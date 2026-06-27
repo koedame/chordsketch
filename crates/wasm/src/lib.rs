@@ -311,6 +311,27 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::chord_pitches(chord)
 }
 
+/// Pure-Rust core of [`bindings::diagram_pitches`]. Returns the MIDI note
+/// numbers **sounded** by the chord diagram drawn for `(chord, instrument)`,
+/// or `None` when no diagram is available.
+///
+/// Routes through [`chordsketch_chordpro::voicings::diagram_pitches`], which
+/// runs the same lookup chain as the SVG renderer, so the audited pitches are
+/// exactly the pitches of the drawn shape (per-string for fretted instruments,
+/// highlighted keys for keyboard). `frets_shown` is fixed at `5` to match the
+/// SVG path in [`chord_diagram_svg_inner_with_options`], so a diagram and its
+/// audio resolve to the same voicing. Sister-site to the NAPI
+/// `diagram_pitches_inner` and the FFI binding's `diagram_pitches`
+/// (`.claude/rules/fix-propagation.md` §Bindings).
+#[must_use]
+pub(crate) fn diagram_pitches_inner(
+    chord: &str,
+    instrument: &str,
+    defines: &[(String, String)],
+) -> Option<Vec<u8>> {
+    chordsketch_chordpro::voicings::diagram_pitches(chord, defines, instrument, 5)
+}
+
 /// Pure-Rust core of [`bindings::key_scale_pitches`]. Returns the ascending
 /// one-octave scale of `key` as MIDI note numbers, or `None` when `key` is
 /// not parseable as a chord.
@@ -1780,6 +1801,36 @@ mod tests {
     fn test_chord_pitches_inner_unparseable_returns_none() {
         assert_eq!(chord_pitches_inner("XYZ-not-a-chord"), None);
         assert_eq!(chord_pitches_inner(""), None);
+    }
+
+    #[test]
+    fn test_diagram_pitches_inner_sounds_the_drawn_shape() {
+        // Guitar open C (x32010): C3 E3 G3 C4 E4 — the per-string voicing,
+        // NOT the block voicing chord_pitches returns.
+        assert_eq!(
+            diagram_pitches_inner("C", "guitar", &[]),
+            Some(vec![48, 52, 55, 60, 64]),
+        );
+        // Keyboard returns the highlighted keys.
+        assert_eq!(
+            diagram_pitches_inner("C", "piano", &[]),
+            Some(vec![60, 64, 67])
+        );
+        // A song {define} is honoured (open C as 032010 → low E sounds).
+        let defines = vec![("C".to_string(), "base-fret 1 frets 0 3 2 0 1 0".to_string())];
+        assert_eq!(
+            diagram_pitches_inner("C", "guitar", &defines),
+            Some(vec![40, 48, 52, 55, 60, 64]),
+        );
+    }
+
+    #[test]
+    fn test_diagram_pitches_inner_unparseable_returns_none() {
+        assert_eq!(
+            diagram_pitches_inner("XYZ-not-a-chord", "guitar", &[]),
+            None
+        );
+        assert_eq!(diagram_pitches_inner("XYZ-not-a-chord", "piano", &[]), None);
     }
 
     #[test]

@@ -249,6 +249,29 @@ export function chordDiagramSvgWithDefines(
 export function chordPitches(chord: string): Buffer | null;
 
 /**
+ * MIDI note numbers **sounded** by the chord diagram drawn for
+ * `(chord, instrument)` — for auditioning a diagram as exactly the shape it
+ * depicts, rather than the instrument-agnostic block voicing
+ * {@link chordPitches} returns from the chord *name* (#2736). Mirrors the
+ * WASM `diagramPitches` and FFI `diagram_pitches` exports.
+ *
+ * Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`, `"charango"`)
+ * return one pitch per non-muted string in string (strum) order, keeping
+ * octave doublings; keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`)
+ * return the highlighted keys. `defines` is the same `[name, raw]` tuple list
+ * {@link chordDiagramSvgWithDefines} accepts (ignored for keyboard, matching
+ * the SVG path). Returns `null` when no diagram is available for the chord.
+ *
+ * Throws an `Error` (`InvalidArg`) when any inner array in `defines` does not
+ * have exactly two elements.
+ */
+export function diagramPitches(
+  chord: string,
+  instrument: string,
+  defines: Array<[string, string]>,
+): Buffer | null;
+
+/**
  * One staff-placed chord tone returned by `chordStaffNotes`. Mirrors the
  * WASM `StaffNote` interface and the FFI `StaffNote` dictionary.
  */

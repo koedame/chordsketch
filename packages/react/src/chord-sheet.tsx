@@ -520,7 +520,7 @@ function ChordSheetAstBranch({
         ? chordAudio
         : null
       : ownsAudio && ownAudio.supported
-        ? { enabled: true, play: ownAudio.play }
+        ? { enabled: true, play: ownAudio.play, playPitches: ownAudio.playPitches }
         : null;
 
   // Click-to-focus + nudge selection state (#2614). Owned here so it

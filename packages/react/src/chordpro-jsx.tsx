@@ -84,6 +84,7 @@ import type {
   ChordDiagramInstrument,
   ChordDiagramOrientation,
 } from './use-chord-diagram';
+import { useChordDiagramPitches } from './use-chord-diagram';
 import {
   buildChordNudge,
   chordLayoutForLine,
@@ -1739,6 +1740,29 @@ function ChordCell(props: {
   const audioName = chord.name ?? '';
   const audioOn = Boolean(chordAudio?.enabled) && audioName.length > 0;
 
+  // Diagram-voicing audio (#2736). In HOVER mode the chord NAME span owns the
+  // click (the diagram is a non-interactive popover), so resolve the diagram's
+  // voicing here to sound the drawn shape. In INLINE mode the compact diagram
+  // IS the play target, so `<ChordDiagram>` resolves and plays its own pitches
+  // — we only forward a `playPitches` channel to it below, and skip the lookup
+  // here. Looked up by `chordName` (the rendered/`display` spelling) to match
+  // the diagram drawn; falls back to the raw-name block voicing when the
+  // diagram has no pitches (unparseable display, stale bundle).
+  const hoverDiagramPitches = useChordDiagramPitches(
+    chordName,
+    instrument,
+    undefined,
+    defines,
+    audioOn && mode === 'hover',
+  );
+  const playHoverChord = (): void => {
+    if (chordAudio?.playPitches && hoverDiagramPitches && hoverDiagramPitches.length > 0) {
+      chordAudio.playPitches(hoverDiagramPitches);
+    } else {
+      chordAudio?.play(audioName);
+    }
+  };
+
   // Stable ID required for the aria-describedby / id pairing below.
   const tooltipId = useId();
 
@@ -1755,13 +1779,13 @@ function ChordCell(props: {
           'aria-label': `Play chord ${audioName}`,
           'data-chord': audioName,
           onClick: (e: ReactMouseEvent<HTMLSpanElement>) => {
-            chordAudio?.play(audioName);
+            playHoverChord();
             pulseElement(e.currentTarget, 'chord--ringing');
           },
           onKeyDown: (e: ReactKeyboardEvent<HTMLSpanElement>) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              chordAudio?.play(audioName);
+              playHoverChord();
               pulseElement(e.currentTarget, 'chord--ringing');
             }
           },
@@ -1801,9 +1825,18 @@ function ChordCell(props: {
   // inline: the compact diagram stands in for the chord name, so the
   // diagram itself is the play button. Hand `<ChordDiagram>` a config that
   // auditions the RAW name (see `audioName` above) regardless of the
-  // `display`-spelled `chordName` it renders.
+  // `display`-spelled `chordName` it renders. `playPitches` is forwarded to
+  // the parent so the diagram sounds its own concrete voicing (#2736): the
+  // child `<ChordDiagram>` resolves the drawn diagram's pitches and hands them
+  // here. The `play` fallback still uses the raw chord name for older bundles
+  // / unparseable displays where no diagram pitches resolve.
+  const parentPlayPitches = chordAudio?.playPitches;
   const inlineAudio: ChordAudioConfig | null = audioOn
-    ? { enabled: true, play: () => chordAudio?.play(audioName) }
+    ? {
+        enabled: true,
+        play: () => chordAudio?.play(audioName),
+        playPitches: parentPlayPitches ? (p: number[]) => parentPlayPitches(p) : undefined,
+      }
     : null;
   return (
     <span

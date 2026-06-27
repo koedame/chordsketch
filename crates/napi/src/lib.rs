@@ -246,6 +246,24 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::chord_pitches(chord)
 }
 
+/// Pure-Rust core of [`bindings::diagram_pitches`]. Returns the MIDI note
+/// numbers **sounded** by the chord diagram drawn for `(chord, instrument)`,
+/// or `None` when no diagram is available.
+///
+/// Routes through [`chordsketch_chordpro::voicings::diagram_pitches`] with
+/// `frets_shown = 5`, matching the SVG path so a diagram and its audio resolve
+/// to the same voicing. Sister-site to the wasm `diagram_pitches_inner` and the
+/// FFI binding's `diagram_pitches` (`.claude/rules/fix-propagation.md`
+/// §Bindings).
+#[must_use]
+pub(crate) fn diagram_pitches_inner(
+    chord: &str,
+    instrument: &str,
+    defines: &[(String, String)],
+) -> Option<Vec<u8>> {
+    chordsketch_chordpro::voicings::diagram_pitches(chord, defines, instrument, 5)
+}
+
 /// Pure-Rust core of [`bindings::chord_staff_notes`]. Returns the chord's
 /// constituent tones spelled for staff notation, or `None` when `chord` is
 /// not parseable.
@@ -1137,6 +1155,23 @@ mod tests {
     fn test_chord_pitches_inner_unparseable_returns_none() {
         assert_eq!(chord_pitches_inner("XYZ-not-a-chord"), None);
         assert_eq!(chord_pitches_inner(""), None);
+    }
+
+    #[test]
+    fn test_diagram_pitches_inner_sounds_the_drawn_shape() {
+        // Guitar open C (x32010): the per-string voicing, not the block voicing.
+        assert_eq!(
+            diagram_pitches_inner("C", "guitar", &[]),
+            Some(vec![48, 52, 55, 60, 64]),
+        );
+        assert_eq!(
+            diagram_pitches_inner("C", "piano", &[]),
+            Some(vec![60, 64, 67])
+        );
+        assert_eq!(
+            diagram_pitches_inner("XYZ-not-a-chord", "guitar", &[]),
+            None
+        );
     }
 
     #[test]

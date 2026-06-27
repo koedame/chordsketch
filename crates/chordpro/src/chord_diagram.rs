@@ -75,6 +75,76 @@ impl DiagramData {
     pub fn title(&self) -> &str {
         self.display_name.as_deref().unwrap_or(&self.name)
     }
+
+    /// MIDI note numbers this fretted diagram **sounds**, in string order — the
+    /// diagram's left-to-right order, which is also the order a downstroke
+    /// strums across the strings.
+    ///
+    /// This is the audio companion to the SVG renderers: where they draw the
+    /// shape, this returns the pitches that shape produces, so a diagram can be
+    /// auditioned as exactly what it depicts (sister to
+    /// [`crate::chord::chord_pitches`], which voices a chord from its *name*
+    /// rather than from a concrete fingering).
+    ///
+    /// `tuning` is the open-string MIDI pitch of each string, in the same order
+    /// as [`frets`](Self::frets). Use
+    /// [`crate::voicings::diagram_pitches`] to resolve the standard tuning for
+    /// an instrument automatically.
+    ///
+    /// Each string contributes one pitch unless it is **muted** (`-1`) or has
+    /// no matching `tuning` entry (a `{define}` with more strings than the
+    /// known tuning) — those strings are skipped. The fret encoding mirrors
+    /// the renderers: a value of `0` is the open string, and a positive value
+    /// `n` is `n` rows below `base_fret` (absolute fret `base_fret + n - 1`).
+    /// Pitches outside the MIDI range `0..=127` are skipped defensively;
+    /// duplicates (octave doublings the shape really sounds) are **kept** and
+    /// the result is **not** sorted.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chordsketch_chordpro::chord_diagram::DiagramData;
+    ///
+    /// // Open C major on guitar (x32010), standard EADGBE tuning.
+    /// let c = DiagramData {
+    ///     name: "C".to_string(),
+    ///     display_name: None,
+    ///     strings: 6,
+    ///     frets_shown: 5,
+    ///     base_fret: 1,
+    ///     frets: vec![-1, 3, 2, 0, 1, 0],
+    ///     fingers: vec![0, 3, 2, 0, 1, 0],
+    /// };
+    /// let tuning = [40, 45, 50, 55, 59, 64];
+    /// // Low E muted; A+3=48 (C3), D+2=52 (E3), G open=55 (G3),
+    /// // B+1=60 (C4), high-e open=64 (E4).
+    /// assert_eq!(c.voiced_pitches(&tuning), vec![48, 52, 55, 60, 64]);
+    /// ```
+    #[must_use]
+    pub fn voiced_pitches(&self, tuning: &[i32]) -> Vec<u8> {
+        let mut pitches = Vec::with_capacity(self.frets.len());
+        for (i, &raw) in self.frets.iter().enumerate() {
+            // Muted strings sound nothing; strings beyond the known tuning
+            // (an over-long `{define}`) cannot be pitched, so skip them
+            // rather than guess an open pitch.
+            let Some(&open) = tuning.get(i) else { continue };
+            if raw < 0 {
+                continue;
+            }
+            // Reverse the `base_fret` encoding: `0` is the open string, a
+            // positive `n` is the absolute fret `base_fret + n - 1`.
+            let abs_fret = if raw == 0 {
+                0
+            } else {
+                raw + self.base_fret as i32 - 1
+            };
+            let midi = open + abs_fret;
+            if (0..=127).contains(&midi) {
+                pitches.push(midi as u8);
+            }
+        }
+        pitches
+    }
 }
 
 impl DiagramData {
@@ -2423,6 +2493,45 @@ pub fn canonical_chord_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn diagram(base_fret: u32, frets: Vec<i32>) -> DiagramData {
+        DiagramData {
+            name: "X".to_string(),
+            display_name: None,
+            strings: frets.len(),
+            frets_shown: 5,
+            base_fret,
+            frets,
+            fingers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn voiced_pitches_decodes_base_fret_offset() {
+        // B major barre at fret 2 (x24442 relative): A+2, D+4, G+4, B+3, e+2,
+        // i.e. absolute frets 2 4 4 4 3 2 with the low string muted.
+        let d = diagram(2, vec![-1, 1, 3, 3, 3, 1]);
+        let tuning = [40, 45, 50, 55, 59, 64];
+        // base_fret=2: relative 1→abs 2, relative 3→abs 4.
+        // A+2=47, D+4=54, G+4=59, B+4=63, e+2=66.
+        assert_eq!(d.voiced_pitches(&tuning), vec![47, 54, 59, 63, 66]);
+    }
+
+    #[test]
+    fn voiced_pitches_skips_muted_and_out_of_range_strings() {
+        // Strings beyond the supplied tuning carry no known pitch and are
+        // skipped rather than guessed.
+        let d = diagram(1, vec![-1, 0, 2, -1, 1, 0, 5]);
+        let tuning = [40, 45, 50, 55, 59, 64]; // 6 entries, diagram has 7 frets
+        // muted, A open=45, D+2=52, muted, B+1=60, e open=64, (7th string skipped)
+        assert_eq!(d.voiced_pitches(&tuning), vec![45, 52, 60, 64]);
+    }
+
+    #[test]
+    fn voiced_pitches_empty_when_all_muted() {
+        let d = diagram(1, vec![-1, -1, -1]);
+        assert!(d.voiced_pitches(&[40, 45, 50]).is_empty());
+    }
 
     #[test]
     fn decompose_title_parenthesised_tensions() {
