@@ -25,11 +25,15 @@ instead.
 ## Decision
 
 In `inline` diagram mode, center each chord-block's children on the cross axis
-(`align-items: center`) instead of left-aligning them. Because the diagram is
-the widest child of the flex column, centering keeps the diagram spanning the
-block's full width — its left edge never overflows the line start — while the
-narrower `.lyrics` child is the element that recenters beneath the diagram. The
-net visual effect is the diagram centered over its syllable.
+(`align-items: center`) instead of left-aligning them. The chord-block is a
+shrink-wrapped inline-flex column, so the **wider** of the two children
+(diagram, lyric) defines the column width and the narrower child centers within
+it. Normally the compact diagram is the wider child, so the lyric recenters
+beneath it; but a long unbroken chord-bearing syllable can be wider than the
+diagram (lyric segments never wrap — `.lyrics` is `white-space: pre`), in which
+case the diagram centers over the lyric. In either ordering the block's left
+edge stays at the line start, so centering never overflows it. The net visual
+effect is the diagram centered over its syllable.
 
 The change is a single CSS rule scoped to `.line--inline-diagrams .chord-block`
 in `packages/react/src/styles.css`. The `.line--inline-diagrams` class is
@@ -49,13 +53,16 @@ two rules act on orthogonal axes (the line is a row, each block is a column).
   centered over its syllable reads as annotating that syllable; a name's left
   edge already does that job, so the two surfaces deserve different alignment —
   this is a deliberate asymmetry, not an inconsistency.
-- **No overflow.** Because the widest child of a shrink-wrapped flex column
-  defines the column width and spans it fully, centering moves only the
-  narrower `.lyrics` child. The first block on every (possibly wrapped) line
-  keeps its diagram's left edge at the line start, so centering introduces no
-  left-edge overflow. (Centering the diagram on the syllable's *start point*
-  rather than on the whole segment — which would overflow — was considered and
-  rejected; see Alternatives.)
+- **No overflow.** The widest child of a shrink-wrapped flex column defines the
+  column width and spans it fully; centering only moves the *narrower* child
+  within that width. So whichever of {diagram, lyric} is wider sits flush with
+  the block's left edge, and the first block on every (possibly wrapped) line
+  keeps that left edge at the line start — centering introduces no left-edge
+  overflow regardless of which child is wider. (This "left edge" framing is
+  LTR-relative; RTL alignment is inherited unchanged from ADR-0027, which has
+  the same directional assumption.) Centering the diagram on the syllable's
+  *start point* rather than on the whole segment — which *would* overflow — was
+  considered and rejected; see Alternatives.
 - **One CSS rule, scoped to the mode.** The behaviour lives entirely in the
   walker's stylesheet as a mode-scoped selector, so it cannot leak into chord-
   name or hover layouts and needs no AST, JSON, or component change.
@@ -73,9 +80,12 @@ two rules act on orthogonal axes (the line is a row, each block is a column).
   `hover` output is byte-identical.
 - jsdom has no layout engine, so the centering is verified in a real browser by
   `packages/playground/tests-e2e/diagrams-inline-hover.spec.ts` (the diagram's
-  measured horizontal center matches its lyric's center within tolerance); the
-  walker unit test continues to assert only the `.line--inline-diagrams` hook
-  is emitted in inline mode and withheld elsewhere.
+  measured horizontal center matches its lyric's center within tolerance) — in
+  both width orderings: the common case (diagram wider than the lyric) and a
+  dedicated long-syllable case (lyric wider than the diagram), so the
+  "no overflow" reasoning is locked in for both. The walker unit test continues
+  to assert only the `.line--inline-diagrams` hook is emitted in inline mode and
+  withheld elsewhere.
 - When the Rust renderers eventually gain inline-diagram placement (the
   ADR-0027 follow-up), they inherit this alignment decision: the diagram is
   centered over its lyric segment, the chord name is left-aligned.
