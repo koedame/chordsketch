@@ -149,9 +149,10 @@ Token aliases in `tokens.css`:
   modals.
 - **Elevation** — Lines first (`--border` = `--ink-200`). Shadows are
   reserved for popovers (`--e-2`), modals (`--e-3`), and the
-  command-palette overlay (`--e-overlay`). Each level is a two-layer
-  shadow — a tight key layer plus a soft, negative-spread ambient — so a
-  raised surface reads as gentle depth, not a single hard slab. **Large
+  command-palette overlay (`--e-overlay`). Each of those three is a
+  two-layer shadow — a tight key layer plus a soft, negative-spread
+  ambient — so a raised surface reads as gentle depth, not a single hard
+  slab (`--e-1` and the near-flat `--e-panel` stay single-layer). **Large
   floating panels are border-led**, not popovers: an app-shell sidebar or
   similar full-height panel takes the near-flat `--e-panel` and lets a
   slightly stronger hairline (`--border-strong`) carry the separation. A
