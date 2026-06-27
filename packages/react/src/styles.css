@@ -1505,34 +1505,7 @@
 .chordsketch-sheet__content .chord-block {
   display: inline-flex;
   flex-direction: column;
-  /* The default (chord-name / `section` mode) left-aligns the chord above
-     its lyric: a short chord name's left edge already marks the position.
-     Inline-diagram mode OVERRIDES this to `center` via the more-specific
-     `.line--inline-diagrams .chord-block` rule below — keep that override in
-     mind before changing this value. */
   align-items: flex-start;
-}
-/* Inline diagrams (ADR-0027 / ADR-0039): center each compact diagram over
-   the lyric segment it annotates, instead of left-aligning its edge. A
-   compact diagram is much wider than the syllable beneath it, so left
-   alignment leaves the diagram hanging off to the right of the note it
-   belongs to; centering makes the diagram read as belonging to that
-   syllable. The chord-block is a shrink-wrapped inline-flex column, so the
-   WIDER of {diagram, lyric} defines its width and the narrower child centers
-   within it: normally the diagram is wider (the lyric recenters beneath it),
-   but a long unbroken chord-bearing syllable — `.lyrics` is `white-space:
-   pre`, so a segment never wraps — can be the wider child instead (the
-   diagram then centers over the lyric). In either ordering the block's left
-   edge stays at the line start, so centering never overflows it. (The
-   "left edge" framing is LTR-relative; RTL alignment behaviour is inherited
-   unchanged from ADR-0027.) Scoped to `inline` mode (the walker adds
-   `.line--inline-diagrams` only when `diagrams.mode === 'inline'`): a chord
-   *name* stays left-aligned, and hover mode keeps the name as text, so
-   neither layout is affected. Pairs with the `.line--inline-diagrams {
-   align-items: flex-end }` rule above, which bottom-aligns the blocks on the
-   lyric baseline (an orthogonal axis: the line is a flex row). */
-.chordsketch-sheet__content .line--inline-diagrams .chord-block {
-  align-items: center;
 }
 .chordsketch-sheet__content .chord {
   font-family: var(--cs-font-chord, "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif);
