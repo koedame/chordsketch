@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sample — UI refresh (interactive) — ChordSketch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ──────────────────────────────────────────────────────────────────────────
+   INTERACTIVE SAMPLE — not a committed design-system artifact.
+
+   The real floating-sidebar app shell, rendered live. Use the control panel
+   (top-right) to flip Before/After and pick a shadow strength. Everything but
+   the SHADOW is identical between modes — colour, type, spacing, radius, IA,
+   and layout are untouched. Pick the strength that looks right and tell me;
+   that value goes into tokens.css.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* The chosen elevation values live as data-attribute scopes on <html>. */
+
+/* mode = before → today's single-layer tokens (sidebar uses --e-2). */
+html[data-mode="before"] {
+  --e-1:       0 1px 2px rgba(10, 10, 11, 0.04);
+  --e-2:       0 4px 12px rgba(10, 10, 11, 0.08);
+  --e-3:       0 16px 32px rgba(10, 10, 11, 0.12);
+  --e-overlay: 0 24px 48px rgba(10, 10, 11, 0.18);
+  --e-panel:   0 4px 12px rgba(10, 10, 11, 0.08);
+}
+
+/* mode = after → layered key+ambient, low alpha, negative spread. The four
+   shared tokens are the same in every strength; only --e-panel (the large
+   floating panel / sidebar) changes with the strength selector. */
+html[data-mode="after"] {
+  --e-1:       0 1px 1px rgba(10, 10, 11, 0.03), 0 1px 3px rgba(10, 10, 11, 0.05);
+  --e-2:       0 1px 2px rgba(10, 10, 11, 0.04), 0 6px 16px -4px rgba(10, 10, 11, 0.07);
+  --e-3:       0 2px 6px rgba(10, 10, 11, 0.04), 0 16px 32px -8px rgba(10, 10, 11, 0.11);
+  --e-overlay: 0 4px 10px rgba(10, 10, 11, 0.05), 0 28px 56px -16px rgba(10, 10, 11, 0.16);
+}
+html[data-mode="after"][data-strength="minimal"] {
+  --e-panel: 0 1px 2px rgba(10, 10, 11, 0.02), 0 6px 16px -8px rgba(10, 10, 11, 0.04);
+}
+html[data-mode="after"][data-strength="soft"] {
+  --e-panel: 0 1px 2px rgba(10, 10, 11, 0.03), 0 10px 28px -10px rgba(10, 10, 11, 0.06);
+}
+html[data-mode="after"][data-strength="lifted"] {
+  --e-panel: 0 2px 4px rgba(10, 10, 11, 0.04), 0 16px 36px -12px rgba(10, 10, 11, 0.10);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: var(--font-jp);
+  font-size: var(--fs-14);
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--canvas);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+
+/* ── App shell (verbatim structure from sidebar-floating.html) ─────────────── */
+.app {
+  --sidebar-w: 272px;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  gap: var(--sp-4);
+  height: 100vh;
+  padding: var(--sp-4);
+}
+
+.sidebar {
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  box-shadow: var(--e-panel);
+  overflow: hidden;
+  transition: box-shadow var(--dur-2) var(--ease-out);
+}
+.sb-head { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-4) var(--sp-3) var(--sp-3); }
+.sb-head .brand-link { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.sb-head .mark { width: 26px; height: 26px; border-radius: var(--r-2); display: block; flex: none; }
+.sb-head .brand { font-weight: 700; font-size: var(--fs-16); letter-spacing: -0.01em; }
+.sb-head .head-actions { display: flex; align-items: center; gap: var(--sp-1); margin-left: auto; }
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--r-2);
+  border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.icon-btn:hover { background: var(--ink-100); color: var(--text-primary); }
+.icon-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sb-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 var(--sp-3) var(--sp-3); }
+.sb-new {
+  display: flex; align-items: center; gap: var(--sp-3); width: 100%;
+  margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); height: 40px;
+  border: 1px solid var(--border-strong); border-radius: var(--r-2);
+  background: var(--surface); font: 500 var(--fs-14)/1 var(--font-jp); color: var(--text-primary); cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.sb-new:hover { background: var(--ink-100); }
+.sb-new:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.nav { display: flex; flex-direction: column; gap: 1px; }
+.nav a {
+  position: relative; display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3); height: 38px; border-radius: var(--r-2);
+  color: var(--text-secondary); font-weight: 500;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.nav a svg { color: var(--text-tertiary); flex: none; }
+.nav a:hover { background: var(--ink-100); color: var(--text-primary); }
+.nav a[aria-current="page"] { background: var(--ink-100); color: var(--text-primary); }
+.nav a[aria-current="page"] svg { color: var(--crimson-500); }
+.nav a[aria-current="page"]::before {
+  content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 20px; border-radius: var(--r-full); background: var(--crimson-500);
+}
+.sb-section { margin-top: var(--sp-5); }
+.section-label {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--sp-3) var(--sp-2);
+  font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; color: var(--text-secondary);
+}
+.recent { display: flex; flex-direction: column; gap: 1px; }
+.recent a {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3); height: 34px; border-radius: var(--r-2);
+  color: var(--text-secondary); white-space: nowrap; overflow: hidden;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.recent a:hover { background: var(--ink-100); color: var(--text-primary); }
+.recent a .dot { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--border-strong); flex: none; }
+.recent a.active .dot { background: var(--crimson-500); }
+.sb-foot { border-top: 1px solid var(--border); padding: var(--sp-3); }
+.account {
+  display: flex; align-items: center; gap: var(--sp-3); width: 100%;
+  padding: var(--sp-2); border: 0; border-radius: var(--r-2); background: transparent; cursor: pointer;
+  text-align: left; font: inherit; color: inherit;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.account:hover { background: var(--ink-100); }
+.account .avatar {
+  width: 30px; height: 30px; border-radius: var(--r-full); background: var(--ink-1000); color: var(--ink-0);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); flex: none;
+}
+.account .who { line-height: 1.2; min-width: 0; }
+.account .who .name { font-weight: 600; color: var(--text-primary); }
+.account .who .plan { font-size: var(--fs-12); color: var(--text-secondary); }
+.account .chev { margin-left: auto; color: var(--text-tertiary); flex: none; }
+
+/* ── Main area — a realistic library so the look is judged in context ──────── */
+.main { background: transparent; display: flex; flex-direction: column; min-height: 0; }
+.main-bar { height: 56px; display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-6); flex: none; }
+.main-bar h1 { margin: 0; font-size: var(--fs-16); font-weight: 700; letter-spacing: -0.01em; }
+.main-bar .search { margin-left: auto; flex: 0 1 320px; position: relative; }
+.main-bar .search input {
+  width: 100%; height: 36px; padding: 0 var(--sp-3) 0 36px;
+  border: 1px solid var(--border); border-radius: var(--r-2); background: var(--surface);
+  font: 400 var(--fs-14)/1 var(--font-jp); color: var(--text-primary);
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.main-bar .search input:focus { outline: none; border-color: var(--crimson-500); box-shadow: var(--focus-ring); }
+.main-bar .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); }
+.btn { display: inline-flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 var(--sp-4); border-radius: var(--r-2); border: 1px solid transparent; font: 500 var(--fs-14)/1 var(--font-jp); cursor: pointer; }
+.btn-primary { background: var(--crimson-500); color: var(--fg-on-crimson); }
+.btn-primary:hover { background: var(--crimson-600); }
+.main-body { flex: 1; overflow-y: auto; padding: var(--sp-6); }
+.welcome { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-24); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 var(--sp-6); }
+.welcome .spark { color: var(--crimson-500); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-5); }
+.song-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-5);
+  cursor: pointer;
+  transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+}
+.song-card:hover { border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--e-1); }
+.song-card .artist { font-family: var(--font-latin); font-weight: 500; font-size: var(--fs-13); color: var(--text-secondary); margin: 0 0 var(--sp-2); }
+.song-card h3 { font-weight: 700; font-size: var(--fs-18); line-height: 1.4; letter-spacing: -0.01em; margin: 0 0 var(--sp-4); }
+.song-card .meta { display: flex; gap: var(--sp-3); flex-wrap: wrap; font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); margin-bottom: var(--sp-4); font-variant-numeric: tabular-nums; }
+.song-card .footer { display: flex; align-items: center; justify-content: space-between; padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.badge { display: inline-flex; align-items: center; padding: 2px var(--sp-2); border-radius: var(--r-1); font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-12); }
+.badge.key { background: var(--ink-1000); color: var(--ink-0); }
+.badge.key.crimson { background: var(--crimson-500); color: var(--fg-on-crimson); }
+.badge.fmt { background: var(--ink-100); color: var(--text-secondary); }
+
+/* A live popover so the --e-2 softening is visible in context too. */
+.pop-wrap { position: relative; }
+.popover {
+  position: absolute; right: 0; top: calc(100% + var(--sp-2)); width: 220px; z-index: 5;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3);
+  box-shadow: var(--e-2); padding: var(--sp-2);
+}
+.popover .pop-item { padding: var(--sp-2) var(--sp-3); border-radius: var(--r-2); font-size: var(--fs-14); color: var(--text-secondary); }
+.popover .pop-item:hover { background: var(--ink-100); color: var(--text-primary); }
+
+/* ── Floating control panel (sample chrome — not part of the design) ───────── */
+.controls {
+  position: fixed; top: var(--sp-4); right: var(--sp-4); z-index: 50;
+  width: 248px; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--r-3); box-shadow: var(--e-3); padding: var(--sp-4);
+  font-size: var(--fs-13);
+}
+.controls h2 { margin: 0 0 var(--sp-1); font-size: var(--fs-13); font-weight: 700; }
+.controls .hint { margin: 0 0 var(--sp-4); font-size: var(--fs-12); color: var(--text-secondary); line-height: 1.5; }
+.controls .field { margin-bottom: var(--sp-4); }
+.controls .field:last-child { margin-bottom: 0; }
+.controls .field > .lbl { display: block; font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); color: var(--text-secondary); margin-bottom: var(--sp-2); }
+.seg { display: flex; background: var(--ink-100); border-radius: var(--r-2); padding: 2px; gap: 2px; }
+.seg label { flex: 1; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span {
+  display: block; text-align: center; padding: var(--sp-2) 0; border-radius: calc(var(--r-2) - 1px);
+  font-weight: 500; color: var(--text-secondary); cursor: pointer; user-select: none;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.seg label:hover span { color: var(--text-primary); }
+.seg input:checked + span { background: var(--surface); color: var(--text-primary); box-shadow: var(--e-1); }
+.seg input:focus-visible + span { box-shadow: var(--focus-ring); }
+.controls .now { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); word-break: break-all; }
+.controls .now b { color: var(--text-primary); font-weight: 600; }
+.controls[data-collapsed="true"] .body { display: none; }
+.controls .collapse { position: absolute; top: var(--sp-3); right: var(--sp-3); }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <aside class="sidebar" aria-label="Primary">
+    <div class="sb-head">
+      <a class="brand-link" href="#" aria-label="ChordSketch home">
+        <img class="mark" src="../assets/logo.svg" alt="" width="26" height="26">
+        <span class="brand">ChordSketch</span>
+      </a>
+      <div class="head-actions">
+        <button class="icon-btn" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+        </button>
+        <button class="icon-btn" type="button" aria-label="Search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="sb-scroll">
+      <button class="sb-new" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        New song
+      </button>
+      <nav class="nav" aria-label="Sections">
+        <a href="#" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h18"/></svg>Library</a>
+        <a href="#"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Viewer</a>
+        <a href="#"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editor</a>
+        <a href="#"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Setlists</a>
+      </nav>
+      <div class="sb-section">
+        <div class="section-label"><span>Recent</span></div>
+        <div class="recent">
+          <a href="#"><span class="dot"></span>Country Roads</a>
+          <a href="#"><span class="dot"></span>Wonderwall</a>
+          <a href="#"><span class="dot"></span>Autumn Leaves</a>
+          <a href="#" class="active"><span class="dot"></span>Hotel California</a>
+          <a href="#"><span class="dot"></span>Hallelujah</a>
+          <a href="#"><span class="dot"></span>Stand By Me</a>
+          <a href="#"><span class="dot"></span>Let It Be</a>
+        </div>
+      </div>
+    </div>
+    <div class="sb-foot">
+      <button class="account" type="button" aria-haspopup="menu">
+        <span class="avatar">J</span>
+        <span class="who"><span class="name">john</span><span class="plan">Max</span></span>
+        <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="main-bar">
+      <h1>Library</h1>
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" placeholder="e.g. Country Roads" aria-label="Search songs">
+      </div>
+      <div class="pop-wrap">
+        <button class="btn btn-primary" id="pop-toggle" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          New
+        </button>
+        <div class="popover" id="pop" hidden>
+          <div class="pop-item">Blank ChordPro</div>
+          <div class="pop-item">Blank iReal Pro</div>
+          <div class="pop-item">Import file…</div>
+        </div>
+      </div>
+    </div>
+    <div class="main-body">
+      <p class="welcome"><span class="spark" aria-hidden="true">✳</span> Welcome back, john</p>
+      <div class="grid">
+        <article class="song-card"><p class="artist">John Denver</p><h3>Country Roads</h3><div class="meta"><span>4/4</span><span>♩=82</span></div><div class="footer"><span class="badge key crimson">G</span><span class="badge fmt">ChordPro</span></div></article>
+        <article class="song-card"><p class="artist">Oasis</p><h3>Wonderwall</h3><div class="meta"><span>4/4</span><span>♩=87</span></div><div class="footer"><span class="badge key">F♯m</span><span class="badge fmt">ChordPro</span></div></article>
+        <article class="song-card"><p class="artist">Joseph Kosma</p><h3>Autumn Leaves</h3><div class="meta"><span>4/4</span><span>♩=120</span></div><div class="footer"><span class="badge key">Gm</span><span class="badge fmt">iReal Pro</span></div></article>
+        <article class="song-card"><p class="artist">Eagles</p><h3>Hotel California</h3><div class="meta"><span>4/4</span><span>♩=74</span></div><div class="footer"><span class="badge key">Bm</span><span class="badge fmt">ChordPro</span></div></article>
+        <article class="song-card"><p class="artist">Leonard Cohen</p><h3>Hallelujah</h3><div class="meta"><span>6/8</span><span>♩=60</span></div><div class="footer"><span class="badge key">C</span><span class="badge fmt">ChordPro</span></div></article>
+        <article class="song-card"><p class="artist">Ben E. King</p><h3>Stand By Me</h3><div class="meta"><span>4/4</span><span>♩=118</span></div><div class="footer"><span class="badge key crimson">A</span><span class="badge fmt">ChordPro</span></div></article>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Sample control panel — chrome for this comparison page only -->
+<aside class="controls" id="controls" data-collapsed="false" aria-label="Sample controls">
+  <button class="icon-btn collapse" id="collapse" type="button" aria-label="Collapse controls" title="Hide">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+  </button>
+  <h2>UI refresh — sample</h2>
+  <div class="body">
+    <p class="hint">Flip between today and the proposal, and try the shadow strengths. Only the shadow differs.</p>
+
+    <div class="field">
+      <span class="lbl">Mode</span>
+      <div class="seg" id="seg-mode" role="radiogroup" aria-label="Mode">
+        <label><input type="radio" name="mode" value="before"><span>Before</span></label>
+        <label><input type="radio" name="mode" value="after" checked><span>After</span></label>
+      </div>
+    </div>
+
+    <div class="field" id="strength-field">
+      <span class="lbl">Sidebar shadow strength</span>
+      <div class="seg" id="seg-strength" role="radiogroup" aria-label="Shadow strength">
+        <label><input type="radio" name="strength" value="minimal"><span>Minimal</span></label>
+        <label><input type="radio" name="strength" value="soft" checked><span>Soft</span></label>
+        <label><input type="radio" name="strength" value="lifted"><span>Lifted</span></label>
+      </div>
+    </div>
+
+    <div class="now" id="now"></div>
+  </div>
+</aside>
+
+<script>
+(function () {
+  var html = document.documentElement;
+  var now = document.getElementById('now');
+  var strengthField = document.getElementById('strength-field');
+
+  function readVar(name) {
+    return getComputedStyle(html).getPropertyValue(name).trim();
+  }
+  function refresh() {
+    var mode = html.getAttribute('data-mode');
+    var strength = html.getAttribute('data-strength');
+    // Strength only applies in "after" — dim the field in "before".
+    strengthField.style.opacity = (mode === 'before') ? '0.4' : '1';
+    strengthField.style.pointerEvents = (mode === 'before') ? 'none' : 'auto';
+    var label = (mode === 'before') ? 'Before · --e-2' : ('After · ' + strength);
+    now.innerHTML = '<b>--e-panel</b> &nbsp;' + readVar('--e-panel');
+    now.setAttribute('title', label);
+  }
+
+  // Initial state.
+  html.setAttribute('data-mode', 'after');
+  html.setAttribute('data-strength', 'soft');
+  refresh();
+
+  document.getElementById('seg-mode').addEventListener('change', function (e) {
+    html.setAttribute('data-mode', e.target.value);
+    refresh();
+  });
+  document.getElementById('seg-strength').addEventListener('change', function (e) {
+    html.setAttribute('data-strength', e.target.value);
+    refresh();
+  });
+
+  // Popover demo.
+  var popToggle = document.getElementById('pop-toggle');
+  var pop = document.getElementById('pop');
+  popToggle.addEventListener('click', function () {
+    pop.hidden = !pop.hidden;
+  });
+  document.addEventListener('click', function (e) {
+    if (!pop.hidden && !pop.contains(e.target) && e.target !== popToggle && !popToggle.contains(e.target)) {
+      pop.hidden = true;
+    }
+  });
+
+  // Collapse the control panel.
+  var controls = document.getElementById('controls');
+  document.getElementById('collapse').addEventListener('click', function () {
+    var collapsed = controls.getAttribute('data-collapsed') === 'true';
+    controls.setAttribute('data-collapsed', String(!collapsed));
+  });
+})();
+</script>
+</body>
+</html>
