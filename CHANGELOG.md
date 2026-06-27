@@ -135,10 +135,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   aligning the diagram's left edge to the lyric. A compact diagram is much wider
   than the syllable beneath it, so left-edge alignment left the diagram hanging
   off to the right of its note; centering makes the diagram read as belonging to
-  that syllable. The diagram's left edge still sits at the line start (no
-  overflow), and only the lyric recenters beneath the diagram. Chord-name
-  (`section`) and `hover` modes are unchanged — a short chord name's left edge
-  already marks the position. Verified in a real browser by
+  that syllable. The wider of the diagram and the lyric segment defines the
+  chord-block width and the narrower child centers within it (normally the
+  diagram is wider, but a long unbroken syllable can be the wider child since
+  lyric segments do not wrap); in either ordering the block's left edge stays at
+  the line start, so centering never overflows. Chord-name (`section`) and
+  `hover` modes are unchanged — a short chord name's left edge already marks the
+  position. Verified in a real browser by
   `tests-e2e/diagrams-inline-hover.spec.ts`. (#2741,
   [ADR-0039](docs/adr/0039-center-inline-chord-diagrams-over-lyric.md))
 - Tightened the regular (full-size) SVG chord-diagram bounding box
