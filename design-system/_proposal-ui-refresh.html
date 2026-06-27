@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposal — UI refresh (elevation / sidebar) — ChordSketch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ──────────────────────────────────────────────────────────────────────────
+   PROPOSAL ONLY — not a committed design-system artifact.
+
+   This page pins the CURRENT elevation tokens against a PROPOSED set so the
+   two can be compared on one screen before anything in tokens.css changes.
+
+   `.before` keeps today's values. `.after` scopes the proposed values as a
+   local override of the elevation variables only — colour, type, spacing,
+   radius, motion, and every IA/layout decision are untouched. The point of
+   the refresh is purely the *quality of the shadow*, not the structure.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* CURRENT elevation (mirrors tokens.css today, restated for the .before column) */
+.before {
+  --e-1:       0 1px 2px rgba(10, 10, 11, 0.04);
+  --e-2:       0 4px 12px rgba(10, 10, 11, 0.08);
+  --e-3:       0 16px 32px rgba(10, 10, 11, 0.12);
+  --e-overlay: 0 24px 48px rgba(10, 10, 11, 0.18);
+  --e-panel:   0 4px 12px rgba(10, 10, 11, 0.08);   /* sidebar uses --e-2 today */
+}
+
+/* PROPOSED elevation — two-layer (key + ambient), low alpha, negative spread.
+   The negative 4th value tightens the umbra so the shadow stays close to the
+   element and diffuses softly outward instead of casting a uniform grey haze.
+   A new `--e-panel` is the dedicated, barely-there lift for LARGE floating
+   panels (the sidebar): a tall surface needs far less shadow than a small
+   popover to read as "detached" — the hairline border carries the separation. */
+.after {
+  --e-1:       0 1px 1px rgba(10, 10, 11, 0.03), 0 1px 3px rgba(10, 10, 11, 0.05);
+  --e-2:       0 1px 2px rgba(10, 10, 11, 0.04), 0 6px 16px -4px rgba(10, 10, 11, 0.07);
+  --e-3:       0 2px 6px rgba(10, 10, 11, 0.04), 0 16px 32px -8px rgba(10, 10, 11, 0.11);
+  --e-overlay: 0 4px 10px rgba(10, 10, 11, 0.05), 0 28px 56px -16px rgba(10, 10, 11, 0.16);
+  --e-panel:   0 1px 2px rgba(10, 10, 11, 0.03), 0 10px 28px -10px rgba(10, 10, 11, 0.06);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--font-jp);
+  font-size: var(--fs-14);
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: var(--sp-12) var(--sp-6) var(--sp-24); }
+.eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); color: var(--text-secondary); margin: 0 0 var(--sp-2); }
+h1.title { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-36); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 var(--sp-3); }
+.deck { color: var(--text-secondary); max-width: 64ch; margin: 0 0 var(--sp-12); }
+h2.sec { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-24); letter-spacing: -0.01em; margin: var(--sp-16) 0 var(--sp-2); }
+h2.sec:first-of-type { margin-top: var(--sp-8); }
+.sec-note { color: var(--text-secondary); margin: 0 0 var(--sp-6); max-width: 64ch; font-size: var(--fs-13); }
+
+/* Side-by-side comparison frame */
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); }
+@media (max-width: 880px) { .compare { grid-template-columns: 1fr; } }
+.col { min-width: 0; }
+.col-tag {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12);
+  margin-bottom: var(--sp-3);
+}
+.col-tag .pip { width: 8px; height: 8px; border-radius: var(--r-full); }
+.col-tag.is-before { color: var(--text-secondary); }
+.col-tag.is-before .pip { background: var(--ink-300); }
+.col-tag.is-after { color: var(--crimson-600); }
+.col-tag.is-after .pip { background: var(--crimson-500); }
+
+/* The grey stage behind floating panels — slightly tinted so shadows read */
+.stage {
+  background: var(--ink-100);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  padding: var(--sp-8);
+}
+
+/* Elevation swatches */
+.ramp { display: flex; flex-direction: column; gap: var(--sp-6); }
+.chip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.chip .name { font-family: var(--font-mono); font-size: var(--fs-13); font-weight: 600; }
+.chip .use { font-size: var(--fs-12); color: var(--text-secondary); }
+.chip.e1 { box-shadow: var(--e-1); }
+.chip.e2 { box-shadow: var(--e-2); }
+.chip.epanel { box-shadow: var(--e-panel); }
+.chip.e3 { box-shadow: var(--e-3); }
+.chip.eov { box-shadow: var(--e-overlay); }
+
+/* ── Embedded floating-sidebar mock (trimmed copy of sidebar-floating.html) ── */
+.demo {
+  background: var(--ink-100);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  padding: var(--sp-4);
+  height: 420px;
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  gap: var(--sp-4);
+  overflow: hidden;
+}
+.demo .sidebar {
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  box-shadow: var(--e-panel);
+  overflow: hidden;
+}
+.demo .sb-head { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-4) var(--sp-3) var(--sp-3); }
+.demo .sb-head .mark { width: 24px; height: 24px; border-radius: var(--r-2); display: block; }
+.demo .sb-head .brand { font-weight: 700; font-size: var(--fs-15); letter-spacing: -0.01em; }
+.demo .sb-head .spacer { margin-left: auto; }
+.demo .icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: var(--r-2);
+  border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer;
+}
+.demo .icon-btn:hover { background: var(--ink-100); color: var(--text-primary); }
+.demo .sb-scroll { flex: 1; min-height: 0; overflow: hidden; padding: 0 var(--sp-3) var(--sp-3); }
+.demo .sb-new {
+  display: flex; align-items: center; gap: var(--sp-3); width: 100%;
+  margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); height: 38px;
+  border: 1px solid var(--border-strong); border-radius: var(--r-2);
+  background: var(--surface); font: 500 var(--fs-14)/1 var(--font-jp);
+  color: var(--text-primary); cursor: pointer;
+}
+.demo .sb-new:hover { background: var(--ink-100); }
+.demo .nav { display: flex; flex-direction: column; gap: 1px; }
+.demo .nav a {
+  position: relative; display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3); height: 36px; border-radius: var(--r-2);
+  color: var(--text-secondary); font-weight: 500;
+}
+.demo .nav a svg { color: var(--text-tertiary); flex: none; }
+.demo .nav a:hover { background: var(--ink-100); color: var(--text-primary); }
+.demo .nav a[aria-current="page"] { background: var(--ink-100); color: var(--text-primary); }
+.demo .nav a[aria-current="page"] svg { color: var(--crimson-500); }
+.demo .nav a[aria-current="page"]::before {
+  content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 18px; border-radius: var(--r-full); background: var(--crimson-500);
+}
+.demo .sb-section { margin-top: var(--sp-5); }
+.demo .section-label {
+  padding: 0 var(--sp-3) var(--sp-2);
+  font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; color: var(--text-secondary);
+}
+.demo .recent { display: flex; flex-direction: column; gap: 1px; }
+.demo .recent a {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3); height: 32px; border-radius: var(--r-2);
+  color: var(--text-secondary); white-space: nowrap; overflow: hidden;
+}
+.demo .recent a:hover { background: var(--ink-100); color: var(--text-primary); }
+.demo .recent a .dot { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--border-strong); flex: none; }
+.demo .recent a.active .dot { background: var(--crimson-500); }
+.demo .sb-foot { border-top: 1px solid var(--border); padding: var(--sp-3); }
+.demo .account { display: flex; align-items: center; gap: var(--sp-3); width: 100%; padding: var(--sp-2); border: 0; border-radius: var(--r-2); background: transparent; cursor: pointer; font: inherit; color: inherit; }
+.demo .account:hover { background: var(--ink-100); }
+.demo .account .avatar { width: 28px; height: 28px; border-radius: var(--r-full); background: var(--ink-1000); color: var(--ink-0); display: flex; align-items: center; justify-content: center; font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); flex: none; }
+.demo .account .who { line-height: 1.2; }
+.demo .account .who .name { font-weight: 600; color: var(--text-primary); }
+.demo .account .who .plan { font-size: var(--fs-12); color: var(--text-secondary); }
+.demo .main { display: flex; flex-direction: column; min-height: 0; }
+.demo .main-bar { height: 48px; display: flex; align-items: center; padding: 0 var(--sp-4); }
+.demo .main-bar h3 { margin: 0; font-size: var(--fs-15); font-weight: 700; letter-spacing: -0.01em; }
+.demo .main-body { padding: var(--sp-6) var(--sp-4); color: var(--text-secondary); }
+.demo .welcome { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-18); font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+.demo .welcome .spark { color: var(--crimson-500); }
+
+/* Popover + card + modal mini-demos */
+.row { display: flex; gap: var(--sp-6); flex-wrap: wrap; align-items: flex-start; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3);
+  padding: var(--sp-5); width: 240px;
+}
+.card.lifted { border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--e-1); }
+.card .artist { font-family: var(--font-latin); font-weight: 500; font-size: var(--fs-13); color: var(--text-secondary); margin: 0 0 var(--sp-2); }
+.card h4 { margin: 0 0 var(--sp-4); font-weight: 700; font-size: var(--fs-18); letter-spacing: -0.01em; }
+.card .meta { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); }
+.popover {
+  width: 240px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-3); box-shadow: var(--e-2); padding: var(--sp-2);
+}
+.popover .pop-item { padding: var(--sp-2) var(--sp-3); border-radius: var(--r-2); font-size: var(--fs-14); }
+.popover .pop-item:hover { background: var(--ink-100); }
+.modal {
+  width: 360px; background: var(--surface); border-radius: var(--r-4);
+  box-shadow: var(--e-3); overflow: hidden;
+}
+.modal .m-body { padding: var(--sp-6); }
+.modal .m-body h4 { margin: 0 0 var(--sp-2); font-weight: 700; font-size: var(--fs-18); }
+.modal .m-body p { margin: 0; color: var(--text-secondary); font-size: var(--fs-13); }
+.modal .m-foot { padding: var(--sp-4) var(--sp-6); background: var(--ink-50); display: flex; justify-content: flex-end; gap: var(--sp-3); }
+.btn { display: inline-flex; align-items: center; height: 34px; padding: 0 var(--sp-4); border-radius: var(--r-2); border: 1px solid transparent; font: 500 var(--fs-14)/1 var(--font-jp); cursor: pointer; }
+.btn-primary { background: var(--crimson-500); color: var(--fg-on-crimson); }
+.btn-secondary { background: var(--surface); color: var(--text-primary); border-color: var(--border-strong); }
+
+.legend { margin-top: var(--sp-16); padding: var(--sp-6); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); }
+.legend h3 { margin: 0 0 var(--sp-4); font-size: var(--fs-16); font-weight: 700; }
+.legend table { width: 100%; border-collapse: collapse; font-size: var(--fs-13); }
+.legend th, .legend td { text-align: left; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--border); vertical-align: top; }
+.legend th { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); color: var(--text-secondary); }
+.legend td.tok { font-family: var(--font-mono); font-size: var(--fs-12); white-space: nowrap; }
+.legend td.val { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p class="eyebrow">Proposal · not yet committed</p>
+  <h1 class="title">UI refresh — softer, layered elevation</h1>
+  <p class="deck">
+    The sidebar's drop shadow reads harsh because it is a single hard-edged
+    layer (<code>--e-2</code>) sized for a small popover but cast by a tall
+    full-height panel. This proposal keeps every colour, type, spacing,
+    radius, and layout decision exactly as-is and changes only the
+    <strong>quality of the shadow</strong>: two-layer key+ambient shadows with
+    low alpha and negative spread, plus a dedicated barely-there lift for large
+    floating panels. Left = today, Right = proposed.
+  </p>
+
+  <h2 class="sec">1 · The floating sidebar</h2>
+  <p class="sec-note">
+    The headline change. Today the panel sits under a uniform grey smudge; the
+    proposal lets the hairline border do the separating and reduces the shadow
+    to a soft ambient lift — the modern app-shell look, without moving a single
+    element.
+  </p>
+  <div class="compare">
+    <div class="col before">
+      <span class="col-tag is-before"><span class="pip"></span>Current · <code>--e-2</code></span>
+      <div class="demo">
+        <aside class="sidebar" style="box-shadow: var(--e-2);">
+          <div class="sb-head">
+            <img class="mark" src="../assets/logo.svg" alt="" width="24" height="24">
+            <span class="brand">ChordSketch</span>
+            <span class="spacer"></span>
+            <button class="icon-btn" type="button" aria-label="Collapse"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+          </div>
+          <div class="sb-scroll">
+            <button class="sb-new" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>New song</button>
+            <nav class="nav">
+              <a href="#" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h18"/></svg>Library</a>
+              <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Viewer</a>
+              <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editor</a>
+            </nav>
+            <div class="sb-section">
+              <div class="section-label">Recent</div>
+              <div class="recent">
+                <a href="#"><span class="dot"></span>Country Roads</a>
+                <a href="#" class="active"><span class="dot"></span>Hotel California</a>
+                <a href="#"><span class="dot"></span>Let It Be</a>
+              </div>
+            </div>
+          </div>
+          <div class="sb-foot">
+            <button class="account" type="button"><span class="avatar">J</span><span class="who"><span class="name">john</span><span class="plan">Max</span></span></button>
+          </div>
+        </aside>
+        <div class="main">
+          <div class="main-bar"><h3>Library</h3></div>
+          <div class="main-body"><p class="welcome"><span class="spark">✳</span> Welcome back, john</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col after">
+      <span class="col-tag is-after"><span class="pip"></span>Proposed · <code>--e-panel</code></span>
+      <div class="demo">
+        <aside class="sidebar">
+          <div class="sb-head">
+            <img class="mark" src="../assets/logo.svg" alt="" width="24" height="24">
+            <span class="brand">ChordSketch</span>
+            <span class="spacer"></span>
+            <button class="icon-btn" type="button" aria-label="Collapse"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+          </div>
+          <div class="sb-scroll">
+            <button class="sb-new" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>New song</button>
+            <nav class="nav">
+              <a href="#" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h18"/></svg>Library</a>
+              <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>Viewer</a>
+              <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Editor</a>
+            </nav>
+            <div class="sb-section">
+              <div class="section-label">Recent</div>
+              <div class="recent">
+                <a href="#"><span class="dot"></span>Country Roads</a>
+                <a href="#" class="active"><span class="dot"></span>Hotel California</a>
+                <a href="#"><span class="dot"></span>Let It Be</a>
+              </div>
+            </div>
+          </div>
+          <div class="sb-foot">
+            <button class="account" type="button"><span class="avatar">J</span><span class="who"><span class="name">john</span><span class="plan">Max</span></span></button>
+          </div>
+        </aside>
+        <div class="main">
+          <div class="main-bar"><h3>Library</h3></div>
+          <div class="main-body"><p class="welcome"><span class="spark">✳</span> Welcome back, john</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">2 · The elevation ramp</h2>
+  <p class="sec-note">
+    Every shadow in the system, top to bottom. The proposed values are two
+    layers — a tight 1–4 px key shadow that grounds the element plus a wide,
+    low-alpha ambient that diffuses. Negative spread keeps the ambient from
+    spilling into a grey rectangle.
+  </p>
+  <div class="compare">
+    <div class="col before">
+      <span class="col-tag is-before"><span class="pip"></span>Current</span>
+      <div class="stage">
+        <div class="ramp">
+          <div class="chip e1"><span class="name">--e-1</span><span class="use">hover lift</span></div>
+          <div class="chip e2"><span class="name">--e-2</span><span class="use">popover · sidebar</span></div>
+          <div class="chip e3"><span class="name">--e-3</span><span class="use">modal</span></div>
+          <div class="chip eov"><span class="name">--e-overlay</span><span class="use">command palette</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col after">
+      <span class="col-tag is-after"><span class="pip"></span>Proposed</span>
+      <div class="stage">
+        <div class="ramp">
+          <div class="chip e1"><span class="name">--e-1</span><span class="use">hover lift</span></div>
+          <div class="chip e2"><span class="name">--e-2</span><span class="use">popover</span></div>
+          <div class="chip epanel"><span class="name">--e-panel <em style="color:var(--crimson-600);font-style:normal">new</em></span><span class="use">large floating panel · sidebar</span></div>
+          <div class="chip e3"><span class="name">--e-3</span><span class="use">modal</span></div>
+          <div class="chip eov"><span class="name">--e-overlay</span><span class="use">command palette</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">3 · Where the ramp lands — popover, card hover, modal</h2>
+  <p class="sec-note">
+    The same softening flows through every elevated surface. No structural
+    change — these already use <code>--e-1</code> / <code>--e-2</code> /
+    <code>--e-3</code>; they simply inherit the gentler values.
+  </p>
+  <div class="compare">
+    <div class="col before">
+      <span class="col-tag is-before"><span class="pip"></span>Current</span>
+      <div class="stage">
+        <div class="row">
+          <div class="card lifted"><p class="artist">John Denver</p><h4>Country Roads</h4><p class="meta">G · 4/4 · ♩=82</p></div>
+          <div class="popover"><div class="pop-item">Duplicate</div><div class="pop-item">Add to setlist</div><div class="pop-item">Export PDF</div></div>
+        </div>
+        <div style="margin-top: var(--sp-6)">
+          <div class="modal"><div class="m-body"><h4>Delete song?</h4><p>This removes “Country Roads” from your library. This cannot be undone.</p></div><div class="m-foot"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Delete</button></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="col after">
+      <span class="col-tag is-after"><span class="pip"></span>Proposed</span>
+      <div class="stage">
+        <div class="row">
+          <div class="card lifted"><p class="artist">John Denver</p><h4>Country Roads</h4><p class="meta">G · 4/4 · ♩=82</p></div>
+          <div class="popover"><div class="pop-item">Duplicate</div><div class="pop-item">Add to setlist</div><div class="pop-item">Export PDF</div></div>
+        </div>
+        <div style="margin-top: var(--sp-6)">
+          <div class="modal"><div class="m-body"><h4>Delete song?</h4><p>This removes “Country Roads” from your library. This cannot be undone.</p></div><div class="m-foot"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Delete</button></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <h3>Token changes at a glance</h3>
+    <table>
+      <thead><tr><th>Token</th><th>Current</th><th>Proposed</th><th style="width:34%">Why</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="tok">--e-1</td>
+          <td class="val">0 1px 2px /.04</td>
+          <td class="val">2 layers /.03 +.05</td>
+          <td>Resting/hover lift gains a faint second layer so it reads as depth, not a line.</td>
+        </tr>
+        <tr>
+          <td class="tok">--e-2</td>
+          <td class="val">0 4px 12px /.08</td>
+          <td class="val">2 layers, −4 spread /.07</td>
+          <td>Popover shadow tightened and softened; no longer a hard slab.</td>
+        </tr>
+        <tr>
+          <td class="tok">--e-panel</td>
+          <td class="val">— (sidebar used --e-2)</td>
+          <td class="val">2 layers, −10 spread /.06</td>
+          <td><strong>New.</strong> Dedicated near-flat lift for large floating panels — the sidebar's fix.</td>
+        </tr>
+        <tr>
+          <td class="tok">--e-3</td>
+          <td class="val">0 16px 32px /.12</td>
+          <td class="val">2 layers, −8 spread /.11</td>
+          <td>Modal keeps its presence but loses the grey haze around the edge.</td>
+        </tr>
+        <tr>
+          <td class="tok">--e-overlay</td>
+          <td class="val">0 24px 48px /.18</td>
+          <td class="val">2 layers, −16 spread /.16</td>
+          <td>Command palette stays clearly "above everything" but reads cleaner.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin: var(--sp-4) 0 0; font-size: var(--fs-13); color: var(--text-secondary);">
+      Scope of the real change: edit the elevation block in
+      <code>design-system/tokens.css</code> (add <code>--e-panel</code>, soften
+      the four existing tokens), point <code>sidebar-floating.html</code>'s
+      <code>.sidebar</code> at <code>--e-panel</code>, run
+      <code>node scripts/build-tokens.mjs</code> to regenerate the
+      <code>--cs-*</code> blocks, and bump DESIGN.md §4 + the changelog. No
+      colour, type, spacing, IA, or layout changes.
+    </p>
+  </div>
+</main>
+</body>
+</html>
