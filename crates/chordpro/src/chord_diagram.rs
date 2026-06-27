@@ -122,6 +122,13 @@ impl DiagramData {
     /// ```
     #[must_use]
     pub fn voiced_pitches(&self, tuning: &[i32]) -> Vec<u8> {
+        // `base_fret` / `frets` are public fields, so a directly-constructed
+        // `DiagramData` could carry an out-of-range `base_fret` or an absurd
+        // fret value. Clamp `base_fret` to the same range the renderers guard
+        // (`is_valid_diagram` / `from_raw_frets`) and use saturating
+        // arithmetic so a hand-built struct can never overflow `i32` — the
+        // out-of-range `midi` is then dropped by the `0..=127` check below.
+        let base_fret = (self.base_fret.min(MAX_BASE_FRET)) as i32;
         let mut pitches = Vec::with_capacity(self.frets.len());
         for (i, &raw) in self.frets.iter().enumerate() {
             // Muted strings sound nothing; strings beyond the known tuning
@@ -136,9 +143,9 @@ impl DiagramData {
             let abs_fret = if raw == 0 {
                 0
             } else {
-                raw + self.base_fret as i32 - 1
+                raw.saturating_add(base_fret).saturating_sub(1)
             };
-            let midi = open + abs_fret;
+            let midi = open.saturating_add(abs_fret);
             if (0..=127).contains(&midi) {
                 pitches.push(midi as u8);
             }
@@ -2531,6 +2538,19 @@ mod tests {
     fn voiced_pitches_empty_when_all_muted() {
         let d = diagram(1, vec![-1, -1, -1]);
         assert!(d.voiced_pitches(&[40, 45, 50]).is_empty());
+    }
+
+    #[test]
+    fn voiced_pitches_does_not_overflow_on_directly_built_extreme_struct() {
+        // `base_fret` / `frets` are public, so a hand-built struct could carry
+        // absurd values. Saturating arithmetic + the base_fret clamp must keep
+        // this from panicking (debug) / wrapping (release); the out-of-range
+        // pitches are simply dropped by the 0..=127 filter.
+        let d = diagram(u32::MAX, vec![i32::MAX, 0, i32::MIN + 1]);
+        let out = d.voiced_pitches(&[i32::MAX, 45, 50]);
+        // The only survivable string is the open A (fret 0 → 45); everything
+        // else lands outside 0..=127 and is dropped, without overflowing.
+        assert_eq!(out, vec![45]);
     }
 
     #[test]
