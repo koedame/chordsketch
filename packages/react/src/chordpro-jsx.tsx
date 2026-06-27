@@ -4820,14 +4820,24 @@ export function renderChordproAst(
                   defines={defines}
                   orientation={chordDiagramsOpts.orientation}
                   // When chord-audio is on, each grid diagram is a play
-                  // button (#2686) sounding the chord it depicts. The
-                  // diagram is looked up by `name` (the display override)
-                  // but auditioned by `rawName` — a `display=` label may
-                  // not be a parseable chord — so the config plays the raw
-                  // name regardless of the `chord` prop ChordDiagram passes.
+                  // button (#2686, #2736) sounding the chord it depicts.
+                  // The diagram is looked up by `name` (the display
+                  // override) but auditioned by `rawName` — a `display=`
+                  // label may not be a parseable chord — so the `play`
+                  // closure always uses `rawName` regardless of the
+                  // `chord` prop `<ChordDiagram>` passes. `playPitches`
+                  // is forwarded directly: when the diagram voicing
+                  // resolves (#2736), `<ChordDiagram>` calls it with the
+                  // diagram's own pitches; when it doesn't (stale bundle /
+                  // unparseable display label), the fallback `play`
+                  // closure still sounds `rawName`.
                   chordAudio={
                     ctx.chordAudio?.enabled
-                      ? { enabled: true, play: () => ctx.chordAudio?.play(rawName) }
+                      ? {
+                          enabled: true,
+                          play: () => ctx.chordAudio?.play(rawName),
+                          playPitches: ctx.chordAudio?.playPitches,
+                        }
                       : null
                   }
                 />

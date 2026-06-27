@@ -2079,7 +2079,13 @@ pub fn diagram_pitches(
             let voicing = lookup_keyboard_voicing(chord_name, &[])?;
             let (keys, _root) =
                 crate::chord_diagram::normalise_keyboard_keys(&voicing.keys, voicing.root_key);
-            if keys.is_empty() { None } else { Some(keys) }
+            // `normalise_keyboard_keys` is length-preserving (maps 1-to-1,
+            // no filtering). `lookup_keyboard_voicing` only returns `Some`
+            // when `chord_pitches` succeeds, which always yields a non-empty
+            // pitch list (root interval is always included). So `keys` is
+            // guaranteed non-empty here; the `?` above already handles the
+            // no-voicing case.
+            Some(keys)
         }
         _ => {
             let data = lookup_diagram(chord_name, defines, instrument, frets_shown)?;
