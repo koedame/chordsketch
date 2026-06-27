@@ -853,13 +853,15 @@ pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
 /// depicts, rather than the instrument-agnostic block voicing
 /// [`chord_pitches`] returns from the chord *name*.
 ///
-/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`, `"charango"`)
-/// return one pitch per non-muted string in string (strum) order, keeping
-/// octave doublings; keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`)
-/// return the highlighted keys. `defines` is the same `[[name, raw], …]` shape
+/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`) return one pitch
+/// per non-muted string in string (strum) order, keeping octave doublings;
+/// keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`) return the
+/// highlighted keys. `defines` is the same `[[name, raw], …]` shape
 /// [`chord_diagram_svg_with_defines`] accepts (ignored for keyboard, matching
-/// the SVG path). Returns `undefined` when no diagram is available for the
-/// chord.
+/// the SVG path). The accepted instrument set is kept in lockstep with
+/// [`chord_diagram_svg_with_defines`]; anything outside it (e.g. `"charango"`,
+/// not drawn by the binding SVG path) returns `undefined`. Also `undefined`
+/// when no diagram is available for the chord.
 ///
 /// Thin wrapper over the pure-Rust `diagram_pitches_inner`. Sister-site to the
 /// NAPI `diagramPitches` export and the FFI `diagram_pitches` function

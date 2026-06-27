@@ -323,13 +323,37 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
 /// audio resolve to the same voicing. Sister-site to the NAPI
 /// `diagram_pitches_inner` and the FFI binding's `diagram_pitches`
 /// (`.claude/rules/fix-propagation.md` §Bindings).
+///
+/// The accepted instrument set is kept in lockstep with
+/// [`chord_diagram_svg_inner_with_options`]: only the instruments the SVG
+/// binding surface exposes (`guitar` / `ukulele` / `uke` + `piano` /
+/// `keyboard` / `keys`) yield pitches. Anything else — e.g. `charango`, which
+/// the core voicing layer supports but the binding SVG path does not draw —
+/// returns `None`, so the audio surface never sounds an instrument that has no
+/// drawable diagram on the same binding.
 #[must_use]
 pub(crate) fn diagram_pitches_inner(
     chord: &str,
     instrument: &str,
     defines: &[(String, String)],
 ) -> Option<Vec<u8>> {
+    if !is_binding_diagram_instrument(instrument) {
+        return None;
+    }
     chordsketch_chordpro::voicings::diagram_pitches(chord, defines, instrument, 5)
+}
+
+/// Whether `instrument` is one the binding diagram surface (SVG *and* audio)
+/// exposes — the lockstep instrument allowlist shared by
+/// [`chord_diagram_svg_inner_with_options`] and [`diagram_pitches_inner`].
+///
+/// Kept as one predicate so the SVG and audio surfaces cannot drift on which
+/// instruments they accept (`.claude/rules/fix-propagation.md`).
+fn is_binding_diagram_instrument(instrument: &str) -> bool {
+    matches!(
+        instrument.to_ascii_lowercase().as_str(),
+        "guitar" | "ukulele" | "uke" | "piano" | "keyboard" | "keys"
+    )
 }
 
 /// Pure-Rust core of [`bindings::key_scale_pitches`]. Returns the ascending
@@ -1831,6 +1855,17 @@ mod tests {
             None
         );
         assert_eq!(diagram_pitches_inner("XYZ-not-a-chord", "piano", &[]), None);
+    }
+
+    #[test]
+    fn test_diagram_pitches_inner_rejects_instruments_the_svg_binding_rejects() {
+        // Lockstep with the SVG dispatch: charango (core-supported but not
+        // exposed by the binding SVG path) and unknown instruments yield no
+        // pitches, so the audio surface never sounds an instrument that has no
+        // drawable diagram on this binding.
+        assert_eq!(diagram_pitches_inner("C", "charango", &[]), None);
+        assert_eq!(diagram_pitches_inner("C", "theremin", &[]), None);
+        assert!(diagram_pitches_inner("C", "ukulele", &[]).is_some());
     }
 
     #[test]

@@ -416,23 +416,44 @@ pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
 /// `diagramPitches` and NAPI `diagramPitches` exports
 /// (`.claude/rules/fix-propagation.md` §Bindings).
 ///
-/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`, `"charango"`)
-/// return one pitch per non-muted string in string (strum) order, keeping
-/// octave doublings; keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`)
-/// return the highlighted keys. `defines` is the same `(name, raw)` list
+/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`) return one pitch
+/// per non-muted string in string (strum) order, keeping octave doublings;
+/// keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`) return the
+/// highlighted keys. `defines` is the same `(name, raw)` list
 /// [`chord_diagram_svg_with_defines`] consults (ignored for keyboard, matching
 /// the SVG path). `frets_shown` is fixed at `5` to match the SVG path so a
-/// diagram and its audio resolve to the same voicing. Returns `None` when no
-/// diagram is available for the chord.
+/// diagram and its audio resolve to the same voicing.
+///
+/// The accepted instrument set is kept in lockstep with
+/// [`chord_diagram_svg_with_defines_orientation`]: anything outside the set
+/// above — e.g. `"charango"`, which the core voicing layer supports but the
+/// binding SVG path does not draw — returns `None`, so the audio surface never
+/// sounds an instrument that has no drawable diagram on the same binding.
+/// Returns `None` when no diagram is available for the chord.
 #[must_use]
 pub fn diagram_pitches(
     chord: String,
     instrument: String,
     defines: Vec<ChordDefine>,
 ) -> Option<Vec<u8>> {
+    if !is_binding_diagram_instrument(&instrument) {
+        return None;
+    }
     let defines_pairs: Vec<(String, String)> =
         defines.into_iter().map(|d| (d.name, d.raw)).collect();
     chordsketch_chordpro::voicings::diagram_pitches(&chord, &defines_pairs, &instrument, 5)
+}
+
+/// Whether `instrument` is one the binding diagram surface (SVG *and* audio)
+/// exposes — the lockstep instrument allowlist shared by
+/// [`chord_diagram_svg_with_defines_orientation`] and [`diagram_pitches`] so
+/// the two surfaces cannot drift on which instruments they accept
+/// (`.claude/rules/fix-propagation.md`).
+fn is_binding_diagram_instrument(instrument: &str) -> bool {
+    matches!(
+        instrument.to_ascii_lowercase().as_str(),
+        "guitar" | "ukulele" | "uke" | "piano" | "keyboard" | "keys"
+    )
 }
 
 /// One staff-placed chord tone returned by [`chord_staff_notes`].
@@ -1494,6 +1515,16 @@ mod tests {
                 "guitar".to_string(),
                 Vec::new()
             ),
+            None,
+        );
+        // Lockstep with the SVG dispatch: instruments the binding SVG path does
+        // not expose (charango, typos) yield no pitches.
+        assert_eq!(
+            diagram_pitches("C".to_string(), "charango".to_string(), Vec::new()),
+            None,
+        );
+        assert_eq!(
+            diagram_pitches("C".to_string(), "theremin".to_string(), Vec::new()),
             None,
         );
     }
