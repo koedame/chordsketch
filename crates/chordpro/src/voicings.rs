@@ -2080,11 +2080,13 @@ pub fn diagram_pitches(
             let (keys, _root) =
                 crate::chord_diagram::normalise_keyboard_keys(&voicing.keys, voicing.root_key);
             // `normalise_keyboard_keys` is length-preserving (maps 1-to-1,
-            // no filtering). `lookup_keyboard_voicing` only returns `Some`
-            // when `chord_pitches` succeeds, which always yields a non-empty
-            // pitch list (root interval is always included). So `keys` is
-            // guaranteed non-empty here; the `?` above already handles the
-            // no-voicing case.
+            // no filtering). This call passes `&[]` for keyboard_defines, so
+            // `lookup_keyboard_voicing` only reaches the curated or synthesiser
+            // paths. Curated voicings always have at least one key (an empty
+            // entry would also break the SVG renderer). The synthesiser path
+            // goes through `chord_pitches`, which always includes the root
+            // interval when it returns `Some`. So `keys` is guaranteed
+            // non-empty here; the `?` above already handles the no-voicing case.
             Some(keys)
         }
         _ => {
