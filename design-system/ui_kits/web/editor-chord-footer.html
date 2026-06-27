@@ -18,7 +18,9 @@ html, body { margin: 0; height: 100%; }
 body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
 
 .mock-cap { max-width: 1180px; margin: var(--sp-8) auto var(--sp-2); padding: 0 var(--sp-6); font: 600 var(--fs-13)/1 var(--font-latin); letter-spacing: .04em; text-transform: uppercase; color: var(--text-tertiary); }
-.app { max-width: 1180px; margin: 0 auto var(--sp-8); border: 1px solid var(--border); border-radius: var(--r-3); overflow: hidden; box-shadow: var(--e-2); background: var(--surface); display: flex; flex-direction: column; height: 560px; }
+/* Large floating panel → border-led elevation (DESIGN.md §4): a stronger
+   hairline + near-flat --e-panel, not a popover-weight --e-2 shadow. */
+.app { max-width: 1180px; margin: 0 auto var(--sp-8); border: 1px solid var(--border-strong); border-radius: var(--r-3); overflow: hidden; box-shadow: var(--e-panel); background: var(--surface); display: flex; flex-direction: column; height: 560px; }
 
 .topnav { height: 52px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 var(--sp-5); gap: var(--sp-4); flex: none; }
 .brand { display: flex; align-items: center; gap: var(--sp-3); font-weight: 700; font-size: var(--fs-15); }
