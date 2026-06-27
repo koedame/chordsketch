@@ -1,0 +1,7 @@
+{title: Stacked Tension Diagrams (Horizontal)}
+{+config.diagrams.orientation: horizontal}
+{define: Dmaj7(9,11,13) base-fret 1 frets x x 0 2 2 2}
+{define: Cmaj7(9,13) base-fret 1 frets x 3 2 0 0 0}
+{define: G7(9,11,13) base-fret 3 frets 3 5 3 4 3 5}
+{diagrams}
+[Dmaj7(9,11,13)]Long [Cmaj7(9,13)]chord [G7(9,11,13)]names
