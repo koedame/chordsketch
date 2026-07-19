@@ -994,13 +994,10 @@ impl ChordDefinition {
         // Key values are MIDI note numbers (0-127). Non-numeric and
         // out-of-range values are silently dropped.
         // Handles arbitrary whitespace after "keys" (space, tab, multiple).
-        if let Some(keys_str) = remaining.strip_prefix("keys").and_then(|rest| {
-            if rest.is_empty() || rest.starts_with(|c: char| c.is_ascii_whitespace()) {
-                Some(rest)
-            } else {
-                None
-            }
-        }) {
+        if let Some(keys_str) = remaining
+            .strip_prefix("keys")
+            .filter(|&rest| rest.is_empty() || rest.starts_with(|c: char| c.is_ascii_whitespace()))
+        {
             let keys: Vec<i32> = keys_str
                 .split_whitespace()
                 .filter_map(|s| s.parse::<i32>().ok())
@@ -1014,26 +1011,20 @@ impl ChordDefinition {
         // Check for "copy <source>" or "copyall <source>"
         // Only the first token after the prefix is used as the source name.
         // Handles arbitrary whitespace (spaces, tabs, multiple) after keyword.
-        if let Some(rest) = remaining.strip_prefix("copyall").and_then(|r| {
-            if r.is_empty() || r.starts_with(|c: char| c.is_ascii_whitespace()) {
-                Some(r)
-            } else {
-                None
-            }
-        }) {
+        if let Some(rest) = remaining
+            .strip_prefix("copyall")
+            .filter(|&r| r.is_empty() || r.starts_with(|c: char| c.is_ascii_whitespace()))
+        {
             let name = rest.split_whitespace().next().unwrap_or("").trim();
             if !name.is_empty() {
                 def.copyall = Some(name.to_string());
             }
             return def;
         }
-        if let Some(rest) = remaining.strip_prefix("copy").and_then(|r| {
-            if r.is_empty() || r.starts_with(|c: char| c.is_ascii_whitespace()) {
-                Some(r)
-            } else {
-                None
-            }
-        }) {
+        if let Some(rest) = remaining
+            .strip_prefix("copy")
+            .filter(|&r| r.is_empty() || r.starts_with(|c: char| c.is_ascii_whitespace()))
+        {
             let name = rest.split_whitespace().next().unwrap_or("").trim();
             if !name.is_empty() {
                 def.copy = Some(name.to_string());
