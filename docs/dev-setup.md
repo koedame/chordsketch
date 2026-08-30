@@ -85,6 +85,12 @@ Verify: `chordpro --version`
 Tests that require external tools are marked with `#[ignore]` and skipped
 by default during `cargo test`.
 
+**CI does not run them.** External-tool integration is deliberately not
+covered by CI — see
+[ADR-0040](adr/0040-external-tool-tests-are-not-run-in-ci.md). If you change
+`crates/chordpro/src/external_tool.rs` or the ABC / Lilypond render paths, run
+the commands below locally; nothing else will.
+
 ```bash
 # Run only external-tool tests
 cargo test --workspace -- --ignored
