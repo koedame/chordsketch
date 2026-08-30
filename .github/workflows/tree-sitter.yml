@@ -56,3 +56,26 @@ jobs:
 
       - name: Run corpus tests
         run: npm test
+
+      - name: Validate queries against the grammar
+        # `tree-sitter query` compiles each query against the freshly
+        # generated parser, so an unknown node type or a malformed
+        # S-expression exits non-zero (verified: a bogus node name
+        # fails with `Invalid node type`). This is what keeps
+        # `queries/*.scm` from silently rotting when `grammar.js`
+        # renames a node — the corpus tests above cannot see queries
+        # at all.
+        #
+        # Capture names (`@fold`, `@indent.zero`, …) are free-form
+        # tree-sitter identifiers whose meaning is assigned by the
+        # consuming editor, so they are deliberately not checked here.
+        #
+        # The fixture is parsed, not just linted: it is written to
+        # contain every node type the grammar can produce, so each
+        # node name a query references is actually reachable.
+        run: |
+          for query in queries/*.scm; do
+            echo "== $query"
+            ./node_modules/.bin/tree-sitter query "$query" \
+              test/fixtures/query-coverage.cho >/dev/null
+          done

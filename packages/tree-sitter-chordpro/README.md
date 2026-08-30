@@ -20,6 +20,23 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 | Chords | `[Am]`, `[G/B]` | `chord` (with `chord_name`) |
 | Lyrics | `Amazing grace` | `lyrics` |
 
+## Queries
+
+| File | Capture vocabulary | Purpose |
+|---|---|---|
+| `queries/highlights.scm` | standard tree-sitter highlight names | Directives, chord names, comments, delegate-block bodies |
+| `queries/folds.scm` | nvim-treesitter (`@fold`) | Folds each `{start_of_X}` … `{end_of_X}` delegate block |
+| `queries/indents.scm` | nvim-treesitter (`@indent.zero` / `@indent.auto`) | Pins ChordPro lines to column 0; leaves delegate-block bodies to the editor |
+
+`folds.scm` and `indents.scm` target nvim-treesitter specifically. Helix
+uses different capture names for indentation (`@indent` / `@outdent`) and
+derives folds from the syntax tree, so it consumes `highlights.scm` only —
+see [`docs/editors.md`](https://github.com/koedame/chordsketch/blob/main/docs/editors.md).
+
+Every query is compiled against the generated parser in CI
+(`.github/workflows/tree-sitter.yml`), so a query referencing a node type
+that `grammar.js` no longer produces fails the build.
+
 ## Usage
 
 ### In a Zed extension

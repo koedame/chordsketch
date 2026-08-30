@@ -90,13 +90,20 @@ Then install the parser:
 :TSInstall chordpro
 ```
 
-Copy the highlight queries to your Neovim runtime:
+Copy the queries to your Neovim runtime. All three files use the
+nvim-treesitter capture vocabulary:
 
 ```bash
 mkdir -p ~/.config/nvim/queries/chordpro
-cp packages/tree-sitter-chordpro/queries/highlights.scm \
-   ~/.config/nvim/queries/chordpro/highlights.scm
+cp packages/tree-sitter-chordpro/queries/*.scm \
+   ~/.config/nvim/queries/chordpro/
 ```
+
+| Query | What it does |
+|---|---|
+| `highlights.scm` | Colours directives, chord names, comments, and delegate-block bodies |
+| `folds.scm` | Makes each `{start_of_X}` … `{end_of_X}` block foldable |
+| `indents.scm` | Keeps ChordPro lines at column 0 and leaves delegate-block bodies to the editor's own indent logic |
 
 ### LSP setup
 
@@ -195,6 +202,11 @@ mkdir -p ~/.config/helix/runtime/queries/chordpro
 cp packages/tree-sitter-chordpro/queries/highlights.scm \
    ~/.config/helix/runtime/queries/chordpro/highlights.scm
 ```
+
+Copy only `highlights.scm`. The grammar's `folds.scm` and `indents.scm`
+use nvim-treesitter's capture names (`@fold`, `@indent.zero`), which
+Helix does not read — it derives folds from the syntax tree itself and
+expects `@indent` / `@outdent` in its own `indents.scm`.
 
 ## Language Server (any editor)
 
