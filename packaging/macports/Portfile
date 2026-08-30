@@ -47,7 +47,17 @@ long_description    ChordSketch is a Rust implementation of the ChordPro file \
 
 # Source-tarball checksums for v0.5.0. Regenerate on each release —
 # the canonical procedure lives in `docs/releasing.md` §MacPorts.
-checksums           rmd160  9a661359e1bab8230b984b6903a54cdb6035cbad \
+#
+# The `${distname}${extract.suffix}` key is required, not decorative.
+# `cargo.crates` below appends one checksum entry per crate distfile,
+# so this port has many distfiles and every entry must name the file
+# it belongs to. Without the key MacPorts reads the crate entries as a
+# continuation of this block ("invalid checksum field:
+# adler2-2.0.1.crate") and then reports "No checksum set for
+# chordsketch-0.5.0.tar.gz". Every cargo port in macports-ports uses
+# this keyed form.
+checksums           ${distname}${extract.suffix} \
+                    rmd160  9a661359e1bab8230b984b6903a54cdb6035cbad \
                     sha256  21392bc0a7cc829da7bb03adf70cbbd450cc2a6a7eb6b4a7c1102cfbda01ed87 \
                     size    7739468
 
