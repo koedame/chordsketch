@@ -15,11 +15,10 @@ on:
   # - PR runs: install MacPorts, register the local Portfile,
   #   `port lint --nitpick`. Catches Tcl-syntax / required-field /
   #   field-ordering bugs in <5 min.
-  # - `workflow_dispatch`: everything above, plus `port install -s
-  #   chordsketch` and the `cli-render-smoke` composite. ~30 min
-  #   wall-clock; reserved for release-time AC2 evidence runs and
-  #   any deliberate Portfile rebuild verification, not for routine
-  #   PR review.
+  # - `workflow_dispatch`: everything above, plus `port install
+  #   chordsketch` and the `cli-render-smoke` composite. Reserved for
+  #   release-time evidence runs and any deliberate Portfile rebuild
+  #   verification, not for routine PR review.
 
 # Cancel stale PR runs when a new commit is pushed to the same PR so
 # rebase / force-push does not leave two parallel jobs competing for
@@ -43,10 +42,12 @@ jobs:
     # Wall-clock budget:
     # - PR path (lint only): ~5 min — install MacPorts, selfupdate,
     #   register tree, lint.
-    # - workflow_dispatch path: cargo portgroup downloads ~640 crates
-    #   and compiles the full chordsketch crate graph from scratch
-    #   on a fresh runner, plus MacPorts build deps. 90 min cap is
-    #   generous.
+    # - workflow_dispatch path: the cargo portgroup downloads ~640
+    #   crates and compiles the chordsketch crate graph from scratch
+    #   on a fresh runner. Dependencies are fetched as MacPorts binary
+    #   archives rather than built (see the install step), which is
+    #   what this budget assumes; it does NOT cover a from-source
+    #   toolchain build.
     timeout-minutes: 90
     # `Swatinem/rust-cache` is intentionally absent: cargo runs inside
     # the MacPorts sandbox under its own distfile cache. The action
@@ -169,13 +170,24 @@ jobs:
 
       # The remaining steps run only on `workflow_dispatch` — see the
       # `on:` comment for the rationale. PR runs stop here.
-      - name: port install (source build)
+      - name: port install (chordsketch from source, deps from archives)
         if: github.event_name == 'workflow_dispatch'
-        # `-s` forces source build. Binary archives would let us
-        # short-circuit the cargo build, but they only exist on the
-        # MacPorts buildbot side post-acceptance — we want to validate
-        # the recipe end-to-end here.
-        run: sudo /opt/local/bin/port -v install -s chordsketch
+        # No `-s`. The flag is global, not per-port: it forbids binary
+        # archives for every port in the dependency graph, so MacPorts
+        # rebuilt the whole toolchain — 61 ports including `cmake`,
+        # `perl5.34`, `python314`, `icu`, `openssl3` and `rust`. Run
+        # 33324702529 spent its entire 90-minute budget inside `rust`'s
+        # bundled LLVM (last line: `[1169/3892] Building CXX object
+        # .../LLVMScalarOpts.dir/Scalar.cpp.o`) and never reached
+        # chordsketch's own crates.
+        #
+        # Dropping `-s` does not weaken the check. chordsketch is not
+        # in the upstream ports tree, so no binary archive for it can
+        # exist and MacPorts necessarily builds it from source; only
+        # its dependencies come from the MacPorts buildbot. That is
+        # exactly the intended scope — the recipe under test is this
+        # repository's Portfile, not LLVM's.
+        run: sudo /opt/local/bin/port -v install chordsketch
 
       - name: Verify install (cli-render-smoke)
         if: github.event_name == 'workflow_dispatch'
