@@ -18,8 +18,16 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/napi.yml"
-  release:
-    types: [published]
+  # Reusable: called by release.yml's fan-out after the GitHub Release
+  # exists, so `upload-release-tarballs` has somewhere to upload to
+  # (ADR-0039). A non-empty `tag` is what puts this workflow in release
+  # mode; on `push` / `pull_request` it is empty and only build + lint run.
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to stage tarballs for (e.g., v0.2.0). Format-validated by the caller."
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -30,7 +38,7 @@ on:
 # Cancel stale PR runs when a new commit is pushed to the same PR so
 # that rebase / force-push does not leave two parallel napi-rs builds
 # competing for the macOS 5-job concurrency cap. `main` pushes, tag
-# pushes, and `workflow_dispatch` / `release` events are not grouped
+# pushes, and `workflow_dispatch` / `workflow_call` runs are not grouped
 # with PRs and run to completion.
 concurrency:
   group: napi-${{ github.event.pull_request.number || github.ref }}
@@ -233,9 +241,12 @@ jobs:
     # we download them all, assemble each platform package, and tar the
     # six packages (5 platforms + meta) into the release.
     needs: [build]
-    if: |
-      github.event_name == 'release' ||
-      (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    # `inputs.tag` is the single release-mode discriminator: it is set on
+    # the `workflow_call` (release.yml fan-out) and `workflow_dispatch`
+    # paths and empty on `push` / `pull_request`. Testing the event name
+    # would not work — under `workflow_call` the event is the *caller's*
+    # (`push`, for a tag push), indistinguishable from a push to `main`.
+    if: inputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -248,28 +259,22 @@ jobs:
           node-version: 22
 
       - name: Validate release tag
-        # Format-validate the user-supplied tag before downstream steps
-        # derive a `version` from it. See #1797.
+        # Format-validate the tag before downstream steps derive a
+        # `version` from it. See #1797. The `workflow_call` path arrives
+        # pre-validated; this re-check guards `workflow_dispatch`, whose
+        # input is user-supplied.
         uses: ./.github/actions/validate-release-tag
         with:
-          tag: ${{ inputs.tag || github.event.release.tag_name || github.ref_name }}
+          tag: ${{ inputs.tag }}
 
       - name: Determine version
         id: version
         env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "release" ]; then
-            tag="$RELEASE_TAG"
-          else
-            tag="$INPUT_TAG"
-          fi
-          version="${tag#v}"
+          version="${TAG#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Staging @chordsketch/node@$version for local publish"
 
       - name: Download all platform artifacts
@@ -362,7 +367,7 @@ jobs:
       - name: Upload tarballs to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ inputs.tag }}
         # `--clobber` lets a re-run overwrite the previous tarball if a
         # build was rebuilt against the same tag.
         run: |

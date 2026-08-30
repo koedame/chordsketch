@@ -14,8 +14,6 @@ on:
     # Daily at 06:00 UTC — catches registry-side regressions without coupling
     # to the release cadence.
     - cron: "0 6 * * *"
-  release:
-    types: [published]
   # Run on every PR, no path filter. End-user installability is a
   # global property of the repo: it either works or it doesn't, and
   # the validity of that guarantee should not depend on which file
@@ -28,7 +26,7 @@ on:
   pull_request:
 
 # Cancel previous runs on the same PR when new commits land. Daily cron
-# and release runs fall through to `github.ref` and are never cancelled
+# runs fall through to `github.ref` and are never cancelled
 # (cancel-in-progress is gated on `pull_request` events).
 concurrency:
   group: readme-smoke-${{ github.event.pull_request.number || github.ref }}

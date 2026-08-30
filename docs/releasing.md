@@ -205,28 +205,42 @@ at post-release verification rather than before the tag is cut.
    done
    ```
 
-8. **Manually trigger remaining release-event workflows.** The
-   release created in step 5 uses `GITHUB_TOKEN`, which does NOT
-   trigger `release: published` workflows (GitHub anti-recursion
-   rule; tracked in a follow-up ADR). Until the cascade-credential
-   fix lands, every non-npm workflow that depends on the release
-   event must be dispatched manually:
+8. **Run the channel rollup.** Every CI-published channel has already
+   run inside the release workflow (step 5) — Docker, VS Code / Open
+   VSX, napi tarballs, and the whole `post-release.yml` fan-out are
+   `needs: [release]` jobs in that single run, per
+   [ADR-0039](adr/0039-release-fan-out-is-an-explicit-call-graph.md).
+   Nothing needs dispatching to make the release happen.
+
+   What is left is the convergence check, and it can only run now that
+   steps 6-7 have published the manual channels:
    ```bash
    V=X.Y.Z  # replace with the actual version
-   gh workflow run post-release.yml          -f tag=v$V    -R koedame/chordsketch
-   gh workflow run docker.yml                -f tag=v$V    -R koedame/chordsketch
-   gh workflow run vscode-extension.yml      -f tag=v$V    -R koedame/chordsketch
-   gh workflow run release-verify.yml        -f tag=v$V    -R koedame/chordsketch
-   gh workflow run napi.yml                  -f tag=v$V    -R koedame/chordsketch
+   gh workflow run release-verify.yml -f tag=v$V -R koedame/chordsketch
    ```
-   The `napi.yml` dispatch above only re-runs the build matrix and
-   re-uploads platform tarballs to the Release for safety; it does
+   `release-verify.yml` also sweeps daily at 07:00 UTC, so a forgotten
+   dispatch surfaces within a day rather than never. It is expected to be
+   red between the tag and the completion of steps 6-7 — that is an
+   accurate report of an unfinished release, not noise.
+
+   To re-run a single channel against an existing tag (a failed publish,
+   a rotated credential), dispatch that workflow directly:
+   ```bash
+   gh workflow run docker.yml           -f tag=v$V -R koedame/chordsketch
+   gh workflow run vscode-extension.yml -f tag=v$V -R koedame/chordsketch
+   gh workflow run post-release.yml     -f tag=v$V -R koedame/chordsketch
+   gh workflow run napi.yml             -f tag=v$V -R koedame/chordsketch
+   ```
+   A `docker.yml` dispatch deliberately does **not** move the `:latest`
+   tag unless you tick `promote-latest`, so re-running an older tag
+   cannot regress it (#1064). The `napi.yml` dispatch only re-runs the
+   build matrix and re-uploads platform tarballs to the Release; it does
    not publish to npm (Step 7c does that).
 
-9. **Wait for all workflows to complete** and verify each channel:
+9. **Verify each channel.** The release run from step 5 covers every
+   CI-published channel, so check that first:
    ```bash
-   # Watch the triggered runs
-   gh run list -R koedame/chordsketch --limit 10
+   gh run list -R koedame/chordsketch --workflow release.yml --limit 5
    ```
    Check that post-release.yml updates Homebrew, Scoop, AUR, Snap,
    Chocolatey, CocoaPods, Swift, and Flathub. Docker pushes to both
@@ -272,8 +286,10 @@ step 9 — the bash script in Step 6 above orders them sequentially for simplici
 `koedame/chordsketch` is distributed across multiple channels. Each channel
 has its own automation, secret, and verification path. The
 `.github/workflows/readme-smoke.yml` workflow exercises every channel
-end-to-end after each release as the single source of truth for "is the
-project's promised distribution actually working right now".
+end-to-end on a daily schedule (and on every PR) as the single source of
+truth for "is the project's promised distribution actually working right
+now". It deliberately does not run at release time: most channels are not
+updated until the manual publishes in steps 6-7 are done.
 
 This table is the **human-readable view** of `ci/release-channels.toml`.
 When adding a new channel, update both.
@@ -282,23 +298,23 @@ When adding a new channel, update both.
 |---|---|---|---|---|
 | crates.io | `chordsketch` (CLI) + 8 lib crates | manual `cargo publish` (Step 6) | maintainer's `~/.cargo/credentials` | `cargo-install` job |
 | GitHub Releases | binary archives | `release.yml` on tag push | `GITHUB_TOKEN` | `source-build` job |
-| GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml` on `release: published` | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
-| Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml` on `release: published` | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
+| GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml`, called by `release.yml` on tag push | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
+| Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml`, called by `release.yml` on tag push | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
 | npm (wasm) | `@chordsketch/wasm` | manual local `npm publish` (Step 7a) — see ADR-0008 | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-wasm` job |
 | npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | manual local `crates/napi/scripts/local-publish.sh` (Step 7c) — see ADR-0008. CI uploads platform tarballs to the GitHub Release. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `napi-node` job |
 | npm (tree-sitter) | `tree-sitter-chordpro` | manual local `npm publish --access public` (Step 7b) — see ADR-0008 | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-tree-sitter` rollup entry |
-| Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml` on `release: published` | `TAP_GITHUB_TOKEN` | `homebrew` job |
-| Scoop bucket | `koedame/scoop-bucket/chordsketch` | `post-release.yml` on `release: published` | `TAP_GITHUB_TOKEN` | `scoop` job |
-| AUR | `chordsketch` | `post-release.yml` on `release: published` | `AUR_SSH_KEY` | `aur` rollup entry |
-| Chocolatey | `chordsketch` | `post-release.yml` on `release: published` (windows-latest) | `CHOCOLATEY_API_KEY` | `chocolatey` rollup entry |
-| Snap Store | `chordsketch` | `post-release.yml` on `release: published` | `SNAP_STORE_TOKEN` | `snap` rollup entry |
+| Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `homebrew` job |
+| Scoop bucket | `koedame/scoop-bucket/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `scoop` job |
+| AUR | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `AUR_SSH_KEY` | `aur` rollup entry |
+| Chocolatey | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push (windows-latest) | `CHOCOLATEY_API_KEY` | `chocolatey` rollup entry |
+| Snap Store | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `SNAP_STORE_TOKEN` | `snap` rollup entry |
 | nixpkgs | `pkgs.chordsketch` | manual PR to `NixOS/nixpkgs` | none | `nixpkgs` rollup entry |
 | winget | `koedame.chordsketch` | manual PR to `microsoft/winget-pkgs` (Step 8) | none (uses your `gh` token to fork+push) | `winget` job |
-| VS Code Marketplace | `koedame.chordsketch` (1 universal + 7 platform-specific VSIXes, #1789) | `vscode-extension.yml` on `release: published` | `VSCE_PAT` (PAT, Marketplace Publish scope) | `vscode-marketplace` rollup entry |
+| VS Code Marketplace | `koedame.chordsketch` (1 universal + 7 platform-specific VSIXes, #1789) | `vscode-extension.yml`, called by `release.yml` on tag push | `VSCE_PAT` (PAT, Marketplace Publish scope) | `vscode-marketplace` rollup entry |
 | PyPI | `chordsketch` | `python.yml` on tag push | none (OIDC trusted publisher) | `pypi` rollup entry |
 | RubyGems | `chordsketch` | `ruby.yml` on tag push | none (OIDC trusted publisher) | `rubygems` rollup entry |
 | Maven Central | `me.koeda:chordsketch` | `kotlin.yml` on tag push | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, `SIGNING_PASSWORD` | `maven-central` rollup entry |
-| CocoaPods | `ChordSketch` | `post-release.yml` on `release: published` | `COCOAPODS_TRUNK_TOKEN` | `cocoapods` rollup entry |
+| CocoaPods | `ChordSketch` | `post-release.yml`, called by `release.yml` on tag push | `COCOAPODS_TRUNK_TOKEN` | `cocoapods` rollup entry |
 | JetBrains Marketplace | `me.koeda.chordsketch` | manual `./gradlew publishPlugin` | `JETBRAINS_MARKETPLACE_TOKEN` | not yet automated |
 | from source | `git clone` + `cargo install --path crates/cli` | always available | none | `source-build` job |
 | Library Usage (Rust) | crates.io snippet from README | implicit via crates.io | none | `library-smoke` job |
@@ -528,7 +544,6 @@ following as the rotation policy:
 | Secret | Target cadence | Rotation UI |
 |--------|----------------|-------------|
 | `NPM_TOKEN` | Every 90 days, or immediately if the value has ever been pasted into chat / shared logs | <https://www.npmjs.com/settings/~/tokens> (sign in as the npm account that owns `@chordsketch`) |
-| `RELEASE_DISPATCH_TOKEN` | Every 90 days. Per [ADR-0009](adr/0009-release-event-cascade-credential.md), this is a fine-grained PAT scoped to `koedame/chordsketch` only with `Contents: Read and write`. Required for `release.yml` and `desktop-release.yml` to fire `release: [published]` events on tag push. | <https://github.com/settings/tokens?type=beta> → "Generate new token" → repository access "Only select repositories" → `koedame/chordsketch` → permissions: `Contents: Read and write` → expiration 90 days. Then `gh secret set RELEASE_DISPATCH_TOKEN -R koedame/chordsketch` with the new token value. |
 | `DOCKERHUB_TOKEN` | Every 90 days | <https://hub.docker.com/settings/security> |
 | `TAP_GITHUB_TOKEN` | Every 90 days, or whenever the issuing GitHub account changes 2FA / recovery setup | <https://github.com/settings/tokens> |
 | `CHOCOLATEY_API_KEY` | Only if regenerated on chocolatey.org | <https://community.chocolatey.org/account> → API Key → copy, then `gh secret set CHOCOLATEY_API_KEY` |
@@ -560,25 +575,30 @@ These are non-obvious gotchas discovered during real publishing. They are not
 derivable from the code; check this section before assuming the simple path
 will work.
 
-### `release: published` workflows do not auto-trigger
+### Nothing keys off the `release: published` event any more
 
-`release.yml` creates the GitHub Release using `GITHUB_TOKEN`. GitHub's
-anti-recursion rule prevents events created by `GITHUB_TOKEN` from
-triggering further workflows. This means every workflow with
-`on: release: types: [published]` — Docker, VS Code extension, napi,
-post-release, the npm publish workflows, and **release-verify** — will
-NOT fire automatically.
+Historical note, kept because the symptom is memorable and the cause is
+not visible in the workflow files.
 
-**All of these must be manually dispatched via `gh workflow run` after
-step 5 of the Release Checklist.** See step 8 for the exact commands.
+`gh release create` run with `GITHUB_TOKEN` does not fire
+`release: published` — GitHub's anti-recursion rule suppresses it. While
+the downstream workflows subscribed to that event, this meant none of
+them ran: discovered during the v0.2.1 release (2026-04-16), when
+Homebrew, Scoop, AUR, Snap, Chocolatey, CocoaPods, Swift, Flathub and
+Docker all silently did not update. ADR-0009 worked around it with a PAT
+(`RELEASE_DISPATCH_TOKEN`).
 
-Discovered during the v0.2.1 release (2026-04-16) when post-release
-automation (Homebrew, Scoop, AUR, Snap, Chocolatey, CocoaPods, Swift,
-Flathub, Docker) silently did not run.
+Both the event and the PAT are gone now. Per
+[ADR-0039](adr/0039-release-fan-out-is-an-explicit-call-graph.md) the
+downstream workflows are reusable (`workflow_call`) and are invoked by
+`release.yml` as `needs: [release]` jobs in the same run, so the release
+event is never consulted and the token that made it fire is no longer
+provisioned.
 
-Long-term fix: use a PAT or GitHub App token in `release.yml` instead
-of `GITHUB_TOKEN` so the release event propagates normally. This would
-eliminate step 8 entirely.
+**If you are adding a publishing workflow, do not give it a `release:`
+trigger.** Add a caller job for it in `release.yml` instead — that is
+what gives it tag-namespace filtering and after-the-Release-exists
+ordering.
 
 ### npm publish via CI cannot create new packages (scoped or unscoped)
 
@@ -895,8 +915,9 @@ package.
    `.github/workflows/npm-publish-<name>.yml`:
    - Use `npm-publish.yml` (the `@chordsketch/wasm` workflow) as a
      template
-   - Triggers: `release: [published]` and `workflow_dispatch` with a
-     `version` input
+   - Triggers: `workflow_call` and `workflow_dispatch`, both with a
+     `version` input. Add a caller job for it in `release.yml`'s fan-out
+     (ADR-0039); do **not** give it a `release:` trigger
    - Do **not** add an `environment:` block — `NPM_TOKEN` is a repo-level
      secret. An environment block was removed from `npm-publish.yml` in
      #1791 to avoid stale deployment entries (see #1790).

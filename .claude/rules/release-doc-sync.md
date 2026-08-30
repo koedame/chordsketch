@@ -111,9 +111,14 @@ disk:
 - ADR-0008 (npm publishing is local) ↔ no `npm publish` invocation in
   any `.github/workflows/*.yml`. Verify with
   `grep -RnE 'npm[[:space:]]+publish' .github/workflows/`.
-- ADR-0009 (release-event cascade credential) ↔ `release.yml` and
-  `desktop-release.yml` use `secrets.RELEASE_DISPATCH_TOKEN` (NOT
-  `secrets.GITHUB_TOKEN`) on every `gh release create` step.
+- ADR-0039 (release fan-out is an explicit call graph) ↔ no workflow
+  carries a `release:` trigger, and `release.yml` calls every
+  publishing workflow as a `needs: [release]` job. Verify with
+  `grep -Rn 'types: \[published\]' .github/workflows/` (must be empty)
+  and by reading `release.yml`'s fan-out block. Supersedes the
+  ADR-0009 check, which required `secrets.RELEASE_DISPATCH_TOKEN` on
+  every `gh release create` step — that PAT is retired, and both
+  `gh release create` calls are back on `secrets.GITHUB_TOKEN`.
 
 A drift here is a §6 finding regardless of CHANGELOG / Cargo.toml
 state and blocks the release-cut commit identically.
