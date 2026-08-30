@@ -1,10 +1,12 @@
 # Branch Strategy
 
-- **All work requires a GitHub Issue first** — no branch without an issue.
+- **A GitHub Issue is optional** — a branch may exist without one
+  ([ADR-0043](../../docs/adr/0043-issue-not-required-for-prs.md)).
 - Branch naming: `issue-{number}-{short-kebab-case}` (e.g., `issue-5-chord-parser`)
-  for single-issue branches.
+  for single-issue branches; `{type}/{short-kebab-case}` (e.g.
+  `fix/transpose-sharps`, `docs/release-checklist`) for branches with no issue.
 - One branch per issue, one issue per branch — strict 1:1 mapping for
-  human-authored branches and single-issue autopilot rounds.
+  issue-linked human-authored branches and single-issue autopilot rounds.
 - All branches are created from latest `main`.
 - After merge, delete the remote branch (already configured via repo settings).
 
