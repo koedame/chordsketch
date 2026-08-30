@@ -180,10 +180,14 @@ and is not bundled here.
 
 **Accepted:**
 
-- One release is now one workflow run with roughly 50 jobs instead of nine
-  runs. Deep-linking to "the Docker run for v0.5.0" becomes "the docker
-  job group inside the v0.5.0 release run". The run limit is 256 jobs, so
-  there is headroom, but a future channel addition should re-check.
+- One release is now one workflow run instead of nine runs. Counted from
+  the job definitions and matrix sizes: 8 build + 1 release + 2 docker +
+  7 napi + 10 vscode-extension + 1 npm-wasm + 1 tree-sitter + 8
+  post-release = 37 leaf jobs, 43 rows including the six caller
+  wrappers. Deep-linking to "the Docker run for v0.5.0" becomes "the
+  docker job group inside the v0.5.0 release run". The run limit is 256
+  jobs, so there is headroom, but a future channel addition should
+  re-check.
 - A failed VS Code matrix cell now blocks the extension publish entirely
   rather than publishing the remaining platforms. This is intentional
   (fail closed, and loudly) and matches `release.yml`'s own `build` job,
