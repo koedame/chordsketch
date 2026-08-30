@@ -27,6 +27,14 @@ PortGroup           github 1.0
 PortGroup           cargo 1.0
 
 github.setup        koedame chordsketch 0.5.0 v
+# The `github` portgroup defaults `tarball_from` to `releases`, which
+# looks for a release asset literally named
+# `chordsketch-${version}.tar.gz`. This project's releases carry
+# per-target binaries (`chordsketch-v0.5.0-<triple>.tar.gz`) and no
+# such source asset, so the default 404s. Fetch the tag archive
+# instead — that is also what the `checksums` below are computed
+# against, per the regeneration note at the top of this file.
+github.tarball_from archive
 revision            0
 categories          textproc music
 license             MIT
