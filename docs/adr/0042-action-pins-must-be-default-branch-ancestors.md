@@ -41,8 +41,6 @@ pick a SHA that is within the history of the master branch. Any commit that is
 not within the history of master will eventually get garbage-collected and
 your workflows will fail."*
 
-[rt]: https://github.com/dtolnay/rust-toolchain#choice-of-full-length-commit-sha
-
 ## Decision
 
 A SHA pin must name a commit that is an **ancestor of (or identical to) the
@@ -92,3 +90,36 @@ the call site is behaviour-preserving.
   upstream action repository. Dependabot already performs that check weekly —
   the point of this ADR is that its report was being thrown away, not that a
   second checker is needed.
+
+## Alternatives considered
+
+- **Add a network reachability check to `check-action-pins.sh`**: rejected.
+  The check would require one `gh api` call per distinct pin on every PR,
+  making a required check depend on the availability of every upstream action
+  repository. If any upstream is temporarily unreachable, the check fails for
+  an unrelated reason. Dependabot already performs this check weekly; the
+  correct fix is to keep Dependabot's report actionable (i.e., maintain valid
+  pins), not to duplicate the check in CI.
+
+- **Keep pinning to the `stable`/`nightly` branches and accept the risk**:
+  rejected. The tail risk of upstream garbage collection is not theoretical —
+  `dtolnay/rust-toolchain`'s README explicitly documents the hazard. Accepting
+  it in exchange for the convenience of not naming the toolchain at the call
+  site is not a good trade.
+
+- **Switch to a different Rust toolchain installer** (e.g., `rustup` invoked
+  directly in a `run:` step): not needed. `dtolnay/rust-toolchain` works
+  correctly when pinned to a `master` commit; the fix is one line per call
+  site, not a toolchain-installer migration.
+
+## References
+
+- [dtolnay/rust-toolchain README — "Choice of full-length commit SHA"][rt]
+- Dependabot `github_actions` job failure log (7 consecutive failures,
+  2026-04-05 through 2026-08-30) — the error excerpt is reproduced in the
+  Context section above.
+- PR #2784 — the code change implementing this decision.
+- `.claude/rules/action-pin-provenance.md` — the operational rule that
+  states this policy for anyone editing a `uses:` line.
+
+[rt]: https://github.com/dtolnay/rust-toolchain#choice-of-full-length-commit-sha
