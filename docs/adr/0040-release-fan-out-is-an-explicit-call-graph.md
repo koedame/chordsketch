@@ -54,8 +54,10 @@ started, and there is no wait or retry anywhere in that workflow.
 
 `vscode-extension.yml` carried `continue-on-error: true` on
 `build-platform`, `publish`, and `publish-openvsx`. On `desktop-v0.5.0`
-every job in that workflow failed and the run was still reported ✅. The
-"five workflows failed" count above is therefore an undercount.
+nine of that workflow's ten jobs failed — all seven `build-platform`
+matrix cells plus both publish jobs; only the tag-agnostic `Build &
+Package Extension` CI job passed — and the run was still reported ✅.
+The "five workflows failed" count above is therefore an undercount.
 
 The three compound. On `v0.5.0`, `Publish to Open VSX Registry` genuinely
 failed — and was green because of (3), while `release-verify` was red

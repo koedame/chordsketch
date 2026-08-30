@@ -189,9 +189,10 @@ jobs:
     # expected VSIX count` step inside each publish job was left as the
     # only guardrail against shipping a partial set. The cost was that a
     # wholly-failed matrix still reported the run green: on
-    # `desktop-v0.5.0` every job in this workflow failed and the run was
-    # still marked successful. That is exactly the "red is invisible"
-    # failure this rework exists to remove, so the masking is gone.
+    # `desktop-v0.5.0` nine of this workflow's ten jobs failed (all seven
+    # cells here plus both publish jobs) and the run was still marked
+    # successful. That is exactly the "red is invisible" failure this
+    # rework exists to remove, so the masking is gone.
     #
     # Consequence, stated plainly: a failed cell now fails this job, which
     # skips both publish jobs and turns the release run red. That is the
