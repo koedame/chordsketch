@@ -56,7 +56,14 @@ jobs:
     # Portfile changes plus workflow_dispatch, well below the 7-day
     # cache TTL.
     env:
-      MACPORTS_VERSION: "2.10.7"
+      # Floor is 2.11.5: that is the first macports-base release whose
+      # assets include a macOS 26 (Tahoe) installer, and `macos-latest`
+      # is macOS 26. Pinning below it makes the download step 404 for
+      # every runner. Verified against the release assets:
+      #   gh api repos/macports/macports-base/releases/tags/v<V> \
+      #     --jq '[.assets[].name|select(test("Tahoe"))]|length'
+      # returns 0 for v2.10.7 / v2.11.4 and 2 from v2.11.5 onward.
+      MACPORTS_VERSION: "2.12.6"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -70,6 +77,7 @@ jobs:
             13) name=Ventura  ;;
             14) name=Sonoma   ;;
             15) name=Sequoia  ;;
+            26) name=Tahoe    ;;
             *)
               echo "unsupported macOS major version: $major" >&2
               exit 1
