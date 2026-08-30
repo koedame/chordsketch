@@ -50,7 +50,6 @@ YAML noise.
 - `desktop-release.yml` — fires on `desktop-v*` tag pushes; expected
   cadence comparable to `release.yml` and below the 7-day cache TTL
 - `npm-publish.yml` — a few times per month
-- `extended-tests.yml` — dispatch-only, rarely invoked
 
 Workflows in the "intentionally omitted" category SHOULD have a YAML comment
 explaining the frequency-based rationale so future contributors do not
