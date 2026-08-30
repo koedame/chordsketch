@@ -136,18 +136,25 @@ jobs:
           # could not be read, which is not itself a reason to refuse to
           # push - fall through and let the push decide.
           $feed = "https://community.chocolatey.org/api/v2/Packages(Id='chordsketch',Version='$env:VERSION')"
-          $probe = Invoke-WebRequest -Uri $feed -SkipHttpErrorCheck
-          switch ($probe.StatusCode) {
-            200 {
-              Write-Host "::notice::chordsketch $env:VERSION is already on the Chocolatey Community Repository; nothing to push. $page"
-              exit 0
+          try {
+            $probe = Invoke-WebRequest -Uri $feed -SkipHttpErrorCheck
+            switch ($probe.StatusCode) {
+              200 {
+                Write-Host "::notice::chordsketch $env:VERSION is already on the Chocolatey Community Repository; nothing to push. $page"
+                exit 0
+              }
+              404 {
+                Write-Host "chordsketch $env:VERSION is not on the repository yet; pushing."
+              }
+              default {
+                Write-Host "::warning::Could not read the Chocolatey feed (HTTP $($probe.StatusCode)); pushing without the pre-flight check."
+              }
             }
-            404 {
-              Write-Host "chordsketch $env:VERSION is not on the repository yet; pushing."
-            }
-            default {
-              Write-Host "::warning::Could not read the Chocolatey feed (HTTP $($probe.StatusCode)); pushing without the pre-flight check."
-            }
+          } catch {
+            # -SkipHttpErrorCheck covers 4xx/5xx answers; a DNS failure or
+            # timeout still throws, and the runner's 'Stop' preference is
+            # in effect here, so it would abort the step instead.
+            Write-Host "::warning::Could not reach the Chocolatey feed ($_); pushing without the pre-flight check."
           }
 
           # `choco push` collapses every rejection into exit code 1 and
@@ -156,10 +163,13 @@ jobs:
           # runner's pwsh wrapper sets $ErrorActionPreference = 'Stop',
           # which on PowerShell 7.4+ aborts the step on a non-zero native
           # exit before any of that can be read back.
+          # Set-Location stays above the preference change so a missing
+          # directory still stops the step outright.
+          Set-Location choco-pkg
+
           $ErrorActionPreference = 'Continue'
           $PSNativeCommandUseErrorActionPreference = $false
 
-          Set-Location choco-pkg
           $output = & choco push "chordsketch.$env:VERSION.nupkg" `
             --source https://push.chocolatey.org/ `
             --api-key $env:CHOCOLATEY_API_KEY 2>&1 | Out-String
