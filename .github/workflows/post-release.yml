@@ -1,8 +1,16 @@
 name: Post-Release Package Updates
 
+# Reusable: called by release.yml's fan-out after the GitHub Release
+# exists (ADR-0039). Every job here targets the CLI/library release, and
+# the caller's `push: tags: v*` trigger is what guarantees the tag is in
+# that namespace — this workflow no longer sorts tags itself.
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to fan out (e.g., v0.1.0). Format-validated by the caller."
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -17,7 +25,7 @@ on:
 # conforms to `.claude/rules/ci-parallelization.md` §5, but keep
 # `cancel-in-progress: false` so no partial rollouts are possible.
 concurrency:
-  group: post-release-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  group: post-release-${{ inputs.tag }}
   cancel-in-progress: false
 
 permissions:
@@ -28,36 +36,8 @@ defaults:
     shell: bash
 
 jobs:
-  detect-tag-type:
-    name: Detect tag type (CLI vs desktop)
-    # `release.types=[published]` does not offer a tag-pattern
-    # filter, so desktop-v* tags (owned by
-    # `desktop-release.yml`, #2078) would fan out through every
-    # CLI-targeted job below and fail `validate-release-tag`
-    # against the CLI tag format. Compute one boolean output
-    # here and gate every downstream job on it. Added in #2079
-    # when the desktop release namespace was introduced.
-    runs-on: ubuntu-latest
-    outputs:
-      is-desktop: ${{ steps.check.outputs.is-desktop }}
-    steps:
-      - name: Inspect tag
-        id: check
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          if [[ "$RELEASE_TAG" == desktop-v* ]] || [[ "$INPUT_TAG" == desktop-v* ]]; then
-            echo "is-desktop=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is-desktop=false" >> "$GITHUB_OUTPUT"
-          fi
-
   update-homebrew:
     name: Update Homebrew formula
-    if: needs.detect-tag-type.outputs.is-desktop != 'true'
-    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -65,15 +45,8 @@ jobs:
       - name: Determine version
         id: version
         env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="$RELEASE_TAG"
-          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
@@ -149,8 +122,6 @@ jobs:
 
   update-scoop:
     name: Update Scoop manifest
-    if: needs.detect-tag-type.outputs.is-desktop != 'true'
-    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -158,15 +129,8 @@ jobs:
       - name: Determine version
         id: version
         env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="$RELEASE_TAG"
-          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
@@ -222,8 +186,6 @@ jobs:
 
   update-chocolatey:
     name: Update Chocolatey package
-    if: needs.detect-tag-type.outputs.is-desktop != 'true'
-    needs: [detect-tag-type]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -232,15 +194,8 @@ jobs:
         id: version
         shell: bash
         env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="$RELEASE_TAG"
-          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
@@ -308,8 +263,6 @@ jobs:
 
   update-snap:
     name: Update Snap package
-    if: needs.detect-tag-type.outputs.is-desktop != 'true'
-    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -317,15 +270,8 @@ jobs:
       - name: Determine version
         id: version
         env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="$RELEASE_TAG"
-          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
@@ -382,8 +328,6 @@ jobs:
 
   update-cocoapods:
     name: Update CocoaPods podspec
-    if: needs.detect-tag-type.outputs.is-desktop != 'true'
-    needs: [detect-tag-type]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -391,15 +335,8 @@ jobs:
       - name: Determine version
         id: version
         env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="$RELEASE_TAG"
-          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
@@ -433,8 +370,6 @@ jobs:
 
   update-aur:
     name: Update AUR package
-    if: needs.detect-tag-type.outputs.is-desktop != 'true'
-    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -442,15 +377,8 @@ jobs:
       - name: Determine version
         id: version
         env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="$RELEASE_TAG"
-          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
@@ -549,8 +477,6 @@ jobs:
 
   update-swift-package:
     name: Update Swift Package.swift
-    if: needs.detect-tag-type.outputs.is-desktop != 'true'
-    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     # Note: this job pushes a branch and opens a PR. The default
     # GITHUB_TOKEN cannot trigger downstream workflows on pushes / PR
@@ -569,15 +495,8 @@ jobs:
       - name: Determine version
         id: version
         env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="$RELEASE_TAG"
-          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
@@ -763,8 +682,6 @@ jobs:
 
   update-flatpak:
     name: Update Flathub manifest
-    if: needs.detect-tag-type.outputs.is-desktop != 'true'
-    needs: [detect-tag-type]
     runs-on: ubuntu-latest
     # Prerequisites: the Flathub app repo (flathub/me.koeda.chordsketch)
     # must exist before this job can run. Unlike AUR or Homebrew, Flathub
@@ -777,15 +694,8 @@ jobs:
       - name: Determine version
         id: version
         env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="$RELEASE_TAG"
-          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 

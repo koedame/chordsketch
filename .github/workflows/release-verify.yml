@@ -8,8 +8,20 @@ name: Release verify
 # silently succeeding at release time.
 #
 # Runs on:
-#   - release: types: [published] — automatically after a release is cut
+#   - schedule — a daily convergence sweep
 #   - workflow_dispatch — manual re-verify or red-path dry-run
+#
+# Deliberately NOT on the release event, and deliberately not part of
+# release.yml's fan-out (ADR-0039). This rollup asks "has every channel
+# converged on the release?", and at tag time the answer is structurally
+# "no": crates.io and every npm package are published by hand after the
+# tag (docs/releasing.md steps 6-7, ADR-0008), and PyPI / RubyGems /
+# Maven Central are published by python.yml / ruby.yml / kotlin.yml,
+# which race the release on the same tag push. Running here at release
+# time produced a permanent red — 12 of 13 runs up to v0.5.0 failed —
+# which is exactly the "red means nothing" state this rollup is supposed
+# to break. Whether *this release's CI publishes* worked is now answered
+# by the release run itself, whose publish jobs fail loudly.
 #
 # The `force_stale_channel` dispatch input satisfies the A.dry-run bullet
 # from issue #1506: forcing any channel to report a synthetic stale version
@@ -21,8 +33,13 @@ name: Release verify
 # the status without having to navigate to Actions.
 
 on:
-  release:
-    types: [published]
+  schedule:
+    # Daily at 07:00 UTC, an hour after readme-smoke's sweep so the two
+    # do not contend. Red here means a channel is genuinely behind — in
+    # the hours between a tag and the maintainer finishing the manual
+    # publishes that is true and expected, and it clears on its own once
+    # the checklist is done.
+    - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       tag:
@@ -70,16 +87,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_TAG: ${{ inputs.tag }}
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "release" ]; then
-            tag="$RELEASE_TAG"
-          elif [ -n "${INPUT_TAG:-}" ]; then
+          if [ -n "${INPUT_TAG:-}" ]; then
             tag="$INPUT_TAG"
           else
-            tag=$(gh release list -R "$GITHUB_REPOSITORY" --limit 1 --json tagName -q '.[0].tagName')
+            # Pick the newest tag in the *library* namespace. Plain
+            # `--limit 1` would pick up a `desktop-v*` release (owned by
+            # desktop-release.yml, whose channels are not in this
+            # manifest) whenever the desktop release is the more recent
+            # of the two — as it was for both v0.5.0 and v0.4.0.
+            tag=$(gh release list -R "$GITHUB_REPOSITORY" --limit 30 --json tagName \
+                    -q '[.[] | select(.tagName | test("^v[0-9]"))][0].tagName')
           fi
           if [ -z "$tag" ]; then
             echo "::error::no tag could be determined"

@@ -176,6 +176,16 @@ jobs:
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    # The contract every downstream reusable workflow is called with
+    # (ADR-0039). `tag` is the v-prefixed release tag, already
+    # format-validated by the `Validate release tag` step below; `version`
+    # is the same value with the `v` stripped, for the npm-side callees
+    # that set a package.json version. (The `build` job's own
+    # `steps.version.outputs.version` predates this and holds the *tag* —
+    # it names release archives, so it is left alone.)
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -199,11 +209,12 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            VERSION="$INPUT_TAG"
+            TAG="$INPUT_TAG"
           else
-            VERSION="$REF_NAME"
+            TAG="$REF_NAME"
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
         shell: bash
 
       - name: Generate checksums
@@ -212,34 +223,109 @@ jobs:
           find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec sha256sum {} \; | sed 's|  \./[^/]*/|  |' > ../checksums.txt
           cat ../checksums.txt
 
-      - name: Assert RELEASE_DISPATCH_TOKEN is present
-        # Per ADR-0009: the release MUST be created by a PAT, not
-        # GITHUB_TOKEN, so that `release: [published]` cascades to
-        # the eight downstream workflows that listen for it. Fail
-        # loud if the secret is missing rather than silently
-        # falling back to GITHUB_TOKEN (the silent path is exactly
-        # what this ADR exists to eliminate).
-        env:
-          DISPATCH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
-        run: |
-          if [ -z "${DISPATCH_TOKEN:-}" ]; then
-            echo "::error::RELEASE_DISPATCH_TOKEN is unset. Per ADR-0009 this token is required for releases to cascade to downstream workflows. Provision it via 'gh secret set RELEASE_DISPATCH_TOKEN' before re-running."
-            exit 1
-          fi
-
       - name: Create Release
         env:
-          # `RELEASE_DISPATCH_TOKEN` is a fine-grained PAT scoped to
-          # `Contents: Read and write` on this repo only. Using a
-          # non-GITHUB_TOKEN here is what causes the resulting
-          # `release: [published]` event to fire downstream
-          # workflows. See ADR-0009.
-          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
+          # `GITHUB_TOKEN` is sufficient here. Publishing used to need a
+          # PAT (ADR-0009) purely so the resulting `release: [published]`
+          # event would cascade to the downstream workflows — GitHub
+          # suppresses that event when the release is created by
+          # `GITHUB_TOKEN`. ADR-0039 replaced the cascade with the
+          # explicit fan-out below, so nothing keys off the event any
+          # more and the PAT's only purpose is gone.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          gh release create "$VERSION" \
-            --title "$VERSION" \
+          gh release create "$TAG" \
+            --title "$TAG" \
             --notes "See [CHANGELOG.md](https://github.com/koedame/chordsketch/blob/main/CHANGELOG.md) for details." \
             artifacts/*/* \
             checksums.txt \
             --draft=false
+
+  # --------------------------------------------------------------- fan-out
+  #
+  # Downstream publishing is an explicit call graph rooted at this workflow,
+  # not a `release: [published]` broadcast (ADR-0039). Two properties the
+  # broadcast could not provide:
+  #
+  #   1. Tag-namespace routing. This workflow's `push: tags: v*` trigger is
+  #      filtered by GitHub itself, so a `desktop-v*` release (owned by
+  #      desktop-release.yml) can no longer reach any of these workflows.
+  #      The broadcast had no tag filter and fanned every release into all
+  #      of them.
+  #   2. Ordering. `needs: [release]` means the GitHub Release — and every
+  #      asset the callees download from it — exists before they start.
+  #
+  # Each callee's `permissions:` below is the union of what its own jobs
+  # declare: a called workflow can only narrow the caller job's token, so
+  # under-granting here silently breaks a publish step.
+  #
+  # Every callee also keeps a `workflow_dispatch` entry point for
+  # re-running one channel against an existing tag.
+
+  docker:
+    name: Docker
+    needs: [release]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+      # Only a tag push publishes the newest release, so only a tag push
+      # may move `:latest`. A `workflow_dispatch` re-run rebuilds an older
+      # tag's immutable `:X.Y.Z` / `:X.Y` aliases without regressing
+      # `:latest` (#1064) — this expression is what used to be spelled
+      # `github.event_name == 'release'` inside docker.yml.
+      promote-latest: ${{ github.event_name == 'push' }}
+    secrets: inherit
+
+  napi:
+    name: napi-rs
+    needs: [release]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/napi.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
+
+  vscode-extension:
+    name: VS Code Extension
+    needs: [release]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/vscode-extension.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
+
+  npm-wasm:
+    name: Verify @chordsketch/wasm build
+    needs: [release]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/npm-publish.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
+
+  npm-tree-sitter:
+    name: Verify tree-sitter-chordpro build
+    needs: [release]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/npm-publish-tree-sitter.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
+
+  post-release:
+    name: Post-Release Package Updates
+    needs: [release]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/post-release.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
