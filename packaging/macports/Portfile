@@ -1,26 +1,14 @@
 # -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
 
-# Reference Portfile for MacPorts submission. Before submitting to
-# macports/macports-ports, refresh the per-release fields:
-#
-#   1. Bump `github.setup` to the new tag.
-#   2. Refresh the source-tarball `checksums` block (rmd160 / sha256 /
-#      size) — `wc -c` + `openssl dgst -rmd160` + `openssl dgst
-#      -sha256` against
-#      https://github.com/koedame/chordsketch/archive/refs/tags/v<TAG>.tar.gz.
-#   3. Regenerate the `cargo.crates` block from the **tagged**
-#      `Cargo.lock`, never HEAD's:
-#          python3 scripts/macports-regen-cargo-crates.py \
-#              --apply --from-ref v<TAG>
-#      The full procedure lives in `docs/releasing.md` §MacPorts.
-#
-# `cargo.crates` and the source tarball share an invariant: every
-# checksum listed here must match what the tarball's `Cargo.lock`
-# demands, otherwise the cargo portgroup rejects the build with
-# "checksum mismatch on <crate>". The `macports-portfile-sync` CI
-# guard pins this invariant on every PR. Rationale and the rejected
-# alternatives live in `docs/adr/0012-macports-portfile-cargo-crates-
-# tag-relative.md`.
+# Per-release maintenance: bump `github.setup` to the new tag, refresh
+# the source-tarball `checksums` block below, and regenerate
+# `cargo.crates` from the **tagged** `Cargo.lock` — never HEAD's.
+# Every crate checksum listed here must match what the `Cargo.lock`
+# shipped inside the source tarball demands, or the cargo portgroup
+# rejects the build with "checksum mismatch on <crate>". The upstream
+# project ships a regeneration script and documents the full
+# procedure:
+#     https://github.com/koedame/chordsketch/blob/main/docs/releasing.md
 
 PortSystem          1.0
 PortGroup           github 1.0
@@ -33,10 +21,11 @@ github.setup        koedame chordsketch 0.5.0 v
 # per-target binaries (`chordsketch-v0.5.0-<triple>.tar.gz`) and no
 # such source asset, so the default 404s. Fetch the tag archive
 # instead — that is also what the `checksums` below are computed
-# against, per the regeneration note at the top of this file.
+# against, per the maintenance note at the top of this file.
 github.tarball_from archive
 revision            0
-categories          textproc music
+categories          textproc audio
+installs_libs       no
 license             MIT
 maintainers         {koeda.me:oss @koedame} openmaintainer
 description         ChordPro file format parser and renderer
@@ -45,9 +34,6 @@ long_description    ChordSketch is a Rust implementation of the ChordPro file \
                     HTML, or PDF output. Full compatibility with the ChordPro \
                     specification.
 
-# Source-tarball checksums for v0.5.0. Regenerate on each release —
-# the canonical procedure lives in `docs/releasing.md` §MacPorts.
-#
 # The `${distname}${extract.suffix}` key is required, not decorative.
 # `cargo.crates` below appends one checksum entry per crate distfile,
 # so this port has many distfiles and every entry must name the file
@@ -61,8 +47,8 @@ checksums           ${distname}${extract.suffix} \
                     sha256  21392bc0a7cc829da7bb03adf70cbbd450cc2a6a7eb6b4a7c1102cfbda01ed87 \
                     size    7739468
 
-# Cargo crate manifest auto-generated from `git show v0.5.0:Cargo.lock`.
-# Do not edit by hand — regenerate per docs/releasing.md §MacPorts.
+# Cargo crate manifest auto-generated from the tagged `Cargo.lock`.
+# Do not edit by hand — regenerate with the script linked at the top.
 cargo.crates \
     adler2 2.0.1 320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa \
     adobe-cmap-parser 0.4.1 ae8abfa9a4688de8fc9f42b3f013b6fffec18ed8a554f5f113577e0b9b3212a3 \
