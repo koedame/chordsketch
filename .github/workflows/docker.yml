@@ -1,14 +1,31 @@
 name: Docker
 
+# Reusable: called by release.yml's fan-out after the GitHub Release
+# exists (ADR-0040). `workflow_dispatch` stays as the re-run entry point
+# for republishing a single tag's images.
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g., v0.1.0). Format-validated by the caller."
+        required: true
+        type: string
+      promote-latest:
+        description: "Move the `:latest` tag to this build. Only true for the newest release."
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       tag:
         description: "Release tag (e.g., v0.1.0)"
         required: true
         type: string
+      promote-latest:
+        description: "Move the `:latest` tag to this build. Leave off when rebuilding an older tag."
+        required: false
+        default: false
+        type: boolean
 
 # Deny-by-default: each job declares only the permissions it needs.
 permissions: {}
@@ -31,30 +48,20 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Determine version
-        id: version
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
-            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Validate release tag
-        # Format-validate the resolved tag before downstream `gh release
-        # download` and `docker buildx` invocations use it. See #1797.
+        # Format-validate the tag before downstream `gh release download`
+        # and `docker buildx` invocations use it. See #1797. The
+        # `workflow_call` path arrives pre-validated; this re-check is
+        # what guards the `workflow_dispatch` path, whose input is
+        # user-supplied.
         uses: ./.github/actions/validate-release-tag
         with:
-          tag: ${{ steps.version.outputs.tag }}
+          tag: ${{ inputs.tag }}
 
       - name: Download and extract release binaries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ inputs.tag }}
         run: |
           # Download musl binaries from the release
           gh release download "$TAG" \
@@ -87,13 +94,13 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}},value=${{ steps.version.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.tag }}
-            # Only auto-tag :latest on actual release events. workflow_dispatch
-            # reruns (e.g. fixing a broken older release) MUST NOT regress the
-            # :latest tag — they only republish the immutable :X.Y.Z and :X.Y
-            # aliases. See #1064 for the regression scenario.
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{version}},value=${{ inputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
+            # Only the newest release auto-tags :latest. Re-runs against an
+            # older tag (e.g. fixing a broken older release) MUST NOT regress
+            # the :latest tag — they only republish the immutable :X.Y.Z and
+            # :X.Y aliases. See #1064 for the regression scenario.
+            type=raw,value=latest,enable=${{ inputs.promote-latest }}
 
       - name: Build and push to GHCR
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v6
@@ -141,25 +148,15 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Determine version
-        id: version
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
-            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Validate release tag
-        # Format-validate the resolved tag before downstream `gh release
-        # download` and `docker buildx` invocations use it. See #1797.
+        # Format-validate the tag before downstream `gh release download`
+        # and `docker buildx` invocations use it. See #1797. The
+        # `workflow_call` path arrives pre-validated; this re-check is
+        # what guards the `workflow_dispatch` path, whose input is
+        # user-supplied.
         uses: ./.github/actions/validate-release-tag
         with:
-          tag: ${{ steps.version.outputs.tag }}
+          tag: ${{ inputs.tag }}
 
       - name: Detect Docker Hub credentials
         # Decouple Docker Hub from GHCR: if DOCKERHUB_TOKEN or DOCKERHUB_USERNAME
@@ -213,8 +210,8 @@ jobs:
         # command here. See #1440.
         if: steps.dockerhub.outputs.available == 'true'
         env:
-          TAG: ${{ steps.version.outputs.tag }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
+          PROMOTE_LATEST: ${{ inputs.promote-latest }}
           SRC: ghcr.io/${{ env.IMAGE_NAME }}
           DST: docker.io/${{ env.IMAGE_NAME }}
         run: |
@@ -233,10 +230,10 @@ jobs:
             -t "${DST}:${MAJOR_MINOR}" \
             "${SRC}:${MAJOR_MINOR}"
 
-          # Only copy :latest for release events. workflow_dispatch reruns
-          # (e.g. fixing a broken older release) MUST NOT regress the :latest
-          # tag. See #1064.
-          if [ "${EVENT_NAME}" = "release" ]; then
+          # Only copy :latest when this build is the newest release. Re-runs
+          # against an older tag (e.g. fixing a broken older release) MUST NOT
+          # regress the :latest tag. See #1064.
+          if [ "${PROMOTE_LATEST}" = "true" ]; then
             docker buildx imagetools create \
               -t "${DST}:latest" \
               "${SRC}:latest"

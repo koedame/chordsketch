@@ -1,7 +1,17 @@
 # 0009. Release event cascading requires a non-GITHUB_TOKEN credential
 
-- **Status**: Accepted
+- **Status**: Superseded by ADR-0040
 - **Date**: 2026-04-26
+
+> Superseded on 2026-08-30 by
+> [ADR-0040](0040-release-fan-out-is-an-explicit-call-graph.md). The
+> `release: [published]` cascade this ADR existed to make work has been
+> replaced by an explicit `workflow_call` graph rooted at `release.yml`,
+> so no workflow keys off the release event any more.
+> `RELEASE_DISPATCH_TOKEN` is retired and both `gh release create` calls
+> are back on `GITHUB_TOKEN`. The Context and Problem sections below
+> remain an accurate description of GitHub's anti-recursion rule; only
+> the Decision is replaced.
 
 ## Context
 

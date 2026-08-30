@@ -10,9 +10,15 @@ name: Verify tree-sitter-chordpro build
 # The generated parser files (src/parser.c, src/grammar.json) are
 # already committed, so no build step is needed.
 
+# Reusable: called by release.yml's fan-out (ADR-0040). `workflow_dispatch`
+# stays as the re-run entry point.
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to set in package.json before verifying (e.g., 0.1.0). No `v` prefix.'
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       version:
@@ -41,21 +47,15 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Derive version from git tag
-        if: github.event_name == 'release'
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#v}"
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
-
-      - name: Validate workflow_dispatch version
-        if: github.event_name == 'workflow_dispatch'
+      - name: Validate version input
+        # See the sister step in npm-publish.yml: the version arrives from
+        # `inputs.version` on both entry points, so it is validated once
+        # instead of only on the `workflow_dispatch` path.
         uses: ./.github/actions/validate-release-version
         with:
           version: ${{ inputs.version }}
 
-      - name: Set version from workflow input
-        if: github.event_name == 'workflow_dispatch'
+      - name: Set version
         env:
           VERSION: ${{ inputs.version }}
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version

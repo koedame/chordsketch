@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The release pipeline fans out through an explicit call graph instead of
+  the `release: published` event. `release.yml` now calls `docker.yml`,
+  `napi.yml`, `vscode-extension.yml`, `npm-publish.yml`,
+  `npm-publish-tree-sitter.yml` and `post-release.yml` as reusable
+  workflows once the GitHub Release exists, so a `desktop-v*` release can
+  no longer start any of them (it failed five of them on both
+  `desktop-v0.4.0` and `desktop-v0.5.0`) and no publish job can be read
+  by a verifier before it has run. `vscode-extension.yml` no longer sets
+  `continue-on-error`, so a failed extension publish colours the release
+  run red instead of reporting success with every job failed.
+  `release-verify.yml` moves to a daily sweep plus manual dispatch,
+  because most channels it checks are published by hand after the tag and
+  it could never be green at release time. `RELEASE_DISPATCH_TOKEN` is
+  retired — it existed only to make the removed event fire. See
+  [ADR-0040](docs/adr/0040-release-fan-out-is-an-explicit-call-graph.md),
+  which supersedes ADR-0009.
+
 ### Added
 
 - Chord diagrams with long names (e.g. `Dmaj7(9,11,13)`) no longer overflow

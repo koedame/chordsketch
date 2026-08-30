@@ -6,9 +6,15 @@ name: Verify @chordsketch/wasm build
 # tarball. The maintainer runs `cd packages/npm && npm run build &&
 # npm publish` locally on the release machine.
 
+# Reusable: called by release.yml's fan-out (ADR-0040). `workflow_dispatch`
+# stays as the re-run entry point.
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to set in package.json before verifying (e.g., 0.2.0). No `v` prefix.'
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       version:
@@ -81,27 +87,21 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Derive version from git tag
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#v}"
-          cd packages/npm
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
-        if: github.event_name == 'release'
-
-      - name: Validate workflow_dispatch version
-        if: github.event_name == 'workflow_dispatch'
+      - name: Validate version input
+        # The version now arrives the same way on both entry points — from
+        # `inputs.version` — so it is validated once rather than only on the
+        # `workflow_dispatch` path. Previously the release path derived it
+        # from `GITHUB_REF` and skipped this check entirely.
         uses: ./.github/actions/validate-release-version
         with:
           version: ${{ inputs.version }}
 
-      - name: Set version from workflow input
+      - name: Set version
         env:
           VERSION: ${{ inputs.version }}
         run: |
           cd packages/npm
           npm version "$VERSION" --no-git-tag-version --allow-same-version
-        if: github.event_name == 'workflow_dispatch'
 
       - name: Pack tarball (dry run)
         # Surfaces filename / size regressions without producing a
