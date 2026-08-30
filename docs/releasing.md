@@ -286,10 +286,11 @@ step 9 — the bash script in Step 6 above orders them sequentially for simplici
 `koedame/chordsketch` is distributed across multiple channels. Each channel
 has its own automation, secret, and verification path. The
 `.github/workflows/readme-smoke.yml` workflow exercises every channel
-end-to-end on a daily schedule (and on every PR) as the single source of
-truth for "is the project's promised distribution actually working right
-now". It deliberately does not run at release time: most channels are not
-updated until the manual publishes in steps 6-7 are done.
+end-to-end on a daily schedule (and on PRs that touch the README system —
+ADR-0041) as the single source of truth for "is the project's promised
+distribution actually working right now". It deliberately does not run at
+release time: most channels are not updated until the manual publishes in
+steps 6-7 are done.
 
 This table is the **human-readable view** of `ci/release-channels.toml`.
 When adding a new channel, update both.

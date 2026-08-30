@@ -14,16 +14,43 @@ on:
     # Daily at 06:00 UTC — catches registry-side regressions without coupling
     # to the release cadence.
     - cron: "0 6 * * *"
-  # Run on every PR, no path filter. End-user installability is a
-  # global property of the repo: it either works or it doesn't, and
-  # the validity of that guarantee should not depend on which file
-  # the current PR happens to edit. A path-filter list also has to be
-  # re-audited every time the workspace shape changes (new crate,
-  # build.rs, rust-toolchain.toml, .cargo/config.toml, etc.) and a
-  # missed entry produces a false sense of safety. The daily cron
-  # already runs the same matrix; running it on each PR adds bounded
-  # cost in exchange for catching every regression at PR time.
+  # Scoped to the README system on PRs (ADR-0041). On a PR event 11
+  # of the 14 smoke jobs install from a PUBLISHED artifact (GHCR,
+  # Docker Hub, crates.io, npm, a tap, scoop, winget, chocolatey,
+  # snap). No PR diff can change what those registries serve, so
+  # their failure mode is time-based, not diff-based, and the daily
+  # cron below — not the PR — is the detector that matches it.
+  # Measured over this workflow's entire history (1,832
+  # `pull_request` runs, 156 of them failing, 187 failing jobs
+  # between them): 186 of those 187 were published-artifact jobs and
+  # exactly one was a job that compiles the PR's own tree. On a PR
+  # they were not even reported — `report-failure` is gated on
+  # `github.event_name != 'pull_request'`, so a PR-event failure
+  # never opens the tracking issue this workflow exists to open. It
+  # only painted the PR red for something the PR did not cause.
+  #
+  # The three jobs that DO compile the PR's tree (`source-build`,
+  # `usage-smoke`, and `library-smoke`'s path-dep branch) lose their
+  # every-PR coverage here; ADR-0041 records the measurement behind
+  # accepting that (one catch in 1,832 runs) and the watch signal for
+  # revisiting it.
+  #
+  # The list below is the set of inputs that actually decide this
+  # workflow's outcome: the README whose commands it asserts, the
+  # committed snapshot of those commands, the fixtures and composite
+  # action every job renders through, and this file. It is
+  # deliberately NOT a transitive dependency list of the Rust
+  # workspace — that is the failure mode `deploy-playground.yml`
+  # documents (#2608, #2636). Scoping to enumerable inputs rather
+  # than transitive ones is what keeps this list from going stale
+  # the way that one did.
   pull_request:
+    paths:
+      - "README.md"
+      - ".github/snapshots/readme-commands.txt"
+      - ".github/fixtures/**"
+      - ".github/actions/cli-render-smoke/action.yml"
+      - ".github/workflows/readme-smoke.yml"
 
 # Cancel previous runs on the same PR when new commits land. Daily cron
 # runs fall through to `github.ref` and are never cancelled
