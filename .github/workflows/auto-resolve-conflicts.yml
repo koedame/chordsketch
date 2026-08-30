@@ -12,8 +12,18 @@ concurrency:
 jobs:
   resolve:
     name: Request Claude conflict resolution
-    # Run regardless of auto-rebase conclusion — we just need to find
-    # PRs that still have the has-conflicts label after auto-rebase ran.
+    # Auto Rebase reports `skipped` when its own guard declined the run —
+    # i.e. Conflict Check fired for a pull_request_target event rather than a
+    # push to main, so no rebase was attempted and no label can have changed
+    # since the previous cycle. Without this guard the chain reaches here on
+    # every PR open/synchronize/reopen and burns a runner listing every open
+    # PR to conclude there is nothing to do. Any conclusion in which the
+    # rebase step actually ran (including `failure`) still reaches this job:
+    # PRs auto-rebase could not fix are exactly the ones Claude is asked to
+    # resolve.
+    if: >
+      github.event.workflow_run.conclusion != 'skipped' &&
+      github.event.workflow_run.conclusion != 'cancelled'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
