@@ -35,7 +35,7 @@ see [`docs/editors.md`](https://github.com/koedame/chordsketch/blob/main/docs/ed
 
 Every query is compiled against the generated parser in CI
 (`.github/workflows/tree-sitter.yml`), so a query referencing a node type
-`grammar.js` no longer produces fails the build.
+that `grammar.js` no longer produces fails the build.
 
 ## Usage
 
