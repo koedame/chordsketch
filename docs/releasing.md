@@ -1057,10 +1057,22 @@ gh workflow run chocolatey-retry.yml -R koedame/chordsketch -f tag=vX.Y.Z
 
 This re-runs only the pack-and-push steps and does not re-trigger the
 other 7 post-release jobs (AUR, Flathub, Snap, CocoaPods, Homebrew,
-Scoop, Swift), avoiding duplicate side effects. Wait for the previous
-version's moderation badge on
-`community.chocolatey.org/packages/chordsketch` to read `Ready`
-(approved) before retrying.
+Scoop, Swift), avoiding duplicate side effects.
+
+The workflow is safe to dispatch repeatedly. It checks the Chocolatey
+v2 feed before pushing and exits successfully when the version is
+already on the repository, and it treats a `409 Conflict` from the push
+the same way, so re-running it after a push that actually landed does
+not produce a red run.
+
+A failure names the HTTP status. `403 Forbidden` means an earlier
+version is still queued for moderation and is blocking this one; wait
+for it to clear and dispatch again. Read the queue state from
+`community.chocolatey.org/packages/chordsketch/<version>` under
+**Package Status** — `Submitted` means still queued. Do not read the
+review-timeline badge instead: it says `Ready for review`, which looks
+like an approval but is the pre-approval state, and misreading it sent
+the #1852 investigation down the wrong path once already.
 
 ### Snap Store
 
