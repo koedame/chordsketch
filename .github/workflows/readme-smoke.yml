@@ -478,45 +478,18 @@ jobs:
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@3cdb78d0f62ad29dd32de765782654f4eedea607 # master
 
-      - name: Tap and install
+      - name: Install
         run: |
           set -euo pipefail
-          brew tap koedame/tap
-          # Homebrew's tap-trust feature (gated by
-          # HOMEBREW_REQUIRE_TAP_TRUST, shipped on the bleeding-edge
-          # setup-homebrew@master this job pins) refuses to load
-          # formulae from a third-party tap until the tap is explicitly
-          # trusted, failing with "Refusing to load formula ... from
-          # untrusted tap". Trust our own tap so the documented
-          # `brew install` below runs. `brew trust` is non-interactive
-          # under CI (Homebrew auto-detects CI=true), so it records the
-          # trust without prompting.
-          #
-          # The enforcement is NOT yet the stable default — upstream
-          # users must opt in via `export HOMEBREW_REQUIRE_TAP_TRUST=1`
-          # (https://github.com/Homebrew/brew/issues/22551) — so the
-          # README's user-facing `brew install chordsketch` still works
-          # on released Homebrew without this step, and the README is
-          # intentionally left unchanged. Watch signal: when tap-trust
-          # becomes the stable default, the README install instructions
-          # must add a `brew trust koedame/tap` line (tracked in #2606).
-          brew trust koedame/tap
-          # Homebrew 6.0 (tagged on the master this job tracks) makes the
-          # Linux build sandbox mandatory and requires a rootless `bwrap`
-          # (Bubblewrap) on PATH. GitHub's ubuntu runner ships neither,
-          # and Homebrew cannot install the `bubblewrap` formula to
-          # satisfy it because that install itself would need the sandbox
-          # — a bootstrap deadlock ("Bubblewrap is required to use the
-          # Linux sandbox but was not found"). Disable the Linux sandbox,
-          # exactly as Homebrew's own error recommends as the final
-          # workaround. This is safe here: the sandbox guards against
-          # malicious formula build scripts, and we are installing our
-          # own trusted formula (which built fine before Homebrew 6.0).
-          # Like the trust gate above, this enforcement is bleeding-edge
-          # only, so the README's documented `brew install chordsketch`
-          # is unaffected for end users on released Homebrew.
-          export HOMEBREW_NO_SANDBOX_LINUX=1
-          brew install chordsketch
+          # Run exactly the command the README documents, with no extra
+          # setup. The fully qualified name taps koedame/tap on demand
+          # and trusts just this formula, which is what makes the
+          # README's one-liner work under Homebrew's tap-trust
+          # enforcement (mandatory since Homebrew 6.0.0). Adding a
+          # `brew tap`, `brew trust` or `HOMEBREW_NO_SANDBOX_LINUX`
+          # line here would make the job pass while the README's own
+          # instructions fail for users.
+          brew install koedame/tap/chordsketch
           chordsketch --version
 
       - name: Render smoke
@@ -531,24 +504,17 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Tap and install cask
+      - name: Install cask
         run: |
           set -euo pipefail
-          brew tap koedame/tap
-          # Homebrew's tap-trust feature refuses to load a cask from a
-          # third-party tap until the tap is explicitly trusted, failing
-          # with "Refusing to load cask ... from untrusted tap". Trust our
-          # own tap so the documented `brew install --cask` below runs.
-          # `brew trust` is non-interactive under CI (Homebrew auto-detects
-          # CI=true). This mirrors the `brew trust koedame/tap` the sibling
-          # formula job already runs (#2606); the cask job missed that
-          # propagation and began failing once the runner's Homebrew
-          # enforced tap-trust. The README's user-facing
-          # `brew install --cask chordsketch` is intentionally left
-          # unchanged — tap-trust is not yet the stable default for end
-          # users (tracked in #2606).
-          brew trust koedame/tap
-          brew install --cask chordsketch
+          # Run exactly the command the README documents, with no extra
+          # setup. The fully qualified name taps koedame/tap on demand
+          # and trusts just this cask, which is what makes the README's
+          # one-liner work under Homebrew's tap-trust enforcement
+          # (mandatory since Homebrew 6.0.0). Adding a `brew tap` or
+          # `brew trust` line here would make the job pass while the
+          # README's own instructions fail for users.
+          brew install --cask koedame/tap/chordsketch
           # Verify the app bundle landed where the README promises.
           if [ ! -d /Applications/ChordSketch.app ]; then
             echo "::error::ChordSketch.app missing from /Applications after cask install" >&2

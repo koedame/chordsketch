@@ -511,7 +511,7 @@ After the release workflow completes and the GitHub Release is published:
    ```
    Spot-check from a clean machine:
    - `cargo install chordsketch && chordsketch --version`
-   - `brew tap koedame/tap && brew install chordsketch && chordsketch --version`
+   - `brew install koedame/tap/chordsketch && chordsketch --version`
    - `docker run --rm ghcr.io/koedame/chordsketch:latest --version`
    - `docker run --rm docker.io/koedame/chordsketch:latest --version`
    - `npm install @chordsketch/wasm && node -e "import('@chordsketch/wasm').then(({version}) => console.log(version()))"`
