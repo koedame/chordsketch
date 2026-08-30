@@ -1,7 +1,7 @@
 name: Docker
 
 # Reusable: called by release.yml's fan-out after the GitHub Release
-# exists (ADR-0040). `workflow_dispatch` stays as the re-run entry point
+# exists (ADR-0039). `workflow_dispatch` stays as the re-run entry point
 # for republishing a single tag's images.
 on:
   workflow_call:

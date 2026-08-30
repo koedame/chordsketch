@@ -1,4 +1,4 @@
-# 0040. Release fan-out is an explicit call graph, not a `release: published` broadcast
+# 0039. Release fan-out is an explicit call graph, not a `release: published` broadcast
 
 - **Status**: Accepted
 - **Date**: 2026-08-30

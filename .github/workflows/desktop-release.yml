@@ -269,8 +269,8 @@ jobs:
           # created by `GITHUB_TOKEN`. Nothing has ever keyed off a
           # *desktop* release event: this workflow's own downstream work
           # (`update-cask`, `publish-updater-manifest`) has always been
-          # in-graph via `needs: [release]`, and ADR-0040 moved the
-          # library release to the same shape. See ADR-0040.
+          # in-graph via `needs: [release]`, and ADR-0039 moved the
+          # library release to the same shape. See ADR-0039.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
         # `--generate-notes` asks GitHub to auto-build the body

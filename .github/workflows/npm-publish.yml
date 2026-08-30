@@ -6,7 +6,7 @@ name: Verify @chordsketch/wasm build
 # tarball. The maintainer runs `cd packages/npm && npm run build &&
 # npm publish` locally on the release machine.
 
-# Reusable: called by release.yml's fan-out (ADR-0040). `workflow_dispatch`
+# Reusable: called by release.yml's fan-out (ADR-0039). `workflow_dispatch`
 # stays as the re-run entry point.
 on:
   workflow_call:

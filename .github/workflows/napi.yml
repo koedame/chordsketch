@@ -20,7 +20,7 @@ on:
       - ".github/workflows/napi.yml"
   # Reusable: called by release.yml's fan-out after the GitHub Release
   # exists, so `upload-release-tarballs` has somewhere to upload to
-  # (ADR-0040). A non-empty `tag` is what puts this workflow in release
+  # (ADR-0039). A non-empty `tag` is what puts this workflow in release
   # mode; on `push` / `pull_request` it is empty and only build + lint run.
   workflow_call:
     inputs:

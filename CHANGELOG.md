@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because most channels it checks are published by hand after the tag and
   it could never be green at release time. `RELEASE_DISPATCH_TOKEN` is
   retired — it existed only to make the removed event fire. See
-  [ADR-0040](docs/adr/0040-release-fan-out-is-an-explicit-call-graph.md),
+  [ADR-0039](docs/adr/0039-release-fan-out-is-an-explicit-call-graph.md),
   which supersedes ADR-0009.
 
 ### Added

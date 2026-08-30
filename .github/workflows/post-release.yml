@@ -1,7 +1,7 @@
 name: Post-Release Package Updates
 
 # Reusable: called by release.yml's fan-out after the GitHub Release
-# exists (ADR-0040). Every job here targets the CLI/library release, and
+# exists (ADR-0039). Every job here targets the CLI/library release, and
 # the caller's `push: tags: v*` trigger is what guarantees the tag is in
 # that namespace — this workflow no longer sorts tags itself.
 on:

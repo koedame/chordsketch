@@ -1,10 +1,10 @@
 # 0009. Release event cascading requires a non-GITHUB_TOKEN credential
 
-- **Status**: Superseded by ADR-0040
+- **Status**: Superseded by ADR-0039
 - **Date**: 2026-04-26
 
 > Superseded on 2026-08-30 by
-> [ADR-0040](0040-release-fan-out-is-an-explicit-call-graph.md). The
+> [ADR-0039](0039-release-fan-out-is-an-explicit-call-graph.md). The
 > `release: [published]` cascade this ADR existed to make work has been
 > replaced by an explicit `workflow_call` graph rooted at `release.yml`,
 > so no workflow keys off the release event any more.

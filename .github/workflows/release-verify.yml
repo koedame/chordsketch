@@ -12,7 +12,7 @@ name: Release verify
 #   - workflow_dispatch — manual re-verify or red-path dry-run
 #
 # Deliberately NOT on the release event, and deliberately not part of
-# release.yml's fan-out (ADR-0040). This rollup asks "has every channel
+# release.yml's fan-out (ADR-0039). This rollup asks "has every channel
 # converged on the release?", and at tag time the answer is structurally
 # "no": crates.io and every npm package are published by hand after the
 # tag (docs/releasing.md steps 6-7, ADR-0008), and PyPI / RubyGems /

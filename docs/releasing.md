@@ -209,7 +209,7 @@ at post-release verification rather than before the tag is cut.
    run inside the release workflow (step 5) — Docker, VS Code / Open
    VSX, napi tarballs, and the whole `post-release.yml` fan-out are
    `needs: [release]` jobs in that single run, per
-   [ADR-0040](adr/0040-release-fan-out-is-an-explicit-call-graph.md).
+   [ADR-0039](adr/0039-release-fan-out-is-an-explicit-call-graph.md).
    Nothing needs dispatching to make the release happen.
 
    What is left is the convergence check, and it can only run now that
@@ -589,7 +589,7 @@ Docker all silently did not update. ADR-0009 worked around it with a PAT
 (`RELEASE_DISPATCH_TOKEN`).
 
 Both the event and the PAT are gone now. Per
-[ADR-0040](adr/0040-release-fan-out-is-an-explicit-call-graph.md) the
+[ADR-0039](adr/0039-release-fan-out-is-an-explicit-call-graph.md) the
 downstream workflows are reusable (`workflow_call`) and are invoked by
 `release.yml` as `needs: [release]` jobs in the same run, so the release
 event is never consulted and the token that made it fire is no longer
@@ -917,7 +917,7 @@ package.
      template
    - Triggers: `workflow_call` and `workflow_dispatch`, both with a
      `version` input. Add a caller job for it in `release.yml`'s fan-out
-     (ADR-0040); do **not** give it a `release:` trigger
+     (ADR-0039); do **not** give it a `release:` trigger
    - Do **not** add an `environment:` block — `NPM_TOKEN` is a repo-level
      secret. An environment block was removed from `npm-publish.yml` in
      #1791 to avoid stale deployment entries (see #1790).

@@ -111,7 +111,7 @@ disk:
 - ADR-0008 (npm publishing is local) ↔ no `npm publish` invocation in
   any `.github/workflows/*.yml`. Verify with
   `grep -RnE 'npm[[:space:]]+publish' .github/workflows/`.
-- ADR-0040 (release fan-out is an explicit call graph) ↔ no workflow
+- ADR-0039 (release fan-out is an explicit call graph) ↔ no workflow
   carries a `release:` trigger, and `release.yml` calls every
   publishing workflow as a `needs: [release]` job. Verify with
   `grep -Rn 'types: \[published\]' .github/workflows/` (must be empty)
