@@ -25,6 +25,7 @@ github.setup        koedame chordsketch 0.5.0 v
 github.tarball_from archive
 revision            0
 categories          textproc audio
+installs_libs       no
 license             MIT
 maintainers         {koeda.me:oss @koedame} openmaintainer
 description         ChordPro file format parser and renderer
