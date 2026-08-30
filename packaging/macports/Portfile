@@ -800,7 +800,12 @@ cargo.crates \
 build.dir           ${worksrcpath}
 
 destroot {
-    xinstall -m 0755 ${worksrcpath}/target/[option cargo.rust_platform]/release/chordsketch \
+    # `cargo.rust_platform` is a proc the cargo portgroup defines, not
+    # an option, so it is invoked as `[cargo.rust_platform]`. Wrapping
+    # it in `[option ...]` asks Tcl for a variable of that name and
+    # fails the destroot phase with
+    # `can't read "cargo.rust_platform": no such variable`.
+    xinstall -m 0755 ${worksrcpath}/target/[cargo.rust_platform]/release/chordsketch \
         ${destroot}${prefix}/bin/chordsketch
 }
 
