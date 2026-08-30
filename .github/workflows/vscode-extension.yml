@@ -78,7 +78,9 @@ jobs:
       #
       # The cost is one Rust + wasm-pack build per PR (~2-3 min cold,
       # ~30s with rust-cache).
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
       - uses: ./.github/actions/install-wasm-pack
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
@@ -258,7 +260,9 @@ jobs:
       # see the rationale on the same step in the `build` job above.
       # On a release event the manual `npm publish` of @chordsketch/wasm
       # may not have happened yet, so `@latest` lags the in-tree source.
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
       - uses: ./.github/actions/install-wasm-pack
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
