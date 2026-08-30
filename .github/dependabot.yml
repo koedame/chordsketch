@@ -1,4 +1,11 @@
 version: 2
+
+# Backlog note: Dependabot stops opening pull requests for an ecosystem once
+# five of its PRs are open (the default `open-pull-requests-limit`), and no
+# scheduled job for that ecosystem has appeared since its fifth PR was opened
+# (github_actions: 2026-07-12, cargo: 2026-07-19). Updates only resume when the
+# open PRs are merged or closed — an unattended backlog silently stops updates
+# rather than queueing them.
 updates:
   # Dependabot opens one PR per dependency for every update type
   # (patch, minor, AND major). The `/dependabot-review` slash command
