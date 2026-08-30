@@ -1,12 +1,14 @@
 name: zz-tmp-caller
 on:
-  workflow_dispatch:
+  push:
+    branches: [ci/release-call-graph]
+    paths: [".github/workflows/zz-tmp-caller.yml"]
 jobs:
-  call:
+  expect-true:
     uses: ./.github/workflows/zz-tmp-callee.yml
     with:
       flag: ${{ github.event_name == 'push' }}
-  call-true:
+  expect-false:
     uses: ./.github/workflows/zz-tmp-callee.yml
     with:
       flag: ${{ github.event_name == 'workflow_dispatch' }}
