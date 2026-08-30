@@ -457,6 +457,9 @@ After the release workflow completes and the GitHub Release is published:
       `port install chordsketch` followed by the `cli-render-smoke`
       composite. A green run is the local-equivalent evidence that
       `sudo port install` works against the tagged source tarball.
+      Dependencies come from the MacPorts buildbot's binary archives;
+      chordsketch itself is still compiled from source, because a port
+      that is not yet in the upstream tree has no archive to fetch.
    4. Fork `macports/macports-ports` (or use the existing fork), place the
       Portfile in `textproc/chordsketch/Portfile`, and open a PR.
    5. Wait for MacPorts CI and maintainer review.

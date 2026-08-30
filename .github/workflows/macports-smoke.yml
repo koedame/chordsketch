@@ -7,7 +7,7 @@ on:
       - ".github/workflows/macports-smoke.yml"
       - "scripts/macports-regen-cargo-crates.py"
   workflow_dispatch:
-  # No `push:` trigger: the heavy steps (`port install -s` + verify)
+  # No `push:` trigger: the heavy steps (`port install` + verify)
   # only fire on `workflow_dispatch` anyway, so a `push: branches:
   # [main]` would just re-run the cheap PR-time path on every merge.
   #
