@@ -1,0 +1,12 @@
+name: zz-tmp-caller
+on:
+  workflow_dispatch:
+jobs:
+  call:
+    uses: ./.github/workflows/zz-tmp-callee.yml
+    with:
+      flag: ${{ github.event_name == 'push' }}
+  call-true:
+    uses: ./.github/workflows/zz-tmp-callee.yml
+    with:
+      flag: ${{ github.event_name == 'workflow_dispatch' }}

@@ -1,0 +1,13 @@
+name: zz-tmp-callee
+on:
+  workflow_call:
+    inputs:
+      flag:
+        required: false
+        default: false
+        type: boolean
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'echo "flag=${{ inputs.flag }} truthy=${{ inputs.flag && ''YES'' || ''NO'' }}"'
