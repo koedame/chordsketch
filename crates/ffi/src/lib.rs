@@ -5,7 +5,21 @@
 
 use chordsketch_chordpro::render_result::RenderResult;
 
-uniffi::include_scaffolding!("chordsketch");
+// WORKAROUND: `uniffi::include_scaffolding!` expands the UDL-derived metadata
+// buffer as a `const` rather than a `static`, which trips
+// `clippy::large_const_arrays` under current stable Rust. This is generated
+// code from the `uniffi_macros`/`uniffi_build` pipeline that we don't author;
+// reproduces identically on both uniffi 0.31.2 and 0.32.0. Upstream tracking:
+// mozilla/uniffi-rs#254 ("Fix clippy for generated code"), still open with no
+// released fix. Re-evaluate on every future `uniffi` version bump.
+// See koedame/chordsketch#2775.
+#[allow(clippy::large_const_arrays)]
+mod uniffi_scaffolding {
+    use super::*;
+
+    uniffi::include_scaffolding!("chordsketch");
+}
+use uniffi_scaffolding::*;
 
 /// Errors returned by the FFI layer.
 #[derive(Debug, thiserror::Error)]
