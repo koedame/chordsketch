@@ -12,6 +12,17 @@ compatible (parse to a structured AST, render to plain text, HTML, and
 PDF), full `irealb://` URL parsing, iReal Pro chart rendering to SVG /
 PNG / PDF, and bidirectional ChordPro ↔ iReal Pro conversion.
 
+## Stability
+
+ChordSketch is pre-1.0 and still in a validation phase. **Until `1.0.0`
+ships, any release may break compatibility** — public API items, rendered
+output, CLI flags, binding surfaces, and the minimum supported Rust
+version can all change in a `0.x` bump, without a deprecation cycle.
+Breaking changes are named in the [CHANGELOG](CHANGELOG.md), and larger
+ones get a guide under [`docs/migration/`](docs/migration/). Pin an exact
+version if you depend on this crate today. The full policy is in
+[Versioning and release process](docs/releasing.md#pre-10-breaking-changes-are-expected).
+
 ## Features
 
 ### ChordPro
@@ -179,7 +190,7 @@ cargo install chordsketch
 
 ### From source
 
-Requires Rust 1.85 or later.
+Requires Rust 1.88 or later.
 
 ```bash
 git clone https://github.com/koedame/chordsketch.git

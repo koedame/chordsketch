@@ -488,11 +488,12 @@ pub fn classify_grid_row(input: &str) -> GridRow {
         if matches!(t, GridToken::Space) {
             continue;
         }
-        if let GridToken::Cell(names) = t {
-            if names.len() == 1 && (names[0] == "s" || names[0] == "S") {
-                kind = GridRowKind::Strum;
-                strum_marker_idx = Some(i);
-            }
+        if let GridToken::Cell(names) = t
+            && names.len() == 1
+            && (names[0] == "s" || names[0] == "S")
+        {
+            kind = GridRowKind::Strum;
+            strum_marker_idx = Some(i);
         }
         break;
     }

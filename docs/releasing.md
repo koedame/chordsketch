@@ -9,8 +9,34 @@ bumped in lockstep. This project follows [Semantic Versioning](https://semver.or
 - **Minor** (0.2.0) — new features, backward compatible
 - **Patch** (0.1.1) — bug fixes, backward compatible
 
-While the version is below 1.0.0, minor version bumps may include breaking
-changes.
+### Pre-1.0: breaking changes are expected
+
+The workspace is below `1.0.0` and is still a **validation phase** — the
+formats, the public API surface, and the toolchain floor are all being
+proven against real ChordPro / iReal Pro material rather than held stable
+for downstream consumers.
+
+Until `1.0.0` ships, **any release may break compatibility**, and the
+project does not carry deprecation cycles or compatibility shims across
+the break. Concretely, a `0.x` bump — minor *or* patch — is allowed to:
+
+- rename, re-scope, or remove a public item in any crate (the
+  `chordsketch-core` → `chordsketch-chordpro` rename in
+  [v0.3.0](migration/v0.3.md) is the pattern);
+- change rendered output, CLI flags, config keys, or directive
+  semantics;
+- change the wire shape of the WASM / NAPI / FFI bindings;
+- **raise the minimum supported Rust version** (see
+  [ADR-0044](adr/0044-pre-1.0-breaking-changes-are-expected.md)) — an MSRV
+  raise is not treated as breaking here and does not wait for `1.0.0`.
+
+Breaking changes are still *documented*: the CHANGELOG entry names them,
+and a rename or migration large enough to need steps gets a guide under
+[`docs/migration/`](migration/). What pre-1.0 buys is the freedom to make
+the change at all, not the freedom to make it silently.
+
+From `1.0.0` onward the normal Semantic Versioning contract above applies
+and breaking changes wait for a major bump.
 
 The npm package `@chordsketch/wasm` *usually* tracks the workspace version,
 but is allowed to be **skewed by patch versions** when a packaging-only fix is

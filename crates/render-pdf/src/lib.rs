@@ -783,18 +783,17 @@ fn render_song_into_doc(
     // config knob. Sister-site: `crates/render-html/src/lib.rs` reads
     // the same key and emits the same warning.
     let raw_orientation = config.get_path("diagrams.orientation").as_str();
-    if let Some(s) = raw_orientation {
-        if !s.trim().is_empty()
-            && chordsketch_chordpro::chord_diagram::try_parse_orientation_value(Some(s)).is_none()
-        {
-            push_warning(
-                warnings,
-                format!(
-                    "diagrams.orientation: unrecognised value {s:?}; \
+    if let Some(s) = raw_orientation
+        && !s.trim().is_empty()
+        && chordsketch_chordpro::chord_diagram::try_parse_orientation_value(Some(s)).is_none()
+    {
+        push_warning(
+            warnings,
+            format!(
+                "diagrams.orientation: unrecognised value {s:?}; \
                      using default (vertical)"
-                ),
-            );
-        }
+            ),
+        );
     }
     let diagram_orientation =
         chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation);
@@ -1104,7 +1103,7 @@ fn render_song_into_doc(
                         // (1, 3, 5, …).  If the new page is even (verso),
                         // insert a blank page so the next content starts on
                         // a recto page.
-                        if doc.page_count() % 2 == 0 {
+                        if doc.page_count().is_multiple_of(2) {
                             doc.new_page();
                         }
                     }
@@ -1151,14 +1150,14 @@ fn render_song_into_doc(
                         }
                         // Track {define} chords that are rendered inline so the
                         // auto-inject grid can skip them (dedup for #1211/#1245/#1246).
-                        if d.kind == DirectiveKind::Define && show_diagrams {
-                            if let Some(ref val) = d.value {
-                                let name =
-                                    chordsketch_chordpro::ast::ChordDefinition::parse_value(val)
-                                        .name;
-                                if !name.is_empty() {
-                                    inline_defined.insert(canonical_chord_name(&name));
-                                }
+                        if d.kind == DirectiveKind::Define
+                            && show_diagrams
+                            && let Some(ref val) = d.value
+                        {
+                            let name =
+                                chordsketch_chordpro::ast::ChordDefinition::parse_value(val).name;
+                            if !name.is_empty() {
+                                inline_defined.insert(canonical_chord_name(&name));
                             }
                         }
                         render_directive(d, show_diagrams, diagram_frets, diagram_orientation, doc);
@@ -1442,47 +1441,47 @@ fn render_directive(
     diagram_orientation: chordsketch_chordpro::chord_diagram::Orientation,
     doc: &mut PdfDocument,
 ) {
-    if directive.kind == DirectiveKind::Define && show_diagrams {
-        if let Some(ref value) = directive.value {
-            let def = chordsketch_chordpro::ast::ChordDefinition::parse_value(value);
-            // Keyboard defines: render a piano keyboard diagram.
-            if let Some(ref keys_raw) = def.keys {
-                let keys_u8: Vec<u8> = keys_raw
-                    .iter()
-                    .filter_map(|&k| {
-                        if (0i32..=127).contains(&k) {
-                            Some(k as u8)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                if !keys_u8.is_empty() {
-                    let root = keys_u8[0];
-                    let voicing = chordsketch_chordpro::chord_diagram::KeyboardVoicing {
-                        name: def.name.clone(),
-                        display_name: def.display.clone(),
-                        keys: keys_u8,
-                        root_key: root,
-                    };
-                    render_keyboard_diagram_pdf(&voicing, doc);
-                    return;
-                }
+    if directive.kind == DirectiveKind::Define
+        && show_diagrams
+        && let Some(ref value) = directive.value
+    {
+        let def = chordsketch_chordpro::ast::ChordDefinition::parse_value(value);
+        // Keyboard defines: render a piano keyboard diagram.
+        if let Some(ref keys_raw) = def.keys {
+            let keys_u8: Vec<u8> = keys_raw
+                .iter()
+                .filter_map(|&k| {
+                    if (0i32..=127).contains(&k) {
+                        Some(k as u8)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if !keys_u8.is_empty() {
+                let root = keys_u8[0];
+                let voicing = chordsketch_chordpro::chord_diagram::KeyboardVoicing {
+                    name: def.name.clone(),
+                    display_name: def.display.clone(),
+                    keys: keys_u8,
+                    root_key: root,
+                };
+                render_keyboard_diagram_pdf(&voicing, doc);
+                return;
             }
-            // Fretted defines: render the standard fret-grid diagram.
-            if let Some(ref raw) = def.raw {
-                if let Some(mut diagram) =
-                    chordsketch_chordpro::chord_diagram::DiagramData::from_raw_infer_frets(
-                        &def.name,
-                        raw,
-                        diagram_frets,
-                    )
-                {
-                    diagram.display_name = def.display.clone();
-                    render_chord_diagram_pdf(&diagram, doc, diagram_orientation);
-                    return;
-                }
-            }
+        }
+        // Fretted defines: render the standard fret-grid diagram.
+        if let Some(ref raw) = def.raw
+            && let Some(mut diagram) =
+                chordsketch_chordpro::chord_diagram::DiagramData::from_raw_infer_frets(
+                    &def.name,
+                    raw,
+                    diagram_frets,
+                )
+        {
+            diagram.display_name = def.display.clone();
+            render_chord_diagram_pdf(&diagram, doc, diagram_orientation);
+            return;
         }
     }
 
@@ -2081,11 +2080,11 @@ fn render_chord_diagram_pdf_vertical(
             let y = grid_top - (fret as f32 - 0.5) * cell_h;
             doc.filled_circle_at(x, y, 3.0);
             // Finger number inside the dot (if available and non-zero)
-            if let Some(&finger) = data.fingers.get(i) {
-                if finger > 0 {
-                    let label = finger.to_string();
-                    doc.white_text_at(&label, Font::Helvetica, 5.0, x - 1.5, y - 1.5);
-                }
+            if let Some(&finger) = data.fingers.get(i)
+                && finger > 0
+            {
+                let label = finger.to_string();
+                doc.white_text_at(&label, Font::Helvetica, 5.0, x - 1.5, y - 1.5);
             }
         }
     }
@@ -2218,11 +2217,11 @@ fn render_chord_diagram_pdf_horizontal(
             // Fretted: filled dot at the centre of its fret cell.
             let x = nut_x + (fret as f32 - 0.5) * fret_pitch;
             doc.filled_circle_at(x, y, 3.0);
-            if let Some(&finger) = data.fingers.get(i) {
-                if finger > 0 {
-                    let label = finger.to_string();
-                    doc.white_text_at(&label, Font::Helvetica, 5.0, x - 1.5, y - 1.5);
-                }
+            if let Some(&finger) = data.fingers.get(i)
+                && finger > 0
+            {
+                let label = finger.to_string();
+                doc.white_text_at(&label, Font::Helvetica, 5.0, x - 1.5, y - 1.5);
             }
         }
     }

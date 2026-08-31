@@ -179,11 +179,11 @@ fn try_format_directive(line: &str, options: &FormatOptions) -> Option<String> {
     // it again would produce a doubled suffix like `"textfont-piano-piano"`.
     let mut result = String::from("{");
     result.push_str(&canonical_name);
-    if options.normalize_directive_names {
-        if let Some(sel) = &selector {
-            result.push('-');
-            result.push_str(sel);
-        }
+    if options.normalize_directive_names
+        && let Some(sel) = &selector
+    {
+        result.push('-');
+        result.push_str(sel);
     }
     if let Some(value) = value_opt {
         let v = value.trim();

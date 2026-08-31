@@ -499,16 +499,16 @@ impl Config {
         }
 
         // Song-specific config (untrusted — reduced size limit)
-        if let Some(path) = song_config {
-            if let Some(text) = read_file_if_exists(
+        if let Some(path) = song_config
+            && let Some(text) = read_file_if_exists(
                 Path::new(path),
                 MAX_UNTRUSTED_CONFIG_FILE_SIZE,
                 &mut warnings,
-            ) {
-                match Self::parse_collecting_warnings(&text, &mut warnings) {
-                    Ok(song) => config = config.merge(song),
-                    Err(e) => warnings.push(format!("failed to parse config file {path}: {e}")),
-                }
+            )
+        {
+            match Self::parse_collecting_warnings(&text, &mut warnings) {
+                Ok(song) => config = config.merge(song),
+                Err(e) => warnings.push(format!("failed to parse config file {path}: {e}")),
             }
         }
 

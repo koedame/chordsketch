@@ -75,16 +75,16 @@ impl SelectorContext {
         // selectors may bypass normalization via direct Directive struct
         // construction. `eq_ignore_ascii_case` is used defensively to handle
         // both paths without allocating.
-        if let Some(ref instrument) = self.instrument {
-            if instrument.eq_ignore_ascii_case(sel) {
-                return true;
-            }
+        if let Some(ref instrument) = self.instrument
+            && instrument.eq_ignore_ascii_case(sel)
+        {
+            return true;
         }
 
-        if let Some(ref user) = self.user {
-            if user.eq_ignore_ascii_case(sel) {
-                return true;
-            }
+        if let Some(ref user) = self.user
+            && user.eq_ignore_ascii_case(sel)
+        {
+            return true;
         }
 
         false
@@ -152,10 +152,10 @@ impl SelectorContext {
         // selector-bearing directives that survived filtering.
         let mut metadata = song.metadata.clone();
         for line in &filtered_lines {
-            if let crate::ast::Line::Directive(d) = line {
-                if d.selector.is_some() {
-                    crate::parser::Parser::populate_metadata(&mut metadata, d);
-                }
+            if let crate::ast::Line::Directive(d) = line
+                && d.selector.is_some()
+            {
+                crate::parser::Parser::populate_metadata(&mut metadata, d);
             }
         }
 

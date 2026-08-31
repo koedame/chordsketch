@@ -277,21 +277,21 @@ pub fn key_signature_svg(key: &str) -> String {
         t = bravura::smufl_transform(line_gap, 0.0, 0.0, clef_x, g_line_y),
     );
     // Accidentals.
-    if let Some((count, sig_type)) = sig {
-        if sig_type != KeySigType::Natural {
-            let order = if sig_type == KeySigType::Sharp {
-                SHARP_ORDER
+    if let Some((count, sig_type)) = sig
+        && sig_type != KeySigType::Natural
+    {
+        let order = if sig_type == KeySigType::Sharp {
+            SHARP_ORDER
+        } else {
+            FLAT_ORDER
+        };
+        for (i, &(_, y_step)) in order.iter().take(count).enumerate() {
+            let cx = accidental_start + (i as f32) * accidental_spacing;
+            let cy = top + y_step * line_gap;
+            if sig_type == KeySigType::Sharp {
+                write_sharp(&mut s, cx, cy);
             } else {
-                FLAT_ORDER
-            };
-            for (i, &(_, y_step)) in order.iter().take(count).enumerate() {
-                let cx = accidental_start + (i as f32) * accidental_spacing;
-                let cy = top + y_step * line_gap;
-                if sig_type == KeySigType::Sharp {
-                    write_sharp(&mut s, cx, cy);
-                } else {
-                    write_flat(&mut s, cx, cy);
-                }
+                write_flat(&mut s, cx, cy);
             }
         }
     }

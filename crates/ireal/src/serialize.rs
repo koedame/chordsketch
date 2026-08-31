@@ -514,10 +514,10 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
         // content area now (after the open glyph), so the parser's
         // `queue_symbol` lands them on `current_bar` rather than
         // a phantom previous bar.
-        if bar.start != BarLine::Single {
-            if let Some(end) = bar.ending {
-                serialize_ending(&mut chart, end);
-            }
+        if bar.start != BarLine::Single
+            && let Some(end) = bar.ending
+        {
+            serialize_ending(&mut chart, end);
         }
         // A repeat-previous bar collapses to the `Kcl` token. The
         // parser handles `Kcl` as `finish_bar` + `start_new_bar` +
@@ -567,21 +567,20 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
                     chart.push('Y');
                 }
             }
-            if !text_carries_macro(bar) {
-                if let Some(sym) = bar.symbol {
-                    serialize_symbol(&mut chart, sym);
-                }
+            if !text_carries_macro(bar)
+                && let Some(sym) = bar.symbol
+            {
+                serialize_symbol(&mut chart, sym);
             }
             for st in &bar.staff_texts {
                 emit_staff_text(&mut chart, st);
             }
             serialize_bar_close(&mut chart, bar);
-            if let Some(next) = flat.get(i + 1) {
-                if next.bar.start == BarLine::Single {
-                    if let Some(end) = next.bar.ending {
-                        serialize_ending(&mut chart, end);
-                    }
-                }
+            if let Some(next) = flat.get(i + 1)
+                && next.bar.start == BarLine::Single
+                && let Some(end) = next.bar.ending
+            {
+                serialize_ending(&mut chart, end);
             }
             continue;
         }
@@ -609,10 +608,10 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
         // Skip when one of the bar's own staff_texts already
         // exact-matches a macro phrase that would re-fire on
         // re-parse. The classifier is exact-match per #2427.
-        if !text_carries_macro(bar) {
-            if let Some(sym) = bar.symbol {
-                serialize_symbol(&mut chart, sym);
-            }
+        if !text_carries_macro(bar)
+            && let Some(sym) = bar.symbol
+        {
+            serialize_symbol(&mut chart, sym);
         }
 
         if bar.no_chord {
@@ -707,12 +706,11 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
 
         serialize_bar_close(&mut chart, bar);
 
-        if let Some(next) = flat.get(i + 1) {
-            if next.bar.start == BarLine::Single {
-                if let Some(end) = next.bar.ending {
-                    serialize_ending(&mut chart, end);
-                }
-            }
+        if let Some(next) = flat.get(i + 1)
+            && next.bar.start == BarLine::Single
+            && let Some(end) = next.bar.ending
+        {
+            serialize_ending(&mut chart, end);
         }
     }
     chart

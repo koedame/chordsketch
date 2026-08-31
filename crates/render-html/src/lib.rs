@@ -316,18 +316,17 @@ fn render_song_body_into(
     // misspelled `{+config.diagrams.orientation: horizonal}` does not
     // silently render vertical.
     let raw_orientation = config.get_path("diagrams.orientation").as_str();
-    if let Some(s) = raw_orientation {
-        if !s.trim().is_empty()
-            && chordsketch_chordpro::chord_diagram::try_parse_orientation_value(Some(s)).is_none()
-        {
-            push_warning(
-                warnings,
-                format!(
-                    "diagrams.orientation: unrecognised value {s:?}; \
+    if let Some(s) = raw_orientation
+        && !s.trim().is_empty()
+        && chordsketch_chordpro::chord_diagram::try_parse_orientation_value(Some(s)).is_none()
+    {
+        push_warning(
+            warnings,
+            format!(
+                "diagrams.orientation: unrecognised value {s:?}; \
                      using default (vertical)"
-                ),
-            );
-        }
+            ),
+        );
     }
     let diagram_orientation =
         chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation);
@@ -830,14 +829,14 @@ fn render_song_body_into(
                         }
                         // Track {define} chords that are rendered inline so the
                         // auto-inject grid can skip them (dedup for #1211/#1245/#1246).
-                        if directive.kind == DirectiveKind::Define && show_diagrams {
-                            if let Some(ref val) = directive.value {
-                                let name =
-                                    chordsketch_chordpro::ast::ChordDefinition::parse_value(val)
-                                        .name;
-                                if !name.is_empty() {
-                                    inline_defined.insert(canonical_chord_name(&name));
-                                }
+                        if directive.kind == DirectiveKind::Define
+                            && show_diagrams
+                            && let Some(ref val) = directive.value
+                        {
+                            let name =
+                                chordsketch_chordpro::ast::ChordDefinition::parse_value(val).name;
+                            if !name.is_empty() {
+                                inline_defined.insert(canonical_chord_name(&name));
                             }
                         }
                         render_directive_inner(
@@ -2153,25 +2152,25 @@ fn sanitize_tag_attrs(tag: &str) -> String {
             continue;
         }
 
-        if is_uri_attr(attr_name) {
-            if let Some(ref val) = attr_value {
-                if has_dangerous_uri_scheme(val) {
-                    // Strip the attribute if it uses a dangerous URI scheme.
-                    continue;
-                }
-                // <use href="..."> / <use xlink:href="..."> must be
-                // fragment-only (^#...). External URIs (even over https)
-                // allow cross-origin tracking, referer leakage, and
-                // timing-based exfiltration from rendered ChordPro
-                // content. See issue #1828 and sanitizer-security.md
-                // §SVG tag blocklists.
-                if is_use_tag
-                    && (attr_name.eq_ignore_ascii_case("href")
-                        || attr_name.eq_ignore_ascii_case("xlink:href"))
-                    && !val.trim_start().starts_with('#')
-                {
-                    continue;
-                }
+        if is_uri_attr(attr_name)
+            && let Some(ref val) = attr_value
+        {
+            if has_dangerous_uri_scheme(val) {
+                // Strip the attribute if it uses a dangerous URI scheme.
+                continue;
+            }
+            // <use href="..."> / <use xlink:href="..."> must be
+            // fragment-only (^#...). External URIs (even over https)
+            // allow cross-origin tracking, referer leakage, and
+            // timing-based exfiltration from rendered ChordPro
+            // content. See issue #1828 and sanitizer-security.md
+            // §SVG tag blocklists.
+            if is_use_tag
+                && (attr_name.eq_ignore_ascii_case("href")
+                    || attr_name.eq_ignore_ascii_case("xlink:href"))
+                && !val.trim_start().starts_with('#')
+            {
+                continue;
             }
         }
 
@@ -2202,21 +2201,21 @@ fn sanitize_tag_attrs(tag: &str) -> String {
         // this broadened denylist as a defence-in-depth layer
         // alongside `sanitize_css_value` (which strips `(`, `)`,
         // and `\` entirely from directive-derived values).
-        if attr_name.eq_ignore_ascii_case("style") {
-            if let Some(ref val) = attr_value {
-                let lower_val: String = val.chars().flat_map(|c| c.to_lowercase()).collect();
-                if lower_val.contains("url(")
-                    || lower_val.contains("image(")
-                    || lower_val.contains("image-set(")
-                    || lower_val.contains("cross-fade(")
-                    || lower_val.contains("expression(")
-                    || lower_val.contains("@import")
-                    || lower_val.contains("behavior:")
-                    || lower_val.contains("-moz-binding")
-                    || lower_val.contains('\\')
-                {
-                    continue;
-                }
+        if attr_name.eq_ignore_ascii_case("style")
+            && let Some(ref val) = attr_value
+        {
+            let lower_val: String = val.chars().flat_map(|c| c.to_lowercase()).collect();
+            if lower_val.contains("url(")
+                || lower_val.contains("image(")
+                || lower_val.contains("image-set(")
+                || lower_val.contains("cross-fade(")
+                || lower_val.contains("expression(")
+                || lower_val.contains("@import")
+                || lower_val.contains("behavior:")
+                || lower_val.contains("-moz-binding")
+                || lower_val.contains('\\')
+            {
+                continue;
             }
         }
 
@@ -2642,10 +2641,10 @@ fn render_grid_line(raw: &str, html: &mut String) {
     let mut cells: Vec<Cell> = Vec::new();
     let mut current: Option<(Vec<BeatSlot>, bool)> = None;
     let flush = |current: &mut Option<(Vec<BeatSlot>, bool)>, cells: &mut Vec<Cell>| {
-        if let Some((beats, no_chord)) = current.take() {
-            if !beats.is_empty() || no_chord {
-                cells.push(Cell::Bar { beats, no_chord });
-            }
+        if let Some((beats, no_chord)) = current.take()
+            && (!beats.is_empty() || no_chord)
+        {
+            cells.push(Cell::Bar { beats, no_chord });
         }
     };
     let strum_row = matches!(row.kind, GridRowKind::Strum);

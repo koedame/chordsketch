@@ -538,10 +538,10 @@ fn page_control_directives_golden_test() {
         .lines
         .iter()
         .filter_map(|line| {
-            if let Line::Directive(d) = line {
-                if d.kind.is_page_control() {
-                    return Some(d);
-                }
+            if let Line::Directive(d) = line
+                && d.kind.is_page_control()
+            {
+                return Some(d);
             }
             None
         })

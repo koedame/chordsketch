@@ -108,12 +108,11 @@ fn equality_distinguishes_chord_changes() {
     // Same input except the bass note differs — must compare unequal.
     let mut a = make_sample();
     let mut b = make_sample();
-    if let Some(section) = b.sections.get_mut(0) {
-        if let Some(bar) = section.bars.get_mut(0) {
-            if let Some(bc) = bar.chords.get_mut(0) {
-                bc.chord.bass = Some(ChordRoot::natural('G'));
-            }
-        }
+    if let Some(section) = b.sections.get_mut(0)
+        && let Some(bar) = section.bars.get_mut(0)
+        && let Some(bc) = bar.chords.get_mut(0)
+    {
+        bc.chord.bass = Some(ChordRoot::natural('G'));
     }
     assert_eq!(
         a.sections[0].bars[0].chords[0].chord.bass, None,

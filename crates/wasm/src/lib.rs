@@ -546,10 +546,8 @@ fn canonicalize_key_directives(song: &mut chordsketch_chordpro::ast::Song) {
                 DirectiveKind::Meta(name) => name.eq_ignore_ascii_case("key"),
                 _ => false,
             };
-            if is_key {
-                if let Some(canonical) = directive.value.as_deref().and_then(canon) {
-                    directive.value = Some(canonical);
-                }
+            if is_key && let Some(canonical) = directive.value.as_deref().and_then(canon) {
+                directive.value = Some(canonical);
             }
         }
     }

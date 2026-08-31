@@ -2,7 +2,7 @@
   description = "ChordSketch — a Rust implementation of the ChordPro file format";
 
   # Only nixpkgs is needed as an input.  The Rust toolchain bundled with
-  # nixpkgs unstable supports Rust 1.85+ and the 2024 edition used by this
+  # nixpkgs unstable supports Rust 1.88+ and the 2024 edition used by this
   # workspace, so no rust-overlay or similar overlay is required.
   #
   # The input is pinned to a specific nixpkgs commit and the resolved
@@ -164,7 +164,7 @@
       });
 
       # Development shell: `rustup` manages the active Rust toolchain (the
-      # workspace requires Rust ≥ 1.85; run `rustup show` inside the shell),
+      # workspace requires Rust ≥ 1.88; run `rustup show` inside the shell),
       # and `wasm-pack` is required to build the `@chordsketch/wasm` package.
       devShells = forEachSystem (pkgs: {
         default = pkgs.mkShell {
