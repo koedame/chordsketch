@@ -217,10 +217,10 @@ impl Parser {
             // If this is a metadata directive without a selector, populate
             // the Song's metadata. Selector-bearing directives are deferred
             // to filter_song(), which re-derives metadata after filtering.
-            if let Line::Directive(ref directive) = line {
-                if directive.selector.is_none() {
-                    Self::populate_metadata(&mut song.metadata, directive);
-                }
+            if let Line::Directive(ref directive) = line
+                && directive.selector.is_none()
+            {
+                Self::populate_metadata(&mut song.metadata, directive);
             }
 
             song.lines.push(line);
@@ -252,10 +252,10 @@ impl Parser {
         while !self.is_at_end() {
             match self.parse_line() {
                 Ok(line) => {
-                    if let Line::Directive(ref directive) = line {
-                        if directive.selector.is_none() {
-                            Self::populate_metadata(&mut song.metadata, directive);
-                        }
+                    if let Line::Directive(ref directive) = line
+                        && directive.selector.is_none()
+                    {
+                        Self::populate_metadata(&mut song.metadata, directive);
                     }
                     song.lines.push(line);
                 }
@@ -496,22 +496,21 @@ impl Parser {
     /// name text; the full directive structure (including `DirectiveClose`)
     /// is validated later by `parse_directive_line`.
     fn is_verbatim_end_ahead(&self) -> bool {
-        if let Some(ref end_name) = self.verbatim_end {
-            if self.pos + 1 < self.tokens.len() {
-                if let TokenKind::Text(ref text) = self.tokens[self.pos + 1].kind {
-                    let trimmed = text.trim().to_ascii_lowercase();
-                    // Check full name
-                    if trimmed == *end_name {
-                        return true;
-                    }
-                    // Check short aliases
-                    return match end_name.as_str() {
-                        "end_of_tab" => trimmed == "eot",
-                        "end_of_grid" => trimmed == "eog",
-                        _ => false,
-                    };
-                }
+        if let Some(ref end_name) = self.verbatim_end
+            && self.pos + 1 < self.tokens.len()
+            && let TokenKind::Text(ref text) = self.tokens[self.pos + 1].kind
+        {
+            let trimmed = text.trim().to_ascii_lowercase();
+            // Check full name
+            if trimmed == *end_name {
+                return true;
             }
+            // Check short aliases
+            return match end_name.as_str() {
+                "end_of_tab" => trimmed == "eot",
+                "end_of_grid" => trimmed == "eog",
+                _ => false,
+            };
         }
         false
     }

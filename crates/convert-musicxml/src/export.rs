@@ -247,42 +247,42 @@ fn write_measure(measure: &Measure, number: usize, out: &mut String) {
     // Notes
     for (chord_name, lyric_text) in &measure.notes {
         // Harmony element
-        if let Some(chord) = chord_name {
-            if let Some(c) = chord_to_musicxml(chord) {
-                out.push_str("      <harmony>\n");
-                out.push_str("        <root>\n");
+        if let Some(chord) = chord_name
+            && let Some(c) = chord_to_musicxml(chord)
+        {
+            out.push_str("      <harmony>\n");
+            out.push_str("        <root>\n");
+            out.push_str(&format!(
+                "          <root-step>{}</root-step>\n",
+                xml_escape(c.root_step)
+            ));
+            if c.root_alter != 0 {
                 out.push_str(&format!(
-                    "          <root-step>{}</root-step>\n",
-                    xml_escape(c.root_step)
+                    "          <root-alter>{}</root-alter>\n",
+                    c.root_alter
                 ));
-                if c.root_alter != 0 {
-                    out.push_str(&format!(
-                        "          <root-alter>{}</root-alter>\n",
-                        c.root_alter
-                    ));
-                }
-                out.push_str("        </root>\n");
-                out.push_str(&format!(
-                    "        <kind text=\"{}\">{}</kind>\n",
-                    xml_escape(&c.kind_text),
-                    xml_escape(c.kind_content)
-                ));
-                if let Some((bass_step, bass_alter)) = c.bass {
-                    out.push_str("        <bass>\n");
-                    out.push_str(&format!(
-                        "          <bass-step>{}</bass-step>\n",
-                        xml_escape(bass_step)
-                    ));
-                    if bass_alter != 0 {
-                        out.push_str(&format!(
-                            "          <bass-alter>{}</bass-alter>\n",
-                            bass_alter
-                        ));
-                    }
-                    out.push_str("        </bass>\n");
-                }
-                out.push_str("      </harmony>\n");
             }
+            out.push_str("        </root>\n");
+            out.push_str(&format!(
+                "        <kind text=\"{}\">{}</kind>\n",
+                xml_escape(&c.kind_text),
+                xml_escape(c.kind_content)
+            ));
+            if let Some((bass_step, bass_alter)) = c.bass {
+                out.push_str("        <bass>\n");
+                out.push_str(&format!(
+                    "          <bass-step>{}</bass-step>\n",
+                    xml_escape(bass_step)
+                ));
+                if bass_alter != 0 {
+                    out.push_str(&format!(
+                        "          <bass-alter>{}</bass-alter>\n",
+                        bass_alter
+                    ));
+                }
+                out.push_str("        </bass>\n");
+            }
+            out.push_str("      </harmony>\n");
         }
 
         // Note element (whole note)

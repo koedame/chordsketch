@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The minimum supported Rust version is now 1.88** (was 1.85). The
+  `uniffi` 0.31 → 0.32 and `pdf-extract` 0.10 → 0.12 bumps both pull in
+  transitive crates that declare a higher floor (`askama` 0.16 requires
+  1.88), and neither could compile on 1.85. Pre-1.0, an MSRV raise ships
+  in a `0.x` release rather than waiting for `1.0.0` — see
+  [ADR-0044](docs/adr/0044-pre-1.0-breaking-changes-are-expected.md).
+  Consumers on Rust 1.85–1.87 stay on the previous release.
+
 - The release pipeline fans out through an explicit call graph instead of
   the `release: published` event. `release.yml` now calls `docker.yml`,
   `napi.yml`, `vscode-extension.yml`, `npm-publish.yml`,

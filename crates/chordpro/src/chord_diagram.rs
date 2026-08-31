@@ -434,10 +434,10 @@ fn root_prefix_len(s: &str) -> usize {
         return 0;
     }
     let mut len = first.len_utf8();
-    if let Some(c) = it.next() {
-        if matches!(c, 'b' | '#' | '♭' | '♯') {
-            len += c.len_utf8();
-        }
+    if let Some(c) = it.next()
+        && matches!(c, 'b' | '#' | '♭' | '♯')
+    {
+        len += c.len_utf8();
     }
     len
 }
@@ -593,21 +593,21 @@ pub fn decompose_diagram_title(name: &str) -> DiagramTitle {
     //    which must render as a single-line title.
     let mut base = name;
     let mut tensions: Vec<String> = Vec::new();
-    if name.ends_with(')') {
-        if let Some(open) = name.rfind('(') {
-            let head = &name[..open];
-            let tokens: Vec<&str> = name[open + 1..name.len() - 1]
-                .split(',')
-                .map(str::trim)
-                .collect();
-            if !head.is_empty()
-                && !head.contains(char::is_whitespace)
-                && !tokens.is_empty()
-                && tokens.iter().all(|t| is_tension_token(t))
-            {
-                tensions = tokens.into_iter().map(String::from).collect();
-                base = head;
-            }
+    if name.ends_with(')')
+        && let Some(open) = name.rfind('(')
+    {
+        let head = &name[..open];
+        let tokens: Vec<&str> = name[open + 1..name.len() - 1]
+            .split(',')
+            .map(str::trim)
+            .collect();
+        if !head.is_empty()
+            && !head.contains(char::is_whitespace)
+            && !tokens.is_empty()
+            && tokens.iter().all(|t| is_tension_token(t))
+        {
+            tensions = tokens.into_iter().map(String::from).collect();
+            base = head;
         }
     }
 
@@ -1521,15 +1521,15 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
                 "<circle cx=\"{x}\" cy=\"{y}\" r=\"{dot_radius}\" fill=\"black\"/>\n"
             ));
             // Finger number inside the dot (if available and non-zero)
-            if let Some(&finger) = data.fingers.get(i) {
-                if finger > 0 {
-                    svg.push_str(&format!(
-                        "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
+            if let Some(&finger) = data.fingers.get(i)
+                && finger > 0
+            {
+                svg.push_str(&format!(
+                    "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
                          font-family=\"sans-serif\" font-size=\"{finger_font}\" \
                          fill=\"white\">{finger}</text>\n",
-                        y + text_v_center
-                    ));
-                }
+                    y + text_v_center
+                ));
             }
         }
     }
@@ -1781,15 +1781,15 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
             svg.push_str(&format!(
                 "<circle cx=\"{x}\" cy=\"{y}\" r=\"{dot_radius}\" fill=\"black\"/>\n"
             ));
-            if let Some(&finger) = data.fingers.get(i) {
-                if finger > 0 {
-                    svg.push_str(&format!(
-                        "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
+            if let Some(&finger) = data.fingers.get(i)
+                && finger > 0
+            {
+                svg.push_str(&format!(
+                    "<text x=\"{x}\" y=\"{}\" text-anchor=\"middle\" \
                          font-family=\"sans-serif\" font-size=\"{finger_font}\" \
                          fill=\"white\">{finger}</text>\n",
-                        y + text_v_center
-                    ));
-                }
+                    y + text_v_center
+                ));
             }
         }
     }

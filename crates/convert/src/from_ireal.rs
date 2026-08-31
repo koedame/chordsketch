@@ -86,11 +86,11 @@ fn push_metadata(song: &mut Song, source: &IrealSong) {
     song.metadata = Metadata::new();
     song.lines
         .push(Line::Directive(Directive::with_value("title", &title)));
-    if let Some(composer) = source.composer.as_deref() {
-        if !composer.trim().is_empty() {
-            song.lines
-                .push(Line::Directive(Directive::with_value("composer", composer)));
-        }
+    if let Some(composer) = source.composer.as_deref()
+        && !composer.trim().is_empty()
+    {
+        song.lines
+            .push(Line::Directive(Directive::with_value("composer", composer)));
     }
 }
 
@@ -115,17 +115,17 @@ fn push_directives(song: &mut Song, source: &IrealSong) {
             source.transpose.to_string(),
         )));
     }
-    if let Some(style) = source.style.as_deref() {
-        if !style.trim().is_empty() {
-            // ChordPro has no canonical `{style}` directive, so we
-            // route the tag through the `{meta}` extension which
-            // every conformant ChordPro reader preserves verbatim
-            // (and which renderers display as a metadata line).
-            song.lines.push(Line::Directive(Directive::with_value(
-                "meta",
-                format!("style {style}"),
-            )));
-        }
+    if let Some(style) = source.style.as_deref()
+        && !style.trim().is_empty()
+    {
+        // ChordPro has no canonical `{style}` directive, so we
+        // route the tag through the `{meta}` extension which
+        // every conformant ChordPro reader preserves verbatim
+        // (and which renderers display as a metadata line).
+        song.lines.push(Line::Directive(Directive::with_value(
+            "meta",
+            format!("style {style}"),
+        )));
     }
 }
 
@@ -496,10 +496,10 @@ mod tests {
 
     fn directive_value(song: &Song, name: &str) -> Option<String> {
         song.lines.iter().find_map(|line| {
-            if let Line::Directive(d) = line {
-                if d.name == name {
-                    return d.value.clone();
-                }
+            if let Line::Directive(d) = line
+                && d.name == name
+            {
+                return d.value.clone();
             }
             None
         })

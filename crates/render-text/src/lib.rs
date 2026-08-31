@@ -163,10 +163,10 @@ fn render_song_impl(
         // the matching EndOf directive. Mirrors the PDF renderer's
         // skip-until-end window introduced in #1825/#1968.
         if let Some(kind) = in_notation_block {
-            if let Line::Directive(d) = line {
-                if kind.is_end_directive(&d.kind) {
-                    in_notation_block = None;
-                }
+            if let Line::Directive(d) = line
+                && kind.is_end_directive(&d.kind)
+            {
+                in_notation_block = None;
             }
             continue;
         }
