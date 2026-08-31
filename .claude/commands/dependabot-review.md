@@ -268,11 +268,28 @@ anyway, but starting it before CI begins on the rebased commit
 risks the subagent reading stale state.
 
 If Dependabot has not rebased a PR within 5 minutes of the previous
-merge, leave a `@dependabot rebase` comment to nudge it:
+merge, nudge it with a `rebase` command comment.
+
+Do NOT pass the command through `--body`: some comment-posting
+clients defang bot commands by inserting `U+00B7` (MIDDLE DOT)
+characters into them. The comment posts successfully and looks
+almost normal, but Dependabot does not recognise it, so the nudge
+silently does nothing. Write the command to a file instead, so the
+literal command text never travels through the client as a command
+argument:
 
 ```bash
-gh pr comment <NEXT_PR> --body "@dependabot rebase"
+python3 -c "import pathlib; pathlib.Path('/tmp/dependabot-cmd.md').write_text(chr(64) + 'dependabot rebase')"
+gh pr comment <NEXT_PR> --body-file /tmp/dependabot-cmd.md
+
+# Posting is not proof the command was accepted. Read it back:
+gh api repos/koedame/chordsketch/issues/<NEXT_PR>/comments --jq '.[-1].body'
 ```
+
+The read-back must print the two-word rebase command and nothing
+else. A `U+00B7` anywhere inside it means the comment was defanged
+in transit and Dependabot will ignore it — re-post from the file
+until the read-back is clean.
 
 ## Step 4 — Final summary
 
@@ -293,7 +310,9 @@ If any PR is in the BLOCKED bucket, end the summary with:
 
 - **`gh pr merge --squash` fails with `Pull request is not mergeable`**:
   the PR is behind `main` because Dependabot has not yet rebased it.
-  Comment `@dependabot rebase`, wait for the rebase + CI, retry once.
+  Post the `rebase` command comment exactly the way step 3 spells
+  it out (`--body-file`, then read the posted comment back), wait
+  for the rebase + CI, retry once.
   If it fails again, report BLOCKED with the failure reason and move
   on.
 - **Subagent's worktree create fails because the path already exists**:
