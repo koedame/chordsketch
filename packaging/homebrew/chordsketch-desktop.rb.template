@@ -27,11 +27,13 @@ cask "chordsketch" do
   # Minimum macOS matches `tauri.conf.json`'s implied baseline
   # (Tauri v2 officially supports macOS 10.15+; we floor to 12
   # because the WKWebView fixes below that version are outside
-  # the project's testable surface). Note the space between `>=`
-  # and `:monterey` — Homebrew Cask DSL requires it (see the
-  # Cookbook at https://docs.brew.sh/Cask-Cookbook#stanza-depends_on;
-  # the no-space form silently fails `brew audit`).
-  depends_on macos: ">= :monterey"
+  # the project's testable surface). A bare symbol already means
+  # "this release or newer" (see the Cookbook at
+  # https://docs.brew.sh/Cask-Cookbook#stanza-depends_on), so it
+  # is equivalent to the `">= :monterey"` string this stanza used
+  # to carry — that string comparison form is deprecated and made
+  # Homebrew warn on every read of the tap.
+  depends_on macos: :monterey
 
   app "ChordSketch.app"
 
