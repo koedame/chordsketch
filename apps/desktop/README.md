@@ -34,7 +34,7 @@ apps/desktop/
 
 ## Prerequisites
 
-- **Rust** (stable, 1.85+)
+- **Rust** (stable, 1.88+)
 - **wasm-pack** 0.14.0 — `cargo install wasm-pack --version "0.14.0"`
 - **Tauri CLI** — `cargo install tauri-cli --version "^2.0" --locked`
 - **Node.js 22+** (for Vite / TypeScript)
