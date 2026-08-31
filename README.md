@@ -113,7 +113,7 @@ JavaScript/TypeScript.
 CLI (formula):
 
 ```bash
-brew install koedame/tap/chordsketch
+brew install --formula koedame/tap/chordsketch
 ```
 
 [Desktop app](#desktop-application) (cask, macOS only):
@@ -127,7 +127,11 @@ clears the Gatekeeper quarantine flag automatically on install.
 
 Both commands name the tap in full so that Homebrew taps `koedame/tap`
 on demand and trusts just that one formula or cask; Homebrew 6.0.0 and
-later refuse to load anything from an untrusted third-party tap.
+later refuse to load anything from an untrusted third-party tap. The
+tap ships the CLI and the desktop app under the same `chordsketch`
+name, so `--formula` and `--cask` say which of the two to install;
+without either flag Homebrew picks the formula and warns that the name
+was ambiguous.
 
 ### Scoop (Windows)
 

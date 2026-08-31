@@ -485,11 +485,22 @@ jobs:
           # setup. The fully qualified name taps koedame/tap on demand
           # and trusts just this formula, which is what makes the
           # README's one-liner work under Homebrew's tap-trust
-          # enforcement (mandatory since Homebrew 6.0.0). Adding a
-          # `brew tap`, `brew trust` or `HOMEBREW_NO_SANDBOX_LINUX`
-          # line here would make the job pass while the README's own
-          # instructions fail for users.
-          brew install koedame/tap/chordsketch
+          # enforcement (mandatory since Homebrew 6.0.0). `--formula`
+          # disambiguates against the same-named cask in the tap.
+          # Adding a `brew tap`, `brew trust` or
+          # `HOMEBREW_NO_SANDBOX_LINUX` line here would make the job
+          # pass while the README's own instructions fail for users.
+          brew install --formula koedame/tap/chordsketch 2>&1 \
+            | tee "$RUNNER_TEMP/install.log"
+          # The formula and the cask share the token `chordsketch`, so
+          # dropping `--formula` makes Homebrew guess and print
+          # "Treating ... as a formula" on every install. That warning
+          # is user-visible noise on a documented command, and nothing
+          # else in this job fails when it comes back.
+          if grep -q 'Treating .* as a formula' "$RUNNER_TEMP/install.log"; then
+            echo "::error::README's brew install printed an ambiguity warning" >&2
+            exit 1
+          fi
           chordsketch --version
 
       - name: Render smoke

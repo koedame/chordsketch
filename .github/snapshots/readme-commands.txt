@@ -1,5 +1,5 @@
 [Installation] npm install @chordsketch/wasm
-[Installation] brew install koedame/tap/chordsketch
+[Installation] brew install --formula koedame/tap/chordsketch
 [Installation] brew install --cask koedame/tap/chordsketch
 [Installation] scoop bucket add koedame https://github.com/koedame/scoop-bucket
 [Installation] scoop install chordsketch
