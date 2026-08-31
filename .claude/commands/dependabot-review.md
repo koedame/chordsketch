@@ -268,11 +268,58 @@ anyway, but starting it before CI begins on the rebased commit
 risks the subagent reading stale state.
 
 If Dependabot has not rebased a PR within 5 minutes of the previous
-merge, leave a `@dependabot rebase` comment to nudge it:
+merge, nudge it with a `rebase` command comment.
+
+Do NOT pass the command through `--body`: some comment-posting
+clients defang bot commands by inserting `U+00B7` (MIDDLE DOT)
+characters into them. The comment posts successfully and looks
+almost normal, but Dependabot does not recognise it, so the nudge
+silently does nothing. Write the command to a file instead, so the
+literal command text never travels through the client as a command
+argument. Use a freshly generated temp path (`mktemp`), not a fixed
+name — a predictable path under `/tmp` is a symlink/race target on a
+shared host:
 
 ```bash
-gh pr comment <NEXT_PR> --body "@dependabot rebase"
+attempt=1
+while [ "$attempt" -le 3 ]; do
+  CMD_FILE=$(mktemp)
+  python3 -c "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(chr(64) + 'dependabot rebase')" "$CMD_FILE"
+  COMMENT_URL=$(gh pr comment <NEXT_PR> --body-file "$CMD_FILE")
+  rm -f "$CMD_FILE"
+
+  # Posting is not proof the command was accepted. Read back the
+  # exact comment just created, by ID — do NOT list-and-take-last:
+  # the issue-comments endpoint defaults to the oldest 30 comments
+  # in ascending order with no pagination, so on a PR that has
+  # accumulated 30+ comments over its review lifetime, `--jq
+  # '.[-1].body'` would silently read a stale unrelated comment
+  # instead of the one just posted.
+  COMMENT_ID="${COMMENT_URL##*#issuecomment-}"
+  BODY=$(gh api "repos/koedame/chordsketch/issues/comments/$COMMENT_ID" --jq '.body')
+
+  case "$BODY" in
+    *$'\xc2\xb7'*) attempt=$((attempt + 1)) ;;  # U+00B7 present — defanged, retry
+    *) break ;;                                 # clean
+  esac
+done
+
+# $BODY dies with this shell once the tool call returns — print the
+# outcome explicitly so it survives into the next command's context.
+if [ "$attempt" -gt 3 ]; then
+  echo "BLOCKED: rebase nudge defanged after 3 attempts"
+else
+  echo "OK: $BODY"
+fi
 ```
+
+The final line must read `OK: ` followed by the two-word rebase
+command and nothing else. A `U+00B7` anywhere inside the read-back
+means the comment was defanged in transit and Dependabot will ignore
+it. Cap retries at 3 attempts — if the third read-back is still
+defanged, the script prints the `BLOCKED:` line instead; stop nudging
+this PR, report it in the BLOCKED bucket with "rebase nudge defanged
+after 3 attempts", and move on. Do not loop indefinitely.
 
 ## Step 4 — Final summary
 
@@ -293,7 +340,9 @@ If any PR is in the BLOCKED bucket, end the summary with:
 
 - **`gh pr merge --squash` fails with `Pull request is not mergeable`**:
   the PR is behind `main` because Dependabot has not yet rebased it.
-  Comment `@dependabot rebase`, wait for the rebase + CI, retry once.
+  Post the `rebase` command comment exactly the way step 3 spells
+  it out (`--body-file`, then read the posted comment back), wait
+  for the rebase + CI, retry once.
   If it fails again, report BLOCKED with the failure reason and move
   on.
 - **Subagent's worktree create fails because the path already exists**:
