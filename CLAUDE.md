@@ -211,12 +211,16 @@ checkout — no worktree.
 **After PR merge**: delete the local branch (and remove the worktree if one
 was created).
 
-## Ticket-Driven Development
+## Issue-Linked Development
 
-- No code changes without a corresponding GitHub Issue.
-- Branch names must reference the issue number.
-- PR descriptions must include `Closes #N`.
-- Use `gh issue create` for new work, `gh issue list` to find existing work.
+- A GitHub Issue is **optional**, not a prerequisite for a change
+  ([ADR-0043](docs/adr/0043-issue-not-required-for-prs.md)). A self-contained
+  change may go straight to a PR.
+- When a change does have an issue, the branch name references the issue number
+  and the PR description carries `Closes #N`. Branches without an issue use
+  `{type}/{short-kebab-case}`.
+- Use `gh issue list` to find work that has already been filed; issues are also
+  where users report bugs and request features.
 
 ## Compatibility Strategy
 

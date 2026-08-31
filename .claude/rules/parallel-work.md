@@ -26,7 +26,10 @@ Default (single instance, no concurrent work):
 ```bash
 # From the main repo checkout
 git fetch origin
+# With an issue:
 git checkout -b issue-{N}-{slug} origin/main
+# Without an issue (ADR-0043):
+git checkout -b {type}/{short-kebab-case} origin/main
 ```
 
 When you actually need worktree isolation (concurrent instances, autopilot,
