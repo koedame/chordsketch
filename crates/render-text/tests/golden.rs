@@ -97,11 +97,11 @@ fn diff_strings(expected: &str, actual: &str) -> Option<String> {
             let end = (i + context + 1).min(max_len);
             last_printed = Some(i);
             for j in (i + 1)..end {
-                if let (Some(e), Some(a)) = (expected_lines.get(j), actual_lines.get(j)) {
-                    if e == a {
-                        output.push_str(&format!("  {:4} | {}\n", j + 1, e));
-                        last_printed = Some(j);
-                    }
+                if let (Some(e), Some(a)) = (expected_lines.get(j), actual_lines.get(j))
+                    && e == a
+                {
+                    output.push_str(&format!("  {:4} | {}\n", j + 1, e));
+                    last_printed = Some(j);
                 }
             }
         }

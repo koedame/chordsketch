@@ -74,12 +74,11 @@ impl Song {
     pub fn config_overrides(&self) -> Vec<(&str, &str)> {
         let mut overrides = Vec::new();
         for line in &self.lines {
-            if let Line::Directive(directive) = line {
-                if let DirectiveKind::ConfigOverride(ref key) = directive.kind {
-                    if let Some(ref value) = directive.value {
-                        overrides.push((key.as_str(), value.as_str()));
-                    }
-                }
+            if let Line::Directive(directive) = line
+                && let DirectiveKind::ConfigOverride(ref key) = directive.kind
+                && let Some(ref value) = directive.value
+            {
+                overrides.push((key.as_str(), value.as_str()));
             }
         }
         overrides
@@ -98,20 +97,17 @@ impl Song {
         // First pass: collect chord name -> (display, format) mappings.
         let mut define_map: Vec<(String, Option<String>, Option<String>)> = Vec::new();
         for line in &self.lines {
-            if let Line::Directive(directive) = line {
-                if directive.kind == DirectiveKind::Define {
-                    if let Some(ref value) = directive.value {
-                        let def = ChordDefinition::parse_value(value);
-                        if def.display.is_some() || def.format.is_some() {
-                            if let Some(entry) =
-                                define_map.iter_mut().find(|(n, _, _)| *n == def.name)
-                            {
-                                entry.1 = def.display;
-                                entry.2 = def.format;
-                            } else {
-                                define_map.push((def.name, def.display, def.format));
-                            }
-                        }
+            if let Line::Directive(directive) = line
+                && directive.kind == DirectiveKind::Define
+                && let Some(ref value) = directive.value
+            {
+                let def = ChordDefinition::parse_value(value);
+                if def.display.is_some() || def.format.is_some() {
+                    if let Some(entry) = define_map.iter_mut().find(|(n, _, _)| *n == def.name) {
+                        entry.1 = def.display;
+                        entry.2 = def.format;
+                    } else {
+                        define_map.push((def.name, def.display, def.format));
                     }
                 }
             }
@@ -125,20 +121,18 @@ impl Song {
         for line in &mut self.lines {
             if let Line::Lyrics(lyrics_line) = line {
                 for segment in &mut lyrics_line.segments {
-                    if let Some(ref mut chord) = segment.chord {
-                        if chord.display.is_none() {
-                            if let Some((_, display, format)) =
-                                define_map.iter().find(|(n, _, _)| *n == chord.name)
-                            {
-                                if let Some(d) = display {
-                                    // display= takes precedence over format=
-                                    chord.display = Some(d.clone());
-                                } else if let Some(f) = format {
-                                    // Expand format pattern using chord components
-                                    if let Some(expanded) = chord.expand_format(f) {
-                                        chord.display = Some(expanded);
-                                    }
-                                }
+                    if let Some(ref mut chord) = segment.chord
+                        && chord.display.is_none()
+                        && let Some((_, display, format)) =
+                            define_map.iter().find(|(n, _, _)| *n == chord.name)
+                    {
+                        if let Some(d) = display {
+                            // display= takes precedence over format=
+                            chord.display = Some(d.clone());
+                        } else if let Some(f) = format {
+                            // Expand format pattern using chord components
+                            if let Some(expanded) = chord.expand_format(f) {
+                                chord.display = Some(expanded);
                             }
                         }
                     }
@@ -158,19 +152,17 @@ impl Song {
     pub fn fretted_defines(&self) -> Vec<(String, String)> {
         let mut result: Vec<(String, String)> = Vec::new();
         for line in &self.lines {
-            if let Line::Directive(directive) = line {
-                if directive.kind == DirectiveKind::Define
-                    || directive.kind == DirectiveKind::ChordDirective
-                {
-                    if let Some(ref value) = directive.value {
-                        let def = ChordDefinition::parse_value(value);
-                        if let Some(raw) = def.raw {
-                            if let Some(pos) = result.iter().position(|(n, _)| *n == def.name) {
-                                result[pos].1 = raw;
-                            } else {
-                                result.push((def.name, raw));
-                            }
-                        }
+            if let Line::Directive(directive) = line
+                && (directive.kind == DirectiveKind::Define
+                    || directive.kind == DirectiveKind::ChordDirective)
+                && let Some(ref value) = directive.value
+            {
+                let def = ChordDefinition::parse_value(value);
+                if let Some(raw) = def.raw {
+                    if let Some(pos) = result.iter().position(|(n, _)| *n == def.name) {
+                        result[pos].1 = raw;
+                    } else {
+                        result.push((def.name, raw));
                     }
                 }
             }
@@ -191,19 +183,17 @@ impl Song {
     pub fn keyboard_defines(&self) -> Vec<(String, Vec<i32>)> {
         let mut result: Vec<(String, Vec<i32>)> = Vec::new();
         for line in &self.lines {
-            if let Line::Directive(directive) = line {
-                if directive.kind == DirectiveKind::Define
-                    || directive.kind == DirectiveKind::ChordDirective
-                {
-                    if let Some(ref value) = directive.value {
-                        let def = ChordDefinition::parse_value(value);
-                        if let Some(keys) = def.keys {
-                            if let Some(pos) = result.iter().position(|(n, _)| *n == def.name) {
-                                result[pos].1 = keys;
-                            } else {
-                                result.push((def.name, keys));
-                            }
-                        }
+            if let Line::Directive(directive) = line
+                && (directive.kind == DirectiveKind::Define
+                    || directive.kind == DirectiveKind::ChordDirective)
+                && let Some(ref value) = directive.value
+            {
+                let def = ChordDefinition::parse_value(value);
+                if let Some(keys) = def.keys {
+                    if let Some(pos) = result.iter().position(|(n, _)| *n == def.name) {
+                        result[pos].1 = keys;
+                    } else {
+                        result.push((def.name, keys));
                     }
                 }
             }
@@ -224,10 +214,10 @@ impl Song {
         for line in &self.lines {
             if let Line::Lyrics(lyrics) = line {
                 for seg in &lyrics.segments {
-                    if let Some(ref chord) = seg.chord {
-                        if seen.insert(chord.name.clone()) {
-                            result.push(chord.name.clone());
-                        }
+                    if let Some(ref chord) = seg.chord
+                        && seen.insert(chord.name.clone())
+                    {
+                        result.push(chord.name.clone());
                     }
                 }
             }
@@ -1446,20 +1436,20 @@ impl DirectiveKind {
             // Custom sections (start_of_X / end_of_X)
             other => {
                 // Config override: {+config.KEY: VALUE}
-                if let Some(key) = other.strip_prefix("+config.") {
-                    if !key.is_empty() {
-                        return Self::ConfigOverride(key.to_string());
-                    }
+                if let Some(key) = other.strip_prefix("+config.")
+                    && !key.is_empty()
+                {
+                    return Self::ConfigOverride(key.to_string());
                 }
-                if let Some(section) = other.strip_prefix("start_of_") {
-                    if !section.is_empty() {
-                        return Self::StartOfSection(section.to_string());
-                    }
+                if let Some(section) = other.strip_prefix("start_of_")
+                    && !section.is_empty()
+                {
+                    return Self::StartOfSection(section.to_string());
                 }
-                if let Some(section) = other.strip_prefix("end_of_") {
-                    if !section.is_empty() {
-                        return Self::EndOfSection(section.to_string());
-                    }
+                if let Some(section) = other.strip_prefix("end_of_")
+                    && !section.is_empty()
+                {
+                    return Self::EndOfSection(section.to_string());
                 }
                 Self::Unknown(other.to_string())
             }

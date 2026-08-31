@@ -51,15 +51,15 @@ pub fn convert(source: &Song) -> Result<ConversionOutput<IrealSong>, ConversionE
 }
 
 fn populate_metadata(ireal: &mut IrealSong, source: &Song, warnings: &mut Vec<ConversionWarning>) {
-    if let Some(title) = source.metadata.title.as_deref() {
-        if !title.trim().is_empty() {
-            ireal.title = title.to_owned();
-        }
+    if let Some(title) = source.metadata.title.as_deref()
+        && !title.trim().is_empty()
+    {
+        ireal.title = title.to_owned();
     }
-    if let Some(composer) = source.metadata.composers.first() {
-        if !composer.trim().is_empty() {
-            ireal.composer = Some(composer.clone());
-        }
+    if let Some(composer) = source.metadata.composers.first()
+        && !composer.trim().is_empty()
+    {
+        ireal.composer = Some(composer.clone());
     }
     if source.metadata.composers.len() > 1 {
         warnings.push(ConversionWarning::new(
@@ -67,22 +67,21 @@ fn populate_metadata(ireal: &mut IrealSong, source: &Song, warnings: &mut Vec<Co
             "extra composers dropped — iReal stores only a single composer field",
         ));
     }
-    if let Some(key_str) = source.metadata.key.as_deref() {
-        if let Some(ks) = parse_chordpro_key(key_str) {
-            ireal.key_signature = ks;
-        }
+    if let Some(key_str) = source.metadata.key.as_deref()
+        && let Some(ks) = parse_chordpro_key(key_str)
+    {
+        ireal.key_signature = ks;
     }
-    if let Some(time_str) = source.metadata.time.as_deref() {
-        if let Some(ts) = parse_chordpro_time(time_str) {
-            ireal.time_signature = ts;
-        }
+    if let Some(time_str) = source.metadata.time.as_deref()
+        && let Some(ts) = parse_chordpro_time(time_str)
+    {
+        ireal.time_signature = ts;
     }
-    if let Some(tempo_str) = source.metadata.tempo.as_deref() {
-        if let Ok(n) = tempo_str.parse::<u16>() {
-            if n > 0 {
-                ireal.tempo = Some(n);
-            }
-        }
+    if let Some(tempo_str) = source.metadata.tempo.as_deref()
+        && let Ok(n) = tempo_str.parse::<u16>()
+        && n > 0
+    {
+        ireal.tempo = Some(n);
     }
     // Surface dropped metadata categories iReal cannot represent.
     if !source.metadata.subtitles.is_empty() {
@@ -141,35 +140,33 @@ fn populate_extras_from_directives(
     // only consume the `style` flavour.
     for line in &source.lines {
         if let Line::Directive(d) = line {
-            if d.name == "meta" {
-                if let Some(value) = d.value.as_deref() {
-                    if let Some(rest) = value.strip_prefix("style ") {
-                        let trimmed = rest.trim();
-                        if !trimmed.is_empty() {
-                            ireal.style = Some(trimmed.to_owned());
-                        }
-                    }
+            if d.name == "meta"
+                && let Some(value) = d.value.as_deref()
+                && let Some(rest) = value.strip_prefix("style ")
+            {
+                let trimmed = rest.trim();
+                if !trimmed.is_empty() {
+                    ireal.style = Some(trimmed.to_owned());
                 }
             }
             // Some ChordPro files set `{transpose: N}`. iReal stores
             // transpose in `[-11, 11]`. Parse as i32 so values outside
             // the i8 range are still detected and warned about rather
             // than silently dropped by a parse failure.
-            if d.kind == DirectiveKind::Transpose {
-                if let Some(value) = d.value.as_deref() {
-                    if let Ok(n) = value.trim().parse::<i32>() {
-                        let clamped = n.clamp(-11, 11) as i8;
-                        if n != i32::from(clamped) {
-                            warnings.push(ConversionWarning::new(
+            if d.kind == DirectiveKind::Transpose
+                && let Some(value) = d.value.as_deref()
+                && let Ok(n) = value.trim().parse::<i32>()
+            {
+                let clamped = n.clamp(-11, 11) as i8;
+                if n != i32::from(clamped) {
+                    warnings.push(ConversionWarning::new(
                                 WarningKind::LossyDrop,
                                 format!(
                                     "{{transpose: {n}}} clamped to {clamped} — iReal transpose range is [-11, 11]"
                                 ),
                             ));
-                        }
-                        ireal.transpose = clamped;
-                    }
                 }
+                ireal.transpose = clamped;
             }
         }
     }
@@ -262,10 +259,10 @@ fn populate_sections(ireal: &mut IrealSong, source: &Song, warnings: &mut Vec<Co
 }
 
 fn push_current(current: &mut Option<Section>, sections: &mut Vec<Section>) {
-    if let Some(section) = current.take() {
-        if !section.bars.is_empty() {
-            sections.push(section);
-        }
+    if let Some(section) = current.take()
+        && !section.bars.is_empty()
+    {
+        sections.push(section);
     }
 }
 
@@ -326,12 +323,11 @@ fn push_unsupported_warnings(warnings: &mut Vec<ConversionWarning>, source: &Son
             // pass-through (`meta: style ...`) become a single
             // aggregated warning so callers know not every meta
             // value round-trips.
-            if d.name == "meta" {
-                if let Some(value) = d.value.as_deref() {
-                    if !value.trim().starts_with("style ") {
-                        had_other_meta = true;
-                    }
-                }
+            if d.name == "meta"
+                && let Some(value) = d.value.as_deref()
+                && !value.trim().starts_with("style ")
+            {
+                had_other_meta = true;
             }
         }
     }

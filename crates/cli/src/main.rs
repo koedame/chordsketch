@@ -370,12 +370,12 @@ fn main() -> ExitCode {
     // Apply --instrument shorthand before --define so that --define can override.
     // Empty/whitespace-only values are ignored — they would silently remove all
     // selector-bearing directives since no selector matches the empty string.
-    if let Some(ref instrument) = cli.instrument {
-        if !instrument.trim().is_empty() {
-            config = config
-                .with_define(&format!("instrument.type={instrument}"))
-                .expect("instrument.type define is valid");
-        }
+    if let Some(ref instrument) = cli.instrument
+        && !instrument.trim().is_empty()
+    {
+        config = config
+            .with_define(&format!("instrument.type={instrument}"))
+            .expect("instrument.type define is valid");
     }
 
     // Apply --define overrides (highest precedence)
@@ -755,11 +755,11 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
                     eprintln!("error: {file}: not formatted");
                     needs_format = true;
                 }
-            } else if formatted != input {
-                if let Err(e) = write_formatted_atomic(file, &formatted) {
-                    eprintln!("error: {file}: {e}");
-                    had_error = true;
-                }
+            } else if formatted != input
+                && let Err(e) = write_formatted_atomic(file, &formatted)
+            {
+                eprintln!("error: {file}: {e}");
+                had_error = true;
             }
         }
     }

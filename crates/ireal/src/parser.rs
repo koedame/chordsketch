@@ -647,14 +647,13 @@ fn parse_beat_grouping(input: &str) -> Option<BeatGrouping> {
 /// or a compound-time grouping (handled by [`parse_beat_grouping`]).
 fn classify_staff_text(trimmed: &str) -> StaffText {
     // (1) `<Nx>` repeat-count form.
-    if let Some(prefix) = trimmed.strip_suffix('x') {
-        if !prefix.is_empty() && prefix.bytes().all(|b| b.is_ascii_digit()) {
-            if let Ok(n) = prefix.parse::<u16>() {
-                if let Some(nz) = core::num::NonZeroU16::new(n) {
-                    return StaffText::RepeatCount(nz);
-                }
-            }
-        }
+    if let Some(prefix) = trimmed.strip_suffix('x')
+        && !prefix.is_empty()
+        && prefix.bytes().all(|b| b.is_ascii_digit())
+        && let Ok(n) = prefix.parse::<u16>()
+        && let Some(nz) = core::num::NonZeroU16::new(n)
+    {
+        return StaffText::RepeatCount(nz);
     }
     // (2) `<*XYtext>` vertical-position form. The two-digit
     // prefix is split on a byte boundary; `*` is single-byte ASCII
@@ -826,25 +825,25 @@ fn parse_chord_chart_with_header_ts(
             }
         }
         // <...> = comment / DC / DS / Fine instruction
-        if let Some(after_lt) = rest.strip_prefix('<') {
-            if let Some(end) = after_lt.find('>') {
-                let comment = &after_lt[..end];
-                state.apply_comment(comment);
-                let consumed = '<'.len_utf8() + end + '>'.len_utf8();
-                rest = &rest[consumed..];
-                continue;
-            }
+        if let Some(after_lt) = rest.strip_prefix('<')
+            && let Some(end) = after_lt.find('>')
+        {
+            let comment = &after_lt[..end];
+            state.apply_comment(comment);
+            let consumed = '<'.len_utf8() + end + '>'.len_utf8();
+            rest = &rest[consumed..];
+            continue;
         }
         // T<numerator><denominator> — time signature directive.
         // iReal uses 2-digit packed form: T44 = 4/4, T34 = 3/4,
         // T68 = 6/8, T128 = 12/8 (3 digits when the numerator
         // is two-digit). Try the longer match first.
-        if let Some(after_t) = rest.strip_prefix('T') {
-            if let Some((ts, consumed)) = parse_time_signature(after_t) {
-                state.set_time_signature(ts);
-                rest = &after_t[consumed..];
-                continue;
-            }
+        if let Some(after_t) = rest.strip_prefix('T')
+            && let Some((ts, consumed)) = parse_time_signature(after_t)
+        {
+            state.set_time_signature(ts);
+            rest = &after_t[consumed..];
+            continue;
         }
         if let Some(r) = rest.strip_prefix('x') {
             // "Repeat previous measure" — mark the current bar with
@@ -990,30 +989,29 @@ fn parse_chord_chart_with_header_ts(
             rest = r;
             continue;
         }
-        if let Some(after_n) = rest.strip_prefix('N') {
-            if let Some(d) = after_n.chars().next() {
-                if let Some(digit_value) = d.to_digit(10) {
-                    // `N0` is the spec's "no text Ending" token —
-                    // map it to `Ending::Untitled` instead of
-                    // falling through. `N1`..=`N9` route through
-                    // `Ending::new`, which today returns `None`
-                    // only for `0`, and `0` is already consumed by
-                    // the explicit branch above. Use `.expect` so
-                    // any future widening of `Ending::new`'s
-                    // rejection set surfaces as an audible panic
-                    // in tests rather than silently downgrading a
-                    // numbered bracket to `Untitled`.
-                    let ending = if digit_value == 0 {
-                        Ending::Untitled
-                    } else {
-                        Ending::new(digit_value as u8)
-                            .expect("digit_value > 0; Ending::new currently rejects only 0")
-                    };
-                    state.queue_ending(ending);
-                    rest = &after_n[d.len_utf8()..];
-                    continue;
-                }
-            }
+        if let Some(after_n) = rest.strip_prefix('N')
+            && let Some(d) = after_n.chars().next()
+            && let Some(digit_value) = d.to_digit(10)
+        {
+            // `N0` is the spec's "no text Ending" token —
+            // map it to `Ending::Untitled` instead of
+            // falling through. `N1`..=`N9` route through
+            // `Ending::new`, which today returns `None`
+            // only for `0`, and `0` is already consumed by
+            // the explicit branch above. Use `.expect` so
+            // any future widening of `Ending::new`'s
+            // rejection set surfaces as an audible panic
+            // in tests rather than silently downgrading a
+            // numbered bracket to `Untitled`.
+            let ending = if digit_value == 0 {
+                Ending::Untitled
+            } else {
+                Ending::new(digit_value as u8)
+                    .expect("digit_value > 0; Ending::new currently rejects only 0")
+            };
+            state.queue_ending(ending);
+            rest = &after_n[d.len_utf8()..];
+            continue;
         }
         if let Some(r) = rest.strip_prefix('Z') {
             // Final bar line.
@@ -1077,19 +1075,19 @@ fn parse_time_signature(after_t: &str) -> Option<(TimeSignature, usize)> {
     if digits.len() >= 3 {
         let num = digits[..2].parse::<u8>().ok();
         let den = digits[2..3].parse::<u8>().ok();
-        if let (Some(n), Some(d)) = (num, den) {
-            if let Some(ts) = TimeSignature::new(n, d) {
-                return Some((ts, 3));
-            }
+        if let (Some(n), Some(d)) = (num, den)
+            && let Some(ts) = TimeSignature::new(n, d)
+        {
+            return Some((ts, 3));
         }
     }
     if digits.len() >= 2 {
         let num = digits[..1].parse::<u8>().ok();
         let den = digits[1..2].parse::<u8>().ok();
-        if let (Some(n), Some(d)) = (num, den) {
-            if let Some(ts) = TimeSignature::new(n, d) {
-                return Some((ts, 2));
-            }
+        if let (Some(n), Some(d)) = (num, den)
+            && let Some(ts) = TimeSignature::new(n, d)
+        {
+            return Some((ts, 2));
         }
     }
     None
@@ -1349,17 +1347,16 @@ impl ChartParseState {
         // semantically meaningful destination. Falls back to a
         // regular push if no Played chord exists (URL malformed —
         // alt without primary).
-        if self.in_alternate {
-            if let Some(prev) = self
+        if self.in_alternate
+            && let Some(prev) = self
                 .current_bar
                 .chords
                 .iter_mut()
                 .rev()
                 .find(|bc| bc.kind == BarChordKind::Played)
-            {
-                prev.chord.alternate = Some(Box::new(chord));
-                return Ok(());
-            }
+        {
+            prev.chord.alternate = Some(Box::new(chord));
+            return Ok(());
         }
         // Beat positions are not encoded in the iReal URL format; the
         // renderer distributes chords across beats based on count and
@@ -1479,17 +1476,16 @@ impl ChartParseState {
             // last committed bar in the current section — those
             // markers attach to a bar's RIGHT edge, and the
             // committed bar is the rightmost real bar in the song.
-            if self.pending_final || self.pending_double_close {
-                if let Some(section) = self.current_section.as_mut() {
-                    if let Some(last) = section.bars.last_mut() {
-                        if self.pending_final {
-                            last.end = BarLine::Final;
-                            self.pending_final = false;
-                        } else if self.pending_double_close {
-                            last.end = BarLine::Double;
-                            self.pending_double_close = false;
-                        }
-                    }
+            if (self.pending_final || self.pending_double_close)
+                && let Some(section) = self.current_section.as_mut()
+                && let Some(last) = section.bars.last_mut()
+            {
+                if self.pending_final {
+                    last.end = BarLine::Final;
+                    self.pending_final = false;
+                } else if self.pending_double_close {
+                    last.end = BarLine::Double;
+                    self.pending_double_close = false;
                 }
             }
             return;

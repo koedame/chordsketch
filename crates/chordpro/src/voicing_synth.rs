@@ -275,10 +275,10 @@ fn backtrack(
     best: &mut Option<(i64, Vec<i32>)>,
 ) {
     if string_idx == cands.len() {
-        if let Some(score) = evaluate(chosen, ctx) {
-            if best.as_ref().is_none_or(|(b, _)| score > *b) {
-                *best = Some((score, chosen.to_vec()));
-            }
+        if let Some(score) = evaluate(chosen, ctx)
+            && best.as_ref().is_none_or(|(b, _)| score > *b)
+        {
+            *best = Some((score, chosen.to_vec()));
         }
         return;
     }

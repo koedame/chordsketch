@@ -318,13 +318,13 @@ impl PlainTextImporter {
                 LineKind::ChordLine(positions) => {
                     // Peek at the next non-blank line: if it is a lyric, pair them.
                     let j = i + 1;
-                    if j < classes.len() {
-                        if let LineKind::Lyric(lyric) = &classes[j] {
-                            let paired = pair_chords_with_lyric(positions, lyric);
-                            song.lines.push(Line::Lyrics(paired));
-                            i += 2;
-                            continue;
-                        }
+                    if j < classes.len()
+                        && let LineKind::Lyric(lyric) = &classes[j]
+                    {
+                        let paired = pair_chords_with_lyric(positions, lyric);
+                        song.lines.push(Line::Lyrics(paired));
+                        i += 2;
+                        continue;
                     }
                     // No following lyric — emit the chords as a chord-only line.
                     let paired = pair_chords_with_lyric(positions, "");
@@ -633,14 +633,13 @@ fn parse_section_header(line: &str) -> Option<String> {
     }
 
     // LABEL: form — alphabetic label followed by exactly one colon
-    if let Some(label) = trimmed.strip_suffix(':') {
-        if label
+    if let Some(label) = trimmed.strip_suffix(':')
+        && label
             .chars()
             .all(|c| c.is_alphabetic() || c == ' ' || c == '-')
-            && is_safe_label(label.trim())
-        {
-            return Some(label.trim().to_string());
-        }
+        && is_safe_label(label.trim())
+    {
+        return Some(label.trim().to_string());
     }
 
     // -- Label -- and == Label == forms

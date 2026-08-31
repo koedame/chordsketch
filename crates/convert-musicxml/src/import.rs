@@ -71,10 +71,10 @@ fn convert_score(score: &Element) -> Result<Song, ImportError> {
     // --- Metadata -----------------------------------------------------------
 
     // Title from <work><work-title>
-    if let Some(title) = score.text_at(&["work", "work-title"]) {
-        if !title.is_empty() {
-            song.metadata.title = Some(title.to_string());
-        }
+    if let Some(title) = score.text_at(&["work", "work-title"])
+        && !title.is_empty()
+    {
+        song.metadata.title = Some(title.to_string());
     }
 
     // Creators from <identification><creator type="...">
@@ -124,46 +124,40 @@ fn convert_score(score: &Element) -> Result<Song, ImportError> {
                 let key_name = fifths_to_key(fifths, mode);
                 current_key = Some(key_name);
             }
-            if !capo_emitted {
-                if let Some(capo_text) = attrs.text_at(&["capo"]) {
-                    // Validate: capo must be a non-negative integer in [1, 24].
-                    // Values outside this range are silently ignored — a capo
-                    // of 0 means "no capo" and > 24 is beyond any real guitar fret.
-                    if let Ok(capo_val) = capo_text.trim().parse::<u8>() {
-                        if (1..=24).contains(&capo_val) {
-                            emit_directive(&mut song.lines, "capo", Some(capo_text.trim()));
-                            capo_emitted = true;
-                        }
-                    }
+            if !capo_emitted && let Some(capo_text) = attrs.text_at(&["capo"]) {
+                // Validate: capo must be a non-negative integer in [1, 24].
+                // Values outside this range are silently ignored — a capo
+                // of 0 means "no capo" and > 24 is beyond any real guitar fret.
+                if let Ok(capo_val) = capo_text.trim().parse::<u8>()
+                    && (1..=24).contains(&capo_val)
+                {
+                    emit_directive(&mut song.lines, "capo", Some(capo_text.trim()));
+                    capo_emitted = true;
                 }
             }
         }
 
         // Emit key once (first time we see it)
-        if !key_emitted {
-            if let Some(ref key) = current_key {
-                if song.metadata.key.is_none() {
-                    song.metadata.key = Some(key.clone());
-                }
-                key_emitted = true;
+        if !key_emitted && let Some(ref key) = current_key {
+            if song.metadata.key.is_none() {
+                song.metadata.key = Some(key.clone());
             }
+            key_emitted = true;
         }
 
         // --- directions (tempo, rehearsal marks) ----------------------------
         for direction in measure.children_named("direction") {
             // Tempo: `<sound tempo="...">` inside `<direction>`.
             // Validate the value is a positive finite number before storing.
-            if !tempo_emitted {
-                if let Some(sound) = direction.child("sound") {
-                    if let Some(tempo) = sound.attr("tempo") {
-                        if let Ok(bpm) = tempo.trim().parse::<f64>() {
-                            if bpm > 0.0 && bpm.is_finite() {
-                                song.metadata.tempo = Some(tempo.trim().to_string());
-                                tempo_emitted = true;
-                            }
-                        }
-                    }
-                }
+            if !tempo_emitted
+                && let Some(sound) = direction.child("sound")
+                && let Some(tempo) = sound.attr("tempo")
+                && let Ok(bpm) = tempo.trim().parse::<f64>()
+                && bpm > 0.0
+                && bpm.is_finite()
+            {
+                song.metadata.tempo = Some(tempo.trim().to_string());
+                tempo_emitted = true;
             }
 
             // Rehearsal marks → section start directives
