@@ -1073,6 +1073,16 @@ No local Windows machine is needed.
    `.nupkg` from the template and pushing to the Chocolatey Community
    Repository on each release. No manual `choco push` is needed.
 
+Both that job and `chocolatey-retry.yml` publish through the
+`.github/actions/chocolatey-pack-push` composite action, so the pre-flight
+feed probe, the `409 Conflict` handling, and the `403 Forbidden` diagnosis
+described below apply identically to the release path. The two callers
+differ only in disposition: the release job skips when
+`CHOCOLATEY_API_KEY` is unset and downgrades a `403` to a warning, so a
+moderation queue that has not drained cannot fail a release that already
+published to the other seven registries. The retry workflow fails on both,
+because pushing is the only thing it does.
+
 #### Retrying a failed Chocolatey push
 
 If `update-chocolatey` fails while the other jobs in `post-release.yml`
@@ -1097,7 +1107,12 @@ not produce a red run.
 
 A failure names the HTTP status. `403 Forbidden` means an earlier
 version is still queued for moderation and is blocking this one; wait
-for it to clear and dispatch again. Read the queue state from
+for it to clear and dispatch again. On the release path the same `403`
+is a warning on the `update-chocolatey` job rather than a failure, so
+after a release check that job's annotations — a warning there means the
+version was never pushed and this retry is what publishes it.
+
+Read the queue state from
 `community.chocolatey.org/packages/chordsketch/<version>` under
 **Package Status** — `Submitted` means still queued. Do not read the
 review-timeline badge instead: it says `Ready for review`, which looks
