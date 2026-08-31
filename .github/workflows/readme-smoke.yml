@@ -14,12 +14,13 @@ on:
     # Daily at 06:00 UTC — catches registry-side regressions without coupling
     # to the release cadence.
     - cron: "0 6 * * *"
-  # Scoped to the README system on PRs (ADR-0041). On a PR event 11
-  # of the 14 smoke jobs install from a PUBLISHED artifact (GHCR,
+  # Scoped to the README system on PRs (ADR-0041). On a PR event 12
+  # of the 15 smoke jobs install from a PUBLISHED artifact (GHCR,
   # Docker Hub, crates.io, npm, a tap, scoop, winget, chocolatey,
-  # snap). No PR diff can change what those registries serve, so
-  # their failure mode is time-based, not diff-based, and the daily
-  # cron below — not the PR — is the detector that matches it.
+  # snap, the MacPorts ports tree). No PR diff can change what those
+  # registries serve, so their failure mode is time-based, not
+  # diff-based, and the daily cron below — not the PR — is the
+  # detector that matches it.
   # Measured over this workflow's entire history (1,832
   # `pull_request` runs, 156 of them failing, 187 failing jobs
   # between them): 186 of those 187 were published-artifact jobs and
@@ -50,6 +51,7 @@ on:
       - ".github/snapshots/readme-commands.txt"
       - ".github/fixtures/**"
       - ".github/actions/cli-render-smoke/action.yml"
+      - ".github/actions/install-macports/action.yml"
       - ".github/workflows/readme-smoke.yml"
 
 # Cancel previous runs on the same PR when new commits land. Daily cron
@@ -547,6 +549,42 @@ jobs:
           # install-and-bundle-check above.
           brew info --cask chordsketch
 
+  macports:
+    name: MacPorts (macOS)
+    # `port install` needs a real macOS host; MacPorts targets darwin
+    # only. Same host constraint as `homebrew-cask` above.
+    runs-on: macos-latest
+    # Headroom, not a budget. The port is served as a binary archive
+    # for darwin_25 and MacPorts falls back to it on darwin_26, so a
+    # measured end-to-end `port install chordsketch` + deps run took
+    # 9m15s (macports-smoke run 33387765072, which builds the same
+    # crate graph from source). This cap only bites if a future
+    # release lands in the tree before the buildbot has archived it
+    # AND the from-source build regresses badly.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install MacPorts
+        uses: ./.github/actions/install-macports
+
+      - name: Install
+        run: |
+          set -euo pipefail
+          # Run exactly the command the README documents, against the
+          # official ports tree that `selfupdate` just pulled. No local
+          # ports tree is registered here — that is what separates this
+          # job from `macports-smoke.yml`, which lints this repository's
+          # in-tree `packaging/macports/Portfile`. This job asserts what
+          # an end user actually receives from `port install`, so it
+          # only passes once the Portfile has been accepted into
+          # macports-ports (textproc/chordsketch).
+          sudo port install chordsketch
+          chordsketch --version
+
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
+
   scoop:
     name: Scoop (Windows)
     runs-on: windows-latest
@@ -883,6 +921,7 @@ jobs:
       - source-build
       - homebrew
       - homebrew-cask
+      - macports
       - scoop
       - winget
       - chocolatey

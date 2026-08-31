@@ -5,6 +5,7 @@ on:
     paths:
       - "packaging/macports/**"
       - ".github/workflows/macports-smoke.yml"
+      - ".github/actions/install-macports/action.yml"
       - "scripts/macports-regen-cargo-crates.py"
   workflow_dispatch:
   # No `push:` trigger: the heavy steps (`port install` + verify)
@@ -56,73 +57,11 @@ jobs:
     # §2 (frequency-aware caching) — this workflow only fires on
     # Portfile changes plus workflow_dispatch, well below the 7-day
     # cache TTL.
-    env:
-      # Floor is 2.11.5: that is the first macports-base release whose
-      # assets include a macOS 26 (Tahoe) installer, and `macos-latest`
-      # is macOS 26. Pinning below it makes the download step 404 for
-      # every runner. Verified against the release assets:
-      #   gh api repos/macports/macports-base/releases/tags/v<V> \
-      #     --jq '[.assets[].name|select(test("Tahoe"))]|length'
-      # returns 0 for v2.10.7 / v2.11.4 and 2 from v2.11.5 onward.
-      MACPORTS_VERSION: "2.12.6"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Resolve runner macOS codename
-        id: codename
-        run: |
-          set -euo pipefail
-          major=$(sw_vers -productVersion | cut -d. -f1)
-          case "$major" in
-            12) name=Monterey ;;
-            13) name=Ventura  ;;
-            14) name=Sonoma   ;;
-            15) name=Sequoia  ;;
-            26) name=Tahoe    ;;
-            *)
-              echo "unsupported macOS major version: $major" >&2
-              exit 1
-              ;;
-          esac
-          echo "name=$name"   >> "$GITHUB_OUTPUT"
-          echo "major=$major" >> "$GITHUB_OUTPUT"
-
-      - name: Install MacPorts from official .pkg
-        # All `${{ }}` interpolation goes through `env:` so no
-        # GitHub-controlled value is spliced into the shell directly.
-        env:
-          CODENAME: ${{ steps.codename.outputs.name }}
-          MAJOR: ${{ steps.codename.outputs.major }}
-        run: |
-          set -euo pipefail
-          pkg="MacPorts-${MACPORTS_VERSION}-${MAJOR}-${CODENAME}.pkg"
-          url="https://github.com/macports/macports-base/releases/download/v${MACPORTS_VERSION}/${pkg}"
-          curl -fL --retry 5 --retry-delay 5 -o "$pkg" "$url"
-
-          # Defense-in-depth beyond HTTPS: refuse to install a .pkg
-          # whose embedded Apple Developer ID signature does not pass
-          # macOS's trust check. `pkgutil --check-signature` exits
-          # non-zero if the package is unsigned, has a broken
-          # signature, or chains to a non-trusted root, so a
-          # compromised release asset (or a typo in the URL that
-          # resolves to an attacker-served file) gets caught before
-          # `installer` runs as root. The signing identity is logged
-          # for audit. Per-version SHA256 pinning was considered and
-          # rejected: the GitHub release API does not expose digests
-          # for these assets, and per-codename hard-coded hashes
-          # would silently rot every MacPorts release.
-          sudo pkgutil --check-signature "$pkg"
-
-          sudo installer -pkg "$pkg" -target /
-          # Expose MacPorts on PATH for subsequent steps.
-          echo "/opt/local/bin"  >> "$GITHUB_PATH"
-          echo "/opt/local/sbin" >> "$GITHUB_PATH"
-
-      - name: MacPorts selfupdate
-        # Pulls the upstream ports tree the cargo portgroup needs.
-        # Without this, `port lint` and the cargo portgroup itself
-        # cannot resolve their own dependencies.
-        run: sudo /opt/local/bin/port -v selfupdate
+      - name: Install MacPorts
+        uses: ./.github/actions/install-macports
 
       - name: Stand up local ports tree
         # MacPorts only resolves Portfiles inside a registered ports
