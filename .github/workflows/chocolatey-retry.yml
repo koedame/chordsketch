@@ -10,16 +10,20 @@ name: Chocolatey Retry Push
 #
 # See #1852 (original v0.2.2 failure) and #2030 (this workflow).
 #
-# Both dispatches this workflow has ever had (2026-04-21, for v0.2.2)
-# failed, because 0.2.1 was still queued for a human moderator and
-# Chocolatey rejects a newer version while that is true. The push path
-# itself is sound: the identical step in post-release.yml published
-# 0.5.0 on 2026-05-20 once the queue had drained. What was missing is
-# that neither run said any of this - the job surfaced a bare "Process
-# completed with exit code 1", so the one condition this workflow exists
-# to recover from had to be diagnosed by hand off the package page, and
-# #1852 reached the wrong conclusion once on the way. The push step
-# below reads the status back out of `choco push` and reports it.
+# The two v0.2.2 dispatches on 2026-04-21 both failed, because 0.2.1 was
+# still queued for a human moderator and Chocolatey rejects a newer
+# version while that is true. The push path itself is sound: the
+# equivalent step in post-release.yml published 0.5.0 on 2026-05-20
+# once the queue had drained. What was missing is that neither run said
+# any of this - the job surfaced a bare "Process completed with exit
+# code 1", so the one condition this workflow exists to recover from had
+# to be diagnosed by hand off the package page, and #1852 reached the
+# wrong conclusion once on the way.
+#
+# The reporting now lives in the `chocolatey-pack-push` composite action,
+# which post-release.yml calls too, so the release path cannot fall back
+# to a bare `choco push` that reports nothing. The two callers differ
+# only in how they dispose of a missing key and of a 403.
 
 on:
   workflow_dispatch:
@@ -92,104 +96,16 @@ jobs:
           echo "=== chocolateyInstall.ps1 ==="
           cat choco-pkg/tools/chocolateyInstall.ps1
 
-      - name: Pack
-        shell: pwsh
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          Set-Location choco-pkg
-          choco pack chordsketch.nuspec
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::choco pack failed with exit code $LASTEXITCODE."
-            exit $LASTEXITCODE
-          }
-
-          $nupkg = "chordsketch.$env:VERSION.nupkg"
-          if (-not (Test-Path -LiteralPath $nupkg)) {
-            Write-Host "::error::choco pack reported success but $nupkg is missing."
-            exit 1
-          }
-
-      - name: Push
-        shell: pwsh
-        env:
-          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          $page = "https://community.chocolatey.org/packages/chordsketch/$env:VERSION"
-
-          # post-release.yml can afford to no-op this channel when the key
-          # is absent, because it is one job of eight in an automatic
-          # fan-out. This workflow is dispatched by hand for the sole
-          # purpose of pushing, so reporting success without having pushed
-          # anything would be a false all-clear.
-          if (-not $env:CHOCOLATEY_API_KEY) {
-            Write-Host "::error::CHOCOLATEY_API_KEY is not set on this repository. Set it (gh secret set CHOCOLATEY_API_KEY -R koedame/chordsketch) and dispatch again."
-            exit 1
-          }
-
-          # A retry gets dispatched repeatedly while a moderation queue
-          # drains, so a version that already landed must not read as a
-          # failure. The v2 feed answers 200 for a version the repository
-          # holds and 404 for one it never accepted (checked against 0.5.0
-          # and 0.2.1 vs 0.4.0 and 0.2.2). Anything else means the feed
-          # could not be read, which is not itself a reason to refuse to
-          # push - fall through and let the push decide.
-          $feed = "https://community.chocolatey.org/api/v2/Packages(Id='chordsketch',Version='$env:VERSION')"
-          try {
-            $probe = Invoke-WebRequest -Uri $feed -SkipHttpErrorCheck
-            switch ($probe.StatusCode) {
-              200 {
-                Write-Host "::notice::chordsketch $env:VERSION is already on the Chocolatey Community Repository; nothing to push. $page"
-                exit 0
-              }
-              404 {
-                Write-Host "chordsketch $env:VERSION is not on the repository yet; pushing."
-              }
-              default {
-                Write-Host "::warning::Could not read the Chocolatey feed (HTTP $($probe.StatusCode)); pushing without the pre-flight check."
-              }
-            }
-          } catch {
-            # -SkipHttpErrorCheck covers 4xx/5xx answers; a DNS failure or
-            # timeout still throws, and the runner's 'Stop' preference is
-            # in effect here, so it would abort the step instead.
-            Write-Host "::warning::Could not reach the Chocolatey feed ($_); pushing without the pre-flight check."
-          }
-
-          # `choco push` collapses every rejection into exit code 1 and
-          # carries the HTTP status in its output only, so the output has
-          # to be captured to say anything useful about the failure. The
-          # runner's pwsh wrapper sets $ErrorActionPreference = 'Stop',
-          # which on PowerShell 7.4+ aborts the step on a non-zero native
-          # exit before any of that can be read back.
-          # Set-Location stays above the preference change so a missing
-          # directory still stops the step outright.
-          Set-Location choco-pkg
-
-          $ErrorActionPreference = 'Continue'
-          $PSNativeCommandUseErrorActionPreference = $false
-
-          $output = & choco push "chordsketch.$env:VERSION.nupkg" `
-            --source https://push.chocolatey.org/ `
-            --api-key $env:CHOCOLATEY_API_KEY 2>&1 | Out-String
-          $code = $LASTEXITCODE
-          Write-Host $output
-
-          if ($code -eq 0) {
-            Write-Host "::notice::Pushed chordsketch $env:VERSION. It stays unlisted until a moderator approves it: $page"
-            exit 0
-          }
-
-          if ($output -match '409 \(Conflict\)') {
-            Write-Host "::notice::The repository already holds chordsketch $env:VERSION (HTTP 409); nothing to do. $page"
-            exit 0
-          }
-
-          if ($output -match '403 \(Forbidden\)') {
-            Write-Host "::error::choco push was refused with HTTP 403. The usual cause is an earlier version still queued for community moderation, which blocks every newer push until a moderator clears it (#1852). Open $page and read 'Package Status': 'Submitted' means still queued, and the review-timeline badge reads 'Ready for review' in that state - only an approved package unblocks this push. Dispatch again once it clears. If the earlier version is already approved, check the API key next: https://community.chocolatey.org/account"
-            exit 1
-          }
-
-          Write-Host "::error::choco push failed with exit code $code; see the step output above."
-          exit $code
+      - name: Pack and push
+        # Shared with post-release.yml's `update-chocolatey` job so the
+        # release path and this by-hand retry path cannot diverge. The
+        # dispositions below are this workflow's half of that contract:
+        # it is dispatched for the sole purpose of pushing, so reporting
+        # success without having pushed anything would be a false
+        # all-clear - a missing key and a 403 both fail the run.
+        uses: ./.github/actions/chocolatey-pack-push
+        with:
+          version: ${{ steps.version.outputs.version }}
+          api-key: ${{ secrets.CHOCOLATEY_API_KEY }}
+          on-missing-key: fail
+          on-forbidden: fail
