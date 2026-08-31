@@ -303,14 +303,23 @@ while [ "$attempt" -le 3 ]; do
     *) break ;;                                 # clean
   esac
 done
+
+# $BODY dies with this shell once the tool call returns — print the
+# outcome explicitly so it survives into the next command's context.
+if [ "$attempt" -gt 3 ]; then
+  echo "BLOCKED: rebase nudge defanged after 3 attempts"
+else
+  echo "OK: $BODY"
+fi
 ```
 
-The read-back must print the two-word rebase command and nothing
-else. A `U+00B7` anywhere inside it means the comment was defanged
-in transit and Dependabot will ignore it. Cap retries at 3 attempts —
-if the third read-back is still defanged, stop nudging this PR:
-report it in the BLOCKED bucket with "rebase nudge defanged after 3
-attempts" and move on. Do not loop indefinitely.
+The final line must read `OK: ` followed by the two-word rebase
+command and nothing else. A `U+00B7` anywhere inside the read-back
+means the comment was defanged in transit and Dependabot will ignore
+it. Cap retries at 3 attempts — if the third read-back is still
+defanged, the script prints the `BLOCKED:` line instead; stop nudging
+this PR, report it in the BLOCKED bucket with "rebase nudge defanged
+after 3 attempts", and move on. Do not loop indefinitely.
 
 ## Step 4 — Final summary
 
