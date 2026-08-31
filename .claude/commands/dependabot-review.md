@@ -276,20 +276,41 @@ characters into them. The comment posts successfully and looks
 almost normal, but Dependabot does not recognise it, so the nudge
 silently does nothing. Write the command to a file instead, so the
 literal command text never travels through the client as a command
-argument:
+argument. Use a freshly generated temp path (`mktemp`), not a fixed
+name — a predictable path under `/tmp` is a symlink/race target on a
+shared host:
 
 ```bash
-python3 -c "import pathlib; pathlib.Path('/tmp/dependabot-cmd.md').write_text(chr(64) + 'dependabot rebase')"
-gh pr comment <NEXT_PR> --body-file /tmp/dependabot-cmd.md
+attempt=1
+while [ "$attempt" -le 3 ]; do
+  CMD_FILE=$(mktemp)
+  python3 -c "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(chr(64) + 'dependabot rebase')" "$CMD_FILE"
+  COMMENT_URL=$(gh pr comment <NEXT_PR> --body-file "$CMD_FILE")
+  rm -f "$CMD_FILE"
 
-# Posting is not proof the command was accepted. Read it back:
-gh api repos/koedame/chordsketch/issues/<NEXT_PR>/comments --jq '.[-1].body'
+  # Posting is not proof the command was accepted. Read back the
+  # exact comment just created, by ID — do NOT list-and-take-last:
+  # the issue-comments endpoint defaults to the oldest 30 comments
+  # in ascending order with no pagination, so on a PR that has
+  # accumulated 30+ comments over its review lifetime, `--jq
+  # '.[-1].body'` would silently read a stale unrelated comment
+  # instead of the one just posted.
+  COMMENT_ID="${COMMENT_URL##*#issuecomment-}"
+  BODY=$(gh api "repos/koedame/chordsketch/issues/comments/$COMMENT_ID" --jq '.body')
+
+  case "$BODY" in
+    *$'\xc2\xb7'*) attempt=$((attempt + 1)) ;;  # U+00B7 present — defanged, retry
+    *) break ;;                                 # clean
+  esac
+done
 ```
 
 The read-back must print the two-word rebase command and nothing
 else. A `U+00B7` anywhere inside it means the comment was defanged
-in transit and Dependabot will ignore it — re-post from the file
-until the read-back is clean.
+in transit and Dependabot will ignore it. Cap retries at 3 attempts —
+if the third read-back is still defanged, stop nudging this PR:
+report it in the BLOCKED bucket with "rebase nudge defanged after 3
+attempts" and move on. Do not loop indefinitely.
 
 ## Step 4 — Final summary
 
