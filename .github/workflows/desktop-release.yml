@@ -325,7 +325,7 @@ jobs:
 
   update-cask:
     name: Update Homebrew Cask
-    # Fans out the `brew install --cask chordsketch` path (#2079).
+    # Fans out the `brew install --cask koedame/tap/chordsketch` path (#2079).
     # Clones the existing `koedame/homebrew-tap` (shared with the
     # CLI formula under `Formula/chordsketch.rb`), writes the
     # generated cask to `Casks/chordsketch.rb`, and pushes. The
