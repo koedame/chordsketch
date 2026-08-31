@@ -2,7 +2,10 @@
 
 ## Issue Requirements
 
-- Every piece of work starts with a GitHub Issue.
+- A GitHub Issue is **optional**. Open one to plan, discuss, or track work, and
+  to record what users report; a self-contained change may go straight to a PR
+  ([ADR-0043](../../docs/adr/0043-issue-not-required-for-prs.md)). Everything
+  below describes the flow **when an issue exists**.
 - Issue title: imperative mood, concise (e.g., "Implement chord directive parser").
 - Issue body must include:
   - **Goal**: What should be achieved

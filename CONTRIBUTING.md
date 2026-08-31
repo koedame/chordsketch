@@ -56,10 +56,14 @@ npm run dev
 
 ## Submitting Pull Requests
 
-1. **Open an issue first.** Every change needs a corresponding GitHub issue.
+1. **An issue is optional.** Open one when the change is worth discussing
+   before it is written; a self-contained fix can go straight to a PR
+   ([ADR-0043](docs/adr/0043-issue-not-required-for-prs.md)).
 2. **Create a branch** named `issue-{number}-{short-description}`
-   (e.g., `issue-42-fix-transpose`).
-3. **Make your changes.** Keep the scope focused — one issue per PR.
+   (e.g., `issue-42-fix-transpose`) when the change has an issue, or
+   `{type}/{short-description}` (e.g., `fix/transpose-sharps`) when it
+   does not.
+3. **Make your changes.** Keep the scope focused — one topic per PR.
 4. **Run checks before pushing:**
 
    ```bash
@@ -68,7 +72,8 @@ npm run dev
    cargo test       # All tests must pass
    ```
 
-5. **Open a PR** with `Closes #N` in the description. PRs are squash-merged.
+5. **Open a PR.** Include `Closes #N` in the description when the PR
+   resolves an issue. PRs are squash-merged.
 6. **Click "Squash and merge"** (or run `gh pr merge <N> --squash`).
    Branch protection requires status checks to pass and your branch
    to be up to date with `main`. If `main` moved after your last
