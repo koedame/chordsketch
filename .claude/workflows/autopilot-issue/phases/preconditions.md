@@ -93,18 +93,7 @@ Run each check; record the result. Stop at the first failure and HALT.
    final actions" footer — every HALT path in this phase follows the
    same declarative pattern, not an inline `exit 1`.
 
-7. **One-PR-at-a-time gate** per
-   [`.claude/rules/one-pr-at-a-time.md`](../../../rules/one-pr-at-a-time.md).
-   The rule applies to ALL maintainer-authored PRs against `main`,
-   not just autopilot-driven ones; filter by author + base only:
-   ```bash
-   gh pr list --author "@me" --state open --base main \
-     --json number,headRefName
-   ```
-   If the list is non-empty, HALT with
-   `halt_reason: "another open PR by current user against main: #<N> (<branch>)"`.
-
-8. **Plugin availability** per
+7. **Plugin availability** per
    [`.claude/rules/workflow-discipline.md`](../../../rules/workflow-discipline.md)
    §"Required external dependencies". The `pr-review` phase depends
    on the `pr-review-toolkit` plugin for its specialist review
@@ -158,7 +147,6 @@ Write the matching identifier to `<state-dir>/current-phase.txt`.
 - `git fetch origin` fails.
 - Local `main` has diverged from `origin/main` (cannot be
   fast-forwarded automatically — maintainer judgement required).
-- Another open PR by the current user against `main` exists.
 - Repository identity check fails (running from a worktree).
 - `pr-review-toolkit` plugin is not installed.
 
