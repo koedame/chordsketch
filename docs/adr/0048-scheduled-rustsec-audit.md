@@ -34,7 +34,7 @@ stops opening PRs for an ecosystem once five of its PRs are open — the
 comment at the top of `.github/dependabot.yml` records this, and the outage
 is measurable: the `cargo` ecosystem produced no pull request between
 [#2771](https://github.com/koedame/chordsketch/pull/2771) (2026-07-19) and
-[#2785](https://github.com/koedame/chordsketch/pull/2785) (2026-08-30), a
+[#2787](https://github.com/koedame/chordsketch/pull/2787) (2026-08-30), a
 42-day gap that ended only when the open PRs were cleared. During those 42
 days the repository had no advisory detection at all.
 
