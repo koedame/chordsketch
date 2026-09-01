@@ -69,13 +69,17 @@ jobs:
         # Capture names (`@fold`, `@indent.zero`, …) are free-form
         # tree-sitter identifiers whose meaning is assigned by the
         # consuming editor, so they are deliberately not checked here.
+        # That is why an editor whose vocabulary differs gets its own
+        # `queries/<editor>/` set rather than a copy, and why the walk
+        # below recurses: the node names are the part that has to stay
+        # true for every set, whoever consumes it.
         #
         # The fixture is parsed, not just linted: it is written to
         # contain every node type the grammar can produce, so each
         # node name a query references is actually reachable.
         run: |
-          for query in queries/*.scm; do
+          while read -r query; do
             echo "== $query"
             ./node_modules/.bin/tree-sitter query "$query" \
               test/fixtures/query-coverage.cho >/dev/null
-          done
+          done < <(find queries -name '*.scm' | sort)
