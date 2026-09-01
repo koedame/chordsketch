@@ -141,10 +141,21 @@ runs:
 
         # `choco push` collapses every rejection into exit code 1 and
         # carries the HTTP status in its output only, so the output has
-        # to be captured to say anything useful about the failure. The
-        # runner's pwsh wrapper sets $ErrorActionPreference = 'Stop',
-        # which on PowerShell 7.4+ aborts the step on a non-zero native
-        # exit before any of that can be read back.
+        # to be captured to say anything useful about the failure.
+        #
+        # The two preference lines below are defence in depth, not a
+        # workaround for current behaviour: capturing a failing native
+        # command's output works as written under the runner's
+        # $ErrorActionPreference = 'Stop', because
+        # $PSNativeCommandUseErrorActionPreference — the preference that
+        # promotes a non-zero native exit into a terminating error —
+        # defaults to $false in every shipping PowerShell (7.4 through
+        # 7.6; see about_Preference_Variables, "Preference variables and
+        # their default values"). Were it ever enabled, for the session
+        # or by a future default, `choco push` would throw here before
+        # its output could be read and every diagnosis below would
+        # become unreachable. Pinning both locally costs two lines and
+        # makes this step independent of the ambient setting.
         # Set-Location stays above the preference change so a missing
         # directory still stops the step outright.
         Set-Location choco-pkg
