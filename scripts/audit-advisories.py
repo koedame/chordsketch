@@ -245,7 +245,7 @@ def build_report(
     *,
     vulnerabilities: list[Finding],
     warnings: list[Finding],
-    inherited: set[tuple[str, str]],
+    inherited: set[tuple[str, str, str]],
     runtime: set[str] | None,
     ignores: list[IgnoreEntry],
     ignore_problems: list[str],
@@ -366,7 +366,7 @@ def build_report(
 def needs_attention(
     *,
     vulnerabilities: list[Finding],
-    inherited: set[tuple[str, str]],
+    inherited: set[tuple[str, str, str]],
     ignores: list[IgnoreEntry],
     ignore_problems: list[str],
     mode: str,
@@ -405,7 +405,7 @@ def main(argv: list[str] | None = None) -> int:
     with open(args.audit_json, encoding="utf-8") as handle:
         vulnerabilities, warnings = parse_audit_report(json.load(handle))
 
-    inherited: set[tuple[str, str]] = set()
+    inherited: set[tuple[str, str, str]] = set()
     if args.base_audit_json:
         with open(args.base_audit_json, encoding="utf-8") as handle:
             base_vulnerabilities, _ = parse_audit_report(json.load(handle))
