@@ -78,8 +78,19 @@ jobs:
         # contain every node type the grammar can produce, so each
         # node name a query references is actually reachable.
         run: |
+          found=0
           while read -r query; do
             echo "== $query"
             ./node_modules/.bin/tree-sitter query "$query" \
               test/fixtures/query-coverage.cho >/dev/null
+            found=$((found + 1))
           done < <(find queries -name '*.scm' | sort)
+          # An empty walk must fail. The glob this replaced did so by
+          # accident — with no matches bash passes `queries/*.scm`
+          # through literally and `tree-sitter query` fails on the
+          # missing file — and losing that would turn "nothing was
+          # validated" into a green step.
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No query files found under queries/ — nothing was validated."
+            exit 1
+          fi
