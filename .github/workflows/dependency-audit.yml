@@ -1,0 +1,208 @@
+name: Dependency Audit
+
+# Scans `Cargo.lock` against the RustSec advisory database (ADR-0046).
+#
+# The schedule is the load-bearing trigger: an advisory is published
+# against a version this repo already depends on, so a dependency-change
+# trigger alone can never see it. Before this workflow, the only place
+# `cargo audit` ran was inside `/dependabot-review`, which fires only when
+# a Dependabot PR is open for the affected crate — and Dependabot stops
+# opening PRs for an ecosystem once five of its PRs are open (see the
+# comment at the top of `.github/dependabot.yml`). The detector went quiet
+# exactly when the backlog grew.
+#
+# The `pull_request` trigger is scoped to the inputs that decide this
+# workflow's outcome (the same enumerable-inputs test ADR-0041 applies to
+# `readme-smoke.yml`): the manifests and lockfile that produce the crate
+# set, the ignore list that filters it, and the workflow and script that
+# evaluate it. A PR that changes none of those cannot change the verdict.
+
+on:
+  schedule:
+    # Daily at 06:00 UTC (15:00 JST). Advisories are published continuously
+    # and independently of this repo's activity, so the sweep is daily
+    # rather than weekly; the job installs a prebuilt binary and compiles
+    # nothing, so the cost is a few runner-minutes per day.
+    - cron: "0 6 * * *"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/*/Cargo.toml"
+      - "apps/desktop/src-tauri/Cargo.toml"
+      - ".cargo/audit.toml"
+      - ".github/workflows/dependency-audit.yml"
+      - "scripts/audit-advisories.py"
+      - "scripts/test_audit_advisories.py"
+  workflow_dispatch:
+
+concurrency:
+  group: dependency-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Fail-closed default per #1839; the job opts into `issues: write` for the
+# scheduled reporting path.
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: RustSec advisories
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Rust toolchain
+        # `cargo tree` (the scope classification below) needs a toolchain.
+        # No Rust is compiled here, so there is no `Swatinem/rust-cache`
+        # entry — per `.claude/rules/ci-parallelization.md` §2 cache belongs
+        # to jobs that invoke `cargo build/test/clippy/doc`.
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        with:
+          # Deliberately unpinned: the advisory database is fetched at run
+          # time anyway, and a security scanner that lags its own upstream
+          # is the failure mode this workflow exists to avoid.
+          tool: cargo-audit
+
+      - name: Unit tests for the report script
+        run: python3 -m unittest scripts/test_audit_advisories.py
+
+      - name: Scan the lockfile
+        run: |
+          set -uo pipefail
+          # cargo audit exits non-zero when it finds something; the verdict
+          # is computed from the JSON below, so only a failure to produce a
+          # report is fatal here.
+          cargo audit --json > audit.json
+          status=$?
+          if ! python3 -c 'import json, sys; json.load(open("audit.json"))' 2>/dev/null; then
+            echo "cargo audit produced no JSON report (exit ${status})" >&2
+            cat audit.json >&2 || true
+            exit 1
+          fi
+
+      - name: List crates reachable without dev-dependencies
+        # Feeds the runtime / dev-only column. `--target all` keeps the
+        # platform-gated crates (the GTK stack on Linux, windows-sys on
+        # Windows) in the runtime set rather than labelling them dev-only
+        # on a Linux runner.
+        run: |
+          cargo tree --workspace --edges normal,build --target all \
+            --prefix none --format "{p}" > runtime-packages.txt
+
+      - name: Scan the base branch's lockfile
+        if: github.event_name == 'pull_request'
+        # A pull request answers only for the advisories it introduces;
+        # inherited ones belong to the scheduled sweep and its issue.
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "$GITHUB_BASE_REF"
+          mkdir -p base
+          git show "FETCH_HEAD:Cargo.lock" > base/Cargo.lock
+          cargo audit --json --file base/Cargo.lock > base-audit.json || true
+          python3 -c 'import json; json.load(open("base-audit.json"))'
+
+      - name: Build the report
+        id: report
+        run: |
+          set -uo pipefail
+          args=(--audit-json audit.json
+                --runtime-packages runtime-packages.txt
+                --audit-config .cargo/audit.toml
+                --output report.md)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            args+=(--mode pr --base-audit-json base-audit.json)
+          else
+            args+=(--mode report)
+          fi
+          python3 scripts/audit-advisories.py "${args[@]}"
+          code=$?
+          # 0 = clean, 1 = something needs a human. Anything else is the
+          # script itself failing and must not be read as a verdict.
+          if [ "$code" -gt 1 ]; then
+            exit "$code"
+          fi
+          echo "needs_attention=$code" >> "$GITHUB_OUTPUT"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          cat report.md
+
+      - name: Fail on advisories introduced by this pull request
+        if: github.event_name == 'pull_request' && steps.report.outputs.needs_attention != '0'
+        run: |
+          echo "This pull request introduces an advisory, or leaves a stale entry" >&2
+          echo "in .cargo/audit.toml. See the job summary for the details." >&2
+          exit 1
+
+      - name: Open, update, or close the tracking issue
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEEDS_ATTENTION: ${{ steps.report.outputs.needs_attention }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: Security advisories in Cargo dependencies
+        run: |
+          set -euo pipefail
+
+          # One rolling issue, matched by exact title: a fresh issue per run
+          # would bury the tracker, and a fresh issue per advisory would
+          # fragment a triage that is done against the whole set.
+          number=$(gh issue list --state open --search "in:title \"$TITLE\"" \
+            --json number,title \
+            | jq -r --arg t "$TITLE" 'map(select(.title == $t)) | first | .number // empty')
+
+          if [ "$NEEDS_ATTENTION" = "0" ]; then
+            if [ -n "$number" ]; then
+              gh issue close "$number" --comment \
+                "No advisories remain in \`Cargo.lock\` and the ignore list is clean ([run]($RUN_URL))."
+              echo "Closed #$number"
+            else
+              echo "Clean, and no tracking issue is open."
+            fi
+            exit 0
+          fi
+
+          {
+            cat report.md
+            echo
+            echo "---"
+            echo
+            echo "Maintained by \`.github/workflows/dependency-audit.yml\`: the body is"
+            echo "rewritten on every change and the issue closes itself once the lockfile"
+            echo "and the ignore list are both clean. Mute an advisory by adding it to"
+            echo "\`.cargo/audit.toml\` with a \`# why:\` line and a \`# review-by:\` date."
+          } > issue-body.md
+
+          if [ -z "$number" ]; then
+            gh issue create --title "$TITLE" --body-file issue-body.md \
+              --label dependencies --label priority:high
+            exit 0
+          fi
+
+          # GitHub returns issue bodies with CRLF line endings, so compare
+          # against a normalised copy — otherwise every run would look like
+          # a change and comment about it.
+          gh issue view "$number" --json body --jq .body | tr -d '\r' > current-body.md
+          if cmp -s current-body.md issue-body.md; then
+            echo "#$number is already up to date."
+            exit 0
+          fi
+
+          gh issue edit "$number" --body-file issue-body.md
+          # Editing a body sends no notification, so a change also gets a
+          # comment naming what is new.
+          grep -oE 'RUSTSEC-[0-9]{4}-[0-9]{4}' issue-body.md | sort -u > new-ids.txt || true
+          grep -oE 'RUSTSEC-[0-9]{4}-[0-9]{4}' current-body.md | sort -u > old-ids.txt || true
+          added=$(comm -13 old-ids.txt new-ids.txt | tr '\n' ' ' | sed 's/ *$//')
+          if [ -n "$added" ]; then
+            gh issue comment "$number" --body "New since the last update: $added ([run]($RUN_URL))."
+          else
+            gh issue comment "$number" --body "The advisory list changed ([run]($RUN_URL))."
+          fi
