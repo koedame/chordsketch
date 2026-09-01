@@ -27,11 +27,15 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 | `queries/highlights.scm` | standard tree-sitter highlight names | Directives, chord names, comments, delegate-block bodies |
 | `queries/folds.scm` | nvim-treesitter (`@fold`) | Folds each `{start_of_X}` … `{end_of_X}` delegate block |
 | `queries/indents.scm` | nvim-treesitter (`@indent.zero` / `@indent.auto`) | Pins ChordPro lines to column 0; leaves delegate-block bodies to the editor |
+| `queries/helix/highlights.scm` | Helix (`@comment.line`, `@keyword.directive`, `@markup.raw.block`) | The same nodes as `queries/highlights.scm`, named in Helix's vocabulary |
 
-`folds.scm` and `indents.scm` target nvim-treesitter specifically. Helix
-uses different capture names for indentation (`@indent` / `@outdent`) and
-derives folds from the syntax tree, so it consumes `highlights.scm` only —
-see [`docs/editors.md`](https://github.com/koedame/chordsketch/blob/main/docs/editors.md).
+The top-level files target nvim-treesitter. Helix reads a different
+vocabulary — `@indent` / `@outdent` for indentation, and nothing at all for
+folds, which it derives from the syntax tree — so its set lives in
+`queries/helix/` and holds only `highlights.scm`; ChordPro is flat, so no
+construct opens an indent level. Copy the file that matches your editor,
+not the other one: see
+[`docs/editors.md`](https://github.com/koedame/chordsketch/blob/main/docs/editors.md).
 
 Every query is compiled against the generated parser in CI
 (`.github/workflows/tree-sitter.yml`), so a query referencing a node type
