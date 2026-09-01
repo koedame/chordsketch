@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Lift a composite action's inline `run:` body out of its `action.yml`.
+"""Lift inline `run:` bodies out of an `action.yml` or a workflow.
 
 Shared by the test suites that execute those bodies under a real shell
-(`test_chocolatey_pack_push.py`, `test_chocolatey_generate_package.py`), so
-the scanner they both depend on has one definition to keep in step with the
-action layout.
+(`test_chocolatey_pack_push.py`, `test_chocolatey_generate_package.py`,
+`test_release_checksum_guards.py`), so the scanner they all depend on has one
+definition to keep in step with the YAML layout.
+
+`extract_step_run` addresses one step by name, which suits a composite action.
+`iter_step_runs` walks every step that has one, which suits a workflow, where
+step names repeat across jobs.
 
 Stdlib only, like the rest of `scripts/`.
 """
@@ -60,3 +64,51 @@ def extract_step_run(action_yml: str, step_name: str) -> str:
     if not text:
         raise AssertionError(f"step {step_name!r} has an empty `run:` body")
     return text
+
+
+def iter_step_runs(yaml_text: str) -> list[tuple[str, str]]:
+    """Return `(step name, dedented run body)` for every step that has one.
+
+    Same line-scanning discipline as `extract_step_run`, minus the
+    single-match requirement: a workflow reuses a step name across jobs
+    (`post-release.yml` has two `Generate manifest` steps), so a caller that
+    needs all of them cannot address them by name. Steps without a `run: |`
+    block — `uses:` steps — are skipped rather than raising, since a workflow
+    is expected to hold both kinds.
+    """
+    lines = yaml_text.splitlines()
+    found: list[tuple[str, str]] = []
+    for start, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped.startswith("- name: "):
+            continue
+        name = stripped[len("- name: ") :]
+        step_indent = len(line) - len(line.lstrip())
+
+        run_idx = None
+        for i in range(start + 1, len(lines)):
+            inner = lines[i]
+            if not inner.strip():
+                continue
+            indent = len(inner) - len(inner.lstrip())
+            if indent <= step_indent:
+                break
+            if inner.strip() == "run: |":
+                run_idx = i
+                break
+        if run_idx is None:
+            continue
+
+        key_indent = len(lines[run_idx]) - len(lines[run_idx].lstrip())
+        body: list[str] = []
+        for inner in lines[run_idx + 1 :]:
+            if not inner.strip():
+                body.append("")
+                continue
+            if len(inner) - len(inner.lstrip()) <= key_indent:
+                break
+            body.append(inner)
+        text = textwrap.dedent("\n".join(body)).strip("\n")
+        if text:
+            found.append((name, text))
+    return found

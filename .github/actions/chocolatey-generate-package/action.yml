@@ -31,7 +31,13 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
       run: |
-        SHA_WINDOWS=$(grep "x86_64-pc-windows-msvc" checksums.txt | awk '{print $1}')
+        # One `awk`, not `grep | awk`: under the runner's `-eo pipefail` a
+        # `grep` that matches nothing fails the whole pipeline, which ends
+        # the step at this assignment and reports a bare exit 1 instead of
+        # the message below. `awk` exits 0 with no match, leaving the
+        # variable empty for the guard to name. See #1852 for what a bare
+        # exit 1 costs on this path.
+        SHA_WINDOWS=$(awk '/x86_64-pc-windows-msvc/ { print $1 }' checksums.txt)
 
         if [[ ! "$SHA_WINDOWS" =~ ^[0-9a-fA-F]{64}$ ]]; then
           echo "ERROR: missing or invalid SHA256 for x86_64-pc-windows-msvc: '${SHA_WINDOWS}'" >&2

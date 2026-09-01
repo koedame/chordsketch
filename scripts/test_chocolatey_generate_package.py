@@ -6,7 +6,8 @@ release's `checksums.txt` and the two files under `packaging/chocolatey/`
 into the `choco-pkg/` tree that `chocolatey-pack-push` packs. It runs on
 `windows-latest` during a release fan-out and nowhere else, so a template
 that grows a placeholder the generator does not fill, or a checksum layout
-change that makes the `grep` miss, would first surface as a broken release.
+change that stops the extraction matching, would first surface as a broken
+release.
 
 These tests lift the step's `run:` body out of `action.yml` and execute it
 under bash with the runner's wrapper (`--noprofile --norc -eo pipefail`),
@@ -49,8 +50,8 @@ VERSION = "0.6.0"
 SHA = "a" * 64
 
 # What GitHub runs an inline `shell: bash` body with. `-e` and `pipefail`
-# both matter here: they decide what a `grep` that matches nothing does to
-# the step.
+# both matter here: they decide whether a checksums.txt with no Windows row
+# reaches the step's own error message or dies at the assignment.
 RUNNER_ARGS = ["--noprofile", "--norc", "-eo", "pipefail"]
 
 OTHER_TARGETS = (
@@ -157,14 +158,26 @@ class GenerateStepTest(unittest.TestCase):
         self.assertIn("missing or invalid SHA256 for x86_64-pc-windows-msvc", result.err)
         self.assertFalse(result.wrote_package, "choco-pkg was written despite a rejected checksum")
 
-    def test_a_checksums_file_without_the_windows_target_fails(self) -> None:
-        # The guard's message is not reached in this case: under the
-        # runner's `-eo pipefail` the non-matching `grep` ends the step at
-        # the assignment. Asserted here as "fails and writes nothing",
-        # which holds whichever of the two paths reports it.
+    def test_a_checksums_file_without_the_windows_target_says_so(self) -> None:
+        # Regression guard for the shape of failure, not just the fact of
+        # it. Extracting the checksum with `grep | awk` made this case exit
+        # at the assignment under `-eo pipefail`, so the release log showed
+        # a bare "Process completed with exit code 1" and the guard's
+        # message never ran - the same unreadable failure #1852 spent a
+        # release diagnosing by hand on the push side of this workflow.
         result = self.run_step(checksums=OTHER_TARGETS)
         self.assertNotEqual(0, result.code)
+        self.assertIn("missing or invalid SHA256 for x86_64-pc-windows-msvc", result.err)
         self.assertFalse(result.wrote_package, "choco-pkg was written without a Windows checksum")
+
+    def test_a_duplicated_windows_row_fails_rather_than_concatenating(self) -> None:
+        # Two matching rows make the extraction yield two lines, which no
+        # `checksum64` should ever be. The guard rejects it, and says which
+        # value it rejected.
+        result = self.run_step(checksums=WINDOWS_ROW + WINDOWS_ROW)
+        self.assertNotEqual(0, result.code)
+        self.assertIn("missing or invalid SHA256 for x86_64-pc-windows-msvc", result.err)
+        self.assertFalse(result.wrote_package, "choco-pkg was written from an ambiguous checksum")
 
 
 class CallersTest(unittest.TestCase):
