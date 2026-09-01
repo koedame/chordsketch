@@ -223,6 +223,28 @@ When adding a new workflow that touches macOS, append its group name
 to the appropriate bucket above in the same PR that introduces the
 workflow.
 
+### Concurrent PRs share the same ceiling (advisory)
+
+The 5-job cap is per account, not per PR, so every PR in flight — plus
+Dependabot branches and pushes to `main` — draws from the same pool.
+Sampling every `ci.yml` job from 2026-08-30 15:54 UTC to
+2026-08-31 17:46 UTC (120 macOS jobs across 24 branches; method and raw
+commands in
+[ADR-0045](../../docs/adr/0045-retire-one-pr-at-a-time.md)), the wait
+between a macOS job being created and starting was:
+
+| macOS jobs | n | median | p90 | max |
+|---|---|---|---|---|
+| Only one branch had macOS jobs within ±10 min | 28 | 12 s | 394 s | 563 s |
+| Two or more branches within ±10 min | 92 | 25 s | 997 s | 1567 s |
+
+Nothing gates on this — there is no cap on open PRs
+([ADR-0045](../../docs/adr/0045-retire-one-pr-at-a-time.md) retired the
+one that existed). It is here so the trade-off is visible at the moment
+it is made: opening several Rust-touching PRs at once adds minutes of
+queue latency to all of them, while docs-only PRs that trip no
+macOS-bearing paths filter cost nothing against this ceiling.
+
 ## 6. Workflow frequency is a first-class design input
 
 Before adding a cache layer, a matrix split, or any optimization to a workflow,

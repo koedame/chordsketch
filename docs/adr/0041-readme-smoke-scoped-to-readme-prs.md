@@ -30,9 +30,9 @@ the last 90 days (`created>=2026-05-31`) it ran 357 times on
 `pull_request`, and the 276 successful runs took a median of 7.0 min, a
 mean of 10.7 min, a p90 of 26.4 min and a max of 67.8 min wall clock. It
 is also macOS-bearing (`homebrew-cask` runs on `macos-latest`), and
-[`one-pr-at-a-time.md`](../../.claude/rules/one-pr-at-a-time.md) records
-that the org's 5-concurrent-macOS-job ceiling — not the 20-job total — is
-this repo's practical CI bottleneck.
+[`ci-parallelization.md`](../../.claude/rules/ci-parallelization.md) §5
+records that the org's 5-concurrent-macOS-job ceiling — not the 20-job
+total — is this repo's practical CI bottleneck.
 
 **Almost none of what it catches on a PR is caused by the PR.** On a
 `pull_request` event, 11 of the 14 smoke jobs install from a published
@@ -202,9 +202,12 @@ is not to widen `paths` — it is the alternative below.
   sync; unchanged by this ADR.
 - `.github/workflows/deploy-playground.yml` — the two path-filter
   incidents (#2608, #2636) that set the bar this path list has to clear.
-- [`one-pr-at-a-time.md`](../../.claude/rules/one-pr-at-a-time.md) — the
-  5-concurrent-macOS-job ceiling that makes `homebrew-cask` expensive on
-  a PR.
+- [`ci-parallelization.md`](../../.claude/rules/ci-parallelization.md) §5
+  — the 5-concurrent-macOS-job ceiling that makes `homebrew-cask`
+  expensive on a PR. This ADR originally cited `one-pr-at-a-time.md`,
+  retired by
+  [ADR-0045](0045-retire-one-pr-at-a-time.md); the ceiling itself is
+  unchanged.
 - [ADR-0002](0002-aur-smoke-coverage-exemption.md) — the prior decision to
   omit a smoke channel from this workflow on cost grounds.
 - [ADR-0039](0039-release-fan-out-is-an-explicit-call-graph.md) — removed
