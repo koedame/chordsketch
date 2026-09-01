@@ -103,9 +103,11 @@ registered tools:
 | Tool | Canonical location |
 |---|---|
 | `wasm-pack` | `.github/actions/install-wasm-pack/action.yml`, `inputs.version` fallback (#2225) |
+| `macports-base` | `.github/actions/install-macports/action.yml`, `inputs.version` fallback |
 
-New workflows that need `wasm-pack` MUST consume the composite action
-(`uses: ./.github/actions/install-wasm-pack`) rather than re-pinning the
+New workflows that need one of these tools MUST consume its composite
+action (`uses: ./.github/actions/install-wasm-pack`,
+`uses: ./.github/actions/install-macports`) rather than re-pinning the
 version in a workflow-level `env:` block. Adding a new tool to this list
 means: create a `.github/actions/install-<tool>/action.yml` composite,
 move every workflow's version pin into it, and append the entry here in

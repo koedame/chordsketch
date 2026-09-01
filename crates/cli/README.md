@@ -21,8 +21,9 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 cargo install chordsketch
 ```
 
-Pre-built binaries are also distributed via Homebrew, Scoop, winget,
-Snap, Chocolatey, the GitHub Container Registry, and Docker Hub — see
+Pre-built binaries are also distributed via Homebrew, MacPorts, Scoop,
+winget, Snap, Chocolatey, the GitHub Container Registry, and Docker
+Hub — see
 the [top-level README](https://github.com/koedame/chordsketch#installation)
 for the registry-specific commands.
 
