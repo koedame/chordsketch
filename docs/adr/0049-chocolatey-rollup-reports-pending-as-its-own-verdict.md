@@ -47,12 +47,10 @@ job in `release-verify.yml` renders `⏳ PENDING` and excludes it from
 `any_fail`. No other channel sets `pending`, so their verdicts stay the
 binary they have always been.
 
-The `OK` verdict is decided by the **install feed**,
-`FindPackagesById()?id='<package>'&$filter=Version eq '<version>'`, which
-is the feed the `choco` client itself reads. `PENDING` and `FAIL` are then
-separated by the entity endpoint,
-`Packages(Id='<package>',Version='<version>')`: 200 means the repository
-holds it, 404 means it never landed.
+All three verdicts come from one probe: the v2 OData **entity** endpoint,
+`Packages(Id='<package>',Version='<version>')`. A 404 is `FAIL`; a 200
+whose `Published` is the NuGet unlisted sentinel (`1900-01-01T00:00:00`)
+is `PENDING`; a 200 with a real `Published` date is `OK`.
 
 ## Rationale
 
@@ -76,33 +74,53 @@ drains — so that stays red.
 Neither existing verdict can carry the middle state without lying about
 one of those two properties. The third verdict is what the state costs.
 
-**The install feed is the probe because it is the property being
-claimed.** The alternative probes are all proxies for it, and the closest
-two are actively wrong:
+**`Published` is the probe because it is the field that tracks what a
+user can install.** Measured 2026-09-01:
 
-| Probe | Approved | Exempted | Submitted | Verdict quality |
+| Version | `PackageStatus` | `IsApproved` | `Published` | In install feed |
 |---|---|---|---|---|
-| `FindPackagesById()` + `$filter` | 1 entry | 1 entry | 0 entries | correct |
-| `IsApproved` | `true` | **`false`** | `false` | misreports Exempted |
-| `PackageStatus` | `Approved` | `Exempted` | `Submitted` | open enum |
-| `Published` | real date | real date | `1900-01-01` | undocumented sentinel |
+| `slack` 4.51.191 | `Approved` | `true` | real date | yes |
+| `slack` 1.0.0 | `Approved` | `true` | real date | yes |
+| `slack` 4.51.185 | `Exempted` | **`false`** | real date | **yes** |
+| `slack` 4.52.155 | `Submitted` | `false` | `1900-01-01T00:00:00` | no |
+| `chordsketch` 0.5.0 | `Approved` | `true` | real date | yes |
+| `chordsketch` 0.2.1 | `Approved` | `true` | real date | yes |
 
-(Measured 2026-09-01 against `slack` 4.51.191 / 4.51.185 / 4.52.155.)
-`Exempted` is the trap: those versions are exempt from moderation review
-and fully installable, yet report `IsApproved=false`. A checker keyed to
-that flag would report a live release as stuck in moderation
-indefinitely. `PackageStatus` is an open enum with at least four values,
-so matching `== "Approved"` has the same defect and no way to know when
-Chocolatey adds a fifth. Asking the install feed directly has no enum to
-keep up with: whatever a future status is called, the version either
-appears there or it does not.
+`Published` agrees with install-feed membership on every row; the two
+obvious alternatives do not:
 
-`$filter=Version eq '<version>'` pins the answer to one entry, so the
-repository's 40-item page size cannot hide a version behind pagination.
+- **`IsApproved` misreports `Exempted`.** Those versions skip moderation
+  review and are fully installable, yet report `false`. A checker keyed to
+  that flag would report a live release as stuck in moderation
+  indefinitely.
+- **`PackageStatus` is an open enum** with at least four values seen
+  (`Approved`, `Exempted`, `Submitted`, plus whatever comes next), so
+  matching `== "Approved"` carries the same defect with no way to know
+  when Chocolatey adds a fifth.
+
+The `1900-01-01` instant is not a Chocolatey quirk: it is how NuGet v2
+servers represent an unlisted package, which is exactly the state a
+version awaiting moderation is in.
 
 `PackageStatus` is still read, and reported in the detail line, because a
 human triaging a `PENDING` row wants to know which queue it is in. It is
-never the verdict.
+never the verdict. A feed that stops emitting `Published` reports
+`<error>` rather than being resolved in either direction.
+
+**`FindPackagesById()` — the feed `choco install` actually reads — is
+rejected, despite being the most direct statement of the property.** It
+applies `$filter` *after* paging. `FindPackagesById()?id='slack'&$filter=
+Version eq '1.0.0'` returns an empty first page, an empty second page, and
+the (listed, approved) version only on the third — while
+`$filter=Version eq '4.51.191'` returns it immediately, because that
+version is near the top of the underlying scan. A checker built on it
+works only while a package has fewer versions than the 40-item page size,
+then silently starts reporting published releases as missing. chordsketch
+has two versions today, so the defect would not have surfaced for years.
+Paging until the version is found or the links run out would be correct
+but costs a request per 40 versions; the entity endpoint addresses one
+version directly, cannot paginate, and answers all three verdicts in a
+single request.
 
 ## Consequences
 
@@ -114,15 +132,15 @@ never the verdict.
   table and leaves the job green. The release body therefore states, for
   the whole 28-54 day window, that Windows users cannot yet install the
   release — which is true, and was previously invisible.
-- The happy path costs one HTTP request; only a version missing from the
-  install feed pays for the second.
+- Every verdict costs exactly one HTTP request.
 - `CheckResult.ok` now means "the rollup may stay green for this channel",
   not "the release has arrived". The two came apart the moment a third
   verdict existed; the docstring says so, and `status` is what the CLI and
   the summary job read.
-- An unreadable feed (any non-404 HTTP failure, on either probe) reports
-  `<error>` and fails, so a transport problem is never read as a missing
-  publish, and never silently absorbed into `PENDING`.
+- An unreadable feed (any non-404 HTTP failure), or one that omits
+  `Published`, reports `<error>` and fails — so a transport problem or a
+  feed-shape change is never read as a missing publish, and never silently
+  absorbed into `PENDING`.
 
 ## Alternatives considered
 

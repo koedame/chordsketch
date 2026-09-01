@@ -413,6 +413,12 @@ def _check_scoop_bucket(channel: Channel, version: str) -> CheckResult:
     return _compare(channel, version, observed)
 
 
+# NuGet v2 servers represent an unlisted package by publishing it at this
+# sentinel instant rather than by a separate flag; Chocolatey uses it for a
+# version that is on the repository but still queued for moderation.
+_NUGET_UNLISTED_PUBLISHED = "1900-01-01"
+
+
 def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
     """Verify Chocolatey, which has three states where other channels have two.
 
@@ -423,57 +429,37 @@ def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
     OK / PENDING / FAIL — instead of folding the middle one into either
     neighbour. Rationale and measurements: ADR-0049.
 
-    The probe for the OK verdict is `FindPackagesById()` filtered to the
-    exact version, because that is the feed `choco install` itself reads:
-    a version it returns is one a user can install, which is the property
-    this rollup claims when it prints OK. `$filter=Version eq '<v>'` keeps
-    the answer to one entry, so the repository's 40-item page size cannot
-    hide a version behind pagination.
+    One probe answers all three: the v2 OData *entity* endpoint,
+    `Packages(Id='<package>',Version='<version>')`. It addresses a single
+    version directly, so unlike the collection endpoints it cannot paginate
+    and cannot return a partial answer.
 
-    Deliberately *not* used as the OK signal:
+    - 404 — the repository does not hold the version (FAIL).
+    - 200 with `Published` at the NuGet unlisted sentinel — held but not
+      published to users (PENDING).
+    - 200 with a real `Published` date — installable (OK).
 
-    - `PackageStatus` / `IsApproved` from the entity endpoint. Both say
-      `Exempted` / `false` for a version that is nonetheless published and
-      installable (`slack` 4.51.185 on 2026-09-01), so keying the verdict
-      to them reports a live release as stuck.
-    - `Published`, whose 1900-01-01 sentinel does track installability, but
-      as an undocumented magic value rather than a stated contract.
+    `Published` is the signal because it is the one that tracks what a user
+    can actually install. The obvious alternatives do not:
 
-    The entity endpoint is still queried, but only to explain a version the
-    install feed does not carry — 200 means the repository holds it and
-    moderation is the thing outstanding (PENDING), 404 means the push never
-    landed (FAIL). That split is what keeps a stalled `choco push` — the
-    403 the release fan-out downgrades to a warning so one channel of eight
-    cannot fail a release (#1852) — distinguishable from a queue we simply
-    have to wait out.
+    - `IsApproved` / `PackageStatus` report `false` / `Exempted` for
+      versions that skip moderation review and are fully installable
+      (`slack` 4.51.185, measured 2026-09-01). Keying the verdict to either
+      reports a live release as stuck in moderation forever, and
+      `PackageStatus` is an open enum besides.
+    - `FindPackagesById()`, the feed `choco install` reads, applies
+      `$filter` *after* paging: `Version eq '1.0.0'` for `slack` returns an
+      empty first page and only yields the (listed, approved) version on
+      page 3. Any package with more than one page of versions would have
+      its published release reported as missing.
+
+    A FAIL therefore means the push did not land — typically a `choco push`
+    refused with 403 because an earlier version is still queued and blocks
+    every newer push (#1852), which the release fan-out downgrades to a
+    warning so one stalled channel of eight cannot fail a release. This
+    rollup is the only other place that miss shows up.
     """
     page = f"https://community.chocolatey.org/packages/{channel.package}/{version}"
-
-    # 1. The assertion: can a user install this version right now?
-    install_feed = (
-        "https://community.chocolatey.org/api/v2/FindPackagesById()?"
-        + urllib.parse.urlencode(
-            {"id": f"'{channel.package}'", "$filter": f"Version eq '{version}'"}
-        )
-    )
-    try:
-        listing = _http_get_text(install_feed)
-    except urllib.error.HTTPError as exc:
-        return _error(channel, version, f"Chocolatey feed error: HTTP {exc.code}")
-    except Exception as exc:  # noqa: BLE001
-        return _error(channel, version, f"Chocolatey feed error: {exc}")
-
-    if "<entry>" in listing or "<entry " in listing:
-        return CheckResult(
-            channel_id=channel.id,
-            ok=True,
-            observed=version,
-            expected=version,
-            detail=f"published and installable from the Chocolatey Community Repository: {page}",
-        )
-
-    # 2. The install feed does not carry it. Two very different reasons,
-    #    and the entity endpoint is what tells them apart.
     entity = (
         "https://community.chocolatey.org/api/v2/"
         f"Packages(Id='{channel.package}',Version='{version}')"
@@ -502,22 +488,47 @@ def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
     except Exception as exc:  # noqa: BLE001
         return _error(channel, version, f"Chocolatey feed error: {exc}")
 
-    # Narrow regex rather than an XML parser, matching `_check_maven_central`:
+    # Narrow regexes rather than an XML parser, matching `_check_maven_central`:
     # the document is small, well-known and attacker-uncontrolled, and the
-    # regex carries no XXE surface. Reported, never used as the verdict.
-    match = re.search(r"<d:PackageStatus>([^<]*)</d:PackageStatus>", text)
-    reported = match.group(1).strip() if match is not None else "not reported by the feed"
+    # regex carries no XXE surface.
+    published = re.search(r"<d:Published[^>]*>([^<]*)</d:Published>", text)
+    if published is None:
+        # The verdict depends on this field, so a feed that stopped emitting
+        # it must not be guessed at in either direction.
+        return _error(
+            channel,
+            version,
+            f"Chocolatey feed did not report Published for {version}: {entity}",
+        )
+
+    status = re.search(r"<d:PackageStatus>([^<]*)</d:PackageStatus>", text)
+    # Reported for the human triaging the row, never used as the verdict.
+    reported = status.group(1).strip() if status is not None else "not reported by the feed"
+
+    if published.group(1).strip().startswith(_NUGET_UNLISTED_PUBLISHED):
+        return CheckResult(
+            channel_id=channel.id,
+            ok=True,
+            pending=True,
+            observed=version,
+            expected=version,
+            detail=(
+                f"accepted by the Chocolatey Community Repository but not yet "
+                f"installable — awaiting community moderation "
+                f"(PackageStatus={reported}). Nothing to do here: approval is a "
+                f"Chocolatey moderator's action and has taken 28-54 days per "
+                f"release. {page}"
+            ),
+        )
+
     return CheckResult(
         channel_id=channel.id,
         ok=True,
-        pending=True,
         observed=version,
         expected=version,
         detail=(
-            f"accepted by the Chocolatey Community Repository but not yet installable "
-            f"— awaiting community moderation (PackageStatus={reported}). Nothing to "
-            f"do here: approval is a Chocolatey moderator's action and has taken 28-54 "
-            f"days per release. {page}"
+            f"published and installable from the Chocolatey Community Repository "
+            f"(PackageStatus={reported}): {page}"
         ),
     )
 
