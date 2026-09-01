@@ -309,8 +309,6 @@ beyond what `claude -p` naturally produces. Side-effect-based state
   addition triggers a doc update.
 - [`pr-workflow.md`](pr-workflow.md) — workflows that produce PRs
   stop at the Ready-for-merge gate; merge is a separate decision.
-- [`one-pr-at-a-time.md`](one-pr-at-a-time.md) — workflows that open
-  PRs against `main` must respect the serialisation rule.
 - [ADR-0018](../../docs/adr/0018-phase-based-shell-orchestrated-workflows.md)
   — the architectural decision this rule operationalises.
 

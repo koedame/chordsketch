@@ -13,8 +13,7 @@ name: Desktop Build
 # Tauri bundle build is ~5-10 minutes per runner; running the full
 # matrix on every PR would blow the macOS-slot ceiling (see
 # `.claude/rules/ci-parallelization.md` §5 on the 5-job macOS cap
-# and `.claude/rules/one-pr-at-a-time.md` on the rationale for
-# keeping the pipeline short).
+# and what concurrent PRs cost against it).
 #
 # Triggers:
 #   - push to main: produces artefacts for every merged change

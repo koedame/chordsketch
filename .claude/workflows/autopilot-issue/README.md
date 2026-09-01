@@ -97,9 +97,8 @@ orchestrator might stop early.
 - **`preconditions`**: `gh` unauthenticated or wrong user; current
   branch is not `main`; running from a worktree; working tree is
   dirty; `git fetch origin` fails; local `main` has diverged from
-  `origin/main` (cannot be fast-forwarded); another open PR by the
-  current user against `main` exists; `pr-review-toolkit` plugin is
-  not installed.
+  `origin/main` (cannot be fast-forwarded); `pr-review-toolkit`
+  plugin is not installed.
 - **`issue-selection`**: target issue not authored by the expected
   user, author re-verification fails for any selected issue, or hard
   preconditions on the candidate set fail.
