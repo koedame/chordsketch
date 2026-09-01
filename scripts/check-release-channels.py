@@ -18,6 +18,11 @@ Exits 0 on success, 1 on any failure (registry error, version mismatch,
 visibility contract broken). Prints a single-line status to stdout followed
 by any diagnostic lines on stderr.
 
+The status word is `OK`, `FAIL`, or `PENDING`. `PENDING` means the channel
+accepted the release but has not published it yet — a state only Chocolatey's
+community moderation produces (ADR-0049). It exits 0, because no action here
+can clear it, and the rollup renders it as its own row rather than as a pass.
+
 Stdlib only — no external deps. HTTP goes through urllib with an explicit
 15s timeout and a named User-Agent so registry rate limiters can identify
 us if we misbehave.
@@ -48,13 +53,31 @@ USER_AGENT = "chordsketch-release-verify (+https://github.com/koedame/chordsketc
 
 @dataclass(frozen=True)
 class CheckResult:
-    """Outcome of a single channel verification."""
+    """Outcome of a single channel verification.
+
+    `ok` answers "may the rollup stay green for this channel", which is not
+    the same question as "has the release arrived". A channel that has
+    handed the release to a third party who has not published it yet is
+    neither: it sets `pending`, reporting OK-for-exit-status while the
+    status column says PENDING rather than claiming a converged channel.
+    Only Chocolatey needs it today (ADR-0049) — every other registry
+    publishes synchronously, so for them `pending` is never set and the
+    verdict stays the binary it always was.
+    """
 
     channel_id: str
     ok: bool
     observed: str  # what we found on the registry (or "<error>")
     expected: str  # what the tag said we should find
     detail: str  # human-readable one-line summary
+    pending: bool = False  # accepted upstream, not yet available to users
+
+    @property
+    def status(self) -> str:
+        """Machine-readable status word — the first column the rollup parses."""
+        if self.pending:
+            return "PENDING"
+        return "OK" if self.ok else "FAIL"
 
 
 # ---------------------------------------------------------------- HTTP helpers
@@ -391,34 +414,72 @@ def _check_scoop_bucket(channel: Channel, version: str) -> CheckResult:
 
 
 def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
-    # Asserts that the community repository *accepted* this version, not
-    # that a moderator approved it — approval is asynchronous and took 28
-    # days for 0.2.1 and 54 for 0.5.0 per their own feed entries. Rationale
-    # and the measurements behind it: ADR-0047.
-    #
-    # The v2 OData *entity* endpoint is what separates the two states: 200
-    # for any version the repository took (`PackageStatus` `Submitted`
-    # while it waits, `Approved` once it clears) and 404 for one that never
-    # landed. Same contract the publish action's pre-flight probe reads
-    # (.github/actions/chocolatey-pack-push/action.yml).
-    #
-    # `FindPackagesById()` is deliberately not used: it omits submitted
-    # versions (40 entries for `slack` on 2026-09-01 without the queued
-    # 4.52.155), so a rollup built on it would report a pushed release as
-    # missing for the whole moderation window.
-    #
-    # A red therefore means the push did not land — usually a `choco push`
-    # refused with 403 because an earlier version is still queued and
-    # blocks every newer push (#1852), which the release fan-out
-    # downgrades to a warning so one stalled channel of eight cannot fail
-    # a release. This rollup is the only other place that miss shows up.
-    url = (
+    """Verify Chocolatey, which has three states where other channels have two.
+
+    A version can sit *on* the Community Repository without being
+    installable: community moderation gates publication, and it took 28
+    days for 0.2.1 and 54 for 0.5.0 (`Created` vs `PackageApprovedDate` on
+    their own feed entries). So this checker reports three verdicts —
+    OK / PENDING / FAIL — instead of folding the middle one into either
+    neighbour. Rationale and measurements: ADR-0049.
+
+    The probe for the OK verdict is `FindPackagesById()` filtered to the
+    exact version, because that is the feed `choco install` itself reads:
+    a version it returns is one a user can install, which is the property
+    this rollup claims when it prints OK. `$filter=Version eq '<v>'` keeps
+    the answer to one entry, so the repository's 40-item page size cannot
+    hide a version behind pagination.
+
+    Deliberately *not* used as the OK signal:
+
+    - `PackageStatus` / `IsApproved` from the entity endpoint. Both say
+      `Exempted` / `false` for a version that is nonetheless published and
+      installable (`slack` 4.51.185 on 2026-09-01), so keying the verdict
+      to them reports a live release as stuck.
+    - `Published`, whose 1900-01-01 sentinel does track installability, but
+      as an undocumented magic value rather than a stated contract.
+
+    The entity endpoint is still queried, but only to explain a version the
+    install feed does not carry — 200 means the repository holds it and
+    moderation is the thing outstanding (PENDING), 404 means the push never
+    landed (FAIL). That split is what keeps a stalled `choco push` — the
+    403 the release fan-out downgrades to a warning so one channel of eight
+    cannot fail a release (#1852) — distinguishable from a queue we simply
+    have to wait out.
+    """
+    page = f"https://community.chocolatey.org/packages/{channel.package}/{version}"
+
+    # 1. The assertion: can a user install this version right now?
+    install_feed = (
+        "https://community.chocolatey.org/api/v2/FindPackagesById()?"
+        + urllib.parse.urlencode(
+            {"id": f"'{channel.package}'", "$filter": f"Version eq '{version}'"}
+        )
+    )
+    try:
+        listing = _http_get_text(install_feed)
+    except urllib.error.HTTPError as exc:
+        return _error(channel, version, f"Chocolatey feed error: HTTP {exc.code}")
+    except Exception as exc:  # noqa: BLE001
+        return _error(channel, version, f"Chocolatey feed error: {exc}")
+
+    if "<entry>" in listing or "<entry " in listing:
+        return CheckResult(
+            channel_id=channel.id,
+            ok=True,
+            observed=version,
+            expected=version,
+            detail=f"published and installable from the Chocolatey Community Repository: {page}",
+        )
+
+    # 2. The install feed does not carry it. Two very different reasons,
+    #    and the entity endpoint is what tells them apart.
+    entity = (
         "https://community.chocolatey.org/api/v2/"
         f"Packages(Id='{channel.package}',Version='{version}')"
     )
-    page = f"https://community.chocolatey.org/packages/{channel.package}/{version}"
     try:
-        text = _http_get_text(url)
+        text = _http_get_text(entity)
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             return CheckResult(
@@ -443,22 +504,21 @@ def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
 
     # Narrow regex rather than an XML parser, matching `_check_maven_central`:
     # the document is small, well-known and attacker-uncontrolled, and the
-    # regex carries no XXE surface.
+    # regex carries no XXE surface. Reported, never used as the verdict.
     match = re.search(r"<d:PackageStatus>([^<]*)</d:PackageStatus>", text)
-    if match is None:
-        # Do not assume "Approved" — say what is known (the version is on
-        # the repository) and what is not, rather than inventing a state.
-        moderation = "moderation state not reported by the feed"
-    elif match.group(1).strip() == "Approved":
-        moderation = "approved"
-    else:
-        moderation = f"awaiting moderation (PackageStatus={match.group(1).strip()})"
+    reported = match.group(1).strip() if match is not None else "not reported by the feed"
     return CheckResult(
         channel_id=channel.id,
         ok=True,
+        pending=True,
         observed=version,
         expected=version,
-        detail=f"on the Chocolatey Community Repository, {moderation}: {page}",
+        detail=(
+            f"accepted by the Chocolatey Community Repository but not yet installable "
+            f"— awaiting community moderation (PackageStatus={reported}). Nothing to "
+            f"do here: approval is a Chocolatey moderator's action and has taken 28-54 "
+            f"days per release. {page}"
+        ),
     )
 
 
@@ -584,7 +644,7 @@ def main() -> int:
     force_stale = bool(args.force_stale) and args.force_stale == channel.id
     result = verify_channel(channel, args.tag, force_stale)
 
-    status = "OK" if result.ok else "FAIL"
+    status = result.status
     # Ordering matters: the release-verify rollup (.github/workflows/release-verify.yml)
     # reads `head -n1 result.txt` and parses `<status> <channel_id>
     # expected=… observed=…`. Previously `detail:` was written to stderr;

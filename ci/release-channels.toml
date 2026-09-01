@@ -188,10 +188,12 @@ expected_version = "tag"
 required_secrets = ["CHOCOLATEY_API_KEY"]
 notes = """
 Published by post-release.yml update-chocolatey job on windows-latest.
-_check_chocolatey asserts that the community repository accepted the
-version, not that a moderator approved it: approval takes weeks, while
-a push that never landed (usually a 403 behind a moderation queue,
-#1852) is the failure the rollup exists to catch. See ADR-0047.
+_check_chocolatey reports three verdicts, because community moderation
+gives this channel a state no other one has: OK once the version is
+installable, PENDING while the repository holds it but has not published
+it (28-54 days per release, nothing here can clear it), FAIL when the
+push never landed (usually a 403 behind a moderation queue, #1852 —
+re-run chocolatey-retry.yml). See ADR-0049.
 """
 
 [[channels]]
