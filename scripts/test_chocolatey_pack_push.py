@@ -30,7 +30,6 @@ tests still run on a machine without PowerShell.
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -277,7 +276,7 @@ class PreconditionsTest(_StepTestCase):
         r = self.run_step(env={"CHOCOLATEY_API_KEY": "", "ON_MISSING_KEY": "fail", "ON_FORBIDDEN": "fail"})
         self.assertEqual(r.code, 1, r.out)
         self.assertIn("::error::CHOCOLATEY_API_KEY is not set", r.out)
-        self.assertNotIn("push=", "".join(r.outputs))
+        self.assertNotIn("push", r.outputs)
 
     def test_missing_key_with_fail_names_the_command_that_sets_it(self):
         r = self.run_step(env={"CHOCOLATEY_API_KEY": "", "ON_MISSING_KEY": "fail", "ON_FORBIDDEN": "fail"})
