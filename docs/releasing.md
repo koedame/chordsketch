@@ -471,11 +471,15 @@ After the release workflow completes and the GitHub Release is published:
         --from-ref HEAD`) inline; the next normal CI run, after
         the tag is pushed, validates against the real tagged
         `Cargo.lock`. See #2413 / ADR-0012 for the rationale.
-      - On a Mac with MacPorts installed, run `cargo2port.py` from a
-        local MacPorts install **after** checking out the tag (so
-        `Cargo.lock` in the working tree is the tagged one). The output
-        format is identical to the in-tree script's, so either tool
-        keeps the Portfile reproducible.
+      - With MacPorts' canonical `cargo2port`
+        (https://ports.macports.org/port/cargo2port/) installed, run it
+        **after** checking out the tag (so `Cargo.lock` in the working
+        tree is the tagged one). Its default alignment mode and the
+        in-tree script produce byte-identical blocks — same column
+        layout, same semver-aware ordering — so either tool keeps the
+        Portfile reproducible, and a MacPorts committer regenerating
+        with `cargo2port` during a version bump sees only the crates
+        that actually changed rather than a reshuffle of every line.
    3. Validate the Portfile end-to-end. Trigger
       `.github/workflows/macports-smoke.yml` via `gh workflow run
       macports-smoke.yml`; it spins up a `macos-latest` runner,

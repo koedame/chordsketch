@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `packaging/macports/Portfile`'s `cargo.crates` block is now
+  byte-identical to what MacPorts' canonical
+  [`cargo2port`](https://ports.macports.org/port/cargo2port/) generates:
+  the `{:<28}  {:>8}  {}` column layout, and same-named crates ordered by
+  semver precedence rather than lexically (`float-cmp` 0.9.0 before
+  0.10.0). `scripts/macports-regen-cargo-crates.py` produces that form,
+  so the two generators agree and a MacPorts committer who regenerates
+  the block during a version bump gets a diff of the crates that
+  changed instead of all 732 lines reshuffled. Crate set, versions and
+  checksums are unchanged — this is a formatting and ordering change
+  only.
+
 - **The minimum supported Rust version is now 1.88** (was 1.85). The
   `uniffi` 0.31 → 0.32 and `pdf-extract` 0.10 → 0.12 bumps both pull in
   transitive crates that declare a higher floor (`askama` 0.16 requires

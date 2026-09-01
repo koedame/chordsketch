@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """Regenerate the `cargo.crates` block of `packaging/macports/Portfile`.
 
-MacPorts' canonical regenerator is `cargo2port.py`, which ships with a
-local MacPorts install. This script is an in-tree pure-Python
-alternative so a non-Mac contributor (CI agent, Linux dev) can refresh
-the block without installing MacPorts. The output format matches
-`cargo2port.py`'s contract:
+MacPorts' canonical regenerator is `cargo2port`
+(https://ports.macports.org/port/cargo2port/). This script is an
+in-tree pure-Python alternative so a non-Mac contributor (CI agent,
+Linux dev) can refresh the block without installing MacPorts. Its
+output is byte-identical to `cargo2port`'s default alignment mode:
 
     cargo.crates \\
-        crate_name version checksum \\
+        crate_name                    version  checksum \\
         ...
+
+Byte-identical means both the column layout (`{:<28}  {:>8}  {}`) and
+the ordering — crates sort by name, then by **semver precedence** of
+the version, so `0.9.0` precedes `0.10.0`. Matching the canonical tool
+keeps a MacPorts committer who regenerates the block during a version
+bump from producing a diff that reshuffles every line.
 
 A `[[package]]` block in `Cargo.lock` is included only when it carries
 a `checksum =` line — workspace-local crates have no checksum (their
@@ -55,7 +61,7 @@ Usage:
 
     # Update the Portfile in place (rewrites everything between
     # `cargo.crates \\` and the next blank line — same boundaries
-    # `cargo2port.py` writes)
+    # `cargo2port` writes)
     python3 scripts/macports-regen-cargo-crates.py --apply
 
     # Verify the Portfile matches the tagged Cargo.lock; exits
@@ -86,6 +92,51 @@ GITHUB_SETUP_RE = re.compile(
     r"^github\.setup\s+koedame\s+chordsketch\s+([0-9][0-9A-Za-z.+\-]*)\s+v\s*$",
     re.M,
 )
+
+
+# Column widths of `cargo2port`'s default (`AlignmentMode::Normal`)
+# layout: `format!("    {:<28}  {:>8}  {}", name, version, checksum)`.
+# Names and versions longer than the width are not truncated, they just
+# push the following columns right — same as Rust's formatter.
+NAME_COLUMN_WIDTH = 28
+VERSION_COLUMN_WIDTH = 8
+
+
+def version_sort_key(version: str) -> tuple:
+    """Return a sort key ordering `version` the way semver precedence does.
+
+    `cargo2port` sorts `cargo_lock::Package`, whose `version` field is a
+    `semver::Version`, so same-named crates come out in semver order
+    (`0.9.0` before `0.10.0`) rather than lexical order. Reproducing that
+    here keeps the two generators byte-identical.
+
+    Per the semver spec: build metadata (`+spec-1.1.0`) is ignored for
+    precedence; a pre-release (`0.8.8-speedreader`) ranks below the
+    plain release it qualifies; and pre-release identifiers compare
+    field by field, numeric ones numerically and below alphanumeric ones.
+
+    Anything that does not parse as `MAJOR.MINOR.PATCH` sorts last as a
+    plain string rather than raising — `Cargo.lock` is cargo-generated
+    so this is unreachable in practice, but a malformed entry should not
+    take the release process down.
+    """
+    # Strip build metadata before splitting off the pre-release: the
+    # `+build` part may itself contain `-` (`0.9.0+wasi-snapshot-preview1`),
+    # so partitioning on `-` first would mistake it for a pre-release and
+    # sort the crate out of order.
+    core, _, pre = version.partition("+")[0].partition("-")
+    parts = core.split(".")
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+        return (1, version)
+    numeric_core = tuple(int(part) for part in parts)
+    if not pre:
+        # No pre-release outranks every pre-release of the same core.
+        return (0, numeric_core, (1,))
+    identifiers = tuple(
+        (0, int(ident), "") if ident.isdigit() else (1, 0, ident)
+        for ident in pre.split(".")
+    )
+    return (0, numeric_core, (0, identifiers))
 
 
 def portfile_tag() -> str:
@@ -173,7 +224,7 @@ def parse_cargo_lock(text: str) -> list[tuple[str, str, str]]:
         sum_m = re.search(r'^checksum = "([^"]+)"', block, re.M)
         if name_m and ver_m and sum_m:
             crates.append((name_m.group(1), ver_m.group(1), sum_m.group(1)))
-    crates.sort()
+    crates.sort(key=lambda c: (c[0], version_sort_key(c[1]), c[1]))
     return crates
 
 
@@ -183,7 +234,10 @@ def render_block(crates: list[tuple[str, str, str]]) -> str:
     lines = ["cargo.crates \\"]
     for i, (name, ver, checksum) in enumerate(crates):
         suffix = " \\" if i < len(crates) - 1 else ""
-        lines.append(f"    {name} {ver} {checksum}{suffix}")
+        lines.append(
+            f"    {name:<{NAME_COLUMN_WIDTH}}  "
+            f"{ver:>{VERSION_COLUMN_WIDTH}}  {checksum}{suffix}"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -191,7 +245,7 @@ def replace_block_in_portfile(portfile_text: str, new_block: str) -> str:
     """Replace the `cargo.crates ...` region in the Portfile with `new_block`.
 
     The region runs from the `cargo.crates \\` line to the line before
-    the next blank line. This matches the layout `cargo2port.py`
+    the next blank line. This matches the layout `cargo2port`
     produces and what the in-tree Portfile currently uses.
     """
     lines = portfile_text.splitlines(keepends=True)
