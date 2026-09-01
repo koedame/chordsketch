@@ -1085,11 +1085,15 @@ because pushing is the only thing it does.
 
 #### Retrying a failed Chocolatey push
 
-If `update-chocolatey` fails while the other jobs in `post-release.yml`
-succeed — typical cause is a `403 Forbidden` because the previous
-version is still in community moderation (Chocolatey blocks newer-version
-pushes while the prior version is queued) — use the standalone
-`chocolatey-retry.yml` workflow:
+Use the standalone `chocolatey-retry.yml` workflow whenever
+`update-chocolatey` did not publish this version. That job downgrades a
+`403 Forbidden` to a warning (see above), so the typical trigger is a
+**green** `update-chocolatey` job carrying a `::warning::` annotation —
+not a failed one. `update-chocolatey` itself only turns red for a
+genuine `choco pack` failure or a push refused for a reason other than
+`403`/`409`; check the job's annotations either way, since a `403`
+warning means the version was never pushed even though the job
+succeeded:
 
 ```bash
 gh workflow run chocolatey-retry.yml -R koedame/chordsketch -f tag=vX.Y.Z
@@ -1105,12 +1109,11 @@ already on the repository, and it treats a `409 Conflict` from the push
 the same way, so re-running it after a push that actually landed does
 not produce a red run.
 
-A failure names the HTTP status. `403 Forbidden` means an earlier
-version is still queued for moderation and is blocking this one; wait
-for it to clear and dispatch again. On the release path the same `403`
-is a warning on the `update-chocolatey` job rather than a failure, so
-after a release check that job's annotations — a warning there means the
-version was never pushed and this retry is what publishes it.
+A failure on `chocolatey-retry.yml` itself names the HTTP status: `403
+Forbidden` means an earlier version is still queued for moderation and
+is blocking this one; wait for it to clear and dispatch again (this
+workflow, unlike `update-chocolatey`, fails rather than warns on a
+`403` — see above).
 
 Read the queue state from
 `community.chocolatey.org/packages/chordsketch/<version>` under
