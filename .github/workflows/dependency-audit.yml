@@ -78,9 +78,11 @@ jobs:
       - name: Scan the lockfile
         run: |
           set -uo pipefail
-          # cargo audit exits non-zero when it finds something; the verdict
-          # is computed from the JSON below, so only a failure to produce a
-          # report is fatal here.
+          # cargo audit exits non-zero when it finds something and the
+          # verdict is computed from the JSON below, so `-e` (which the
+          # default shell sets) has to be off here — only a failure to
+          # produce a report is fatal.
+          set +e
           cargo audit --json > audit.json
           status=$?
           if ! python3 -c 'import json, sys; json.load(open("audit.json"))' 2>/dev/null; then
@@ -114,6 +116,9 @@ jobs:
         id: report
         run: |
           set -uo pipefail
+          # Same reason as the scan step: exit code 1 is a verdict, not a
+          # step failure, so the default shell's `-e` has to be off.
+          set +e
           args=(--audit-json audit.json
                 --runtime-packages runtime-packages.txt
                 --audit-config .cargo/audit.toml
