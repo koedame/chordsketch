@@ -1,6 +1,6 @@
 ; Indent captures use the nvim-treesitter vocabulary (@indent.zero /
 ; @indent.auto). Helix uses a different one (@indent / @outdent) and
-; does not read this file — see docs/editors.md § Helix.
+; does not read this file; its query set is queries/helix/.
 ;
 ; ChordPro is line-oriented and flat: comments, directives and
 ; chord/lyric lines all begin at column 0 and nothing nests, so no
