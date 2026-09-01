@@ -58,8 +58,8 @@ push: the feed distinguishes them, and the channel needs no third
 `warning` / `pending` verdict beyond the existing pass/fail.
 
 Approval is also not ours to hold a red open for. It is an asynchronous
-act by a Chocolatey moderator, unblocked by nothing the repository can do,
-whereas a 404 is actionable: re-run `chocolatey-retry.yml` once the queue
+act by a Chocolatey moderator, and nothing in this repository can unblock
+it, whereas a 404 is actionable: re-run `chocolatey-retry.yml` once the queue
 that produced the 403 drains. Failing on the state we cannot act on would
 train the same "red means nothing" reflex
 [ADR-0039](0039-release-fan-out-is-an-explicit-call-graph.md) moved this
