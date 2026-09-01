@@ -49,8 +49,8 @@ categories          textproc music
 license             MIT
 
 cargo.crates \\
-    aaa 1.0.0 0000000000000000000000000000000000000000000000000000000000000001 \\
-    bbb 2.0.0 0000000000000000000000000000000000000000000000000000000000000002
+    aaa                              1.0.0  0000000000000000000000000000000000000000000000000000000000000001 \\
+    bbb                              2.0.0  0000000000000000000000000000000000000000000000000000000000000002
 
 build.dir ${worksrcpath}
 """
@@ -143,6 +143,78 @@ checksum = "aaaa000000000000000000000000000000000000000000000000000000000001"
         crates = mod.parse_cargo_lock(out_of_order)
         self.assertEqual([c[0] for c in crates], ["alpha", "zeta"])
 
+    def test_same_name_crates_sort_by_semver_not_lexically(self) -> None:
+        # `cargo2port` sorts `semver::Version`, so 0.9.0 precedes
+        # 0.10.0. A lexical sort would invert these two.
+        lock = """
+[[package]]
+name = "float-cmp"
+version = "0.10.0"
+checksum = "aaaa000000000000000000000000000000000000000000000000000000000001"
+
+[[package]]
+name = "float-cmp"
+version = "0.9.0"
+checksum = "bbbb000000000000000000000000000000000000000000000000000000000002"
+"""
+        crates = mod.parse_cargo_lock(lock)
+        self.assertEqual([c[1] for c in crates], ["0.9.0", "0.10.0"])
+
+    def test_build_metadata_containing_a_dash_is_not_read_as_prerelease(
+        self,
+    ) -> None:
+        # `0.9.0+wasi-snapshot-preview1` carries a `-` inside its build
+        # metadata. Splitting on `-` before stripping `+build` would
+        # read the core as `0.9.0+wasi` and sort this after 0.11.1.
+        lock = """
+[[package]]
+name = "wasi"
+version = "0.11.1+wasi-snapshot-preview1"
+checksum = "aaaa000000000000000000000000000000000000000000000000000000000001"
+
+[[package]]
+name = "wasi"
+version = "0.9.0+wasi-snapshot-preview1"
+checksum = "bbbb000000000000000000000000000000000000000000000000000000000002"
+"""
+        crates = mod.parse_cargo_lock(lock)
+        self.assertEqual(
+            [c[1] for c in crates],
+            ["0.9.0+wasi-snapshot-preview1", "0.11.1+wasi-snapshot-preview1"],
+        )
+
+    def test_prerelease_sorts_below_its_plain_release(self) -> None:
+        lock = """
+[[package]]
+name = "kuchikiki"
+version = "0.8.8"
+checksum = "aaaa000000000000000000000000000000000000000000000000000000000001"
+
+[[package]]
+name = "kuchikiki"
+version = "0.8.8-speedreader"
+checksum = "bbbb000000000000000000000000000000000000000000000000000000000002"
+"""
+        crates = mod.parse_cargo_lock(lock)
+        self.assertEqual(
+            [c[1] for c in crates], ["0.8.8-speedreader", "0.8.8"]
+        )
+
+    def test_unparseable_version_sorts_last_instead_of_raising(self) -> None:
+        lock = """
+[[package]]
+name = "weird"
+version = "not-a-semver"
+checksum = "aaaa000000000000000000000000000000000000000000000000000000000001"
+
+[[package]]
+name = "weird"
+version = "1.0.0"
+checksum = "bbbb000000000000000000000000000000000000000000000000000000000002"
+"""
+        crates = mod.parse_cargo_lock(lock)
+        self.assertEqual([c[1] for c in crates], ["1.0.0", "not-a-semver"])
+
     def test_captures_version_and_checksum(self) -> None:
         crates = mod.parse_cargo_lock(CARGO_LOCK_FIXTURE)
         self.assertEqual(
@@ -158,7 +230,11 @@ class RenderBlockTests(unittest.TestCase):
 
     def test_single_crate_has_no_trailing_backslash(self) -> None:
         block = mod.render_block([("foo", "1.0.0", "abc123")])
-        self.assertEqual(block, "cargo.crates \\\n    foo 1.0.0 abc123\n")
+        self.assertEqual(
+            block,
+            "cargo.crates \\\n"
+            "    foo                              1.0.0  abc123\n",
+        )
 
     def test_multi_crate_continues_with_backslashes(self) -> None:
         block = mod.render_block([
@@ -168,18 +244,44 @@ class RenderBlockTests(unittest.TestCase):
         self.assertEqual(
             block,
             "cargo.crates \\\n"
-            "    alpha 1.0.0 aaa \\\n"
-            "    beta 2.0.0 bbb\n",
+            "    alpha                            1.0.0  aaa \\\n"
+            "    beta                             2.0.0  bbb\n",
+        )
+
+    def test_name_and_version_columns_match_cargo2port_widths(self) -> None:
+        # `cargo2port`'s default mode is `{:<28}  {:>8}  {}` after a
+        # four-space indent, so the version column right-aligns at
+        # column 42 and the checksum starts at column 44.
+        block = mod.render_block([("foo", "1.0.0", "abc123")])
+        line = block.splitlines()[1]
+        self.assertEqual(line.index("1.0.0") + len("1.0.0"), 42)
+        self.assertEqual(line.index("abc123"), 44)
+
+    def test_over_width_name_pushes_columns_right_without_truncating(
+        self,
+    ) -> None:
+        # Rust's `{:<28}` pads but never truncates; an over-long name
+        # must survive intact rather than be cut to the column width.
+        long_name = "a" * 32
+        block = mod.render_block([(long_name, "1.0.0", "abc")])
+        self.assertEqual(
+            block.splitlines()[1],
+            f"    {long_name}     1.0.0  abc",
         )
 
 
 class ReplaceBlockTests(unittest.TestCase):
     def test_replaces_only_cargo_crates_region(self) -> None:
-        new_block = "cargo.crates \\\n    new 9.9.9 deadbeef\n"
+        new_block = (
+            "cargo.crates \\\n"
+            "    new                              9.9.9  deadbeef\n"
+        )
         result = mod.replace_block_in_portfile(PORTFILE_FIXTURE, new_block)
         self.assertIn("github.setup        koedame chordsketch 0.3.0 v",
                       result)
-        self.assertIn("    new 9.9.9 deadbeef", result)
+        self.assertIn(
+            "    new                              9.9.9  deadbeef", result
+        )
         self.assertNotIn("aaa 1.0.0", result)
         # `build.dir` line after the block must survive.
         self.assertIn("build.dir ${worksrcpath}", result)
