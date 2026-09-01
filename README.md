@@ -144,6 +144,12 @@ name, so `--formula` and `--cask` say which of the two to install;
 without either flag Homebrew picks the formula and warns that the name
 was ambiguous.
 
+### MacPorts (macOS)
+
+```bash
+sudo port install chordsketch
+```
+
 ### Scoop (Windows)
 
 ```bash

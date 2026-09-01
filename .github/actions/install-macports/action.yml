@@ -1,0 +1,82 @@
+name: "Install MacPorts"
+description: >
+  Install MacPorts from the official signed .pkg for the runner's macOS
+  release, put it on PATH, and pull the upstream ports tree via
+  `port selfupdate`. Single source of truth for the MacPorts version pin
+  shared by `macports-smoke.yml` and `readme-smoke.yml` (per
+  `.claude/rules/ci-parallelization.md` §2).
+inputs:
+  version:
+    description: >
+      macports-base release to install. Floor is 2.11.5: that is the first
+      release whose assets include a macOS 26 (Tahoe) installer, and
+      `macos-latest` is macOS 26. Pinning below it makes the download 404 for
+      every runner. Verified against the release assets:
+        gh api repos/macports/macports-base/releases/tags/v<V> \
+          --jq '[.assets[].name|select(test("Tahoe"))]|length'
+      returns 0 for v2.10.7 / v2.11.4 and 2 from v2.11.5 onward.
+    required: false
+    default: "2.12.6"
+runs:
+  using: "composite"
+  steps:
+    - name: Resolve runner macOS codename
+      id: codename
+      shell: bash
+      run: |
+        set -euo pipefail
+        major=$(sw_vers -productVersion | cut -d. -f1)
+        case "$major" in
+          12) name=Monterey ;;
+          13) name=Ventura  ;;
+          14) name=Sonoma   ;;
+          15) name=Sequoia  ;;
+          26) name=Tahoe    ;;
+          *)
+            echo "unsupported macOS major version: $major" >&2
+            exit 1
+            ;;
+        esac
+        echo "name=$name"   >> "$GITHUB_OUTPUT"
+        echo "major=$major" >> "$GITHUB_OUTPUT"
+
+    - name: Install MacPorts from official .pkg
+      # All `${{ }}` interpolation goes through `env:` so no
+      # GitHub-controlled value is spliced into the shell directly.
+      shell: bash
+      env:
+        MACPORTS_VERSION: ${{ inputs.version }}
+        CODENAME: ${{ steps.codename.outputs.name }}
+        MAJOR: ${{ steps.codename.outputs.major }}
+      run: |
+        set -euo pipefail
+        pkg="MacPorts-${MACPORTS_VERSION}-${MAJOR}-${CODENAME}.pkg"
+        url="https://github.com/macports/macports-base/releases/download/v${MACPORTS_VERSION}/${pkg}"
+        curl -fL --retry 5 --retry-delay 5 -o "$pkg" "$url"
+
+        # Defense-in-depth beyond HTTPS: refuse to install a .pkg
+        # whose embedded Apple Developer ID signature does not pass
+        # macOS's trust check. `pkgutil --check-signature` exits
+        # non-zero if the package is unsigned, has a broken
+        # signature, or chains to a non-trusted root, so a
+        # compromised release asset (or a typo in the URL that
+        # resolves to an attacker-served file) gets caught before
+        # `installer` runs as root. The signing identity is logged
+        # for audit. Per-version SHA256 pinning was considered and
+        # rejected: the GitHub release API does not expose digests
+        # for these assets, and per-codename hard-coded hashes
+        # would silently rot every MacPorts release.
+        sudo pkgutil --check-signature "$pkg"
+
+        sudo installer -pkg "$pkg" -target /
+        # Expose MacPorts on PATH for subsequent steps.
+        echo "/opt/local/bin"  >> "$GITHUB_PATH"
+        echo "/opt/local/sbin" >> "$GITHUB_PATH"
+
+    - name: MacPorts selfupdate
+      # Pulls the upstream ports tree. Without this there is no ports
+      # tree at all: `port lint` and the cargo portgroup cannot resolve
+      # their dependencies, and `port install <name>` cannot find any
+      # port to install.
+      shell: bash
+      run: sudo /opt/local/bin/port -v selfupdate

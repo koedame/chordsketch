@@ -237,6 +237,22 @@ from the rollup.
 """
 required_secrets = []
 
+[[channels]]
+id = "macports"
+display = "MacPorts — textproc/chordsketch"
+kind = "manual"
+expected_version = "skip"
+skip_reason = """
+MacPorts publication requires a manual PR against macports/macports-ports
+that is reviewed asynchronously by port maintainers, mirroring the winget
+flow above. There is no automated publish step in this repository to
+trigger a check against, so this channel is intentionally skipped from the
+rollup. See docs/releasing.md step 5 for the per-release Portfile bump +
+PR procedure.
+"""
+required_secrets = []
+notes = "Portfile lives at packaging/macports/Portfile. Live install path verified by the macports job in readme-smoke.yml."
+
 # ---------------------------------------------------------------- VS Code
 
 [[channels]]
