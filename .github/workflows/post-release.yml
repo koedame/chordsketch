@@ -243,23 +243,21 @@ jobs:
           cat choco-pkg/tools/chocolateyInstall.ps1
 
       - name: Pack and push
-        shell: pwsh
-        env:
-          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          if (-not $env:CHOCOLATEY_API_KEY) {
-            Write-Host "CHOCOLATEY_API_KEY secret is not set; skipping Chocolatey push."
-            Write-Host "To enable automatic Chocolatey updates, add the API key"
-            Write-Host "as a repository secret named CHOCOLATEY_API_KEY."
-            exit 0
-          }
-
-          cd choco-pkg
-          choco pack chordsketch.nuspec
-          choco push "chordsketch.$env:VERSION.nupkg" `
-            --source https://push.chocolatey.org/ `
-            --api-key $env:CHOCOLATEY_API_KEY
+        # Shared with chocolatey-retry.yml so the release path and the
+        # by-hand retry path cannot diverge. The dispositions below are
+        # this job's half of that contract. Chocolatey is one job of
+        # eight in an automatic fan-out, so neither an unconfigured
+        # channel nor a 403 from a moderation queue that has not drained
+        # yet (#1852) is a reason to fail a release that has already
+        # published to the other seven. A 403 annotates the job with the
+        # cause and the command that publishes this version once the
+        # queue clears.
+        uses: ./.github/actions/chocolatey-pack-push
+        with:
+          version: ${{ steps.version.outputs.version }}
+          api-key: ${{ secrets.CHOCOLATEY_API_KEY }}
+          on-missing-key: skip
+          on-forbidden: warn
 
   update-snap:
     name: Update Snap package
