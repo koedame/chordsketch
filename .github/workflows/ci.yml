@@ -202,6 +202,36 @@ jobs:
       - name: Unit tests for the regen script
         run: python3 -m unittest scripts/test_macports_regen_cargo_crates.py
 
+  chocolatey-action:
+    name: Chocolatey publish action
+    # Exercises the PowerShell in `.github/actions/chocolatey-pack-push`, which
+    # decides whether a Chocolatey moderation queue fails a release or merely
+    # annotates it. That code otherwise runs only on `windows-latest` during a
+    # release fan-out, so nothing on a PR would catch a regression in it until
+    # the next release broke — the failure mode that left the 403 handling in
+    # only one of the two callers to begin with (#1852).
+    #
+    # The step bodies run under this runner's `pwsh` (7.6.5 on ubuntu-24.04)
+    # with `choco` and the Chocolatey feed stubbed; what they exercise is HTTP
+    # status handling, string matching, and exit codes, none of which is
+    # Windows-specific. Guarantee-style check per
+    # `.claude/rules/ci-parallelization.md` §3 — no paths: filter, runs on
+    # every PR. Python + pwsh only, no Rust compiled, so no rust-cache entry
+    # is needed (§2).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # The suite skips its pwsh-backed cases when no interpreter is present,
+      # so that the repo's other Python unit tests still run on a machine
+      # without PowerShell. That fallback must not silently hollow out this
+      # job if pwsh ever leaves the runner image — fail loudly instead.
+      - name: Verify pwsh is available
+        run: pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+      - name: Unit tests
+        run: python3 -m unittest scripts/test_chocolatey_pack_push.py
+
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})
     runs-on: ${{ matrix.os }}
