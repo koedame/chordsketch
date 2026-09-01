@@ -24,6 +24,7 @@ import importlib.util
 import subprocess
 import sys
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -72,6 +73,20 @@ def _fake_channel(
         skip_reason=skip_reason,
         notes="",
     )
+
+
+# Trimmed shape of a `Packages(Id=…,Version=…)` entity response — only the
+# one property the checker reads, with the surrounding OData namespacing the
+# live feed emits.
+_CHOCOLATEY_ENTITY = (
+    '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n'
+    '<entry xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices">\n'
+    "  <m:properties>\n"
+    "    <d:Version>0.5.0</d:Version>\n"
+    "    <d:PackageStatus>{status}</d:PackageStatus>\n"
+    "  </m:properties>\n"
+    "</entry>\n"
+)
 
 
 # ---------------------------------------------------------------- manifest validation
@@ -484,6 +499,102 @@ end
             mock_http.call_args.args[0],
             "https://rubygems.org/api/v1/versions/chordsketch/latest.json",
         )
+
+    def test_chocolatey_approved_version_is_ok(self) -> None:
+        channel = _fake_channel(kind="chocolatey", package="chordsketch")
+        with patch(
+            "check_release_channels._http_get_text",
+            return_value=_CHOCOLATEY_ENTITY.format(status="Approved"),
+        ) as mock_http:
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertEqual(result.observed, "0.5.0")
+        self.assertIn("approved", result.detail)
+        self.assertEqual(
+            mock_http.call_args.args[0],
+            "https://community.chocolatey.org/api/v2/"
+            "Packages(Id='chordsketch',Version='0.5.0')",
+        )
+
+    def test_chocolatey_version_awaiting_moderation_is_ok(self) -> None:
+        # A version the repository accepted but no moderator has cleared
+        # yet must not read as a missed publish: the wait is measured in
+        # weeks (28 days for 0.2.1, 54 for 0.5.0 per their feed entries),
+        # and the push already did everything it can do.
+        channel = _fake_channel(kind="chocolatey", package="chordsketch")
+        with patch(
+            "check_release_channels._http_get_text",
+            return_value=_CHOCOLATEY_ENTITY.format(status="Submitted"),
+        ):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertEqual(result.observed, "0.5.0")
+        self.assertIn("awaiting moderation", result.detail)
+        self.assertIn("PackageStatus=Submitted", result.detail)
+
+    def test_chocolatey_absent_version_is_red_with_retry_command(self) -> None:
+        # 404 is the only state that means the push did not land, and it
+        # is the state a 403-warned release fan-out leaves behind. The
+        # detail has to name the way out, because nothing else in the
+        # release surfaces the miss.
+        channel = _fake_channel(kind="chocolatey", package="chordsketch")
+        error = urllib.error.HTTPError(
+            url="https://community.chocolatey.org/api/v2/"
+            "Packages(Id='chordsketch',Version='0.6.0')",
+            code=404,
+            msg="Not Found",
+            hdrs=None,  # type: ignore[arg-type]
+            fp=None,
+        )
+        with patch("check_release_channels._http_get_text", side_effect=error):
+            result = check_release_channels.verify_channel(
+                channel, "v0.6.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<absent>")
+        self.assertIn("does not hold 0.6.0", result.detail)
+        self.assertIn("chocolatey-retry.yml", result.detail)
+
+    def test_chocolatey_feed_error_is_distinct_from_absent(self) -> None:
+        # A feed that cannot be read says nothing about whether the push
+        # landed; reporting it as "<absent>" would send the maintainer to
+        # re-push a version that is already there.
+        channel = _fake_channel(kind="chocolatey", package="chordsketch")
+        error = urllib.error.HTTPError(
+            url="https://community.chocolatey.org/api/v2/"
+            "Packages(Id='chordsketch',Version='0.5.0')",
+            code=503,
+            msg="Service Unavailable",
+            hdrs=None,  # type: ignore[arg-type]
+            fp=None,
+        )
+        with patch("check_release_channels._http_get_text", side_effect=error):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<error>")
+        self.assertIn("Chocolatey feed error: HTTP 503", result.detail)
+
+    def test_chocolatey_missing_status_does_not_claim_approval(self) -> None:
+        # Silently defaulting to "approved" would state something the feed
+        # never said. The version is still on the repository, so the
+        # channel stays green while the detail admits what is unknown.
+        channel = _fake_channel(kind="chocolatey", package="chordsketch")
+        with patch(
+            "check_release_channels._http_get_text",
+            return_value="<feed><entry><m:properties/></entry></feed>",
+        ):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertIn("moderation state not reported", result.detail)
+        self.assertNotIn("approved", result.detail)
 
     def test_maven_central_match(self) -> None:
         # Maven groupId is `me.koeda` (reverse-DNS of the koeda.me

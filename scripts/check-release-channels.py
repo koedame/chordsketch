@@ -390,6 +390,78 @@ def _check_scoop_bucket(channel: Channel, version: str) -> CheckResult:
     return _compare(channel, version, observed)
 
 
+def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
+    # Asserts that the community repository *accepted* this version, not
+    # that a moderator approved it — approval is asynchronous and took 28
+    # days for 0.2.1 and 54 for 0.5.0 per their own feed entries. Rationale
+    # and the measurements behind it: ADR-0047.
+    #
+    # The v2 OData *entity* endpoint is what separates the two states: 200
+    # for any version the repository took (`PackageStatus` `Submitted`
+    # while it waits, `Approved` once it clears) and 404 for one that never
+    # landed. Same contract the publish action's pre-flight probe reads
+    # (.github/actions/chocolatey-pack-push/action.yml).
+    #
+    # `FindPackagesById()` is deliberately not used: it omits submitted
+    # versions (40 entries for `slack` on 2026-09-01 without the queued
+    # 4.52.155), so a rollup built on it would report a pushed release as
+    # missing for the whole moderation window.
+    #
+    # A red therefore means the push did not land — usually a `choco push`
+    # refused with 403 because an earlier version is still queued and
+    # blocks every newer push (#1852), which the release fan-out
+    # downgrades to a warning so one stalled channel of eight cannot fail
+    # a release. This rollup is the only other place that miss shows up.
+    url = (
+        "https://community.chocolatey.org/api/v2/"
+        f"Packages(Id='{channel.package}',Version='{version}')"
+    )
+    page = f"https://community.chocolatey.org/packages/{channel.package}/{version}"
+    try:
+        text = _http_get_text(url)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return CheckResult(
+                channel_id=channel.id,
+                ok=False,
+                # Distinct from `_error`'s "<error>": the feed answered,
+                # and its answer is that it does not hold this version.
+                observed="<absent>",
+                expected=version,
+                detail=(
+                    f"the Chocolatey Community Repository does not hold {version}. "
+                    "A push refused with HTTP 403 leaves this state (an earlier "
+                    "version still queued for moderation blocks every newer push, "
+                    "#1852); publish it with `gh workflow run chocolatey-retry.yml "
+                    f"-R koedame/chordsketch -f tag=v{version}` once the queue "
+                    f"clears. {page}"
+                ),
+            )
+        return _error(channel, version, f"Chocolatey feed error: HTTP {exc.code}")
+    except Exception as exc:  # noqa: BLE001
+        return _error(channel, version, f"Chocolatey feed error: {exc}")
+
+    # Narrow regex rather than an XML parser, matching `_check_maven_central`:
+    # the document is small, well-known and attacker-uncontrolled, and the
+    # regex carries no XXE surface.
+    match = re.search(r"<d:PackageStatus>([^<]*)</d:PackageStatus>", text)
+    if match is None:
+        # Do not assume "Approved" — say what is known (the version is on
+        # the repository) and what is not, rather than inventing a state.
+        moderation = "moderation state not reported by the feed"
+    elif match.group(1).strip() == "Approved":
+        moderation = "approved"
+    else:
+        moderation = f"awaiting moderation (PackageStatus={match.group(1).strip()})"
+    return CheckResult(
+        channel_id=channel.id,
+        ok=True,
+        observed=version,
+        expected=version,
+        detail=f"on the Chocolatey Community Repository, {moderation}: {page}",
+    )
+
+
 def _check_manual(channel: Channel, version: str) -> CheckResult:
     # Manual channels are never verified — they are only in the manifest for
     # paper-trail reasons. This function exists so the dispatcher below does
@@ -448,6 +520,7 @@ _DISPATCH: dict[str, Callable[[Channel, str], CheckResult]] = {
     "maven-central": _check_maven_central,
     "homebrew-tap": _check_homebrew_tap,
     "scoop-bucket": _check_scoop_bucket,
+    "chocolatey": _check_chocolatey,
     "manual": _check_manual,
 }
 

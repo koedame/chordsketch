@@ -182,15 +182,16 @@ notes = "Updated by .github/workflows/post-release.yml via PR to koedame/scoop-b
 [[channels]]
 id = "chocolatey"
 display = "Chocolatey — chordsketch"
-kind = "manual"
+kind = "chocolatey"
 package = "chordsketch"
 expected_version = "tag"
 required_secrets = ["CHOCOLATEY_API_KEY"]
 notes = """
 Published by post-release.yml update-chocolatey job on windows-latest.
-First publish will happen on the next release (v0.2.0 was published
-before the CHOCOLATEY_API_KEY secret was configured). kind = "manual"
-because no automated _check_chocolatey verifier exists yet.
+_check_chocolatey asserts that the community repository accepted the
+version, not that a moderator approved it: approval takes weeks, while
+a push that never landed (usually a 403 behind a moderation queue,
+#1852) is the failure the rollup exists to catch. See ADR-0047.
 """
 
 [[channels]]
