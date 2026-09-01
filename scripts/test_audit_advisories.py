@@ -233,7 +233,33 @@ class NeedsAttentionTest(unittest.TestCase):
         self.assertFalse(
             audit.needs_attention(
                 vulnerabilities=self.vulns,
-                inherited={("RUSTSEC-2026-0009", "time")},
+                inherited={("RUSTSEC-2026-0009", "time", "0.3.45")},
+                ignores=[],
+                ignore_problems=[],
+                mode="pr",
+            )
+        )
+
+    def test_on_a_pull_request_a_new_duplicate_resolved_version_needs_attention(self):
+        # The Rust resolver can leave two versions of the same crate in
+        # `Cargo.lock`. If the base branch already carries a vulnerable
+        # `time 0.3.45` and this PR's diff additionally pulls in a second,
+        # still-vulnerable `time 0.3.46` under the same advisory, that
+        # second occurrence is this PR's to answer for — it must not be
+        # collapsed into the inherited finding just because the advisory
+        # and package already matched something on the base branch.
+        vulns, _ = audit.parse_audit_report(
+            report(
+                [
+                    vulnerability("time", "0.3.45", "RUSTSEC-2026-0009"),
+                    vulnerability("time", "0.3.46", "RUSTSEC-2026-0009"),
+                ]
+            )
+        )
+        self.assertTrue(
+            audit.needs_attention(
+                vulnerabilities=vulns,
+                inherited={("RUSTSEC-2026-0009", "time", "0.3.45")},
                 ignores=[],
                 ignore_problems=[],
                 mode="pr",
@@ -244,7 +270,7 @@ class NeedsAttentionTest(unittest.TestCase):
         self.assertTrue(
             audit.needs_attention(
                 vulnerabilities=self.vulns,
-                inherited={("RUSTSEC-2026-0009", "time")},
+                inherited={("RUSTSEC-2026-0009", "time", "0.3.45")},
                 ignores=[],
                 ignore_problems=[],
                 mode="report",
@@ -307,7 +333,7 @@ class BuildReportTest(unittest.TestCase):
             )
         )
         text = self.build(
-            vulnerabilities=vulns, inherited={("RUSTSEC-2026-0194", "quick-xml")}, mode="pr"
+            vulnerabilities=vulns, inherited={("RUSTSEC-2026-0194", "quick-xml", "0.38.4")}, mode="pr"
         )
         added, inherited = text.split("<details>")
         self.assertIn("RUSTSEC-2026-0009", added)

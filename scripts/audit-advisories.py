@@ -57,11 +57,14 @@ class Finding:
     patched: str
 
     @property
-    def key(self) -> tuple[str, str]:
-        # Package included so the same advisory hitting two versions of the
-        # same crate (or being re-introduced elsewhere) is not silently
-        # collapsed into an inherited finding.
-        return (self.advisory_id, self.package)
+    def key(self) -> tuple[str, str, str]:
+        # Version included so a PR that pulls in a second, still-vulnerable
+        # resolved version of the same crate under the same advisory (a
+        # duplicate version in `Cargo.lock`, which the Rust resolver creates
+        # routinely) is not silently collapsed into an inherited finding
+        # just because an older vulnerable version of that crate already
+        # existed on the base branch.
+        return (self.advisory_id, self.package, self.version)
 
 
 @dataclass
