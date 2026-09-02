@@ -101,7 +101,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
-          shared-key: napi-${{ matrix.target }}
+          # The Linux cells compile and link against the napi-cross
+          # sysroot, so their C artifacts and build-script binaries are
+          # not interchangeable with the host-toolchain ones a cache
+          # keyed only by triple would hand back.
+          shared-key: napi-${{ matrix.target }}${{ contains(matrix.target, '-linux-gnu') && '-napi-cross' || '' }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Setup Node.js
@@ -140,20 +144,26 @@ jobs:
           args=(--release --manifest-path Cargo.toml --target "$TARGET")
           if [ -n "$NAPI_CROSS" ]; then
             args+=("$NAPI_CROSS")
-            # `--use-napi-cross` swaps the linker and CC but leaves the
-            # runner's own `/usr/lib` visible, so a `-sys` build script
-            # probes pkg-config, finds the *host's* copy of its C
-            # library, and emits a link flag the cross sysroot cannot
-            # satisfy. `libz-sys` does exactly that: pkg-config finds the
-            # runner's zlib and prints `-lz`, and the link then fails
-            # with `cannot find -lz`. Pointing pkg-config at a directory
-            # that does not exist makes every probe fail, so those crates
-            # fall back to compiling their C dependency from source with
-            # the cross toolchain — which is what the container gives
-            # `ruby.yml` and `kotlin.yml` for free (their artifacts carry
-            # no libz dependency either). Set here rather than in `env:`
-            # so it applies to no other target.
-            export PKG_CONFIG_LIBDIR=/nonexistent
+            # `--use-napi-cross` points the *linker* at the old
+            # sysroot and exports `TARGET_CC`, but the `cc` crate only
+            # honours `TARGET_CC` when the host and target triples
+            # differ. On the x86_64 cell they are identical, so
+            # `libz-sys`'s "is zlib installed?" probe compiles its smoke
+            # test with the runner's own gcc, links `-lz` against the
+            # runner's zlib, concludes zlib is present and emits
+            # `cargo:rustc-link-lib=z`. rustc then links with the cross
+            # gcc, whose sysroot has no libz, and the build dies with
+            # `cannot find -lz`. (The aarch64 cell escapes it: there the
+            # triples differ, the probe uses the cross gcc and fails, and
+            # zlib is built from source.)
+            #
+            # `LIBZ_SYS_STATIC=1` is the crate's documented way to skip
+            # the probe entirely and compile zlib from source, which is
+            # what the `cross` container makes `ruby.yml` and
+            # `kotlin.yml` do — their artifacts carry no libz dependency
+            # either. Exported here rather than declared in `env:` so it
+            # reaches no other target.
+            export LIBZ_SYS_STATIC=1
           fi
           napi build "${args[@]}"
 
