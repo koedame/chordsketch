@@ -1,3 +1,8 @@
+; Sister sites, same nodes in a different capture vocabulary:
+; queries/helix/highlights.scm (Helix) and
+; packages/zed-extension/languages/chordpro/highlights.scm (Zed).
+; A node rename in grammar.js has to be applied to all three.
+
 (comment) @comment
 
 ; Directives: {name} and {name: value}
