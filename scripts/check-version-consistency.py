@@ -46,8 +46,10 @@ Sources checked:
  14. `apps/desktop/src-tauri/Cargo.toml` — `package.version`
  15. `apps/desktop/src-tauri/tauri.conf.json` — top-level `"version"`
  16. `apps/desktop/package.json` — `version`
-     (CLI and GUI are always in lockstep; the three desktop manifests
-     must all agree with the workspace canonical.)
+ 17. `apps/desktop/preview-handler/Cargo.toml` — `package.version`
+     (CLI and GUI are always in lockstep; the four desktop manifests
+     must all agree with the workspace canonical. The preview handler
+     DLL ships inside the desktop installer, so it moves with it.)
 
 Each source is a (file, field, current_value) triple. The allowlist file has
 the same (file, field, current_value) shape plus a mandatory `tracking_issue`
@@ -467,7 +469,7 @@ def load_napi_platform_package_versions(repo_root: Path) -> list[Source]:
 
 
 def load_desktop_versions(repo_root: Path) -> list[Source]:
-    """Collect the three version fields the desktop Tauri app carries.
+    """Collect the four version fields the desktop Tauri app carries.
 
     The desktop crate lives under `apps/desktop/src-tauri/` (outside the
     `crates/` tree that `load_crate_versions` scans) and is kept in
@@ -477,7 +479,9 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
     `tauri.conf.json`'s `"version"`, which MUST agree with the Rust
     crate's `Cargo.toml` and with the Vite frontend's `package.json`
     (otherwise the shipped installer metadata diverges from the binary
-    it packages).
+    it packages). The Windows preview handler
+    (`apps/desktop/preview-handler/`) ships inside the same installer,
+    so its crate version is checked here too.
     """
     sources: list[Source] = []
 
@@ -520,6 +524,25 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
     if package_json.is_file():
         sources.append(
             load_package_json_version(repo_root, "apps/desktop/package.json")
+        )
+
+    preview_handler_toml = repo_root / "apps/desktop/preview-handler/Cargo.toml"
+    if preview_handler_toml.is_file():
+        try:
+            data = tomllib.loads(preview_handler_toml.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError as exc:
+            raise SystemExit(f"{preview_handler_toml}: invalid TOML: {exc}")
+        version = data.get("package", {}).get("version")
+        if not isinstance(version, str):
+            raise SystemExit(
+                f"{preview_handler_toml}: package.version is missing or not a string"
+            )
+        sources.append(
+            Source(
+                file="apps/desktop/preview-handler/Cargo.toml",
+                field="package.version",
+                value=version,
+            )
         )
 
     return sources

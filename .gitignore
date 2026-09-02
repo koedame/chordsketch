@@ -50,6 +50,11 @@ crates/napi/npm/*/package-lock.json
 
 # Tauri code-gen output
 apps/desktop/src-tauri/gen/
+# Preview handler DLL staged by
+# `apps/desktop/scripts/build-preview-handler.mjs` for
+# `tauri.windows.conf.json`'s `bundle.resources`. Rebuilt from
+# `apps/desktop/preview-handler/` on every Windows bundle.
+apps/desktop/src-tauri/windows/bin/
 
 # Tools
 .serena/
