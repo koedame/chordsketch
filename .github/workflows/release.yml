@@ -51,8 +51,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Every Linux target builds through `cross`, whose pinned
+          # container has an old sysroot. Building `x86_64-unknown-linux-gnu`
+          # natively on `ubuntu-latest` instead linked it against the
+          # runner's glibc 2.39, so the published archive installed
+          # cleanly and then failed to start on anything older (Ubuntu
+          # 22.04 / glibc 2.35 included). `scripts/check-glibc-floor.py`
+          # enforces this both here and on the built artifacts below.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+            cross: true
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             cross: true
@@ -102,6 +110,16 @@ jobs:
             cargo build --release --target ${{ matrix.target }} -p chordsketch -p chordsketch-lsp
           fi
         shell: bash
+
+      - name: Verify glibc floor
+        if: contains(matrix.target, '-linux-')
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          python3 scripts/check-glibc-floor.py --target "$TARGET" \
+            "target/${TARGET}/release/chordsketch" \
+            "target/${TARGET}/release/chordsketch-lsp"
 
       - name: Validate release tag
         # Route inputs.tag through env + format regex before any
