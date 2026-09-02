@@ -81,8 +81,8 @@ fixed by restoring the old sysroot, never by raising the constant.
 **Bottle the Homebrew formula.** Homebrew relocates and dependency-
 resolves bottles, so its own glibc 2.39 would be used instead of the
 host's. It fixes exactly one channel, requires standing up per-OS/arch
-bottle builds and an upload path, and leaves AUR, Flatpak, Snap and the
-plain `curl | tar` instructions in the README broken.
+bottle builds and an upload path, and leaves AUR, Flatpak, and Snap
+broken.
 
 **Ship musl in place of gnu.** The musl archives already work on every
 distribution tested. But this is a per-channel URL substitution — each
