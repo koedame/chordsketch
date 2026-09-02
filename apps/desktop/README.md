@@ -23,12 +23,15 @@ apps/desktop/
 │   ├── ChordProDesktopEditor.tsx # CodeMirror 6 + tree-sitter-chordpro editor (React)
 │   └── IrealGridEditor.tsx      # React wrapper around createIrealbEditor
 ├── dist/                        # gitignored; Vite build output
+├── preview-handler/             # Windows Explorer preview handler (its own crate)
 └── src-tauri/                   # Rust / Tauri app shell
     ├── Cargo.toml
     ├── tauri.conf.json          # beforeDev/beforeBuild = npm run dev|build
+    ├── tauri.windows.conf.json  # Windows-only: preview handler build + bundling
     ├── build.rs
     ├── capabilities/
     ├── icons/
+    ├── windows/                 # WiX fragment + NSIS hooks for the preview handler
     └── src/main.rs
 ```
 
@@ -194,12 +197,48 @@ The matching public key must be committed to
 value and re-cutting a release so clients re-pin to the new
 pubkey.
 
+## Windows preview handler
+
+`preview-handler/` is a separate crate that builds
+`chordsketch_preview_handler.dll`, an in-process COM server Explorer
+loads into its `prevhost.exe` surrogate to draw `.cho` / `.chopro` /
+`.crd` / `.chordpro` files in the preview pane. It renders through
+`chordsketch-render-html` and shows the result in a WebView2 control,
+so the pane matches this app's own preview.
+
+On a Windows bundle, `tauri.windows.conf.json` adds three things to the
+build:
+
+- `build.beforeBundleCommand` runs
+  `scripts/build-preview-handler.mjs`, which builds the crate for the
+  bundle's target triple and stages the DLL in
+  `src-tauri/windows/bin/` (gitignored).
+- `bundle.resources` installs it next to `ChordSketch.exe`.
+- `bundle.windows.wix.fragmentPaths` /
+  `bundle.windows.nsis.installerHooks` merge
+  `src-tauri/windows/preview-handler.wxs` and
+  `preview-handler.nsh`, which register and unregister the handler.
+  Each installer writes at its own scope — HKLM for the per-machine
+  MSI, HKCU for the per-user `.exe` — so the default installer needs
+  no administrator rights
+  ([ADR-0050](../../docs/adr/0050-windows-preview-handler-is-installer-registered.md)).
+
+macOS and Linux bundles are unaffected: the platform config is not
+merged there, and the crate compiles to an empty library off Windows.
+
+The registry layout, the build wiring, and how to verify the handler on
+a real machine are in
+[`preview-handler/README.md`](preview-handler/README.md).
+
 ## Workspace integration
 
-- `apps/desktop/src-tauri` is a workspace member but **excluded from
-  default workspace operations** via `default-members` in the root
-  `Cargo.toml`. Bare `cargo build` from the repo root does not touch
-  it, so contributors without the Tauri system libs are unaffected.
+- `apps/desktop/src-tauri` and `apps/desktop/preview-handler` are
+  workspace members but **excluded from default workspace operations**
+  via `default-members` in the root `Cargo.toml`. Bare `cargo build`
+  from the repo root does not touch them, so contributors without the
+  Tauri system libs (or, for the preview handler, without WebView2)
+  are unaffected. Both are still covered by CI's `--workspace` clippy /
+  test / doc jobs.
 - `@chordsketch/react`, `@chordsketch/ui-irealb-editor`, and
   `@chordsketch/wasm` are consumed via Vite `resolve.alias` and
   `tsconfig.paths` entries, mirroring the pattern used by

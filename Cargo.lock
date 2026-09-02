@@ -820,6 +820,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "chordsketch-preview-handler"
+version = "0.5.0"
+dependencies = [
+ "chordsketch-chordpro",
+ "chordsketch-render-html",
+ "raw-window-handle",
+ "windows",
+ "windows-core 0.61.2",
+ "wry",
+]
+
+[[package]]
 name = "chordsketch-render-html"
 version = "0.5.0"
 dependencies = [

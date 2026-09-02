@@ -1,0 +1,54 @@
+[package]
+name = "chordsketch-preview-handler"
+# Kept in lockstep with the SDK workspace version — see
+# `.github/workflows/ci.yml`'s `check-version-consistency` job and
+# `scripts/check-version-consistency.py`. The DLL ships inside the
+# desktop installer, so a release PR bumps this line together with
+# `apps/desktop/src-tauri/Cargo.toml` and the other desktop manifests.
+version = "0.5.0"
+edition.workspace = true
+rust-version.workspace = true
+# Application-layer license per CLAUDE.md §License Policy, matching
+# `chordsketch-desktop` — this DLL ships inside the same installer.
+license = "AGPL-3.0-only"
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Windows Explorer preview handler for ChordPro files"
+publish = false
+
+[lib]
+# In-process COM server loaded by `prevhost.exe`. `cargo test` still
+# builds a test harness from this target, which is how the
+# platform-independent `document` module gets covered on every CI
+# runner (see the `test` job in `.github/workflows/ci.yml`).
+crate-type = ["cdylib"]
+
+[dependencies]
+# The `document` module is deliberately NOT `cfg(windows)`-gated: it is
+# the whole rendering contract of this crate and the only part that can
+# be unit-tested off Windows. Keeping these two deps unconditional is
+# what makes the Linux / macOS CI cells compile and exercise it.
+chordsketch-chordpro = { path = "../../../crates/chordpro" }
+chordsketch-render-html = { path = "../../../crates/render-html" }
+
+[target.'cfg(windows)'.dependencies]
+# Versions match the ones Tauri already pins in `Cargo.lock` so the DLL
+# and the desktop binary share one copy of each crate in the tree.
+raw-window-handle = "0.6"
+# `windows::core::implement` expands to absolute `::windows_core::`
+# paths, so the crate behind that re-export has to be a direct
+# dependency as well.
+windows-core = "0.61"
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_UI_WindowsAndMessaging",
+] }
+# Same WebView2 embedding layer the desktop app itself runs on, so the
+# preview pane and the app render through one code path.
+wry = "0.55"
