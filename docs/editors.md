@@ -153,7 +153,7 @@ Then install the generated ZIP from **Settings** → **Plugins** →
 ## Helix
 
 ChordPro support in Helix requires manual configuration until the
-grammar is submitted upstream to helix-editor/helix.
+language is submitted upstream to helix-editor/helix.
 
 ### Prerequisites
 
@@ -170,17 +170,24 @@ Add to `~/.config/helix/languages.toml`:
 name = "chordpro"
 scope = "source.chordpro"
 file-types = ["cho", "chordpro", "chopro"]
-comment-token = "#"
+comment-tokens = "#"
+injection-regex = "chordpro|chopro"
+indent = { tab-width = 2, unit = "  " }
 language-servers = ["chordsketch-lsp"]
 
 [language-server.chordsketch-lsp]
 command = "chordsketch-lsp"
-args = ["--stdio"]
 
 [[grammar]]
 name = "chordpro"
 source = { git = "https://github.com/koedame/chordsketch", rev = "main", subpath = "packages/tree-sitter-chordpro" }
 ```
+
+This is the same entry proposed upstream, so the configuration keeps
+working unchanged once Helix ships ChordPro as a built-in language.
+
+`chordsketch-lsp` always speaks over stdio; the `--stdio` flag other
+editors pass is accepted but does nothing, so no `args` are needed here.
 
 > **Tip:** For reproducible builds, replace `rev = "main"` with a specific
 > commit hash (e.g. `rev = "404b0a9"`). Using `"main"` always fetches the
@@ -195,18 +202,22 @@ hx --grammar fetch
 hx --grammar build
 ```
 
-Copy the highlight queries to the Helix runtime:
+Copy the Helix highlight queries to the Helix runtime:
 
 ```bash
 mkdir -p ~/.config/helix/runtime/queries/chordpro
-cp packages/tree-sitter-chordpro/queries/highlights.scm \
+cp packages/tree-sitter-chordpro/queries/helix/highlights.scm \
    ~/.config/helix/runtime/queries/chordpro/highlights.scm
 ```
 
-Copy only `highlights.scm`. The grammar's `folds.scm` and `indents.scm`
-use nvim-treesitter's capture names (`@fold`, `@indent.zero`), which
-Helix does not read — it derives folds from the syntax tree itself and
-expects `@indent` / `@outdent` in its own `indents.scm`.
+Take the queries from `queries/helix/`, not from `queries/` one level
+up. The two directories cover the same grammar nodes but speak
+different capture vocabularies: `queries/` is written for
+nvim-treesitter (`@fold`, `@indent.zero`, `@embedded`), which Helix
+does not read. Helix derives folds from the syntax tree itself, and
+ChordPro is flat and line-oriented, so `queries/helix/` deliberately
+ships only `highlights.scm` — there is no construct that opens an
+indent level.
 
 ## Language Server (any editor)
 
