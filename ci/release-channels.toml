@@ -199,20 +199,35 @@ re-run chocolatey-retry.yml). See ADR-0049.
 [[channels]]
 id = "aur"
 display = "AUR — chordsketch"
-kind = "manual"
+kind = "aur"
 package = "chordsketch"
 expected_version = "tag"
 required_secrets = ["AUR_SSH_KEY"]
-notes = "Published by post-release.yml update-aur job via SSH push."
+notes = """
+Published by post-release.yml update-aur job via SSH push, which aurweb
+serves immediately — so the rollup's verdict is the usual binary, not
+Chocolatey's three (ADR-0049). _check_aur reads Version from the RPC v5
+info endpoint and strips the `[epoch:]`/`-pkgrel` decoration around
+pkgver before comparing, because PKGBUILD.template's pkgrel counts
+rebuilds of the same release rather than tracking the tag.
+"""
 
 [[channels]]
 id = "snap"
 display = "Snap Store — chordsketch"
-kind = "manual"
+kind = "snap"
 package = "chordsketch"
 expected_version = "tag"
 required_secrets = ["SNAP_STORE_TOKEN"]
-notes = "Published by post-release.yml update-snap job. Strict confinement."
+notes = """
+Published by post-release.yml update-snap job (`snapcraft upload
+--release=stable`). Strict confinement. _check_snap asserts the default
+track's stable channel, across every architecture the store serves it
+on, because that is what the README's `sudo snap install chordsketch`
+resolves to; candidate / beta / edge are ignored. The endpoint lists
+only revisions the store already serves, so there is no "accepted but
+unreleased" state to report and the verdict stays binary (ADR-0049).
+"""
 
 [[channels]]
 id = "nixpkgs"
@@ -292,15 +307,16 @@ separate build step is needed. See #1604.
 [[channels]]
 id = "cocoapods"
 display = "CocoaPods — ChordSketch"
-kind = "manual"
+kind = "cocoapods"
 package = "ChordSketch"
 expected_version = "tag"
 required_secrets = ["COCOAPODS_TRUNK_TOKEN"]
 notes = """
 Published by post-release.yml update-cocoapods job. First publish was
-done manually on 2026-04-15. kind = "manual" because no automated
-_check_cocoapods verifier exists yet — the rollup passes without
-querying the CocoaPods registry.
+done manually on 2026-04-15. _check_cocoapods reads the trunk API's
+versions array, whose last entry is the most recent push. `pod trunk
+push` registers a version synchronously, so — as everywhere except
+Chocolatey — the verdict is binary (ADR-0049).
 """
 
 # ---------------------------------------------------------------- language bindings
