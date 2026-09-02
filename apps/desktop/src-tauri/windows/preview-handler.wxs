@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Shell registration for the ChordPro preview handler DLL that ships
+  next to the app executable (`bundle.resources` in
+  `tauri.windows.conf.json`).
+
+  Merged into the MSI by `bundle.windows.wix.fragmentPaths`; the
+  `ChordSketchPreviewHandler` component group below is pulled into the
+  install by `bundle.windows.wix.componentGroupRefs`.
+
+  SISTER SITE: `preview-handler.nsh` writes the same layout for the
+  `.exe` (NSIS) installer. A value corrected here must be corrected
+  there in the same commit —
+  `apps/desktop/preview-handler/src/registration.rs` fails the build if
+  the two drift. The key layout and the rationale for registering from
+  the installer rather than from a `DllRegisterServer` export are
+  documented in `apps/desktop/preview-handler/README.md`.
+
+  Root="HKMU" resolves to HKLM here because Tauri's MSI template
+  declares `InstallScope="perMachine"`. That is the root Microsoft's
+  "How to Register a Preview Handler" prescribes for an all-users
+  install; the per-user `.exe` installer writes the same layout under
+  HKCU. Win64="yes" keeps the writes in the 64-bit registry view — the
+  DLL is a 64-bit in-process server and Explorer would not find it
+  under `Wow6432Node`.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <ComponentGroup Id="ChordSketchPreviewHandler">
+      <Component Id="ChordSketchPreviewHandlerRegistration"
+                 Guid="{BE8BAAB6-1C51-4B92-9B24-CFC374193B66}"
+                 Directory="INSTALLDIR"
+                 Win64="yes">
+
+        <!-- The COM class itself. AppID points at the 64-bit
+             prevhost.exe surrogate so the shell loads this DLL into
+             the isolated preview host, not into explorer.exe. -->
+        <RegistryKey Root="HKMU"
+                     Key="Software\Classes\CLSID\{32E65E30-8242-492F-9985-C7785BB38BC7}"
+                     ForceCreateOnInstall="yes"
+                     ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="ChordSketch ChordPro Preview Handler" KeyPath="yes" />
+          <RegistryValue Type="string" Name="AppID" Value="{6d2b5079-2f0b-48dd-ab7f-97cec514d30b}" />
+        </RegistryKey>
+        <RegistryKey Root="HKMU"
+                     Key="Software\Classes\CLSID\{32E65E30-8242-492F-9985-C7785BB38BC7}\InprocServer32"
+                     ForceCreateOnInstall="yes"
+                     ForceDeleteOnUninstall="yes">
+          <!-- [INSTALLDIR] already carries a trailing backslash. -->
+          <RegistryValue Type="string" Value="[INSTALLDIR]chordsketch_preview_handler.dll" />
+          <RegistryValue Type="string" Name="ThreadingModel" Value="Apartment" />
+        </RegistryKey>
+
+        <!-- One shellex subkey per ChordPro extension. The subkey name
+             is the IID of IPreviewHandler; its presence is what marks
+             the file type as previewable. -->
+        <RegistryKey Root="HKMU"
+                     Key="Software\Classes\.cho\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}"
+                     ForceCreateOnInstall="yes"
+                     ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="{32E65E30-8242-492F-9985-C7785BB38BC7}" />
+        </RegistryKey>
+        <RegistryKey Root="HKMU"
+                     Key="Software\Classes\.chopro\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}"
+                     ForceCreateOnInstall="yes"
+                     ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="{32E65E30-8242-492F-9985-C7785BB38BC7}" />
+        </RegistryKey>
+        <RegistryKey Root="HKMU"
+                     Key="Software\Classes\.crd\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}"
+                     ForceCreateOnInstall="yes"
+                     ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="{32E65E30-8242-492F-9985-C7785BB38BC7}" />
+        </RegistryKey>
+        <RegistryKey Root="HKMU"
+                     Key="Software\Classes\.chordpro\shellex\{8895b1c6-b41f-4c1c-a562-0d564250836f}"
+                     ForceCreateOnInstall="yes"
+                     ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="{32E65E30-8242-492F-9985-C7785BB38BC7}" />
+        </RegistryKey>
+
+        <!-- The approved list the shell enumerates registered preview
+             handlers from. -->
+        <RegistryValue Root="HKMU"
+                       Key="Software\Microsoft\Windows\CurrentVersion\PreviewHandlers"
+                       Name="{32E65E30-8242-492F-9985-C7785BB38BC7}"
+                       Type="string"
+                       Value="ChordSketch ChordPro Preview Handler" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

@@ -128,6 +128,8 @@ at post-release verification rather than before the tag is cut.
    - `apps/desktop/src-tauri/tauri.conf.json` — top-level `"version"`
      (drives the installer metadata users see in Finder / Explorer)
    - `apps/desktop/package.json` — `version`
+   - `apps/desktop/preview-handler/Cargo.toml` — `package.version`
+     (the Windows preview handler DLL ships inside the same installer)
 
    Hardcoded pins in CI:
    - `.github/workflows/readme-smoke.yml` ~line 204:

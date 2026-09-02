@@ -33,13 +33,18 @@ on:
       - "packages/npm-export/**"
       - "packages/tree-sitter-chordpro/**"
       - "packages/react/**"
-      # Only the three crates `chordsketch-desktop` depends on —
-      # `chordpro`, `render-html`, `render-pdf`. Changes to sibling
-      # crates (`lsp`, `ffi`, `napi`, `wasm`, `cli`,
+      # Only the three crates the desktop bundle depends on —
+      # `chordpro`, `render-html`, `render-pdf`. (`chordsketch-desktop`
+      # uses all three; `chordsketch-preview-handler`, which the
+      # Windows bundle also builds, uses the first two.) Changes to
+      # sibling crates (`lsp`, `ffi`, `napi`, `wasm`, `cli`,
       # `convert-musicxml`) never affect the desktop bundle, so they
       # MUST not trigger the 4-cell macOS/Windows/Linux matrix.
       # Extending this list requires a matching edit to
-      # `apps/desktop/src-tauri/Cargo.toml`'s `[dependencies]`.
+      # `apps/desktop/src-tauri/Cargo.toml`'s or
+      # `apps/desktop/preview-handler/Cargo.toml`'s `[dependencies]`.
+      # `apps/desktop/**` above already covers the preview handler's
+      # own sources and the installer fragments next to it.
       - "crates/chordpro/**"
       - "crates/render-html/**"
       - "crates/render-pdf/**"
@@ -59,13 +64,18 @@ on:
       - "packages/npm-export/**"
       - "packages/tree-sitter-chordpro/**"
       - "packages/react/**"
-      # Only the three crates `chordsketch-desktop` depends on —
-      # `chordpro`, `render-html`, `render-pdf`. Changes to sibling
-      # crates (`lsp`, `ffi`, `napi`, `wasm`, `cli`,
+      # Only the three crates the desktop bundle depends on —
+      # `chordpro`, `render-html`, `render-pdf`. (`chordsketch-desktop`
+      # uses all three; `chordsketch-preview-handler`, which the
+      # Windows bundle also builds, uses the first two.) Changes to
+      # sibling crates (`lsp`, `ffi`, `napi`, `wasm`, `cli`,
       # `convert-musicxml`) never affect the desktop bundle, so they
       # MUST not trigger the 4-cell macOS/Windows/Linux matrix.
       # Extending this list requires a matching edit to
-      # `apps/desktop/src-tauri/Cargo.toml`'s `[dependencies]`.
+      # `apps/desktop/src-tauri/Cargo.toml`'s or
+      # `apps/desktop/preview-handler/Cargo.toml`'s `[dependencies]`.
+      # `apps/desktop/**` above already covers the preview handler's
+      # own sources and the installer fragments next to it.
       - "crates/chordpro/**"
       - "crates/render-html/**"
       - "crates/render-pdf/**"
