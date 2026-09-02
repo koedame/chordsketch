@@ -38,6 +38,9 @@ KNOWN_KINDS = frozenset(
         "homebrew-tap",
         "scoop-bucket",
         "chocolatey",
+        "aur",
+        "snap",
+        "cocoapods",
         "manual",
     }
 )
