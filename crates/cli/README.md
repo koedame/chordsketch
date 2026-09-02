@@ -34,13 +34,18 @@ are available for the following targets:
 
 | Target triple | OS | Arch | Notes |
 |---|---|---|---|
-| `x86_64-unknown-linux-gnu` | Linux | x86_64 | glibc |
-| `aarch64-unknown-linux-gnu` | Linux | ARM64 | glibc |
+| `x86_64-unknown-linux-gnu` | Linux | x86_64 | glibc 2.18+ |
+| `aarch64-unknown-linux-gnu` | Linux | ARM64 | glibc 2.18+ |
 | `x86_64-unknown-linux-musl` | Linux | x86_64 | static (musl) |
 | `aarch64-unknown-linux-musl` | Linux | ARM64 | static (musl) |
 | `x86_64-apple-darwin` | macOS | Intel (x86_64) | — |
 | `aarch64-apple-darwin` | macOS | Apple Silicon (ARM64) | — |
 | `x86_64-pc-windows-msvc` | Windows | x86_64 | MSVC runtime |
+
+Every Linux archive is cross-compiled against an old sysroot so the gnu
+builds run on any distribution shipping glibc 2.18 or newer
+([ADR-0046](https://github.com/koedame/chordsketch/blob/main/docs/adr/0046-linux-release-binaries-target-an-old-glibc.md));
+the musl builds are statically linked and need no system glibc at all.
 
 For any other target, use `cargo install chordsketch`; the crate has no
 external build-time dependencies beyond a stable Rust toolchain.
