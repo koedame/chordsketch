@@ -310,7 +310,7 @@ const { output, loading, error } = useChordRender(
 it directly gives identical output you can place anywhere in your
 tree. It resolves to a **string** — the rendered HTML fragment or
 plain text — not to an AST. For AST-level custom rendering (React's
-`useChordproAst` / `renderChordproAst`), call `parse_chordpro` on
+`useChordproAst` / `renderChordproAst`), call `parseChordpro` on
 `@chordsketch/wasm` directly and walk the JSON yourself; the Vue
 package has no composable around it.
 

@@ -122,7 +122,7 @@ new operations as they are exposed:
 
 - **AST-direct parse + traversal**: the Rust crate exposes the AST
   as a host object graph, and `@chordsketch/wasm` exposes it as JSON
-  through `parse_chordpro` (which is what `@chordsketch/react`'s
+  through `parseChordpro` (which is what `@chordsketch/react`'s
   `useChordproAst` decodes). The NAPI and UniFFI bindings still
   expose the parser only via the `parse_and_render_*` one-shot. When
   AST projection lands there too, a `tasks/parse.md` page will be
