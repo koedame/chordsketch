@@ -285,9 +285,16 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
     row.appendChild(field('Quality', qualitySelect, minter));
     row.appendChild(customField);
 
-    // Bass note (optional). Single text input "X" / "X♭" / "" rather
-    // than a paired letter+accidental select to keep the row narrow;
-    // parses on every keystroke. Three input states matter:
+    // Bass (optional). Two controls writing the same value:
+    //
+    //   - the structured picker below ("None" + the seven note letters
+    //     + natural / sharp / flat), which is the primary affordance and
+    //     the one the ChordPro chord-editor footer offers;
+    //   - this free-form field, kept as the escape hatch for a bass the
+    //     picker cannot express (`ChordRoot.note` is a free string, so a
+    //     chart can carry a letter outside the seven).
+    //
+    // The field parses on every keystroke, and three input states matter:
     //
     //   - empty           -> bass cleared (`null`)
     //   - valid (A..G + optional accidental) -> ChordRoot assigned
@@ -301,11 +308,85 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
     const bassInput = el('input', {
       attrs: {
         type: 'text',
-        placeholder: '/X (optional)',
+        placeholder: 'G, F♯…',
         value: bc.chord.bass !== null ? formatBass(bc.chord.bass) : '',
       },
-      class: 'irealb-editor__input',
+      class: 'irealb-editor__input irealb-editor__popover-bassinput',
     });
+
+    const bassGroup = el('div', { class: 'irealb-editor__popover-bass' });
+    bassGroup.appendChild(
+      el('span', { class: 'irealb-editor__popover-basslabel', text: 'Bass' }),
+    );
+
+    const noteSeg = el('div', {
+      class: 'irealb-editor__seg',
+      attrs: { role: 'group', 'aria-label': 'Bass note' },
+    });
+    const noneBtn = el('button', { attrs: { type: 'button' }, text: 'None' });
+    noteSeg.appendChild(noneBtn);
+    const noteBtns = NOTE_LETTERS.map((letter) => {
+      const btn = el('button', { attrs: { type: 'button' }, text: letter });
+      noteSeg.appendChild(btn);
+      return { letter, btn };
+    });
+
+    const accSeg = el('div', {
+      class: 'irealb-editor__seg',
+      attrs: { role: 'group', 'aria-label': 'Bass accidental' },
+    });
+    const accBtns = ACCIDENTAL_OPTIONS.map((o) => {
+      const btn = el('button', {
+        attrs: { type: 'button', 'aria-label': `Bass ${o.value}` },
+        text: o.label,
+      });
+      accSeg.appendChild(btn);
+      return { value: o.value, btn };
+    });
+
+    /** Repaint the picker's pressed / inert state from the AST. */
+    const syncBassPicker = (): void => {
+      const pickable = pickableBass(bc.chord.bass);
+      noneBtn.setAttribute('aria-pressed', String(bc.chord.bass === null));
+      for (const { letter, btn } of noteBtns) {
+        btn.setAttribute('aria-pressed', String(pickable?.note === letter));
+      }
+      for (const { value, btn } of accBtns) {
+        btn.setAttribute(
+          'aria-pressed',
+          String(pickable !== null && pickable.accidental === value),
+        );
+        // The accidental belongs to a bass note; inert until the picker
+        // has one, so a click cannot invent a noteless bass.
+        btn.disabled = pickable === null;
+      }
+    };
+
+    /** Commit a picker choice to the AST and both halves of the control. */
+    const setBass = (next: ChordRoot | null): void => {
+      bc.chord.bass = next;
+      bassInput.value = next === null ? '' : formatBass(next);
+      bassInput.classList.remove('irealb-editor__input--invalid');
+      syncBassPicker();
+    };
+
+    listenChord(noneBtn, 'click', () => setBass(null));
+    for (const { letter, btn } of noteBtns) {
+      listenChord(btn, 'click', () => {
+        // Keep the chosen accidental when switching note; natural when
+        // there is no (expressible) bass yet.
+        const pickable = pickableBass(bc.chord.bass);
+        setBass({ note: letter, accidental: pickable?.accidental ?? 'natural' });
+      });
+    }
+    for (const { value, btn } of accBtns) {
+      listenChord(btn, 'click', () => {
+        const pickable = pickableBass(bc.chord.bass);
+        if (pickable === null) return;
+        setBass({ note: pickable.note, accidental: value });
+      });
+    }
+
     listenChord(bassInput, 'input', () => {
       const result = parseBassInput(bassInput.value);
       if (result === 'invalid') {
@@ -314,8 +395,16 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
       }
       bassInput.classList.remove('irealb-editor__input--invalid');
       bc.chord.bass = result;
+      // Typing is the other half of the same control: keep the chips in
+      // step, but do not rewrite what the user is still typing.
+      syncBassPicker();
     });
-    row.appendChild(field('Bass', bassInput, minter));
+
+    syncBassPicker();
+    bassGroup.appendChild(noteSeg);
+    bassGroup.appendChild(accSeg);
+    bassGroup.appendChild(field('/ Bass', bassInput, minter));
+    row.appendChild(bassGroup);
 
     // Beat position
     const posSelect = makeBeatPositionSelect(bc.position);
@@ -601,6 +690,19 @@ function makeDefaultBarChord(): BarChord {
     },
     position: { beat: 1, subdivision: 0 },
   };
+}
+
+/** Narrow a bass value to what the structured picker can express: a
+ * plain `A`..`G` letter plus an accidental. Returns `null` both for "no
+ * bass" and for a bass the picker cannot model — {@link ChordRoot}
+ * types `note` as a free string, so a chart can carry a note letter
+ * outside the seven the picker offers. Callers leave every chip
+ * unpressed in that case and the free-form field owns the value.
+ * Sister-site: `pickableBass` in
+ * `packages/react/src/ireal-bar-grid-popover.tsx`. */
+function pickableBass(bass: ChordRoot | null): ChordRoot | null {
+  if (bass === null) return null;
+  return (NOTE_LETTERS as ReadonlyArray<string>).includes(bass.note) ? bass : null;
 }
 
 /** Render `ChordRoot` as a string for the bass-input field. Inverse of

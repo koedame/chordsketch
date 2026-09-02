@@ -8,7 +8,7 @@
 
 import { describe, expect, test, vi } from 'vitest';
 import { createIrealbEditor, type IrealbWasm } from '../src/index';
-import type { Bar, IrealSong } from '../src/ast';
+import type { Bar, Chord, IrealSong } from '../src/ast';
 
 // A two-section, three-bar fixture so reorder, splice, and per-bar
 // targeting are all exercisable. Section A has two bars; section B
@@ -332,9 +332,9 @@ describe('bar-edit popover', () => {
     qualitySelect.value = 'custom';
     qualitySelect.dispatchEvent(new Event('change', { bubbles: true }));
 
-    // Custom input is the only text input inside this row (bass
-    // input is also text but has placeholder /X). Distinguish by
-    // placeholder.
+    // Custom input is the only text input inside this row that the
+    // `e.g.` placeholder matches (the bass field carries its own
+    // class instead). Distinguish by placeholder.
     const customInput = inputIn(row, 'input[placeholder^="e.g."]');
     expect(customInput.style.display).not.toBe('none');
     customInput.value = '7♯9';
@@ -356,7 +356,7 @@ describe('bar-edit popover', () => {
     const dialog = popoverOf(editor);
     const row = dialog.querySelector<HTMLElement>('[data-row-index="0"]');
     if (!row) throw new Error('first chord row not rendered');
-    const bassInput = inputIn(row, 'input[placeholder^="/X"]');
+    const bassInput = inputIn(row, 'input.irealb-editor__popover-bassinput');
     bassInput.value = 'G♭';
     bassInput.dispatchEvent(new Event('input', { bubbles: true }));
     clickButton(dialog, 'Save');
@@ -390,7 +390,7 @@ describe('bar-edit popover', () => {
     const dialog = popoverOf(editor);
     const row = dialog.querySelector<HTMLElement>('[data-row-index="0"]');
     if (!row) throw new Error('first chord row not rendered');
-    const bassInput = inputIn(row, 'input[placeholder^="/X"]');
+    const bassInput = inputIn(row, 'input.irealb-editor__popover-bassinput');
 
     // Garbage input — the input gains the invalid class; the AST
     // bass stays at G natural.
@@ -409,7 +409,7 @@ describe('bar-edit popover', () => {
     const dialog2 = popoverOf(editor);
     const row2 = dialog2.querySelector<HTMLElement>('[data-row-index="0"]');
     if (!row2) throw new Error('first chord row not rendered after reopen');
-    const bassInput2 = inputIn(row2, 'input[placeholder^="/X"]');
+    const bassInput2 = inputIn(row2, 'input.irealb-editor__popover-bassinput');
     bassInput2.value = 'A♭';
     bassInput2.dispatchEvent(new Event('input', { bubbles: true }));
     expect(bassInput2.classList.contains('irealb-editor__input--invalid')).toBe(false);
@@ -425,7 +425,7 @@ describe('bar-edit popover', () => {
     const dialog3 = popoverOf(editor);
     const row3 = dialog3.querySelector<HTMLElement>('[data-row-index="0"]');
     if (!row3) throw new Error('first chord row not rendered after second reopen');
-    const bassInput3 = inputIn(row3, 'input[placeholder^="/X"]');
+    const bassInput3 = inputIn(row3, 'input.irealb-editor__popover-bassinput');
     bassInput3.value = '';
     bassInput3.dispatchEvent(new Event('input', { bubbles: true }));
     clickButton(dialog3, 'Save');
@@ -595,5 +595,226 @@ describe('bar-edit popover', () => {
     expect(editor.element.querySelector('.irealb-editor__popover')).toBeNull();
 
     editor.element.remove();
+  });
+});
+
+describe('bar-edit popover — bass picker', () => {
+  // The structured picker is the primary slash-bass control; the
+  // free-form field beside it is the escape hatch. Sister-site (React):
+  // `packages/react/tests/ireal-bar-grid-popover.test.tsx`.
+
+  function editorWithBass(
+    wasm: ReturnType<typeof makeStubWasm>,
+    bass: Chord['bass'],
+  ): ReturnType<typeof createIrealbEditor> {
+    const seed: IrealSong = JSON.parse(JSON.stringify(SAMPLE_SONG));
+    const chord = seed.sections[0]?.bars[0]?.chords[0];
+    if (!chord) throw new Error('seed chord missing');
+    chord.chord.bass = bass;
+    return createIrealbEditor({
+      initialValue: `irealb://json:${encodeURIComponent(JSON.stringify(seed))}`,
+      wasm,
+    });
+  }
+
+  function firstRow(editor: ReturnType<typeof createIrealbEditor>): HTMLElement {
+    const row = popoverOf(editor).querySelector<HTMLElement>('[data-row-index="0"]');
+    if (!row) throw new Error('first chord row not rendered');
+    return row;
+  }
+
+  function seg(row: HTMLElement, label: string): HTMLElement {
+    const found = row.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+    if (!found) throw new Error(`segment "${label}" not in row`);
+    return found;
+  }
+
+  function noteChip(row: HTMLElement, text: string): HTMLButtonElement {
+    const btns = Array.from(seg(row, 'Bass note').querySelectorAll('button'));
+    const found = btns.find((b) => b.textContent?.trim() === text);
+    if (!found) throw new Error(`bass note chip "${text}" not in row`);
+    return found;
+  }
+
+  function accChip(row: HTMLElement, label: string): HTMLButtonElement {
+    const found = seg(row, 'Bass accidental').querySelector<HTMLButtonElement>(
+      `button[aria-label="${label}"]`,
+    );
+    if (!found) throw new Error(`bass accidental chip "${label}" not in row`);
+    return found;
+  }
+
+  function bassField(row: HTMLElement): HTMLInputElement {
+    return inputIn(row, 'input.irealb-editor__popover-bassinput');
+  }
+
+  test('None is pressed and the accidental chips are inert without a bass', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    bar(editor, 0).click();
+    const row = firstRow(editor);
+    expect(noteChip(row, 'None').getAttribute('aria-pressed')).toBe('true');
+    expect(seg(row, 'Bass note').querySelectorAll('button[aria-pressed="true"]').length).toBe(1);
+    for (const label of ['Bass natural', 'Bass sharp', 'Bass flat']) {
+      expect(accChip(row, label).disabled).toBe(true);
+    }
+
+    editor.destroy();
+  });
+
+  test('an existing slash bass lights up its note and accidental', () => {
+    const wasm = makeStubWasm();
+    const editor = editorWithBass(wasm, { note: 'G', accidental: 'flat' });
+
+    bar(editor, 0).click();
+    const row = firstRow(editor);
+    expect(noteChip(row, 'G').getAttribute('aria-pressed')).toBe('true');
+    expect(noteChip(row, 'None').getAttribute('aria-pressed')).toBe('false');
+    expect(accChip(row, 'Bass flat').getAttribute('aria-pressed')).toBe('true');
+    expect(accChip(row, 'Bass flat').disabled).toBe(false);
+
+    editor.destroy();
+  });
+
+  test('choosing a note commits a natural bass on Save', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    bar(editor, 0).click();
+    noteChip(firstRow(editor), 'G').click();
+    clickButton(popoverOf(editor), 'Save');
+
+    expect(readSong(editor).sections[0]?.bars[0]?.chords[0]?.chord.bass).toEqual({
+      note: 'G',
+      accidental: 'natural',
+    });
+
+    editor.destroy();
+  });
+
+  test('switching the note keeps the chosen accidental', () => {
+    const wasm = makeStubWasm();
+    const editor = editorWithBass(wasm, { note: 'G', accidental: 'flat' });
+
+    bar(editor, 0).click();
+    noteChip(firstRow(editor), 'A').click();
+    clickButton(popoverOf(editor), 'Save');
+
+    expect(readSong(editor).sections[0]?.bars[0]?.chords[0]?.chord.bass).toEqual({
+      note: 'A',
+      accidental: 'flat',
+    });
+
+    editor.destroy();
+  });
+
+  test('choosing an accidental rewrites the bass in place', () => {
+    const wasm = makeStubWasm();
+    const editor = editorWithBass(wasm, { note: 'G', accidental: 'natural' });
+
+    bar(editor, 0).click();
+    accChip(firstRow(editor), 'Bass sharp').click();
+    clickButton(popoverOf(editor), 'Save');
+
+    expect(readSong(editor).sections[0]?.bars[0]?.chords[0]?.chord.bass).toEqual({
+      note: 'G',
+      accidental: 'sharp',
+    });
+
+    editor.destroy();
+  });
+
+  test('None clears the slash bass to null', () => {
+    const wasm = makeStubWasm();
+    const editor = editorWithBass(wasm, { note: 'G', accidental: 'natural' });
+
+    bar(editor, 0).click();
+    noteChip(firstRow(editor), 'None').click();
+    clickButton(popoverOf(editor), 'Save');
+
+    expect(readSong(editor).sections[0]?.bars[0]?.chords[0]?.chord.bass).toBeNull();
+
+    editor.destroy();
+  });
+
+  test('picking a note fills the free-form field with the same value', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    bar(editor, 0).click();
+    const row = firstRow(editor);
+    noteChip(row, 'G').click();
+    accChip(row, 'Bass flat').click();
+    expect(bassField(row).value).toBe('G♭');
+
+    editor.destroy();
+  });
+
+  test('typing a bass in the free-form field lights up the matching chips', () => {
+    const wasm = makeStubWasm();
+    const editor = createIrealbEditor({ initialValue: SAMPLE_URL, wasm });
+
+    bar(editor, 0).click();
+    const row = firstRow(editor);
+    const field = bassField(row);
+    field.value = 'F#';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(noteChip(row, 'F').getAttribute('aria-pressed')).toBe('true');
+    expect(accChip(row, 'Bass sharp').getAttribute('aria-pressed')).toBe('true');
+    expect(noteChip(row, 'None').getAttribute('aria-pressed')).toBe('false');
+
+    editor.destroy();
+  });
+
+  test('a bass note the picker cannot express leaves every chip unpressed', () => {
+    // `ChordRoot.note` is a free string, so a chart can carry a note
+    // letter outside the seven the picker offers. The chips must not
+    // claim it — the free-form field owns the value, and a Save that
+    // does not touch the bass leaves the AST untouched.
+    const wasm = makeStubWasm();
+    const editor = editorWithBass(wasm, { note: 'H', accidental: 'natural' });
+
+    bar(editor, 0).click();
+    const row = firstRow(editor);
+    expect(seg(row, 'Bass note').querySelector('button[aria-pressed="true"]')).toBeNull();
+    for (const label of ['Bass natural', 'Bass sharp', 'Bass flat']) {
+      expect(accChip(row, label).disabled).toBe(true);
+    }
+    expect(bassField(row).value).toBe('H');
+
+    clickButton(popoverOf(editor), 'Save');
+    expect(readSong(editor).sections[0]?.bars[0]?.chords[0]?.chord.bass).toEqual({
+      note: 'H',
+      accidental: 'natural',
+    });
+
+    editor.destroy();
+  });
+
+  test('invalid free-form input leaves the chips on the committed bass', () => {
+    // The three-valued parse path is preserved: garbage does not touch
+    // the AST, so the picker keeps showing the bass that is actually
+    // saved rather than following the rejected text.
+    const wasm = makeStubWasm();
+    const editor = editorWithBass(wasm, { note: 'G', accidental: 'natural' });
+
+    bar(editor, 0).click();
+    const row = firstRow(editor);
+    const field = bassField(row);
+    field.value = 'ZZZ';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(field.classList.contains('irealb-editor__input--invalid')).toBe(true);
+    expect(noteChip(row, 'G').getAttribute('aria-pressed')).toBe('true');
+
+    clickButton(popoverOf(editor), 'Save');
+    expect(readSong(editor).sections[0]?.bars[0]?.chords[0]?.chord.bass).toEqual({
+      note: 'G',
+      accidental: 'natural',
+    });
+
+    editor.destroy();
   });
 });
