@@ -1,4 +1,4 @@
-# 0048. The Chocolatey channel reports pending as its own verdict
+# 0049. The Chocolatey channel reports pending as its own verdict
 
 - **Status**: Accepted
 - **Date**: 2026-09-01
