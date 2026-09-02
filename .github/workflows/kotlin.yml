@@ -66,7 +66,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
-          shared-key: kotlin-x86_64-unknown-linux-gnu
+          # This cell links against `cross`'s sysroot now rather than the
+          # runner's own toolchain, so its objects and build-script
+          # binaries are not interchangeable with what a key naming only
+          # the triple last held. The aarch64 cell below is unaffected —
+          # it has always built through `cross`.
+          shared-key: kotlin-x86_64-unknown-linux-gnu-cross
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build

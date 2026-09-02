@@ -181,10 +181,11 @@ runner's gcc, finds the runner's copy, and emits `-lz` — which the
 cross gcc then cannot resolve against its own sysroot. `napi.yml`
 therefore sets `LIBZ_SYS_STATIC=1` on those cells so zlib is compiled
 from source, which is what the container makes the other two workflows
-do anyway: their artifacts carry no libz dependency either. For the same
-reason the Linux cells get their own `rust-cache` namespace — objects
-linked against the old sysroot are not interchangeable with
-host-toolchain ones. A container gets that isolation for nothing; this
+do anyway: their artifacts carry no libz dependency either. Every Linux cell whose toolchain
+this decision changes also gets a new `rust-cache` namespace, in all
+three workflows — objects and build-script binaries produced against an
+old sysroot are not interchangeable with host-toolchain ones, and a key
+naming only the target triple hands them back across the change. A container gets that isolation for nothing; this
 is what it costs to keep one `napi build` invocation across all five
 cells.
 

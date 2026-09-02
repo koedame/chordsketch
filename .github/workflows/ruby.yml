@@ -66,7 +66,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
-          shared-key: ruby-x86_64-unknown-linux-gnu
+          # This cell links against `cross`'s sysroot now rather than the
+          # runner's own toolchain, so its objects and build-script
+          # binaries are not interchangeable with what a key naming only
+          # the triple last held.
+          shared-key: ruby-x86_64-unknown-linux-gnu-cross
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
@@ -140,7 +144,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
-          shared-key: ruby-${{ matrix.target }}
+          # Only the aarch64 cell changed toolchain (apt
+          # `gcc-aarch64-linux-gnu` to `cross`), so only it needs a new
+          # namespace; the macOS and Windows cells keep theirs.
+          shared-key: ruby-${{ matrix.target }}${{ matrix.cross && '-cross' || '' }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
