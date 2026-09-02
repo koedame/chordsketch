@@ -2179,6 +2179,49 @@
 .chordsketch-sheet__content .chord-block-inline-diagram {
   line-height: 1;
 }
+/* Inline diagrams (ADR-0051): centre each compact diagram on the lyric
+   position its chord marks, instead of aligning the diagram's left edge
+   there. A compact diagram is much wider than the syllable it annotates
+   (63px vs an 18px kana for the vertical guitar layout), so left-edge
+   alignment leaves the whole diagram hanging to the right of the note it
+   belongs to.
+
+   The shift is `translateX(-50%)` — half the diagram's OWN width — so:
+
+   - it is a paint-time transform: the cell keeps its box in flow, so every
+     `.chord-block` width and every `.lyrics` position is byte-identical to
+     the left-aligned layout. The lyric line reads exactly as before, and
+     the per-segment caret / drag code that measures the `.lyrics` rect is
+     untouched. (Cross-axis `align-items: center` on the chord-block moves
+     the lyric as well as the diagram, which is why it is not used here.)
+   - every diagram shifts by the same fraction of its own width, so the
+     gaps between neighbouring diagrams are preserved: two diagrams can
+     never collide, whatever the instrument (the keyboard layout is 136px
+     wide, the fretted ones 63px) or the syllable widths under them.
+
+   What the diagram centres on is the lyric segment's START — the character
+   the chord is attached to — not the segment's midpoint. For the
+   one-chord-per-syllable case that motivated this the two coincide within
+   half a character; for a long segment (`[C]antidis...`) the diagram stays
+   over the note the chord marks rather than drifting into the middle of the
+   word.
+
+   Scoped to `inline` mode (the walker adds `.line--inline-diagrams` only
+   when `diagrams.mode === 'inline'`): a chord NAME is narrow enough that
+   its left edge already marks the position, and hover mode keeps the name
+   as text, so neither layout is affected. */
+.chordsketch-sheet__content .line--inline-diagrams {
+  /* Leading gutter for the half-diagram that now overhangs the start of
+     the line. The pane clips at its padding box, so without this the first
+     diagram on every (possibly wrapped) row is cut off. The default covers
+     the widest compact diagram this package can render — the keyboard's
+     136px, i.e. a 68px overhang; a host that only renders fretted diagrams
+     (63px wide, 31.5px overhang) can tighten it. */
+  padding-left: var(--cs-inline-diagram-overhang, 4.5rem);
+}
+.chordsketch-sheet__content .line--inline-diagrams .chord-block-inline-diagram {
+  transform: translateX(-50%);
+}
 .chordsketch-sheet__content .chord-block-inline-diagram .chordsketch-diagram,
 .chordsketch-sheet__content .chord-block-inline-diagram .chord-diagram {
   display: block;
