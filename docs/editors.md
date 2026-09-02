@@ -153,7 +153,9 @@ Then install the generated ZIP from **Settings** → **Plugins** →
 ## Helix
 
 ChordPro support in Helix requires manual configuration until the
-language is submitted upstream to helix-editor/helix.
+language entry proposed upstream
+([helix-editor/helix#16232](https://github.com/helix-editor/helix/pull/16232))
+is merged and ships in a Helix release.
 
 ### Prerequisites
 
@@ -183,8 +185,9 @@ name = "chordpro"
 source = { git = "https://github.com/koedame/chordsketch", rev = "main", subpath = "packages/tree-sitter-chordpro" }
 ```
 
-This is the same entry proposed upstream, so the configuration keeps
-working unchanged once Helix ships ChordPro as a built-in language.
+This is the entry proposed upstream — which pins `rev` to a commit
+instead of tracking `main` — so the configuration keeps working unchanged
+once Helix ships ChordPro as a built-in language.
 
 `chordsketch-lsp` always speaks over stdio; the `--stdio` flag other
 editors pass is accepted but does nothing, so no `args` are needed here.
