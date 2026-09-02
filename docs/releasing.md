@@ -1106,6 +1106,18 @@ succeeded:
 gh workflow run chocolatey-retry.yml -R koedame/chordsketch -f tag=vX.Y.Z
 ```
 
+The annotation is no longer the only thing that notices. The daily
+`release-verify.yml` rollup asks the Chocolatey v2 feed about the released
+version and reports one of three states, so a `403` that nobody read at
+release time surfaces on the next sweep with this same dispatch command in
+its failure detail ([ADR-0049](adr/0049-chocolatey-rollup-reports-pending-as-its-own-verdict.md)):
+
+| Rollup row | Meaning | What to do |
+|---|---|---|
+| `✅ OK` | installable via `choco install` | nothing |
+| `⏳ PENDING` | pushed, waiting on community moderation (28-54 days per release) | nothing — no action here can clear it |
+| `❌ FAIL` | the repository does not have it | run the dispatch above once the queue drains |
+
 This re-runs only the pack-and-push steps and does not re-trigger the
 other 7 post-release jobs (AUR, Flathub, Snap, CocoaPods, Homebrew,
 Scoop, Swift), avoiding duplicate side effects.

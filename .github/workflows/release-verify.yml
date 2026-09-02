@@ -2,7 +2,10 @@ name: Release verify
 
 # Post-release channel rollup — queries every distribution registry and turns
 # red if any channel is stale, missing, or its public-visibility contract is
-# broken. Mirrors the "Input-side env guard" pattern (check-env-secrets.py) by
+# broken. A channel that has accepted the release but not yet published it to
+# users reports PENDING instead, which stays green (ADR-0047).
+#
+# Mirrors the "Input-side env guard" pattern (check-env-secrets.py) by
 # closing the loop on the output side: if a publish job was silently skipped
 # due to a missing environment, its channel shows up red here instead of
 # silently succeeding at release time.
@@ -213,6 +216,7 @@ jobs:
             echo "| Channel | Status | Observed | Expected |"
             echo "|---|---|---|---|"
             any_fail=0
+            any_pending=0
             for f in verify-results/*.txt; do
               [ -f "$f" ] || continue
               first=$(head -n1 "$f")
@@ -220,14 +224,25 @@ jobs:
               channel=$(echo "$first" | awk '{print $2}')
               observed=$(echo "$first" | grep -oE 'observed=[^ ]+' | cut -d= -f2- || echo "?")
               expected=$(echo "$first" | grep -oE 'expected=[^ ]+' | cut -d= -f2- || echo "?")
-              icon="✅"
-              if [ "$status" != "OK" ]; then
-                icon="❌"
-                any_fail=1
-              fi
+              # Three verdicts, not two. PENDING is a channel that took the
+              # release but has not published it yet (Chocolatey community
+              # moderation, ADR-0047). Rendering it as ✅ would claim the
+              # release is installable while it is not; rendering it as ❌
+              # would hold a red open for the 28-54 days approval takes,
+              # with no action available to clear it. It gets its own row
+              # and leaves the job green.
+              case "$status" in
+                OK)      icon="✅" ;;
+                PENDING) icon="⏳"; any_pending=1 ;;
+                *)       icon="❌"; any_fail=1 ;;
+              esac
               echo "| $channel | $icon $status | \`$observed\` | \`$expected\` |"
             done
             echo ""
+            if [ "$any_pending" = "1" ]; then
+              echo "⏳ PENDING — the channel accepted this version but has not published it to users yet. See the job log for the per-channel detail line."
+              echo ""
+            fi
             echo "_Tag: \`$TAG\` — verified by [.github/workflows/release-verify.yml](../blob/main/.github/workflows/release-verify.yml)._"
           } > /tmp/channel-verification.md
           cat /tmp/channel-verification.md
