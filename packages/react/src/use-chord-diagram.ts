@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { initWasm } from './wasm-init';
+
 // Narrow WASM surface this hook touches. Kept structural so the
 // React package does not drag the WASM glue into its type graph —
 // the module is dynamically imported at runtime. Keep in sync with
 // `tests/helpers/*` stubs that simulate this module.
 interface DiagramRenderer {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   /**
    * Returns the SVG for the given chord+instrument pair, or
    * `null` / `undefined` when the built-in voicing database has no
@@ -215,7 +218,7 @@ export function useChordDiagram(
       try {
         if (rendererRef.current === null) {
           const mod = await loaderRef.current();
-          await mod.default();
+          await initWasm(mod);
           if (cancelled) return;
           rendererRef.current = mod;
         }
@@ -389,7 +392,7 @@ export function useChordDiagramPitches(
       try {
         if (rendererRef.current === null) {
           const mod = await loaderRef.current();
-          await mod.default();
+          await initWasm(mod);
           if (cancelled) return;
           rendererRef.current = mod;
         }

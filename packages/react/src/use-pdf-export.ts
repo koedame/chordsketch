@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
+import { initWasm } from './wasm-init';
+
 // The PDF / PNG renderer surface lives in the SEPARATE
 // `@chordsketch/wasm-export` package (~10 MB raw / ~6.4 MB
 // gzipped), not the lean `@chordsketch/wasm` (~400 KB raw / ~175
@@ -20,7 +22,8 @@ import { useCallback, useRef, useState } from 'react';
 // the contract with the WASM API is still explicit at the
 // boundary.
 interface PdfRenderer {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   render_pdf: (input: string) => Uint8Array;
   render_pdf_with_options: (
     input: string,
@@ -135,7 +138,7 @@ export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportRe
   // completes all await the SAME underlying load — otherwise the
   // second caller's `rendererRef.current === null` check wins its
   // race with the first caller's `await loaderRef.current()` and
-  // triggers a second `loader()` + `mod.default()` invocation.
+  // triggers a second `loader()` + init invocation.
   // `useRef` is appropriate (not `useState`) because the value is
   // plain cache that does not need to drive re-renders.
   const rendererPromiseRef = useRef<Promise<PdfRenderer> | null>(null);
@@ -159,20 +162,13 @@ export function usePdfExport(loader: WasmLoader = defaultLoader): UsePdfExportRe
       setError(null);
       try {
         if (rendererPromiseRef.current === null) {
-          // `init()` is a no-op on the Node.js build of
-          // `@chordsketch/wasm-export` (the module auto-loads in
-          // Node) and required on the browser build. Calling it
-          // unconditionally keeps the hook runtime-agnostic. The
-          // Node build still exports `default` as a no-op init
-          // stub — see
-          // `packages/npm-export/node/chordsketch_wasm.js`.
-          // If a future `@chordsketch/wasm-export` refactor drops
-          // that export, this call will throw on Node and the
-          // hook will surface the error via `error` state on
-          // first use.
+          // `initWasm` runs the browser build's init and skips it on
+          // the Node build, which instantiates at require time and
+          // exports no init function
+          // (`packages/npm-export/node/chordsketch_wasm.js`).
           rendererPromiseRef.current = (async () => {
             const mod = await loaderRef.current();
-            await mod.default();
+            await initWasm(mod);
             return mod;
           })();
           // If the load rejects, clear the cached promise so a

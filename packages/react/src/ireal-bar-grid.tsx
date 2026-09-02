@@ -35,13 +35,15 @@ import {
   defaultConfirmDeleteSection,
 } from './ireal-bar-grid-section-prompt';
 import { useAnnouncer } from './use-announcer';
+import { initWasm } from './wasm-init';
 
 // Narrow subset of `@chordsketch/wasm` this component touches.
 // Defined structurally so the wasm glue does not enter the React
 // bundle's type graph. Mirrors the parse/serialise stub in
 // `tests/helpers/wasm-stub.ts`.
 interface IrealBarGridWasm {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   parseIrealb: (input: string) => string;
   serializeIrealb: (json: string) => string;
 }
@@ -219,7 +221,7 @@ export function IrealBarGrid({
       try {
         if (wasmRef.current === null) {
           const mod = await loaderRef.current();
-          await mod.default();
+          await initWasm(mod);
           if (cancelled) return;
           wasmRef.current = mod;
         }

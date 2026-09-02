@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { initWasm } from './wasm-init';
+
 // Narrow subset of the `@chordsketch/wasm` module surface this hook
 // touches. The actual module is dynamically imported at runtime.
 interface IrealRenderer {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   renderIrealSvg: (input: string) => string;
 }
 
@@ -65,7 +68,7 @@ export function useIrealRender(
       try {
         if (rendererRef.current === null) {
           const mod = await loaderRef.current();
-          await mod.default();
+          await initWasm(mod);
           rendererRef.current = mod;
           if (cancelled) return;
         }
