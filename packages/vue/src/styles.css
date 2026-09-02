@@ -14,9 +14,10 @@
  * renderer is what stops this file from becoming a hand-maintained
  * copy of it.
  *
- * Sister site: `packages/react/src/styles.css` carries the same
- * component rules for the React bindings (the two surfaces share the
- * class vocabulary, so a visual change to one belongs in both — see
+ * Sister sites: `packages/react/src/styles.css` and
+ * `packages/svelte/src/styles.css` carry the same component rules for
+ * the React and Svelte bindings (the three surfaces share the class
+ * vocabulary, so a visual change to one belongs in all three — see
  * .claude/rules/fix-propagation.md). Design-system tokens are read
  * through the `--cs-*` namespace with inline fallbacks, so hosts
  * that ship `design-system/tokens.css` (or the React stylesheet's

@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`@chordsketch/svelte@0.1.0` — Svelte 5 bindings for the ChordPro
+  surface.** `<ChordSheet>`, `<ChordTextarea>`, `<ChordDiagram>`,
+  `<Transpose>` and `<PdfExport>`, plus the `useChordRender` /
+  `useChordDiagram` / `usePdfExport` / `useTranspose` /
+  `useDebounced` rune helpers behind them, with the same prop names,
+  defaults and class vocabulary as `@chordsketch/react`. Svelte 5.0+
+  is a peer dependency (the components are written with runes);
+  `@chordsketch/wasm-export` is an optional peer used only by
+  `<PdfExport>`. `<ChordSheet format="html">` renders the
+  static-output HTML surface (`render_html_body`) and injects
+  `render_html_css` rewritten so every rule is scoped to the
+  component's own wrapper, leaving the host page untouched. Ships as
+  preprocessed `.svelte` sources plus generated declarations via
+  `svelte-package`; CSS at `@chordsketch/svelte/styles.css`;
+  published manually per
+  [ADR-0008](docs/adr/0008-npm-publishing-is-local.md).
+
 - **`@chordsketch/vue@0.1.0` — Vue 3 bindings for the ChordPro
   surface.** `<ChordSheet>`, `<ChordTextarea>`, `<ChordDiagram>`,
   `<Transpose>` and `<PdfExport>`, plus the `useChordRender` /
