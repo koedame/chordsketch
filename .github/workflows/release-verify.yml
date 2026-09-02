@@ -3,7 +3,7 @@ name: Release verify
 # Post-release channel rollup — queries every distribution registry and turns
 # red if any channel is stale, missing, or its public-visibility contract is
 # broken. A channel that has accepted the release but not yet published it to
-# users reports PENDING instead, which stays green (ADR-0047).
+# users reports PENDING instead, which stays green (ADR-0049).
 #
 # Mirrors the "Input-side env guard" pattern (check-env-secrets.py) by
 # closing the loop on the output side: if a publish job was silently skipped
@@ -226,7 +226,7 @@ jobs:
               expected=$(echo "$first" | grep -oE 'expected=[^ ]+' | cut -d= -f2- || echo "?")
               # Three verdicts, not two. PENDING is a channel that took the
               # release but has not published it yet (Chocolatey community
-              # moderation, ADR-0047). Rendering it as ✅ would claim the
+              # moderation, ADR-0049). Rendering it as ✅ would claim the
               # release is installable while it is not; rendering it as ❌
               # would hold a red open for the 28-54 days approval takes,
               # with no action available to clear it. It gets its own row
