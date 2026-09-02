@@ -18,6 +18,18 @@ import { type Page, expect, test } from '@playwright/test';
 //      popover floats free, so it uses the full-size diagram"). A compact
 //      SVG, or the absolutely-positioned popover collapsing to the
 //      trigger's ~10px inline width, makes the diagram unreadable (~0px).
+//   4. `{diagrams: inline}` — the compact diagram must be centred on the
+//      lyric position its chord marks (ADR-0051) WITHOUT moving the lyric
+//      itself. Both halves are pure layout: the centring is a paint-time
+//      transform no unit test can see, and the earlier attempt at this
+//      (cross-axis `align-items: center`, reverted) silently pulled every
+//      narrow `.lyrics` segment away from the segment before it.
+//   5. `{diagrams: inline}` — the leading gutter that clears the first
+//      diagram's overhang (ADR-0051) must shift the WHOLE song, not just
+//      `.line--inline-diagrams` elements. A gutter scoped to individual
+//      lines leaves `.comment` / `.section-label` siblings flush at the
+//      original margin while every lyric line shifts right, producing a
+//      jagged left edge — a layout property only a real browser can see.
 //
 // Per `.claude/rules/playground-smoke.md` these are exactly the "in-process
 // suites are blind to the integration" cases that require a real-browser
@@ -83,6 +95,119 @@ test.describe('inline / hover compact chord diagrams (ADR-0027)', () => {
     for (const w of chipWidths) {
       expect(w).toBeLessThan(contentWidth * 0.5);
     }
+
+    expect(errors).toEqual([]);
+  });
+
+  test('{diagrams: inline}: the diagram is centred on its lyric position and the lyric flow is untouched', async ({
+    page,
+  }) => {
+    // ADR-0051. Two properties, both invisible to jsdom:
+    //
+    //   (a) each compact diagram's horizontal centre sits on the lyric
+    //       position its chord marks — the start of the chord-bearing
+    //       segment. The pre-ADR-0051 layout put the diagram's LEFT EDGE
+    //       there, i.e. its centre half a diagram (~31px for the vertical
+    //       guitar layout) to the right of the note.
+    //   (b) the lyric line still reads as one continuous run: consecutive
+    //       segments stay flush, and every block keeps the width it had
+    //       when the diagram was left-aligned. The reverted `align-items:
+    //       center` attempt failed exactly here — it centred BOTH children
+    //       of the chord-block column, so a segment narrower than the
+    //       diagram was pushed ~13px away from the segment before it.
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+
+    await page.goto('chordpro/', { waitUntil: 'networkidle' });
+    await setSource(page, ['{diagrams: inline}', 'Hello [C]world and [G]more'].join('\n'));
+
+    await expect(page.locator('.chord-block-inline-diagram svg').first()).toBeVisible();
+
+    const geometry = await page.locator('.line--inline-diagrams').first().evaluate((line) => {
+      const blocks = Array.from(line.querySelectorAll(':scope > .chord-block'));
+      return {
+        lyrics: blocks.map((b) => {
+          const r = b.querySelector(':scope > .lyrics')!.getBoundingClientRect();
+          return { left: r.left, right: r.right };
+        }),
+        // Per chord-bearing block: how far the diagram's centre sits from
+        // the left edge of the lyric segment it annotates.
+        centreOffsets: blocks.flatMap((b) => {
+          const svg = b.querySelector('.chord-block-inline-diagram svg');
+          const lyric = b.querySelector(':scope > .lyrics');
+          if (!svg || !lyric) return [];
+          const s = svg.getBoundingClientRect();
+          return [(s.left + s.right) / 2 - lyric.getBoundingClientRect().left];
+        }),
+      };
+    });
+
+    // (a) centred on the lyric position. The 2px tolerance absorbs
+    // sub-pixel rounding only; the regression measures ~31px.
+    expect(geometry.centreOffsets.length).toBeGreaterThanOrEqual(2);
+    for (const offset of geometry.centreOffsets) {
+      expect(Math.abs(offset)).toBeLessThanOrEqual(2);
+    }
+
+    // (b) the lyric run is continuous — every segment starts where the
+    // previous one ended.
+    expect(geometry.lyrics.length).toBeGreaterThanOrEqual(3);
+    for (let i = 1; i < geometry.lyrics.length; i += 1) {
+      expect(Math.abs(geometry.lyrics[i].left - geometry.lyrics[i - 1].right)).toBeLessThanOrEqual(
+        1,
+      );
+    }
+
+    // The leading gutter must be wide enough that the overhanging half of
+    // the first diagram is not clipped by the preview pane, which clips at
+    // its padding box.
+    const clearance = await page.evaluate(() => {
+      const svg = document.querySelector('.line--inline-diagrams .chord-block-inline-diagram svg');
+      const pane = document.querySelector('.chordsketch-sheet__content');
+      if (!svg || !pane) return null;
+      return svg.getBoundingClientRect().left - pane.getBoundingClientRect().left;
+    });
+    expect(clearance).not.toBeNull();
+    expect(clearance!).toBeGreaterThanOrEqual(0);
+
+    expect(errors).toEqual([]);
+  });
+
+  test('{diagrams: inline}: the leading gutter keeps comments and section labels aligned with lyric lines', async ({
+    page,
+  }) => {
+    // ADR-0051's leading gutter (`--cs-inline-diagram-overhang`) clears the
+    // first diagram's left overhang. An earlier version put the gutter's
+    // `padding-left` on each `.line--inline-diagrams` individually, which
+    // shifted every lyric line right while leaving `.comment` /
+    // `.section-label` — siblings of `.line` that never carry that class —
+    // flush at the original margin, producing a jagged left edge. The
+    // gutter now lives on the `.song` root (`song--diagrams-inline`) so
+    // every body element shifts together.
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+
+    await page.goto('chordpro/', { waitUntil: 'networkidle' });
+    await setSource(
+      page,
+      ['{diagrams: inline}', '{comment: Verse}', 'Hello [C]world'].join('\n'),
+    );
+
+    await expect(page.locator('.chord-block-inline-diagram svg').first()).toBeVisible();
+
+    const leftEdges = await page.evaluate(() => {
+      const comment = document.querySelector('.chordsketch-sheet__content .comment');
+      const line = document.querySelector('.chordsketch-sheet__content .line--inline-diagrams');
+      if (!comment || !line) return null;
+      return {
+        comment: comment.getBoundingClientRect().left,
+        line: line.getBoundingClientRect().left,
+      };
+    });
+    expect(leftEdges).not.toBeNull();
+    // The regression measures the comment ~72px (the default gutter) to
+    // the left of the line; a 1px tolerance absorbs sub-pixel rounding only.
+    expect(Math.abs(leftEdges!.comment - leftEdges!.line)).toBeLessThanOrEqual(1);
 
     expect(errors).toEqual([]);
   });
