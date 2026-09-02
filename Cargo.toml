@@ -24,10 +24,10 @@ members = [
 # dedicated `desktop-smoke` job, and the cross-platform matrix tracked
 # by #2077 owns the full release build. Both crates are still `members`,
 # so the `--workspace` clippy / test / doc jobs cover them: everything
-# in `preview-handler` outside its platform-independent `document`
-# module is `cfg(windows)`-gated, so it compiles to an empty crate on
-# the Linux and macOS cells and to the real COM server on the Windows
-# one.
+# in `preview-handler` outside its platform-independent `document` and
+# `registration` modules is `cfg(windows)`-gated, so it compiles to a
+# COM-free crate on the Linux and macOS cells and to the real COM
+# server on the Windows one.
 #
 # Maintenance note: when you add a new member under `crates/*`, add it
 # to BOTH `members` above AND to `default-members` below, otherwise

@@ -232,8 +232,8 @@ impl IOleWindow_Impl for ChordProPreviewHandler_Impl {
     }
 }
 
-/// Drain the shell's stream, stopping one byte past the preview size
-/// limit.
+/// Drain the shell's stream, stopping at most one [`READ_CHUNK_BYTES`]
+/// chunk past the preview size limit.
 ///
 /// The cap is what keeps a stray multi-gigabyte file from being pulled
 /// into the preview host's address space; [`decode_source`] turns the
