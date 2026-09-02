@@ -4888,23 +4888,45 @@ export function renderChordproAst(
   // modifiers (`top` / `bottom` / `below`) only need the section
   // to carry `data-position` and the wrapper class.
   //
-  // The modifier is meaningful ONLY when the end-of-song diagram grid
-  // is actually emitted — i.e. `section` mode (the grid is gated on
-  // `mode === 'section'` above). Every `song--diagrams-*` rule in the
-  // stylesheet exists to position that grid section (`-bottom` pins it
-  // with `margin-top: auto` under a column-flex parent; `-right` lays
-  // it out as a sticky two-column flex). In `inline` / `hover` mode
-  // there is no grid and no wrapper sibling, so applying the modifier
+  // The `song--diagrams-${position}` modifier is meaningful ONLY when
+  // the end-of-song diagram grid is actually emitted — i.e. `section`
+  // mode (the grid is gated on `mode === 'section'` above). Every
+  // `song--diagrams-{top,bottom,right,below}` rule in the stylesheet
+  // exists to position that grid section (`-bottom` pins it with
+  // `margin-top: auto` under a column-flex parent; `-right` lays it
+  // out as a sticky two-column flex). In `inline` / `hover` mode there
+  // is no grid and no wrapper sibling, so applying one of those four
   // would flip `.song` to `display: flex; flex-direction: column` with
   // a single child group — turning every body element (lines, sections,
   // and the top-level `{key}` / `{tempo}` `.meta-inline` chips) into an
   // independent flex-column item that stacks vertically / stretches to
   // full width. `position` defaults to `bottom`, so without this gate
   // an inline/hover song silently picks up `song--diagrams-bottom`.
-  const songClass =
+  //
+  // `song--diagrams-inline` (ADR-0051) is a separate, always-safe
+  // modifier: it carries only the leading-gutter `padding-left` that
+  // clears the first line's overhanging compact diagram (see
+  // `.line--inline-diagrams .chord-block-inline-diagram`'s
+  // `translateX(-50%)` in styles.css). Applying the gutter to the
+  // `.song` root — instead of to each `.line--inline-diagrams`
+  // individually — shifts EVERY body element (lyric lines, section
+  // labels, comments) by the same amount, so they stay aligned with
+  // each other. Scoping the padding per-line left `.section-label` /
+  // `.comment` flush at the original margin while every `.line` shifted
+  // right by the gutter, producing a jagged left edge on any song that
+  // mixes lyric lines with section headers or comments under
+  // `{diagrams: inline}`.
+  const songClass = [
+    'song',
     diagramsState?.visible && diagramsState.mode === 'section'
-      ? `song song--diagrams-${diagramsState.position}`
-      : 'song';
+      ? `song--diagrams-${diagramsState.position}`
+      : null,
+    diagramsState?.visible && diagramsState.mode === 'inline'
+      ? 'song--diagrams-inline'
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   if (rightSection !== null) {
     // Right-column layout. `.song__body` is a single flex item

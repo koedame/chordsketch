@@ -73,6 +73,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Inline chord diagrams (`{diagrams: inline}`) are now centred on the lyric
+  position their chord marks in the React preview (`@chordsketch/react`),
+  instead of having their left edge aligned there. A compact diagram is far
+  wider than the syllable beneath it (63px against an 18px kana for the
+  vertical guitar layout, 136px for the keyboard one), so left-edge alignment
+  left the whole diagram hanging to the right of the note it belongs to. Each
+  chord cell is shifted half its own width, which paints the diagram over the
+  note while leaving every chord-block width and every lyric position exactly
+  as they were — the lyric line reads as one continuous run, and the
+  per-segment caret / drag positioning is untouched. Because every diagram
+  moves by the same fraction of its own width, diagrams cannot collide on any
+  instrument. The whole song carries a leading gutter
+  (`--cs-inline-diagram-overhang`, default `4.5rem`) for the half-diagram that
+  now overhangs the start of its leftmost line, so lyric lines, section
+  labels, and comments all shift together and stay aligned; a host that only
+  renders fretted diagrams can tighten it. Chord-name (`section`) and `hover`
+  output is unchanged. Verified in a real browser by
+  `tests-e2e/diagrams-inline-hover.spec.ts`. (#2741,
+  [ADR-0051](docs/adr/0051-inline-chord-diagrams-centre-on-the-lyric-position.md))
+
 - `packaging/macports/Portfile`'s `cargo.crates` block is now
   byte-identical to what MacPorts' canonical
   [`cargo2port`](https://ports.macports.org/port/cargo2port/) generates:
