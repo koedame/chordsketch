@@ -1,0 +1,7 @@
+node_modules
+dist
+# svelte-package stages the build here before copying it to dist/
+.svelte-kit
+coverage
+*.tsbuildinfo
+bun.lock

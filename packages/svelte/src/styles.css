@@ -1,5 +1,5 @@
 /*
- * @chordsketch/vue — component stylesheet.
+ * @chordsketch/svelte — component stylesheet.
  *
  * Rules here are minimal defaults designed to be easily overridden
  * by consumer CSS. Every selector uses the `chordsketch-*` prefix
@@ -15,8 +15,8 @@
  * copy of it.
  *
  * Sister sites: `packages/react/src/styles.css` and
- * `packages/svelte/src/styles.css` carry the same component rules for
- * the React and Svelte bindings (the three surfaces share the class
+ * `packages/vue/src/styles.css` carry the same component rules for
+ * the React and Vue bindings (the three surfaces share the class
  * vocabulary, so a visual change to one belongs in all three — see
  * .claude/rules/fix-propagation.md). Design-system tokens are read
  * through the `--cs-*` namespace with inline fallbacks, so hosts
