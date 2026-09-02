@@ -18,6 +18,11 @@ Exits 0 on success, 1 on any failure (registry error, version mismatch,
 visibility contract broken). Prints a single-line status to stdout followed
 by any diagnostic lines on stderr.
 
+The status word is `OK`, `FAIL`, or `PENDING`. `PENDING` means the channel
+accepted the release but has not published it yet — a state only Chocolatey's
+community moderation produces (ADR-0049). It exits 0, because no action here
+can clear it, and the rollup renders it as its own row rather than as a pass.
+
 Stdlib only — no external deps. HTTP goes through urllib with an explicit
 15s timeout and a named User-Agent so registry rate limiters can identify
 us if we misbehave.
@@ -48,13 +53,31 @@ USER_AGENT = "chordsketch-release-verify (+https://github.com/koedame/chordsketc
 
 @dataclass(frozen=True)
 class CheckResult:
-    """Outcome of a single channel verification."""
+    """Outcome of a single channel verification.
+
+    `ok` answers "may the rollup stay green for this channel", which is not
+    the same question as "has the release arrived". A channel that has
+    handed the release to a third party who has not published it yet is
+    neither: it sets `pending`, reporting OK-for-exit-status while the
+    status column says PENDING rather than claiming a converged channel.
+    Only Chocolatey needs it today (ADR-0049) — every other registry
+    publishes synchronously, so for them `pending` is never set and the
+    verdict stays the binary it always was.
+    """
 
     channel_id: str
     ok: bool
     observed: str  # what we found on the registry (or "<error>")
     expected: str  # what the tag said we should find
     detail: str  # human-readable one-line summary
+    pending: bool = False  # accepted upstream, not yet available to users
+
+    @property
+    def status(self) -> str:
+        """Machine-readable status word — the first column the rollup parses."""
+        if self.pending:
+            return "PENDING"
+        return "OK" if self.ok else "FAIL"
 
 
 # ---------------------------------------------------------------- HTTP helpers
@@ -390,6 +413,126 @@ def _check_scoop_bucket(channel: Channel, version: str) -> CheckResult:
     return _compare(channel, version, observed)
 
 
+# NuGet v2 servers represent an unlisted package by publishing it at this
+# sentinel instant rather than by a separate flag; Chocolatey uses it for a
+# version that is on the repository but still queued for moderation.
+_NUGET_UNLISTED_PUBLISHED = "1900-01-01"
+
+
+def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
+    """Verify Chocolatey, which has three states where other channels have two.
+
+    A version can sit *on* the Community Repository without being
+    installable: community moderation gates publication, and it took 28
+    days for 0.2.1 and 54 for 0.5.0 (`Created` vs `PackageApprovedDate` on
+    their own feed entries). So this checker reports three verdicts —
+    OK / PENDING / FAIL — instead of folding the middle one into either
+    neighbour. Rationale and measurements: ADR-0049.
+
+    One probe answers all three: the v2 OData *entity* endpoint,
+    `Packages(Id='<package>',Version='<version>')`. It addresses a single
+    version directly, so unlike the collection endpoints it cannot paginate
+    and cannot return a partial answer.
+
+    - 404 — the repository does not hold the version (FAIL).
+    - 200 with `Published` at the NuGet unlisted sentinel — held but not
+      published to users (PENDING).
+    - 200 with a real `Published` date — installable (OK).
+
+    `Published` is the signal because it is the one that tracks what a user
+    can actually install. The obvious alternatives do not:
+
+    - `IsApproved` / `PackageStatus` report `false` / `Exempted` for
+      versions that skip moderation review and are fully installable
+      (`slack` 4.51.185, measured 2026-09-01). Keying the verdict to either
+      reports a live release as stuck in moderation forever, and
+      `PackageStatus` is an open enum besides.
+    - `FindPackagesById()`, the feed `choco install` reads, applies
+      `$filter` *after* paging: `Version eq '1.0.0'` for `slack` returns an
+      empty first page and only yields the (listed, approved) version on
+      page 3. Any package with more than one page of versions would have
+      its published release reported as missing.
+
+    A FAIL therefore means the push did not land — typically a `choco push`
+    refused with 403 because an earlier version is still queued and blocks
+    every newer push (#1852), which the release fan-out downgrades to a
+    warning so one stalled channel of eight cannot fail a release. This
+    rollup is the only other place that miss shows up.
+    """
+    page = f"https://community.chocolatey.org/packages/{channel.package}/{version}"
+    entity = (
+        "https://community.chocolatey.org/api/v2/"
+        f"Packages(Id='{channel.package}',Version='{version}')"
+    )
+    try:
+        text = _http_get_text(entity)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return CheckResult(
+                channel_id=channel.id,
+                ok=False,
+                # Distinct from `_error`'s "<error>": the feed answered,
+                # and its answer is that it does not hold this version.
+                observed="<absent>",
+                expected=version,
+                detail=(
+                    f"the Chocolatey Community Repository does not hold {version}. "
+                    "A push refused with HTTP 403 leaves this state (an earlier "
+                    "version still queued for moderation blocks every newer push, "
+                    "#1852); publish it with `gh workflow run chocolatey-retry.yml "
+                    f"-R koedame/chordsketch -f tag=v{version}` once the queue "
+                    f"clears. {page}"
+                ),
+            )
+        return _error(channel, version, f"Chocolatey feed error: HTTP {exc.code}")
+    except Exception as exc:  # noqa: BLE001
+        return _error(channel, version, f"Chocolatey feed error: {exc}")
+
+    # Narrow regexes rather than an XML parser, matching `_check_maven_central`:
+    # the document is small, well-known and attacker-uncontrolled, and the
+    # regex carries no XXE surface.
+    published = re.search(r"<d:Published[^>]*>([^<]*)</d:Published>", text)
+    if published is None:
+        # The verdict depends on this field, so a feed that stopped emitting
+        # it must not be guessed at in either direction.
+        return _error(
+            channel,
+            version,
+            f"Chocolatey feed did not report Published for {version}: {entity}",
+        )
+
+    status = re.search(r"<d:PackageStatus>([^<]*)</d:PackageStatus>", text)
+    # Reported for the human triaging the row, never used as the verdict.
+    reported = status.group(1).strip() if status is not None else "not reported by the feed"
+
+    if published.group(1).strip().startswith(_NUGET_UNLISTED_PUBLISHED):
+        return CheckResult(
+            channel_id=channel.id,
+            ok=True,
+            pending=True,
+            observed=version,
+            expected=version,
+            detail=(
+                f"accepted by the Chocolatey Community Repository but not yet "
+                f"installable — awaiting community moderation "
+                f"(PackageStatus={reported}). Nothing to do here: approval is a "
+                f"Chocolatey moderator's action and has taken 28-54 days per "
+                f"release. {page}"
+            ),
+        )
+
+    return CheckResult(
+        channel_id=channel.id,
+        ok=True,
+        observed=version,
+        expected=version,
+        detail=(
+            f"published and installable from the Chocolatey Community Repository "
+            f"(PackageStatus={reported}): {page}"
+        ),
+    )
+
+
 def _check_manual(channel: Channel, version: str) -> CheckResult:
     # Manual channels are never verified — they are only in the manifest for
     # paper-trail reasons. This function exists so the dispatcher below does
@@ -448,6 +591,7 @@ _DISPATCH: dict[str, Callable[[Channel, str], CheckResult]] = {
     "maven-central": _check_maven_central,
     "homebrew-tap": _check_homebrew_tap,
     "scoop-bucket": _check_scoop_bucket,
+    "chocolatey": _check_chocolatey,
     "manual": _check_manual,
 }
 
@@ -511,7 +655,7 @@ def main() -> int:
     force_stale = bool(args.force_stale) and args.force_stale == channel.id
     result = verify_channel(channel, args.tag, force_stale)
 
-    status = "OK" if result.ok else "FAIL"
+    status = result.status
     # Ordering matters: the release-verify rollup (.github/workflows/release-verify.yml)
     # reads `head -n1 result.txt` and parses `<status> <channel_id>
     # expected=… observed=…`. Previously `detail:` was written to stderr;

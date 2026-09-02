@@ -37,6 +37,7 @@ KNOWN_KINDS = frozenset(
         "maven-central",
         "homebrew-tap",
         "scoop-bucket",
+        "chocolatey",
         "manual",
     }
 )
