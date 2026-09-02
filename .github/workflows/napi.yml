@@ -140,6 +140,20 @@ jobs:
           args=(--release --manifest-path Cargo.toml --target "$TARGET")
           if [ -n "$NAPI_CROSS" ]; then
             args+=("$NAPI_CROSS")
+            # `--use-napi-cross` swaps the linker and CC but leaves the
+            # runner's own `/usr/lib` visible, so a `-sys` build script
+            # probes pkg-config, finds the *host's* copy of its C
+            # library, and emits a link flag the cross sysroot cannot
+            # satisfy. `libz-sys` does exactly that: pkg-config finds the
+            # runner's zlib and prints `-lz`, and the link then fails
+            # with `cannot find -lz`. Pointing pkg-config at a directory
+            # that does not exist makes every probe fail, so those crates
+            # fall back to compiling their C dependency from source with
+            # the cross toolchain — which is what the container gives
+            # `ruby.yml` and `kotlin.yml` for free (their artifacts carry
+            # no libz dependency either). Set here rather than in `env:`
+            # so it applies to no other target.
+            export PKG_CONFIG_LIBDIR=/nonexistent
           fi
           napi build "${args[@]}"
 

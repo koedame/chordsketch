@@ -172,6 +172,18 @@ artifact check measures the result either way. `cross` stays the
 mechanism for `ruby.yml` and `kotlin.yml`, whose builds *are* plain
 `cargo build` and where `kotlin.yml` was already using it.
 
+The price of `--use-napi-cross` is that it swaps the toolchain without
+isolating the environment: the runner's `/usr/lib` stays visible, so a
+`-sys` build script can probe pkg-config, find the host's copy of its C
+library and emit a link flag the sysroot cannot satisfy. `libz-sys` does
+this, and the link fails with `cannot find -lz`. `napi.yml` therefore
+points `PKG_CONFIG_LIBDIR` at a nonexistent directory for those cells,
+which makes such crates compile their C dependency from source with the
+cross toolchain — the same outcome the container produces for the other
+two workflows, whose artifacts carry no libz dependency either. A
+container gets that isolation for nothing; this is what it costs to keep
+one `napi build` invocation across all five cells.
+
 **Assert the binding workflows' configuration in `ci.yml` as well.**
 The workflow mode of `check-glibc-floor.py` reads `release.yml`'s build
 matrix and asserts `cross: true` on every Linux row. There is no
