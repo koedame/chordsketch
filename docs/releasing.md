@@ -215,6 +215,14 @@ at post-release verification rather than before the tag is cut.
    #     ADR-0029). Independent of @chordsketch/wasm; versions on its own
    #     cadence (same manual-publish pattern as the other scoped packages).
    cd packages/react-ui && npm run build && npm publish && cd ../..
+
+   # 7f. @chordsketch/react (React component library). Versions on its
+   #     own cadence, like the other framework packages.
+   cd packages/react && npm run build && npm publish && cd ../..
+
+   # 7g. @chordsketch/vue (Vue 3 component library). Same shape as
+   #     @chordsketch/react and versioned on its own cadence.
+   cd packages/vue && npm run build && npm publish && cd ../..
    ```
 
    `npm whoami` should print `unchidev` before any publish; if not,
@@ -226,6 +234,8 @@ at post-release verification rather than before the tag is cut.
    npm view @chordsketch/wasm version          # should show X.Y.Z
    npm view @chordsketch/wasm-export version    # should show X.Y.Z
    npm view @chordsketch/react-ui version       # should show X.Y.Z
+   npm view @chordsketch/react version          # should show X.Y.Z
+   npm view @chordsketch/vue version            # should show X.Y.Z
    npm view tree-sitter-chordpro version        # should show X.Y.Z
    npm view @chordsketch/node version          # should show X.Y.Z
    for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
