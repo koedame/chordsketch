@@ -37,12 +37,9 @@ construct opens an indent level. Copy the file that matches your editor,
 not the other one: see
 [`docs/editors.md`](https://github.com/koedame/chordsketch/blob/main/docs/editors.md).
 
-Every query directly under `queries/` is compiled against the generated
-parser in CI (`.github/workflows/tree-sitter.yml`), so a query referencing
-a node type that `grammar.js` no longer produces fails the build.
-`queries/helix/highlights.scm` is not yet covered by that check — the
-workflow globs `queries/*.scm`, which does not recurse into per-editor
-subdirectories — pending a follow-up PR that extends it (see #1607).
+Every query under `queries/` is compiled against the generated parser in CI
+(`.github/workflows/tree-sitter.yml`), so a query referencing a node type
+that `grammar.js` no longer produces fails the build.
 
 ## Usage
 
