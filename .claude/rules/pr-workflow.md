@@ -3,8 +3,8 @@
 ## Automated Flow (default)
 
 PRs are reviewed automatically; **merging defaults to a human
-action**. An AI assistant MAY enqueue the merge under explicit
-session permission and additional safeguards — see
+action**. An AI assistant MAY perform the merge under maintainer
+authorization and additional safeguards — see
 [ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md)
 and the "Bot-driven merge: conditional permission" section
 below.
@@ -25,8 +25,8 @@ below.
    and a link to an existing tracker. The default is "fix it in this PR."
 6. **Ready for merge** — when the review converges to zero findings,
    Claude posts a single summary comment stating "Ready for merge." If the
-   user has granted per-session merge permission and the four conditions in
-   the "Bot-driven merge: conditional permission" section below are met,
+   four conditions in the "Bot-driven merge: conditional permission"
+   section below are met — the first of them being maintainer authorization —
    Claude squash-merges directly via `gh pr merge --squash`. Otherwise, a
    human inspects the full check rollup (not just the required checks
    listed in branch protection) and performs the squash merge.
@@ -83,10 +83,24 @@ the bot-merge rationale and
 [ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md) for
 why condition (4) is a direct squash and not a merge-queue enqueue.
 
-1. **Explicit, current-session permission.** The user has stated
-   in the active session that the assistant may merge. Standing
-   memory entries from earlier sessions do NOT count — the grant
-   is per-session and explicit.
+1. **Authorization to merge.** The maintainer has authorized the
+   merge in one of three forms:
+
+   - **Authorization granted with the work unit.** The maintainer
+     granted merge authority when handing over a self-contained
+     unit of work — including the configured run of a
+     maintainer-operated automation. The grant covers the PRs the
+     assistant opens as part of that work unit.
+   - **A named PR.** The work unit names the PR to be merged.
+   - **Explicit permission in the active session.** The maintainer
+     states in the session that the assistant may merge.
+
+   Authorization is never inferred and never carried over.
+   A grant from an earlier session, from a different work unit, or
+   from a standing memory entry does NOT authorize this merge, and
+   permission to merge one PR says nothing about any other PR.
+   When no form applies, post "Ready for merge" and leave the
+   merge to the maintainer.
 
 2. **Full check rollup green.** Every check on the PR — required
    AND non-required — is in the `pass` or `skipping` state.
@@ -114,8 +128,8 @@ comment and wait for the human merger.
 
 ### Scheduled unattended Dependabot review-and-merge (ADR-0024)
 
-Clause 1 above ("explicit, current-session permission") is extended —
-**for Dependabot PRs** — by
+Clause 1 above ("authorization to merge") is satisfied without any
+per-run maintainer action — **for Dependabot PRs** — by
 [ADR-0024](../../docs/adr/0024-scheduled-dependabot-merge.md). A
 scheduled, maintainer-operated automation MAY run the
 `/dependabot-review`-equivalent flow (audit, apply required code-side
@@ -145,9 +159,9 @@ unchanged and must be met verbatim.
 The semver level is not part of the gate — majors are handled the same
 way the attended skill handles them (read release notes, adapt the code,
 let the full matrix validate). The scheduled run is the maintainer's
-standing authorization and replaces clause 1's per-session keystroke for
-Dependabot PRs. Every **non-Dependabot** bot-initiated merge still
-requires explicit current-session permission per clause 1.
+standing authorization for Dependabot PRs, so no separate grant is
+needed at merge time. Every **non-Dependabot** bot-initiated merge
+still needs authorization in one of clause 1's three forms.
 
 #### Historical rationale (superseded)
 
