@@ -1,16 +1,17 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "build": {
-    "beforeBundleCommand": "node scripts/build-preview-handler.mjs"
-  },
   "bundle": {
     "resources": {
       "windows/bin/chordsketch_preview_handler.dll": "chordsketch_preview_handler.dll"
     },
     "windows": {
       "wix": {
-        "fragmentPaths": ["windows/preview-handler.wxs"],
-        "componentGroupRefs": ["ChordSketchPreviewHandler"]
+        "fragmentPaths": [
+          "windows/preview-handler.wxs"
+        ],
+        "componentGroupRefs": [
+          "ChordSketchPreviewHandler"
+        ]
       },
       "nsis": {
         "installerHooks": "windows/preview-handler.nsh"

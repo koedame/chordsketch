@@ -206,14 +206,18 @@ loads into its `prevhost.exe` surrogate to draw `.cho` / `.chopro` /
 `chordsketch-render-html` and shows the result in a WebView2 control,
 so the pane matches this app's own preview.
 
-On a Windows bundle, `tauri.windows.conf.json` adds three things to the
-build:
+The DLL is built by `scripts/build-preview-handler.mjs`, which runs
+from the `prebuild` / `predev` npm hooks alongside
+`build-grammar-wasm.mjs`: it builds the crate for the current target
+triple and stages the DLL in `src-tauri/windows/bin/` (gitignored). It
+has to happen that early because `tauri-build`'s build script resolves
+declared bundle resources while compiling the app crate. Off Windows
+the script logs that it skipped and exits.
 
-- `build.beforeBundleCommand` runs
-  `scripts/build-preview-handler.mjs`, which builds the crate for the
-  bundle's target triple and stages the DLL in
-  `src-tauri/windows/bin/` (gitignored).
-- `bundle.resources` installs it next to `ChordSketch.exe`.
+`tauri.windows.conf.json` then adds two things to a Windows bundle:
+
+- `bundle.resources` installs the staged DLL next to
+  `ChordSketch.exe`.
 - `bundle.windows.wix.fragmentPaths` /
   `bundle.windows.nsis.installerHooks` merge
   `src-tauri/windows/preview-handler.wxs` and

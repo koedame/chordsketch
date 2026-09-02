@@ -9,10 +9,14 @@
  *      `tauri.windows.conf.json`'s `bundle.resources` picks it up and
  *      installs it next to the app executable.
  *
- * Wired as `build.beforeBundleCommand` in `tauri.windows.conf.json`,
- * so it runs after the app binary is built and before the MSI / NSIS
- * bundles are assembled. The staging hop exists because cargo writes
- * the DLL into a target-triple-dependent path, while
+ * Wired into the `prebuild` / `predev` npm hooks, alongside
+ * `build-grammar-wasm.mjs`, so it has run by the time `cargo tauri
+ * build` / `cargo tauri dev` reaches the Rust build. That timing is
+ * load-bearing: `tauri-build`'s build script resolves
+ * `bundle.resources` while compiling `chordsketch-desktop`, and a
+ * declared resource that does not exist yet fails the build long
+ * before the bundling phase. The staging hop itself exists because
+ * cargo writes the DLL into a target-triple-dependent path, while
  * `bundle.resources` needs one fixed path relative to
  * `tauri.conf.json`.
  *
@@ -36,14 +40,16 @@ const CRATE = 'chordsketch-preview-handler';
 const DLL_NAME = 'chordsketch_preview_handler.dll';
 
 if (process.platform !== 'win32') {
-  // The preview handler is a Windows COM server; on any other platform
-  // the crate compiles to an empty library and there is nothing to
-  // stage. Refusing loudly beats staging a `.so` nothing will load.
-  console.error(
-    `${DLL_NAME} can only be built on Windows (this is ${process.platform}). ` +
-      'This script is wired into tauri.windows.conf.json only.',
+  // The preview handler is a Windows COM server, and only
+  // `tauri.windows.conf.json` declares it as a bundle resource, so
+  // there is nothing to stage anywhere else. The hooks that call this
+  // script are cross-platform, so say what was skipped rather than
+  // failing the frontend build on macOS and Linux.
+  console.log(
+    `Skipping ${DLL_NAME}: the preview handler is Windows-only ` +
+      `(this platform is ${process.platform}).`,
   );
-  process.exit(1);
+  process.exit(0);
 }
 
 // Tauri sets TAURI_ENV_TARGET_TRIPLE for the build hooks. Fall back to

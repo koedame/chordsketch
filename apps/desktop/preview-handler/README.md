@@ -76,12 +76,16 @@ the Linux and macOS CI cells, where none of the COM code compiles.
 
 ## Building
 
-The DLL is built automatically as part of a Windows Tauri bundle:
-`tauri.windows.conf.json` sets `build.beforeBundleCommand` to
+The DLL is built automatically as part of a Windows Tauri build:
+`apps/desktop/package.json`'s `prebuild` / `predev` hooks run
 `node scripts/build-preview-handler.mjs`, which builds the crate for the
-bundle's target triple and copies the DLL to
+current target triple and copies the DLL to
 `apps/desktop/src-tauri/windows/bin/` (gitignored) for
-`bundle.resources` to install.
+`bundle.resources` to install. It runs from the npm hooks rather than
+from `build.beforeBundleCommand` because `tauri-build`'s build script
+resolves declared resources while compiling `chordsketch-desktop` —
+a resource staged at bundling time arrives too late for both
+`cargo tauri build` and `cargo tauri dev`.
 
 To build it on its own:
 

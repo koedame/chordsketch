@@ -140,10 +140,16 @@ renderer-parity answer as well as the legible one.
   are loaded with `NavigateToString`, so they have an opaque origin and
   no base URL to resolve a relative path against; the CSP states that
   limit rather than leaving it to chance.
-- The DLL is built by `apps/desktop/scripts/build-preview-handler.mjs`
-  as `build.beforeBundleCommand` on Windows and staged where
-  `bundle.resources` can pick it up. A Windows bundle now builds two
-  Rust artifacts.
+- The DLL is built by `apps/desktop/scripts/build-preview-handler.mjs`,
+  wired into the `prebuild` / `predev` npm hooks next to
+  `build-grammar-wasm.mjs`, and staged where `bundle.resources` can pick
+  it up. It has to run that early rather than at
+  `build.beforeBundleCommand`: `tauri-build`'s build script resolves
+  declared resources while compiling `chordsketch-desktop`, so a
+  resource that does not exist yet fails `cargo tauri build` — and
+  `cargo tauri dev` — long before the bundling phase. The script is a
+  logged no-op off Windows, where nothing declares the resource. A
+  Windows bundle now builds two Rust artifacts.
 - The CLSID `{32E65E30-8242-492F-9985-C7785BB38BC7}` is frozen. Changing
   it orphans the keys written by every installer already in the field.
 
