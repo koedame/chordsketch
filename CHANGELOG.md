@@ -22,6 +22,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was reported. See
   [ADR-0046](docs/adr/0046-linux-release-binaries-target-an-old-glibc.md).
 
+- The Linux artifacts of the Node, Ruby and Kotlin bindings now run on
+  distributions older than the CI runner, the same defect the release
+  archives had. `napi.yml`, `ruby.yml` and `kotlin.yml` built them with
+  the runner's own toolchain — natively for x86_64, and through apt's
+  `gcc-aarch64-linux-gnu` for aarch64 — so five of the six published
+  v0.5.0 Linux binaries require GLIBC_2.39 and fail to load on Ubuntu
+  22.04, Debian 11 and Rocky Linux 8: `require('@chordsketch/node')`
+  throws ``version `GLIBC_2.39' not found``, and so does the gem's and
+  the JAR's native library. Only the Kotlin JAR's aarch64 library, which
+  already built through `cross`, was unaffected. The Node addon now
+  builds with `--use-napi-cross` (glibc 2.17 sysroot) and the Ruby and
+  Kotlin libraries with `cross`, and each workflow runs
+  `scripts/check-glibc-floor.py` over its own artifacts before the
+  publishing job can start. See
+  [ADR-0046](docs/adr/0046-linux-release-binaries-target-an-old-glibc.md).
+
 ### Changed
 
 - `packaging/macports/Portfile`'s `cargo.crates` block is now
