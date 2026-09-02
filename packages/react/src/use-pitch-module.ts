@@ -1,15 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 
-/**
- * Minimal shape every lazily-loaded `@chordsketch/wasm` pitch module
- * shares: a wasm-bindgen `default` initialiser that must resolve before
- * any export is callable.
- */
-export interface WasmInitModule {
-  /** wasm-bindgen init — resolves once the module is ready to call. */
-  default: () => Promise<unknown>;
-}
+import { initWasm, type WasmInitModule } from './wasm-init';
 
 /**
  * Lazily import and initialise a wasm module exposing pitch-lookup
@@ -48,7 +40,7 @@ export function usePitchModule<T extends WasmInitModule>(
     void (async () => {
       try {
         const mod = await loaderRef.current();
-        await mod.default();
+        await initWasm(mod);
         if (!cancelled) moduleRef.current = mod;
       } catch {
         // Leave moduleRef null; the consumer's play() degrades to a no-op.

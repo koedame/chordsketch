@@ -36,7 +36,8 @@ const SCALE_TO_CHORD_GAP_S = 0.24;
  * / `keyTonicTriad` exports added in #2658.
  */
 interface KeyAudioModule {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   /**
    * MIDI note numbers for the ascending one-octave scale of `key`
    * (do re mi fa sol la ti do), or `undefined` when the string is not

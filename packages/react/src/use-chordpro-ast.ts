@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { initWasm } from './wasm-init';
+
 import type { ChordproSong } from './chordpro-ast';
 
 // Narrow subset of `@chordsketch/wasm` this hook touches —
@@ -8,7 +10,8 @@ import type { ChordproSong } from './chordpro-ast';
 // `parseChordpro` / `parseChordproWithOptions` exports added in
 // #2475 alongside the AST → JSX cut-over (ADR-0017).
 interface ChordproParser {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   parseChordproWithWarnings: (input: string) => {
     ast: string;
     warnings: string[];
@@ -175,7 +178,7 @@ export function useChordproAst(
     void (async () => {
       try {
         const mod = await loaderRef.current();
-        await mod.default();
+        await initWasm(mod);
         if (cancelled) return;
         setParser(() => mod);
         setInitError(null);

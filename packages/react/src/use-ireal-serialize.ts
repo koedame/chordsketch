@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { initWasm } from './wasm-init';
+
 import type { IrealSong } from './ireal-ast';
 
 // Narrow subset of the `@chordsketch/wasm` module surface this hook
@@ -7,7 +9,8 @@ import type { IrealSong } from './ireal-ast';
 // the surface ever needs additional methods. Kept in sync with
 // `tests/helpers/wasm-stub.ts`.
 interface IrealSerializer {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   serializeIrealb: (json: string) => string;
 }
 
@@ -66,7 +69,7 @@ export function useIrealSerialize(
       try {
         if (serializerRef.current === null) {
           const mod = await loaderRef.current();
-          await mod.default();
+          await initWasm(mod);
           serializerRef.current = mod;
           if (cancelled) return;
         }

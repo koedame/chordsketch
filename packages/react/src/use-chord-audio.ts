@@ -24,7 +24,8 @@ import { usePitchModule } from './use-pitch-module';
  * `chordPitches` export added in #2650.
  */
 interface ChordPitchesModule {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   /**
    * MIDI note numbers for a block voicing of `chord`, or `undefined`
    * when the string is not parseable as a chord. Sister to
