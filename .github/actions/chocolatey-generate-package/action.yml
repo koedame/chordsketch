@@ -1,0 +1,61 @@
+name: "Generate the Chocolatey package sources"
+description: >
+  Fill `packaging/chocolatey/`'s nuspec and install-script templates with the
+  release version and the Windows binary's SHA256, writing the `choco-pkg/`
+  tree that `chocolatey-pack-push` packs and pushes.
+
+  Both publication paths run through this composite: the release fan-out
+  (`post-release.yml`'s `update-chocolatey` job) and the by-hand retry
+  (`chocolatey-retry.yml`). They previously carried identical copies of the
+  step, which is the shape that let the push logic diverge until #2807
+  consolidated it — a placeholder added to a template, a different checksum
+  layout, or a second target would each have to be applied twice, and the
+  path that only runs during a release is the one where a missed edit stays
+  invisible until the next release breaks.
+
+  Expects `checksums.txt` — the release asset, as downloaded by the caller's
+  "Download checksums" step — in the workspace root, and writes
+  `choco-pkg/chordsketch.nuspec` plus `choco-pkg/tools/chocolateyInstall.ps1`
+  there, which is what `chocolatey-pack-push` requires to exist.
+inputs:
+  version:
+    description: >
+      Package version with no leading `v` (e.g. `0.5.0`). Substituted for
+      `{{VERSION}}` in both templates.
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Generate package
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        # One `awk`, not `grep | awk`: under the runner's `-eo pipefail` a
+        # `grep` that matches nothing fails the whole pipeline, which ends
+        # the step at this assignment and reports a bare exit 1 instead of
+        # the message below. `awk` exits 0 with no match, leaving the
+        # variable empty for the guard to name. See #1852 for what a bare
+        # exit 1 costs on this path.
+        SHA_WINDOWS=$(awk '/x86_64-pc-windows-msvc/ { print $1 }' checksums.txt)
+
+        if [[ ! "$SHA_WINDOWS" =~ ^[0-9a-fA-F]{64}$ ]]; then
+          echo "ERROR: missing or invalid SHA256 for x86_64-pc-windows-msvc: '${SHA_WINDOWS}'" >&2
+          exit 1
+        fi
+
+        mkdir -p choco-pkg/tools
+
+        sed \
+          -e "s/{{VERSION}}/${VERSION}/g" \
+          packaging/chocolatey/chordsketch.nuspec.template > choco-pkg/chordsketch.nuspec
+
+        sed \
+          -e "s/{{VERSION}}/${VERSION}/g" \
+          -e "s/{{SHA256_X86_64_PC_WINDOWS_MSVC}}/${SHA_WINDOWS}/g" \
+          packaging/chocolatey/tools/chocolateyInstall.ps1.template > choco-pkg/tools/chocolateyInstall.ps1
+
+        echo "=== chordsketch.nuspec ==="
+        cat choco-pkg/chordsketch.nuspec
+        echo "=== chocolateyInstall.ps1 ==="
+        cat choco-pkg/tools/chocolateyInstall.ps1

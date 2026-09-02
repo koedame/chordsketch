@@ -1078,11 +1078,13 @@ No local Windows machine is needed.
    `.nupkg` from the template and pushing to the Chocolatey Community
    Repository on each release. No manual `choco push` is needed.
 
-Both that job and `chocolatey-retry.yml` publish through the
-`.github/actions/chocolatey-pack-push` composite action, so the pre-flight
-feed probe, the `409 Conflict` handling, and the `403 Forbidden` diagnosis
-described below apply identically to the release path. The two callers
-differ only in disposition: the release job skips when
+Both that job and `chocolatey-retry.yml` assemble the package through the
+`.github/actions/chocolatey-generate-package` composite action and publish
+it through `.github/actions/chocolatey-pack-push`, so the templates under
+`packaging/chocolatey/` are filled the same way on both paths, and the
+pre-flight feed probe, the `409 Conflict` handling, and the `403 Forbidden`
+diagnosis described below apply identically to the release path. The two
+callers differ only in disposition: the release job skips when
 `CHOCOLATEY_API_KEY` is unset and downgrades a `403` to a warning, so a
 moderation queue that has not drained cannot fail a release that already
 published to the other seven registries. The retry workflow fails on both,
