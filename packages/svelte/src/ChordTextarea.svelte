@@ -18,6 +18,18 @@ preview, whether or not the host binds it:
 ```svelte
 <ChordTextarea bind:value={source} bind:transpose />
 ```
+
+### Keyboard note
+
+Unlike the React / Vue siblings — which only intercept the shortcut
+when the host actually wired a transpose callback / `v-model`, so an
+uninterested host keeps the browser's own `Ctrl+ArrowUp/Down`
+paragraph navigation (notably in Firefox) — this component always
+calls `preventDefault()` on the combination. Svelte's `$bindable`
+gives the child no way to tell whether the parent used `bind:transpose`
+or left it unbound, so there is no runtime signal to gate the
+interception on. If the browser default matters for your host, wrap
+the surrounding element and re-dispatch the key event yourself.
 -->
 <script lang="ts">
   import { DEV } from 'esm-env';

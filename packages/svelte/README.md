@@ -98,6 +98,7 @@ The component and prop names match [`@chordsketch/react`](https://www.npmjs.com/
 - **Event callbacks stay callbacks.** `<PdfExport>`'s `onExported` / `onError` are props, as in React.
 - **Helpers take getters and return objects with reactive properties**, rather than React's positional hook arguments and tuple returns.
 - **`<ChordSheet format="html">` renders the engine's HTML** (`render_html_body` plus the engine stylesheet), where the React package walks the AST into React elements. The output is the same chord-over-lyrics layout; the React-only interaction props built on that walker (in-preview chord selection, drag-to-reposition, chord audio) have no equivalent here.
+- **`<ChordTextarea>`'s transpose shortcut always intercepts `Ctrl`/`Cmd`+`ArrowUp`/`ArrowDown`.** React only calls `preventDefault()` when `onTransposeChange` is supplied, and Vue only when `v-model:transpose` is bound, so an uninterested host keeps the browser's own paragraph-navigation shortcut (notably in Firefox). Svelte's `$bindable` gives the child no way to detect whether `bind:transpose` was used, so this component cannot replicate that opt-out — the shortcut always fires, whether or not you bind `transpose`.
 
 ## Links
 
