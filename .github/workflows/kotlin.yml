@@ -52,13 +52,33 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
+      - name: Install cross
+        # The JNI library ships inside the published JAR, so it inherits
+        # the build host's glibc unless it is linked against an old
+        # sysroot. Built natively on `ubuntu-latest` it required
+        # GLIBC_2.39 in v0.5.0 and failed to load on every older
+        # distribution; the aarch64 cell below already used `cross` and
+        # came out at GLIBC_2.18. Same tool, same reason, same
+        # `taiki-e/install-action` pin. See ADR-0046.
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        with:
+          tool: cross
+
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
-          shared-key: kotlin-x86_64-unknown-linux-gnu
+          # This cell links against `cross`'s sysroot now rather than the
+          # runner's own toolchain, so its objects and build-script
+          # binaries are not interchangeable with what a key naming only
+          # the triple last held. The aarch64 cell below is unaffected —
+          # it has always built through `cross`.
+          shared-key: kotlin-x86_64-unknown-linux-gnu-cross
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
-        run: cargo build -p chordsketch-ffi --release --target x86_64-unknown-linux-gnu
+        run: cross build -p chordsketch-ffi --release --target x86_64-unknown-linux-gnu
+
+      - name: Verify glibc floor
+        run: python3 scripts/check-glibc-floor.py --target x86_64-unknown-linux-gnu target/x86_64-unknown-linux-gnu/release/libchordsketch_ffi.so
 
       - name: Upload JNI library
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -129,6 +149,18 @@ jobs:
         # The command is on one line so it works on all runner shells
         # (bash, PowerShell, cmd) — backslash line continuation is bash-only.
         run: ${{ matrix.cross && 'cross' || 'cargo' }} build -p chordsketch-ffi --release --target ${{ matrix.target }}
+
+      - name: Verify glibc floor
+        # Artifact-level counterpart to the `cross` build above: catches a
+        # cross image whose sysroot moved forward, which the matrix flag
+        # cannot. Skipped on the macOS and Windows cells.
+        if: contains(matrix.target, '-linux-')
+        # Single-line for the same reason as the `Build` step above:
+        # backslash continuation is bash-only and this job has a Windows
+        # cell.
+        env:
+          TARGET: ${{ matrix.target }}
+        run: python3 scripts/check-glibc-floor.py --target "$TARGET" "target/${TARGET}/release/libchordsketch_ffi.so"
 
       - name: Upload JNI library
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
