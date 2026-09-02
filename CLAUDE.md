@@ -19,6 +19,8 @@ cargo test -- --ignored  # Run tests requiring external tools
 cargo clippy         # Lint (CI uses -D warnings)
 cargo fmt --check    # Check formatting (CI enforced)
 cargo fmt            # Auto-format code
+cargo audit          # RustSec advisory scan (needs `cargo install cargo-audit`;
+                     # CI runs it daily — see .claude/rules/dependency-advisories.md)
 ```
 
 Reproducible CLI build via nix (uses the pinned `nixpkgs` in
