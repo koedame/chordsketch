@@ -52,13 +52,28 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
+      - name: Install cross
+        # The gem bundles this native library, so it inherits the build
+        # host's glibc unless it is linked against an old sysroot. Built
+        # natively on `ubuntu-latest` it required GLIBC_2.39 in v0.5.0,
+        # which makes `require 'chordsketch'` fail with "version
+        # `GLIBC_2.39' not found" on every older distribution. `cross`
+        # builds inside a pinned container whose sysroot is glibc 2.23.
+        # See ADR-0046.
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        with:
+          tool: cross
+
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: ruby-x86_64-unknown-linux-gnu
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
-        run: cargo build -p chordsketch-ffi --release --target x86_64-unknown-linux-gnu
+        run: cross build -p chordsketch-ffi --release --target x86_64-unknown-linux-gnu
+
+      - name: Verify glibc floor
+        run: python3 scripts/check-glibc-floor.py --target x86_64-unknown-linux-gnu target/x86_64-unknown-linux-gnu/release/libchordsketch_ffi.so
 
       - name: Upload native library
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -110,11 +125,18 @@ jobs:
       - name: Install Rust target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (aarch64-linux)
+      - name: Install cross (aarch64-linux)
+        # Replaces the apt `gcc-aarch64-linux-gnu` toolchain this job
+        # used to install. That toolchain links against the *runner's*
+        # aarch64 sysroot, so it produced the same GLIBC_2.39 floor as
+        # the native x86_64 build — the published v0.5.0 gem carries a
+        # 2.39 aarch64 library, while the Kotlin JAR's aarch64 library,
+        # already built with `cross`, sits at 2.18. Same pin as
+        # `kotlin.yml`, which has used `cross` for this target all along.
         if: matrix.cross
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        with:
+          tool: cross
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
@@ -122,9 +144,18 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build
+        # One line so it runs under every runner shell (this job has a
+        # Windows cell); backslash continuation is bash-only.
+        run: ${{ matrix.cross && 'cross' || 'cargo' }} build -p chordsketch-ffi --release --target ${{ matrix.target }}
+
+      - name: Verify glibc floor
+        # Artifact-level counterpart to the `cross` build above: catches a
+        # cross image whose sysroot moved forward, which the matrix flag
+        # cannot. Skipped on the macOS and Windows cells.
+        if: contains(matrix.target, '-linux-')
         env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross && 'aarch64-linux-gnu-gcc' || '' }}
-        run: cargo build -p chordsketch-ffi --release --target ${{ matrix.target }}
+          TARGET: ${{ matrix.target }}
+        run: python3 scripts/check-glibc-floor.py --target "$TARGET" "target/${TARGET}/release/libchordsketch_ffi.so"
 
       - name: Upload native library
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

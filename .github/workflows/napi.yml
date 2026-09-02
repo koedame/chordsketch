@@ -86,7 +86,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
           - os: macos-latest
@@ -113,18 +112,48 @@ jobs:
       - name: Install @napi-rs/cli
         run: npm install -g @napi-rs/cli
 
-      - name: Install cross-compilation tools (aarch64-linux)
-        if: matrix.cross
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
       - name: Build native addon
         working-directory: crates/napi
         env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross && 'aarch64-linux-gnu-gcc' || '' }}
+          # Linux gnu addons must be linked against an old sysroot.
+          # Building them on the runner's own toolchain — which is what
+          # this step did for x86_64, and what the apt
+          # `gcc-aarch64-linux-gnu` package did for aarch64 — bakes the
+          # runner's glibc into the addon's support floor. Both published
+          # v0.5.0 platform packages require GLIBC_2.39, so
+          # `require('@chordsketch/node')` throws "version `GLIBC_2.39'
+          # not found" on every distribution older than the runner
+          # (Ubuntu 22.04, Debian 11, Rocky 8 all included). The addon
+          # loads fine on the runner itself, so nothing in CI noticed.
+          #
+          # `--use-napi-cross` downloads @napi-rs/cross-toolchain, a
+          # prebuilt gcc with a glibc 2.17 sysroot, and points cargo's
+          # linker and CC at it. It is napi-rs's own answer to this
+          # problem and covers exactly the Linux gnu targets this matrix
+          # builds. Derived from the target triple rather than a matrix
+          # flag so a Linux target added later cannot silently omit it —
+          # forgetting the flag is how the x86_64 cell got here. See
+          # ADR-0046.
+          NAPI_CROSS: ${{ contains(matrix.target, '-linux-gnu') && '--use-napi-cross' || '' }}
+          TARGET: ${{ matrix.target }}
         run: |
-          napi build --release --manifest-path Cargo.toml --target ${{ matrix.target }}
+          args=(--release --manifest-path Cargo.toml --target "$TARGET")
+          if [ -n "$NAPI_CROSS" ]; then
+            args+=("$NAPI_CROSS")
+          fi
+          napi build "${args[@]}"
+
+      - name: Verify glibc floor
+        # Measures the artifact rather than the configuration: a
+        # toolchain whose sysroot moves forward, or a target that stops
+        # matching the `-linux-gnu` test above, both show up here. Runs
+        # on every PR that touches this workflow's paths, and gates
+        # `upload-release-tarballs` through `needs: [build]` at release
+        # time.
+        if: contains(matrix.target, '-linux-')
+        env:
+          TARGET: ${{ matrix.target }}
+        run: python3 scripts/check-glibc-floor.py --target "$TARGET" crates/napi/*.node
 
       - name: Smoke test the built addon (host target only)
         # Load the just-built .node file into the runner's Node.js and call

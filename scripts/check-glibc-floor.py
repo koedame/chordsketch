@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Enforce the glibc floor of the Linux release binaries.
+"""Enforce the glibc floor of the Linux artifacts this project ships.
 
-A `*-unknown-linux-gnu` binary can only be executed on a host whose glibc
-is at least as new as the newest `GLIBC_x.y` symbol version the binary
-references. Building on a GitHub-hosted `ubuntu-latest` runner therefore
-bakes that runner's glibc into the support floor, and the failure is
-invisible on the runner itself: the archive installs fine and only dies
-on the user's older distro with
+A glibc-linked ELF can only be loaded on a host whose glibc is at least
+as new as the newest `GLIBC_x.y` symbol version the file references.
+Building on a GitHub-hosted `ubuntu-latest` runner therefore bakes that
+runner's glibc into the support floor, and the failure is invisible on
+the runner itself: the artifact is produced, published and installed
+without complaint, and only dies on the user's older distro with
 
     version `GLIBC_2.39' not found (required by chordsketch)
 
-This script closes that gap from two directions.
+That applies to every Linux artifact, not just the CLI archives: the
+napi-rs `.node` addon, the FFI `.so` inside the gem, and the JNI `.so`
+inside the JAR are loaded by the same dynamic linker and were shipping
+the same 2.39 floor in v0.5.0.
+
+This script closes the gap from two directions.
 
 Workflow mode (default, runs on every PR via `ci.yml`)
     Assert that every Linux target in `.github/workflows/release.yml`'s
@@ -18,12 +23,21 @@ Workflow mode (default, runs on every PR via `ci.yml`)
     old-sysroot container, which is what keeps the floor low; a Linux
     target without it silently inherits the runner's glibc.
 
-Binary mode (`--target T FILE...`, runs at release time in `release.yml`)
-    Read the ELF symbol versions of the binaries that are about to be
+Binary mode (`--target T FILE...`)
+    Read the ELF symbol versions of the artifacts that are about to be
     packaged and fail if any of them requires a newer glibc than
     MAX_GLIBC. This measures the artifact rather than the configuration,
     so it also catches a `cross` image whose sysroot moved forward. For
     musl targets it asserts the opposite: no glibc references at all.
+
+    Run from `release.yml` (CLI archives), `napi.yml` (Node addon),
+    `ruby.yml` (gem native library) and `kotlin.yml` (JNI library), in
+    each case in the build job that the publishing job depends on, so a
+    violation blocks publication. The three binding workflows also build
+    on pull requests, so for them this is a per-PR check as well — which
+    is why they have no workflow-mode counterpart: their Linux builds are
+    separate jobs rather than one uniform matrix, and measuring the
+    artifact on every PR is the stronger of the two checks anyway.
 
 MAX_GLIBC is a support contract, not a tuning knob. Raising it drops
 every distro between the old and new value; a build that trips this
@@ -43,13 +57,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RELEASE_WORKFLOW = Path(".github/workflows/release.yml")
 
-# The newest glibc symbol version a `*-linux-gnu` release binary may
+# The newest glibc symbol version a `*-linux-gnu` artifact may
 # reference. 2.18 is what the already-`cross`-built v0.5.0
 # `aarch64-unknown-linux-gnu` artifacts require — `chordsketch` tops out
 # at GLIBC_2.17 and `chordsketch-lsp` adds a single weak reference to
 # `__cxa_thread_atexit_impl@GLIBC_2.18` from Rust's thread-local
 # teardown. Every distro still in vendor support is far above it
-# (RHEL 8: 2.28, Debian 11: 2.31, Ubuntu 20.04: 2.31).
+# (RHEL 8: 2.28, Debian 11: 2.31, Ubuntu 20.04: 2.31). One constant for
+# every channel: a user who can run the CLI can load the gem, the JAR and
+# the Node addon too.
 MAX_GLIBC = (2, 18)
 
 # How many offending imports to name in the failure message.
