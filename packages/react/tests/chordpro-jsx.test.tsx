@@ -4464,7 +4464,7 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     expect(tempoChip(inline.container)).toBe(tempoChip(section.container));
   });
 
-  test('when diagrams mode is inline or hover, then the song--diagrams-* wrapper modifier is withheld (it fires only when the end-of-song grid is emitted)', () => {
+  test('when diagrams mode is inline or hover, then the song--diagrams-{position} wrapper modifier is withheld (it fires only when the end-of-song grid is emitted); inline additionally carries song--diagrams-inline for the leading gutter', () => {
     // Bug 1 root cause: the wrapper class carried
     // `song--diagrams-${position}` whenever diagrams were *visible*,
     // and `position` defaults to `bottom`. So `{diagrams: inline}` and
@@ -4480,19 +4480,25 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     // "position modifier ⇔ grid present" that the className alone never
     // expressed.
     //
-    // Inline mode: no grid, so the wrapper must be plain `.song`
-    // (block flow). NOT `song--diagrams-bottom`.
+    // Inline mode: no grid, so the wrapper must NOT carry a `position`
+    // modifier (`song--diagrams-{top,bottom,right,below}`). It DOES
+    // carry `song--diagrams-inline` (ADR-0051) — a different modifier
+    // that only adds the `padding-left` leading gutter for the
+    // overhanging compact diagram, applied to the whole `.song` root
+    // (not per-line) so `.section-label` / `.comment` siblings of
+    // `.line` stay aligned with the shifted lyric lines instead of a
+    // gutter scoped to `.line--inline-diagrams` leaving them behind.
     const inline = render(
       renderChordproAst(mixedSegmentSong('inline'), { chordDiagrams: { instrument: 'guitar' } }),
     );
     const inlineSong = inline.container.querySelector('.song');
     expect(inlineSong).not.toBeNull();
-    expect(inlineSong?.className).toBe('song');
-    // Defensive: no `song--diagrams-*` modifier of any position leaks
-    // into inline mode (guards a future `position` directive in an
-    // inline song from re-introducing the bug under a different
+    expect(inlineSong?.className).toBe('song song--diagrams-inline');
+    // Defensive: no position-flavoured `song--diagrams-*` modifier
+    // leaks into inline mode (guards a future `position` directive in
+    // an inline song from re-introducing the bug under a different
     // suffix).
-    expect(inlineSong?.className).not.toMatch(/\bsong--diagrams-/);
+    expect(inlineSong?.className).not.toMatch(/\bsong--diagrams-(top|bottom|right|below)\b/);
     // The inline body has no end-of-song grid and no `.song__body`
     // wrapper — both are section-mode-only.
     expect(inline.container.querySelector('.chord-diagrams')).toBeNull();

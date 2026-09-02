@@ -24,6 +24,12 @@ import { type Page, expect, test } from '@playwright/test';
 //      transform no unit test can see, and the earlier attempt at this
 //      (cross-axis `align-items: center`, reverted) silently pulled every
 //      narrow `.lyrics` segment away from the segment before it.
+//   5. `{diagrams: inline}` — the leading gutter that clears the first
+//      diagram's overhang (ADR-0051) must shift the WHOLE song, not just
+//      `.line--inline-diagrams` elements. A gutter scoped to individual
+//      lines leaves `.comment` / `.section-label` siblings flush at the
+//      original margin while every lyric line shifts right, producing a
+//      jagged left edge — a layout property only a real browser can see.
 //
 // Per `.claude/rules/playground-smoke.md` these are exactly the "in-process
 // suites are blind to the integration" cases that require a real-browser
@@ -163,6 +169,45 @@ test.describe('inline / hover compact chord diagrams (ADR-0027)', () => {
     });
     expect(clearance).not.toBeNull();
     expect(clearance!).toBeGreaterThanOrEqual(0);
+
+    expect(errors).toEqual([]);
+  });
+
+  test('{diagrams: inline}: the leading gutter keeps comments and section labels aligned with lyric lines', async ({
+    page,
+  }) => {
+    // ADR-0051's leading gutter (`--cs-inline-diagram-overhang`) clears the
+    // first diagram's left overhang. An earlier version put the gutter's
+    // `padding-left` on each `.line--inline-diagrams` individually, which
+    // shifted every lyric line right while leaving `.comment` /
+    // `.section-label` — siblings of `.line` that never carry that class —
+    // flush at the original margin, producing a jagged left edge. The
+    // gutter now lives on the `.song` root (`song--diagrams-inline`) so
+    // every body element shifts together.
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+
+    await page.goto('chordpro/', { waitUntil: 'networkidle' });
+    await setSource(
+      page,
+      ['{diagrams: inline}', '{comment: Verse}', 'Hello [C]world'].join('\n'),
+    );
+
+    await expect(page.locator('.chord-block-inline-diagram svg').first()).toBeVisible();
+
+    const leftEdges = await page.evaluate(() => {
+      const comment = document.querySelector('.chordsketch-sheet__content .comment');
+      const line = document.querySelector('.chordsketch-sheet__content .line--inline-diagrams');
+      if (!comment || !line) return null;
+      return {
+        comment: comment.getBoundingClientRect().left,
+        line: line.getBoundingClientRect().left,
+      };
+    });
+    expect(leftEdges).not.toBeNull();
+    // The regression measures the comment ~72px (the default gutter) to
+    // the left of the line; a 1px tolerance absorbs sub-pixel rounding only.
+    expect(Math.abs(leftEdges!.comment - leftEdges!.line)).toBeLessThanOrEqual(1);
 
     expect(errors).toEqual([]);
   });

@@ -2210,13 +2210,20 @@
    when `diagrams.mode === 'inline'`): a chord NAME is narrow enough that
    its left edge already marks the position, and hover mode keeps the name
    as text, so neither layout is affected. */
-.chordsketch-sheet__content .line--inline-diagrams {
-  /* Leading gutter for the half-diagram that now overhangs the start of
-     the line. The pane clips at its padding box, so without this the first
-     diagram on every (possibly wrapped) row is cut off. The default covers
-     the widest compact diagram this package can render — the keyboard's
-     136px, i.e. a 68px overhang; a host that only renders fretted diagrams
-     (63px wide, 31.5px overhang) can tighten it. */
+/* Leading gutter for the half-diagram that now overhangs the start of the
+   line. The pane clips at its padding box, so without this the leftmost
+   diagram in the song is cut off. Applied to the `.song` root (via the
+   `song--diagrams-inline` modifier the walker adds once per document, not
+   per `.line--inline-diagrams`) so every body element — lyric lines,
+   section labels, comments — shifts by the same amount and stays aligned
+   with the rest of the document; scoping the padding to individual lines
+   left `.section-label` / `.comment` flush at the original margin while
+   every lyric line shifted right, producing a jagged left edge on any song
+   that mixes chord lines with section headers or comments. The default
+   covers the widest compact diagram this package can render — the
+   keyboard's 136px, i.e. a 68px overhang; a host that only renders fretted
+   diagrams (63px wide, 31.5px overhang) can tighten it. */
+.chordsketch-sheet__content .song--diagrams-inline {
   padding-left: var(--cs-inline-diagram-overhang, 4.5rem);
 }
 .chordsketch-sheet__content .line--inline-diagrams .chord-block-inline-diagram {

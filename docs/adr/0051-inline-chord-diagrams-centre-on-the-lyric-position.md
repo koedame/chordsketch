@@ -40,12 +40,16 @@ that no longer scales with the instrument.
 In `inline` mode, shift each chord cell by **half its own width**
 (`transform: translateX(-50%)`), so the diagram's horizontal centre lands on
 the start of the lyric segment its chord is attached to. Reserve a leading
-gutter on the line (`--cs-inline-diagram-overhang`, default `4.5rem`) for the
-half-diagram that now overhangs the start of the line.
+gutter on the **whole song** (`--cs-inline-diagram-overhang`, default
+`4.5rem`) for the half-diagram that now overhangs the start of the leftmost
+line.
 
-Both rules are scoped to `.line--inline-diagrams`, the class the walker emits
-only when `diagrams.mode === 'inline'`, so chord-name (`section`) and `hover`
-output is unchanged.
+The centring transform is scoped to `.line--inline-diagrams
+.chord-block-inline-diagram`, the class the walker emits only when
+`diagrams.mode === 'inline'`, so chord-name (`section`) and `hover` output is
+unchanged. The gutter is scoped to a `song--diagrams-inline` modifier on the
+`.song` root, emitted once per document under the same condition — **not**
+to `.line--inline-diagrams` directly (see Rationale).
 
 ## Rationale
 
@@ -70,6 +74,17 @@ output is unchanged.
   the widest diagram this package renders (the keyboard's 136px) so nothing is
   clipped out of the box, and a host that only renders fretted diagrams can
   tighten it to `2rem` without touching the package.
+- **The gutter applies to the song root, not to each line.** An earlier
+  version of this change put the `padding-left` on `.line--inline-diagrams`
+  directly. That class is per-line, so it shifted every chord-bearing (and
+  chord-less) lyric line right by the gutter while leaving `.section-label`
+  headings and `{comment}` paragraphs — siblings of `.line` under the same
+  `.song`, never carrying the modifier — flush at the original margin,
+  producing a jagged left edge on any song that mixes lyric lines with
+  section headers or comments. Moving the `padding-left` to a
+  `song--diagrams-inline` modifier on the `.song` root shifts every body
+  element by the same amount, so the whole document keeps one consistent
+  left margin.
 - **A React-surface concern only.** Per ADR-0027 inline-diagram *placement* is
   a React-JSX-walker feature; the three Rust renderers do not emit inline
   diagrams, so this carries no renderer-parity obligation. The compact-diagram
@@ -78,8 +93,9 @@ output is unchanged.
 ## Consequences
 
 - Existing `{diagrams: inline}` documents render with every diagram half a
-  diagram-width further left, and inline-diagram lines carry a leading gutter.
-  The ChordPro source, the DOM, and `section` / `hover` output are unchanged.
+  diagram-width further left, and the whole song carries a leading gutter so
+  every line, section label, and comment stays aligned. The ChordPro source,
+  the DOM, and `section` / `hover` output are unchanged.
 - jsdom has no layout engine, so both halves of the decision are pinned by a
   real-browser smoke in
   `packages/playground/tests-e2e/diagrams-inline-hover.spec.ts`: the diagram's
