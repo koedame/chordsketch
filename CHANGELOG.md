@@ -18,8 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through `cross`, putting the gnu archives back on a glibc 2.18 floor,
   and `scripts/check-glibc-floor.py` fails the release build if a future
   archive raises it again. Affects every channel that redistributes the
-  gnu tarball (Homebrew, AUR, Flatpak, Snap, and the README's `curl`
-  instructions), not only Homebrew where it was reported. See
+  gnu tarball (Homebrew, AUR, Flatpak, Snap), not only Homebrew where it
+  was reported. See
   [ADR-0046](docs/adr/0046-linux-release-binaries-target-an-old-glibc.md).
 
 ### Changed
