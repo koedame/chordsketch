@@ -344,7 +344,7 @@ describe('<IrealBarGrid> popover — chord rows', () => {
     const { stub } = await renderEditor();
     openFirstBarPopover();
     const dialog = await screen.findByRole('dialog');
-    const bassInput = within(dialog).getByLabelText('Bass');
+    const bassInput = within(dialog).getByLabelText('/ Bass');
     fireEvent.change(bassInput, { target: { value: 'G♭' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
@@ -369,7 +369,7 @@ describe('<IrealBarGrid> popover — chord rows', () => {
     const { stub } = await renderEditor(seed);
     openFirstBarPopover();
     const dialog = await screen.findByRole('dialog');
-    const bassInput = within(dialog).getByLabelText('Bass');
+    const bassInput = within(dialog).getByLabelText('/ Bass');
     fireEvent.change(bassInput, { target: { value: 'ZZZ' } });
     expect(bassInput.classList.contains('chordsketch-ireal-bar-grid__input--invalid')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -411,12 +411,12 @@ describe('<IrealBarGrid> popover — chord rows', () => {
     await renderEditor(seed);
     openFirstBarPopover();
     const dialog = await screen.findByRole('dialog');
-    const bassInputs = within(dialog).getAllByLabelText('Bass') as HTMLInputElement[];
+    const bassInputs = within(dialog).getAllByLabelText('/ Bass') as HTMLInputElement[];
     expect(bassInputs[0]!.value).toBe('G');
     expect(bassInputs[1]!.value).toBe('');
     // Swap rows: move row 0 down.
     fireEvent.click(within(dialog).getAllByRole('button', { name: 'Move chord down' })[0]!);
-    const reordered = within(dialog).getAllByLabelText('Bass') as HTMLInputElement[];
+    const reordered = within(dialog).getAllByLabelText('/ Bass') as HTMLInputElement[];
     // After reorder, the bass-G chord is at row 1 and the
     // no-bass chord is at row 0. The inputs must reflect the
     // new bound chords, not retain the previous slot's strings.
@@ -468,7 +468,7 @@ describe('<IrealBarGrid> popover — chord rows', () => {
     const downButtons = within(dialog).getAllByRole('button', { name: 'Move chord down' });
     fireEvent.click(downButtons[0]!);
     // After reorder: row 0 = F (no bass), row 1 = C/G (bass G).
-    const bassInputs = within(dialog).getAllByLabelText('Bass');
+    const bassInputs = within(dialog).getAllByLabelText('/ Bass');
     expect((bassInputs[0] as HTMLInputElement).value).toBe('');
     expect((bassInputs[1] as HTMLInputElement).value).toBe('G');
   });
@@ -503,16 +503,178 @@ describe('<IrealBarGrid> popover — chord rows', () => {
     openFirstBarPopover();
     const dialog = await screen.findByRole('dialog');
     // Type an invalid bass into row 0 (no onChange fires — AST unchanged).
-    const [bassInput0] = within(dialog).getAllByLabelText('Bass') as HTMLInputElement[];
+    const [bassInput0] = within(dialog).getAllByLabelText('/ Bass') as HTMLInputElement[];
     fireEvent.change(bassInput0!, { target: { value: 'ZZZ' } });
     expect(bassInput0!.getAttribute('aria-invalid')).toBe('true');
     // Reorder: chord 0 (C, no bass) moves down; chord 1 (F, no bass) takes row 0.
     const downButtons = within(dialog).getAllByRole('button', { name: 'Move chord down' });
     fireEvent.click(downButtons[0]!);
     // Row 0 now holds the F chord — bass display must reset, not carry 'ZZZ'.
-    const [updatedBass0] = within(dialog).getAllByLabelText('Bass') as HTMLInputElement[];
+    const [updatedBass0] = within(dialog).getAllByLabelText('/ Bass') as HTMLInputElement[];
     expect(updatedBass0!.value).toBe('');
     expect(updatedBass0!.getAttribute('aria-invalid')).not.toBe('true');
+  });
+});
+
+describe('<IrealBarGrid> popover — bass picker', () => {
+  // The structured picker is the primary slash-bass control; the
+  // free-form field beside it is the escape hatch. Sister-site (DOM):
+  // `packages/ui-irealb-editor/tests/popover.test.ts`.
+
+  function songWithBass(bass: IrealBar['chords'][number]['chord']['bass']): IrealSong {
+    const seed = songWithOneChordBar();
+    seed.sections[0]!.bars[0]!.chords = [
+      {
+        chord: {
+          root: { note: 'C', accidental: 'natural' },
+          quality: { kind: 'major' },
+          bass,
+        },
+        position: { beat: 1, subdivision: 0 },
+      },
+    ];
+    return seed;
+  }
+
+  function noteChip(dialog: HTMLElement, label: string): HTMLButtonElement {
+    const seg = within(dialog).getByRole('group', { name: 'Bass note' });
+    return within(seg).getByRole('button', { name: label }) as HTMLButtonElement;
+  }
+
+  function accChip(dialog: HTMLElement, name: string): HTMLButtonElement {
+    const seg = within(dialog).getByRole('group', { name: 'Bass accidental' });
+    return within(seg).getByRole('button', { name }) as HTMLButtonElement;
+  }
+
+  test('None is pressed and the accidental chips are inert without a bass', async () => {
+    await renderEditor();
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    expect(noteChip(dialog, 'None').getAttribute('aria-pressed')).toBe('true');
+    const noteSeg = within(dialog).getByRole('group', { name: 'Bass note' });
+    expect(noteSeg.querySelectorAll('button[aria-pressed="true"]').length).toBe(1);
+    for (const name of ['Bass natural', 'Bass sharp', 'Bass flat']) {
+      expect(accChip(dialog, name).disabled).toBe(true);
+    }
+  });
+
+  test('an existing slash bass lights up its note and accidental', async () => {
+    await renderEditor(songWithBass({ note: 'G', accidental: 'flat' }));
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    expect(noteChip(dialog, 'G').getAttribute('aria-pressed')).toBe('true');
+    expect(noteChip(dialog, 'None').getAttribute('aria-pressed')).toBe('false');
+    expect(accChip(dialog, 'Bass flat').getAttribute('aria-pressed')).toBe('true');
+    expect(accChip(dialog, 'Bass flat').disabled).toBe(false);
+  });
+
+  test('choosing a note commits a natural bass on Save', async () => {
+    const { stub } = await renderEditor();
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(noteChip(dialog, 'G'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    expect(stub.lastSong().sections[0]!.bars[0]!.chords[0]!.chord.bass).toEqual({
+      note: 'G',
+      accidental: 'natural',
+    });
+  });
+
+  test('switching the note keeps the chosen accidental', async () => {
+    const { stub } = await renderEditor(songWithBass({ note: 'G', accidental: 'flat' }));
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(noteChip(dialog, 'A'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    expect(stub.lastSong().sections[0]!.bars[0]!.chords[0]!.chord.bass).toEqual({
+      note: 'A',
+      accidental: 'flat',
+    });
+  });
+
+  test('choosing an accidental rewrites the bass in place', async () => {
+    const { stub } = await renderEditor(songWithBass({ note: 'G', accidental: 'natural' }));
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(accChip(dialog, 'Bass sharp'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    expect(stub.lastSong().sections[0]!.bars[0]!.chords[0]!.chord.bass).toEqual({
+      note: 'G',
+      accidental: 'sharp',
+    });
+  });
+
+  test('None clears the slash bass to null', async () => {
+    const { stub } = await renderEditor(songWithBass({ note: 'G', accidental: 'natural' }));
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(noteChip(dialog, 'None'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    expect(stub.lastSong().sections[0]!.bars[0]!.chords[0]!.chord.bass).toBeNull();
+  });
+
+  test('picking a note fills the free-form field with the same value', async () => {
+    await renderEditor();
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(noteChip(dialog, 'G'));
+    fireEvent.click(accChip(dialog, 'Bass flat'));
+    expect((within(dialog).getByLabelText('/ Bass') as HTMLInputElement).value).toBe('G♭');
+  });
+
+  test('typing a bass in the free-form field lights up the matching chips', async () => {
+    await renderEditor();
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('/ Bass'), { target: { value: 'F#' } });
+    expect(noteChip(dialog, 'F').getAttribute('aria-pressed')).toBe('true');
+    expect(accChip(dialog, 'Bass sharp').getAttribute('aria-pressed')).toBe('true');
+    expect(noteChip(dialog, 'None').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  test('a bass note the picker cannot express leaves every chip unpressed', async () => {
+    // `IrealChordRoot.note` is a free string, so a chart can carry a
+    // note letter outside the seven the picker offers. The chips must
+    // not claim it — the free-form field owns the value, and the AST
+    // keeps it untouched through a Save that does not touch the bass.
+    const { stub } = await renderEditor(songWithBass({ note: 'H', accidental: 'natural' }));
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    const noteSeg = within(dialog).getByRole('group', { name: 'Bass note' });
+    expect(noteSeg.querySelector('button[aria-pressed="true"]')).toBeNull();
+    for (const name of ['Bass natural', 'Bass sharp', 'Bass flat']) {
+      expect(accChip(dialog, name).disabled).toBe(true);
+    }
+    expect((within(dialog).getByLabelText('/ Bass') as HTMLInputElement).value).toBe('H');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    expect(stub.lastSong().sections[0]!.bars[0]!.chords[0]!.chord.bass).toEqual({
+      note: 'H',
+      accidental: 'natural',
+    });
+  });
+
+  test('invalid free-form input leaves the chips on the committed bass', async () => {
+    // The three-valued parse path is preserved: garbage does not touch
+    // the AST, so the picker must keep showing the bass that is
+    // actually saved rather than following the rejected text.
+    const { stub } = await renderEditor(songWithBass({ note: 'G', accidental: 'natural' }));
+    openFirstBarPopover();
+    const dialog = await screen.findByRole('dialog');
+    const field = within(dialog).getByLabelText('/ Bass');
+    fireEvent.change(field, { target: { value: 'ZZZ' } });
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(noteChip(dialog, 'G').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(stub.serializeIrealb).toHaveBeenCalled());
+    expect(stub.lastSong().sections[0]!.bars[0]!.chords[0]!.chord.bass).toEqual({
+      note: 'G',
+      accidental: 'natural',
+    });
   });
 });
 

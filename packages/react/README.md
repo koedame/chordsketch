@@ -495,8 +495,12 @@ time numerator + denominator / tempo / transpose round-trip through
   / remove / reorder), N-th ending (`empty` / `0` (untitled
   N0) / `1..9`), and musical symbol (None / Segno / Coda / Fine
   / Fermata / Break + the 11 player-recognised D.C. / D.S.
-  macro variants). Save commits via the host's `emit` path so
-  the URL round-trip stays single-source.
+  macro variants). The slash bass is picked structurally —
+  `None` plus the seven note letters and natural / sharp / flat,
+  the same control the ChordPro footer's `<ChordInspector>`
+  offers — with a free-form field beside it for a bass the
+  picker cannot express. Save commits via the host's `emit` path
+  so the URL round-trip stays single-source.
 - **Accessibility.** The bar grid carries `role="grid"` +
   `aria-rowcount` + `aria-colcount={4}` + `aria-rowindex` /
   `aria-colindex`, with W3C APG roving tabindex (exactly one

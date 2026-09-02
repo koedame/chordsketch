@@ -47,7 +47,7 @@ Shipped:
   pattern: focus trap, Escape / outside-click dismissal) that edits
   every field of the underlying `Bar`: start / end barlines, chord
   rows (root + accidental + 12 named qualities + Custom string +
-  optional `/X` bass + beat position 1 / 1.5 / … / 4.5, with
+  optional slash bass + beat position 1 / 1.5 / … / 4.5, with
   add / remove / reorder), N-th ending number (0 = untitled
   bracket per spec `N0`, 1–9 = numbered bracket, empty = no
   bracket), and musical symbol (None / Segno / Coda / D.C. /
@@ -67,6 +67,11 @@ Subsequent iterations:
 - #2366 — host-driven runtime swap + iRealb input toggle.
 - #2367 — desktop integration (Open / Save dispatch + View menu).
 - #2368 — keyboard navigation + ARIA grid semantics.
+- #2718 — the popover's slash bass is picked structurally: `None`
+  plus the seven note letters and natural / sharp / flat, matching
+  the chord-editor footer on the ChordPro side. The free-form field
+  stays beside it for a bass the picker cannot express, keeping the
+  three-valued parse (cleared / valid / rejected).
 
 ## Design
 
