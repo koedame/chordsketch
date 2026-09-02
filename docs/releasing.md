@@ -223,6 +223,12 @@ at post-release verification rather than before the tag is cut.
    # 7g. @chordsketch/vue (Vue 3 component library). Same shape as
    #     @chordsketch/react and versioned on its own cadence.
    cd packages/vue && npm run build && npm publish && cd ../..
+
+   # 7h. @chordsketch/svelte (Svelte 5 component library). Same cadence
+   #     as the other framework packages; `npm run build` runs
+   #     svelte-package, which emits sources + declarations rather than
+   #     a bundle.
+   cd packages/svelte && npm run build && npm publish && cd ../..
    ```
 
    `npm whoami` should print `unchidev` before any publish; if not,
@@ -236,6 +242,7 @@ at post-release verification rather than before the tag is cut.
    npm view @chordsketch/react-ui version       # should show X.Y.Z
    npm view @chordsketch/react version          # should show X.Y.Z
    npm view @chordsketch/vue version            # should show X.Y.Z
+   npm view @chordsketch/svelte version         # should show X.Y.Z
    npm view tree-sitter-chordpro version        # should show X.Y.Z
    npm view @chordsketch/node version          # should show X.Y.Z
    for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
