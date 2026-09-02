@@ -94,6 +94,14 @@ _PUBLISHED = "2026-05-20T08:29:28.73"
 _UNLISTED = "1900-01-01T00:00:00"
 
 
+def _snap_entry(track: str, risk: str, architecture: str, version: str) -> dict:
+    """One `channel-map` row, trimmed to the fields the checker reads."""
+    return {
+        "channel": {"track": track, "risk": risk, "architecture": architecture},
+        "version": version,
+    }
+
+
 def _chocolatey_404(version: str) -> urllib.error.HTTPError:
     return urllib.error.HTTPError(
         url="https://community.chocolatey.org/api/v2/"
@@ -745,6 +753,227 @@ end
         self.assertFalse(result.ok)
         self.assertIn("Maven Central metadata error", result.detail)
 
+    def test_aur_pkgrel_is_stripped_before_comparing(self) -> None:
+        # The AUR reports `pkgver-pkgrel`; pkgrel counts rebuilds of the
+        # same release, so comparing the raw string would call every
+        # correctly-published release stale.
+        channel = _fake_channel(kind="aur", package="chordsketch")
+        with patch(
+            "check_release_channels._http_get_json",
+            return_value={"resultcount": 1, "results": [{"Version": "0.5.0-1"}]},
+        ) as mock_http:
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertEqual(result.observed, "0.5.0")
+        self.assertEqual(
+            mock_http.call_args.args[0],
+            "https://aur.archlinux.org/rpc/v5/info?arg%5B%5D=chordsketch",
+        )
+
+    def test_aur_epoch_is_stripped_before_comparing(self) -> None:
+        # `epoch:pkgver-pkgrel` is the full grammar. An epoch is a
+        # packaging-side ordering reset that says nothing about the tag.
+        channel = _fake_channel(kind="aur", package="chordsketch")
+        with patch(
+            "check_release_channels._http_get_json",
+            return_value={"resultcount": 1, "results": [{"Version": "2:0.5.0-3"}]},
+        ):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertEqual(result.observed, "0.5.0")
+
+    def test_aur_stale_pkgver_is_red(self) -> None:
+        channel = _fake_channel(kind="aur", package="chordsketch")
+        with patch(
+            "check_release_channels._http_get_json",
+            return_value={"resultcount": 1, "results": [{"Version": "0.4.0-1"}]},
+        ):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "0.4.0")
+
+    def test_aur_unknown_package_is_absent_with_retry_command(self) -> None:
+        # The RPC answers `resultcount: 0` rather than erroring, so this is
+        # the registry saying it does not carry the package — `<absent>`,
+        # distinct from `<error>`.
+        channel = _fake_channel(kind="aur", package="chordsketch")
+        with patch(
+            "check_release_channels._http_get_json",
+            return_value={"resultcount": 0, "results": []},
+        ):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<absent>")
+        self.assertIn("post-release.yml", result.detail)
+
+    def test_aur_unparseable_version_does_not_guess(self) -> None:
+        # A value that is not `[epoch:]pkgver-pkgrel` must not be compared
+        # as if it were a bare version — the mismatch would name the wrong
+        # problem.
+        channel = _fake_channel(kind="aur", package="chordsketch")
+        with patch(
+            "check_release_channels._http_get_json",
+            return_value={"resultcount": 1, "results": [{"Version": "0.5.0"}]},
+        ):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<error>")
+        self.assertIn("pkgrel", result.detail)
+
+    def test_snap_reads_stable_on_the_default_track(self) -> None:
+        # `default-track: null` means the snap is served from `latest`, and
+        # the Snap Store rejects the request outright without the device
+        # series header.
+        channel = _fake_channel(kind="snap", package="chordsketch")
+        payload = {
+            "default-track": None,
+            "channel-map": [
+                _snap_entry("latest", "stable", "amd64", "0.5.0"),
+                _snap_entry("latest", "beta", "amd64", "0.6.0-rc1"),
+                _snap_entry("latest", "edge", "amd64", "0.7.0"),
+            ],
+        }
+        with patch(
+            "check_release_channels._http_get_json", return_value=payload
+        ) as mock_http:
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertEqual(result.observed, "0.5.0")
+        self.assertEqual(
+            mock_http.call_args.args[0],
+            "https://api.snapcraft.io/v2/snaps/info/chordsketch",
+        )
+        self.assertEqual(
+            mock_http.call_args.kwargs["headers"], {"Snap-Device-Series": "16"}
+        )
+
+    def test_snap_ignores_stable_on_a_non_default_track(self) -> None:
+        # A snap that declares a default track serves `snap install` from
+        # that track; another track's stable is a different audience.
+        channel = _fake_channel(kind="snap", package="chordsketch")
+        payload = {
+            "default-track": "2.x",
+            "channel-map": [
+                _snap_entry("2.x", "stable", "amd64", "0.5.0"),
+                _snap_entry("latest", "stable", "amd64", "0.4.0"),
+            ],
+        }
+        with patch("check_release_channels._http_get_json", return_value=payload):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertEqual(result.observed, "0.5.0")
+
+    def test_snap_architectures_that_disagree_are_red(self) -> None:
+        # Architectures can genuinely diverge, and one left behind is a
+        # release those users cannot install. The versions are joined
+        # without spaces because the rollup's summary job cuts the column
+        # out of the status line with `grep -oE 'observed=[^ ]+'`.
+        channel = _fake_channel(kind="snap", package="chordsketch")
+        payload = {
+            "default-track": None,
+            "channel-map": [
+                _snap_entry("latest", "stable", "amd64", "0.5.0"),
+                _snap_entry("latest", "stable", "arm64", "0.4.0"),
+            ],
+        }
+        with patch("check_release_channels._http_get_json", return_value=payload):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "0.4.0,0.5.0")
+        self.assertNotIn(" ", result.observed)
+
+    def test_snap_with_nothing_on_stable_is_absent(self) -> None:
+        # A snap served only on pre-release risks is one `snap install`
+        # cannot reach — the store answered, and the answer is "not there".
+        channel = _fake_channel(kind="snap", package="chordsketch")
+        payload = {
+            "default-track": None,
+            "channel-map": [_snap_entry("latest", "edge", "amd64", "0.5.0")],
+        }
+        with patch("check_release_channels._http_get_json", return_value=payload):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<absent>")
+        self.assertIn("latest/stable", result.detail)
+
+    def test_snap_api_error_is_red(self) -> None:
+        channel = _fake_channel(kind="snap", package="chordsketch")
+        with patch(
+            "check_release_channels._http_get_json",
+            side_effect=RuntimeError("HTTP 400"),
+        ):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<error>")
+        self.assertIn("Snap Store API error", result.detail)
+
+    def test_cocoapods_newest_push_is_the_verdict(self) -> None:
+        # Trunk returns `versions` in push order, so the last entry is the
+        # newest release.
+        channel = _fake_channel(kind="cocoapods", package="ChordSketch")
+        payload = {
+            "versions": [
+                {"name": "0.3.0", "created_at": "2026-04-26 07:39:24 UTC"},
+                {"name": "0.5.0", "created_at": "2026-05-20 08:49:10 UTC"},
+            ]
+        }
+        with patch(
+            "check_release_channels._http_get_json", return_value=payload
+        ) as mock_http:
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertEqual(result.observed, "0.5.0")
+        self.assertEqual(
+            mock_http.call_args.args[0],
+            "https://trunk.cocoapods.org/api/v1/pods/ChordSketch",
+        )
+
+    def test_cocoapods_trunk_missing_the_release_is_red(self) -> None:
+        # The tag being absent from trunk is the whole failure this check
+        # exists to catch: `pod install` serves the previous release.
+        channel = _fake_channel(kind="cocoapods", package="ChordSketch")
+        payload = {"versions": [{"name": "0.3.0", "created_at": "2026-04-26"}]}
+        with patch("check_release_channels._http_get_json", return_value=payload):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "0.3.0")
+
+    def test_cocoapods_pod_with_no_versions_is_absent(self) -> None:
+        channel = _fake_channel(kind="cocoapods", package="ChordSketch")
+        with patch(
+            "check_release_channels._http_get_json", return_value={"versions": []}
+        ):
+            result = check_release_channels.verify_channel(
+                channel, "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<absent>")
+        self.assertIn("post-release.yml", result.detail)
+
 
 class CliOutputOrderingTests(unittest.TestCase):
     """Regression guard for #1853.
@@ -777,16 +1006,16 @@ class CliOutputOrderingTests(unittest.TestCase):
         return completed.returncode, completed.stdout
 
     def test_first_line_is_status_on_skip_channel(self) -> None:
-        # `aur` is a `kind = "manual"` channel in the checked-in manifest,
-        # so no HTTP request is made; this exercises the happy path
-        # deterministically.
+        # `winget` is `expected_version = "skip"` in the checked-in
+        # manifest, so `verify_channel` returns before any HTTP request;
+        # this exercises the happy path deterministically.
         rc, out = self._run_with_combined_redirect(
-            ["--tag", "v0.0.0", "--channel", "aur"]
+            ["--tag", "v0.0.0", "--channel", "winget"]
         )
         self.assertEqual(rc, 0)
         first = out.splitlines()[0]
         self.assertTrue(
-            first.startswith("OK aur "),
+            first.startswith("OK winget "),
             f"first line must start with the status word; got {first!r}",
         )
         self.assertIn("expected=", first)

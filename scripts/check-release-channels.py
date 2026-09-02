@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Post-release channel rollup — query every registry and fail on drift.
 
-Invoked by `.github/workflows/release-verify.yml` on `release: published`.
-Can also be run with `workflow_dispatch` via the same workflow for manual
-re-verification or red-path dry-runs (`--force-stale <channel-id>`).
+Invoked by `.github/workflows/release-verify.yml`, which runs on a daily
+schedule and on `workflow_dispatch` for manual re-verification or red-path
+dry-runs (`--force-stale <channel-id>`). It is deliberately not on the
+release event: at tag time several channels have not been published yet,
+so the rollup would be structurally red (ADR-0039).
 
 Usage (workflow context):
 
@@ -61,8 +63,9 @@ class CheckResult:
     neither: it sets `pending`, reporting OK-for-exit-status while the
     status column says PENDING rather than claiming a converged channel.
     Only Chocolatey needs it today (ADR-0049) — every other registry
-    publishes synchronously, so for them `pending` is never set and the
-    verdict stays the binary it always was.
+    either publishes synchronously or exposes no state between "accepted"
+    and "served", so for them `pending` is never set and the verdict stays
+    the binary it always was.
     """
 
     channel_id: str
@@ -83,9 +86,17 @@ class CheckResult:
 # ---------------------------------------------------------------- HTTP helpers
 
 
-def _http_get_json(url: str) -> dict:
-    """GET a URL and parse the body as JSON. Raises on any HTTP error."""
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+def _http_get_json(url: str, *, headers: dict[str, str] | None = None) -> dict:
+    """GET a URL and parse the body as JSON. Raises on any HTTP error.
+
+    `headers` adds to the defaults, for a registry that refuses a bare
+    GET: the Snap Store answers HTTP 400 `bad-argument` ("Snap-Device-Series
+    header is required.") without one, measured 2026-09-02.
+    """
+    request_headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    if headers:
+        request_headers.update(headers)
+    req = urllib.request.Request(url, headers=request_headers)
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:  # noqa: S310
         return json.loads(resp.read().decode("utf-8"))
 
@@ -468,14 +479,10 @@ def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
         text = _http_get_text(entity)
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            return CheckResult(
-                channel_id=channel.id,
-                ok=False,
-                # Distinct from `_error`'s "<error>": the feed answered,
-                # and its answer is that it does not hold this version.
-                observed="<absent>",
-                expected=version,
-                detail=(
+            return _absent(
+                channel,
+                version,
+                (
                     f"the Chocolatey Community Repository does not hold {version}. "
                     "A push refused with HTTP 403 leaves this state (an earlier "
                     "version still queued for moderation blocks every newer push, "
@@ -533,6 +540,160 @@ def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
     )
 
 
+# AUR package versions are `[epoch:]pkgver-pkgrel` (PKGBUILD(5)). Only
+# `pkgver` tracks the upstream release: `pkgrel` counts rebuilds of the same
+# release (`packaging/aur/PKGBUILD.template` pins it to 1) and `epoch` forces
+# a version-ordering reset. Both are stripped before comparing against the
+# tag, so a rebuild-only bump does not read as drift.
+_AUR_VERSION = re.compile(r"\A(?:\d+:)?(?P<pkgver>.+)-[^-]+\Z")
+
+
+def _check_aur(channel: Channel, version: str) -> CheckResult:
+    """Verify the AUR package, which publishes the instant the push lands.
+
+    `update-aur` in `post-release.yml` pushes a regenerated PKGBUILD over
+    SSH; aurweb serves the new version from the same commit, so there is no
+    third state between "the AUR has it" and "it does not" and the verdict
+    stays the binary every non-Chocolatey channel uses (ADR-0049).
+
+    The RPC v5 `info` endpoint answers with `resultcount: 0` and an empty
+    `results` for a name it does not carry (measured 2026-09-02), which is
+    the registry answering rather than a transport failure — reported as
+    `<absent>`, not `<error>`.
+    """
+    query = urllib.parse.urlencode({"arg[]": channel.package})
+    url = f"https://aur.archlinux.org/rpc/v5/info?{query}"
+    try:
+        payload = _http_get_json(url)
+    except Exception as exc:  # noqa: BLE001
+        return _error(channel, version, f"AUR RPC error: {exc}")
+
+    results = payload.get("results") or []
+    if not results:
+        return _absent(
+            channel,
+            version,
+            f"the AUR carries no package named {channel.package!r}. Re-run the "
+            f"publish with `gh workflow run post-release.yml -R "
+            f"koedame/chordsketch -f tag=v{version}`, which repeats the "
+            f"update-aur SSH push.",
+        )
+
+    raw = str(results[0].get("Version") or "")
+    match = _AUR_VERSION.match(raw)
+    if match is None:
+        # `pkgver-pkgrel` is the format the RPC documents; a value that does
+        # not parse must not be silently compared as if it were a bare
+        # version, because the mismatch would name the wrong problem.
+        return _error(
+            channel,
+            version,
+            f"AUR reported {raw!r}, which is not `[epoch:]pkgver-pkgrel`: {url}",
+        )
+    return _compare(channel, version, match.group("pkgver"))
+
+
+# A snap that declares no default track is served from `latest`. The Snap
+# Store expresses that as `default-track: null` (measured 2026-09-02 for
+# chordsketch and for `hello`).
+_SNAP_IMPLICIT_DEFAULT_TRACK = "latest"
+
+# The risk level `snap install chordsketch` resolves to, and the one
+# `update-snap` in `post-release.yml` uploads to (`snapcraft upload
+# --release=stable`). README.md's install line is the bare `sudo snap
+# install chordsketch`, so stable is what "published" means for this
+# channel; candidate / beta / edge carry pre-release revisions whose drift
+# from the tag is not a release failure.
+_SNAP_PUBLISHED_RISK = "stable"
+
+
+def _check_snap(channel: Channel, version: str) -> CheckResult:
+    """Verify the Snap Store's stable channel on the snap's default track.
+
+    `channel-map` lists one entry per (track, risk, architecture) that the
+    store *serves* — a revision still in store review is simply absent from
+    it, indistinguishable from one never uploaded (the endpoint exposes no
+    "accepted but unreleased" field). There is therefore no observable
+    middle state to report, and this checker stays binary rather than
+    reaching for `PENDING` (ADR-0049): if the stable channel does not serve
+    the release, `snap install chordsketch` does not install it, which is
+    exactly what red means.
+
+    Architectures are compared together rather than sampled. They can
+    genuinely disagree — `hello` served 2.12 on riscv64 against 2.10
+    everywhere else (measured 2026-09-02) — and an architecture left behind
+    is a release users cannot install.
+    """
+    url = f"https://api.snapcraft.io/v2/snaps/info/{urllib.parse.quote(channel.package)}"
+    try:
+        payload = _http_get_json(url, headers={"Snap-Device-Series": "16"})
+    except Exception as exc:  # noqa: BLE001
+        return _error(channel, version, f"Snap Store API error: {exc}")
+
+    track = str(payload.get("default-track") or _SNAP_IMPLICIT_DEFAULT_TRACK)
+    served = sorted(
+        {
+            str(entry.get("version") or "<missing>")
+            for entry in payload.get("channel-map") or []
+            if isinstance(entry, dict)
+            and (entry.get("channel") or {}).get("track") == track
+            and (entry.get("channel") or {}).get("risk") == _SNAP_PUBLISHED_RISK
+        }
+    )
+    if not served:
+        return _absent(
+            channel,
+            version,
+            f"the Snap Store serves nothing on {track}/{_SNAP_PUBLISHED_RISK} "
+            f"for {channel.package}. Re-run the publish with `gh workflow run "
+            f"post-release.yml -R koedame/chordsketch -f tag=v{version}`, "
+            f"which repeats the `snapcraft upload --release=stable` step.",
+        )
+
+    # Joined without spaces: release-verify.yml's summary job pulls the
+    # column out of the status line with `grep -oE 'observed=[^ ]+'`, so a
+    # space here would truncate the table cell.
+    return _compare(channel, version, ",".join(served))
+
+
+def _check_cocoapods(channel: Channel, version: str) -> CheckResult:
+    """Verify the CocoaPods trunk, which registers a push synchronously.
+
+    `pod trunk push` returns once trunk holds the version, so — as with
+    every registry other than Chocolatey — there is no moderation state to
+    model and the verdict is binary (ADR-0049).
+
+    `versions` is an array of `{name, created_at}` in push order, so the
+    last entry is the newest release: chordsketch reads 0.2.1 → 0.2.2 →
+    0.3.0 → 0.5.0 with ascending `created_at` (measured 2026-09-02). That
+    keeps this check the same "the registry's newest is the tag" assertion
+    every other channel makes, rather than the weaker "the tag is in there
+    somewhere", which would stay green through a publish that never
+    happened for the current release.
+    """
+    url = f"https://trunk.cocoapods.org/api/v1/pods/{urllib.parse.quote(channel.package)}"
+    try:
+        payload = _http_get_json(url)
+    except Exception as exc:  # noqa: BLE001
+        return _error(channel, version, f"CocoaPods trunk API error: {exc}")
+
+    names = [
+        str(entry.get("name") or "<missing>")
+        for entry in payload.get("versions") or []
+        if isinstance(entry, dict)
+    ]
+    if not names:
+        return _absent(
+            channel,
+            version,
+            f"the CocoaPods trunk holds no versions of {channel.package}. "
+            f"Re-run the publish with `gh workflow run post-release.yml -R "
+            f"koedame/chordsketch -f tag=v{version}`, which repeats the "
+            f"`pod trunk push` step.",
+        )
+    return _compare(channel, version, names[-1])
+
+
 def _check_manual(channel: Channel, version: str) -> CheckResult:
     # Manual channels are never verified — they are only in the manifest for
     # paper-trail reasons. This function exists so the dispatcher below does
@@ -577,6 +738,24 @@ def _error(channel: Channel, expected: str, detail: str) -> CheckResult:
     )
 
 
+def _absent(channel: Channel, expected: str, detail: str) -> CheckResult:
+    """Red for a registry that answered, and answered that it does not
+    hold this version.
+
+    Distinct from `_error`'s `<error>`, which means the query itself
+    failed. Keeping them apart is what stops a transport problem from
+    being read as a missing publish, and vice versa — the same split
+    `_check_chocolatey` introduced for its 404.
+    """
+    return CheckResult(
+        channel_id=channel.id,
+        ok=False,
+        observed="<absent>",
+        expected=expected,
+        detail=detail,
+    )
+
+
 # ---------------------------------------------------------------- dispatcher
 
 _DISPATCH: dict[str, Callable[[Channel, str], CheckResult]] = {
@@ -592,6 +771,9 @@ _DISPATCH: dict[str, Callable[[Channel, str], CheckResult]] = {
     "homebrew-tap": _check_homebrew_tap,
     "scoop-bucket": _check_scoop_bucket,
     "chocolatey": _check_chocolatey,
+    "aur": _check_aur,
+    "snap": _check_snap,
+    "cocoapods": _check_cocoapods,
     "manual": _check_manual,
 }
 
