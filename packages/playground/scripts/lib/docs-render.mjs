@@ -42,6 +42,13 @@ export const DOC_GROUPS = [
         sourcePath: 'docs/sdk/tasks/embed-react.md',
       },
       {
+        slug: 'embed-vue',
+        title: 'Embed in a Vue app',
+        blurb:
+          '8 copy-paste recipes for the @chordsketch/vue component surface.',
+        sourcePath: 'docs/sdk/tasks/embed-vue.md',
+      },
+      {
         slug: 'render',
         title: 'Render across every binding',
         blurb:
@@ -561,8 +568,14 @@ try {
 // `build-docs-static.mjs` enforces this at build time via
 // `assertEveryFenceLangIsLoaded` so an undeclared lang fails the
 // build instead of silently rendering plain `<pre><code>`.
+// `vue` pulls its embedded grammars (css, html, javascript,
+// typescript, …) in with it, but every lang a fence actually uses is
+// declared here explicitly — a fence that resolves only because
+// another grammar happened to embed it would break the moment Shiki
+// reshuffles that grammar's embeds.
 const SHIKI_LANGS = [
   'bash',
+  'css',
   'json',
   'kotlin',
   'python',
@@ -572,6 +585,7 @@ const SHIKI_LANGS = [
   'swift',
   'tsx',
   'typescript',
+  'vue',
   { ...CHORDPRO_GRAMMAR, name: 'chordpro' },
 ];
 const SHIKI_THEME = 'github-dark';

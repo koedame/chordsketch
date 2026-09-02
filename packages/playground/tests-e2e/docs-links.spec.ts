@@ -23,6 +23,7 @@ import { expect, test } from '@playwright/test';
 const REGISTERED_SLUGS = [
   '',
   'embed-react',
+  'embed-vue',
   'render',
   'transpose-task',
   'reference',
