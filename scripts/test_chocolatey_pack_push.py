@@ -32,12 +32,16 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
-import textwrap
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS_DIR))
+from _action_yml import extract_step_run  # noqa: E402
+
+REPO_ROOT = SCRIPTS_DIR.parent
 ACTION_YML = REPO_ROOT / ".github" / "actions" / "chocolatey-pack-push" / "action.yml"
 
 PWSH = os.environ.get("PWSH") or "pwsh"
@@ -70,55 +74,6 @@ if ((Test-Path -LiteralPath variable:\\LASTEXITCODE)) { exit $LASTEXITCODE }
 """
 
 
-def _extract_step_run(action_yml: str, step_name: str) -> str:
-    """Return the dedented `run:` body of the named step in a composite action.
-
-    Deliberately a narrow line scanner rather than a YAML parse: the check
-    scripts in this repo are stdlib-only (see the header of
-    `ci/release-channels.toml`), and PyYAML is not otherwise a dependency.
-    The narrowness is made safe by failing loudly — an `action.yml` whose
-    shape this does not fit raises instead of silently yielding a short or
-    empty body that would make every assertion below vacuous.
-    """
-    lines = action_yml.splitlines()
-    starts = [i for i, line in enumerate(lines) if line.strip() == f"- name: {step_name}"]
-    if len(starts) != 1:
-        raise AssertionError(f"expected exactly one step named {step_name!r}, found {len(starts)}")
-    start = starts[0]
-    step_indent = len(lines[start]) - len(lines[start].lstrip())
-
-    run_idx = None
-    for i in range(start + 1, len(lines)):
-        line = lines[i]
-        stripped = line.strip()
-        if not stripped:
-            continue
-        indent = len(line) - len(line.lstrip())
-        # A new list item at the same depth means the step ended without a
-        # `run:` — i.e. the body moved somewhere this extractor cannot see.
-        if indent <= step_indent and stripped.startswith("- "):
-            break
-        if stripped == "run: |":
-            run_idx = i
-            break
-    if run_idx is None:
-        raise AssertionError(f"step {step_name!r} has no `run: |` block")
-
-    key_indent = len(lines[run_idx]) - len(lines[run_idx].lstrip())
-    body: list[str] = []
-    for line in lines[run_idx + 1 :]:
-        if not line.strip():
-            body.append("")
-            continue
-        if len(line) - len(line.lstrip()) <= key_indent:
-            break
-        body.append(line)
-    text = textwrap.dedent("\n".join(body)).strip("\n")
-    if not text:
-        raise AssertionError(f"step {step_name!r} has an empty `run:` body")
-    return text
-
-
 _ACTION_TEXT = ACTION_YML.read_text(encoding="utf-8") if ACTION_YML.exists() else ""
 
 
@@ -139,7 +94,7 @@ class _StepTestCase(unittest.TestCase):
     def setUpClass(cls) -> None:
         if PWSH_PATH is None:
             raise unittest.SkipTest(f"{PWSH!r} not found on PATH")
-        cls.body = _extract_step_run(_ACTION_TEXT, cls.step_name)
+        cls.body = extract_step_run(_ACTION_TEXT, cls.step_name)
 
     def run_step(
         self,
@@ -241,15 +196,15 @@ class ExtractorTest(unittest.TestCase):
             ("Push", "403 \\(Forbidden\\)"),
         ):
             with self.subTest(step=name):
-                self.assertIn(marker, _extract_step_run(_ACTION_TEXT, name))
+                self.assertIn(marker, extract_step_run(_ACTION_TEXT, name))
 
     def test_unknown_step_raises(self):
         with self.assertRaises(AssertionError):
-            _extract_step_run(_ACTION_TEXT, "No Such Step")
+            extract_step_run(_ACTION_TEXT, "No Such Step")
 
     def test_step_without_run_block_raises(self):
         with self.assertRaises(AssertionError):
-            _extract_step_run("    - name: Bare\n      uses: ./somewhere\n", "Bare")
+            extract_step_run("    - name: Bare\n      uses: ./somewhere\n", "Bare")
 
 
 class PreconditionsTest(_StepTestCase):

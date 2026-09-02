@@ -69,32 +69,12 @@ jobs:
           gh release download "$TAG" -p checksums.txt
 
       - name: Generate package
-        shell: bash
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          SHA_WINDOWS=$(grep "x86_64-pc-windows-msvc" checksums.txt | awk '{print $1}')
-
-          if [[ ! "$SHA_WINDOWS" =~ ^[0-9a-fA-F]{64}$ ]]; then
-            echo "ERROR: missing or invalid SHA256 for x86_64-pc-windows-msvc: '${SHA_WINDOWS}'" >&2
-            exit 1
-          fi
-
-          mkdir -p choco-pkg/tools
-
-          sed \
-            -e "s/{{VERSION}}/${VERSION}/g" \
-            packaging/chocolatey/chordsketch.nuspec.template > choco-pkg/chordsketch.nuspec
-
-          sed \
-            -e "s/{{VERSION}}/${VERSION}/g" \
-            -e "s/{{SHA256_X86_64_PC_WINDOWS_MSVC}}/${SHA_WINDOWS}/g" \
-            packaging/chocolatey/tools/chocolateyInstall.ps1.template > choco-pkg/tools/chocolateyInstall.ps1
-
-          echo "=== chordsketch.nuspec ==="
-          cat choco-pkg/chordsketch.nuspec
-          echo "=== chocolateyInstall.ps1 ==="
-          cat choco-pkg/tools/chocolateyInstall.ps1
+        # Shared with post-release.yml's `update-chocolatey` job, like
+        # the pack-and-push step below, so the two publication paths
+        # cannot drift in how the package is assembled.
+        uses: ./.github/actions/chocolatey-generate-package
+        with:
+          version: ${{ steps.version.outputs.version }}
 
       - name: Pack and push
         # Shared with post-release.yml's `update-chocolatey` job so the
