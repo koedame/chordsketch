@@ -1,0 +1,215 @@
+/*
+ * @chordsketch/vue — component stylesheet.
+ *
+ * Rules here are minimal defaults designed to be easily overridden
+ * by consumer CSS. Every selector uses the `chordsketch-*` prefix
+ * to avoid colliding with host styles; nothing here uses
+ * `!important` or hard-coded colour values that would clash with
+ * dark/light themes.
+ *
+ * The chord-over-lyrics body inside `.chordsketch-sheet__content`
+ * is NOT styled here: `<ChordSheet format="html">` injects the
+ * renderer's own stylesheet (`render_html_css`), rewritten so every
+ * rule matches only inside that wrapper. Keeping that layer in the
+ * renderer is what stops this file from becoming a hand-maintained
+ * copy of it.
+ *
+ * Sister site: `packages/react/src/styles.css` carries the same
+ * component rules for the React bindings (the two surfaces share the
+ * class vocabulary, so a visual change to one belongs in both — see
+ * .claude/rules/fix-propagation.md). Design-system tokens are read
+ * through the `--cs-*` namespace with inline fallbacks, so hosts
+ * that ship `design-system/tokens.css` (or the React stylesheet's
+ * token layer) theme these controls, and hosts that ship only this
+ * file still get the intended paint.
+ */
+
+/* ---------- Transpose select ---------- */
+/*
+ * The visual contract is the design-system select: a white surface
+ * with a `--cs-border-strong` hairline, 4px corners, and an inline
+ * chevrons-up-down caret.
+ */
+
+.chordsketch-transpose {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-sp-2, 0.5rem);
+  font-family: var(--cs-font-latin, inherit);
+  font-weight: 600;
+  font-size: var(--cs-fs-12, 0.75rem);
+  letter-spacing: 0;
+  color: var(--cs-text-secondary, currentColor);
+  line-height: 1;
+}
+
+.chordsketch-transpose__label {
+  flex-shrink: 0;
+}
+
+.chordsketch-transpose__select {
+  height: 28px;
+  padding: 0 1.75rem 0 0.75rem;
+  background-color: var(--cs-surface, #FFFFFF);
+  background-image: url(
+    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2367646D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m7 15 5 5 5-5'/><path d='m7 9 5-5 5 5'/></svg>"
+  );
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  color: var(--cs-text-primary, inherit);
+  border: 1px solid var(--cs-border-strong, #D4D1D6);
+  border-radius: 4px;
+  font-family: var(--cs-font-jp, inherit);
+  font-weight: 500;
+  font-size: var(--cs-fs-13, 0.8125rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  transition: background-color var(--cs-dur-1, 120ms) var(--cs-ease-out, ease-out),
+    border-color var(--cs-dur-1, 120ms) var(--cs-ease-out, ease-out),
+    box-shadow var(--cs-dur-1, 120ms) var(--cs-ease-out, ease-out);
+}
+
+.chordsketch-transpose__select:hover:not(:disabled) {
+  border-color: var(--cs-text-secondary, #67646D);
+}
+
+.chordsketch-transpose__select:focus-visible {
+  outline: none;
+  border-color: var(--cs-crimson-500, #BD1642);
+  box-shadow: var(--cs-focus-ring, 0 0 0 2px #FFFFFF, 0 0 0 4px #BD1642);
+}
+
+.chordsketch-transpose__select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ---------- Chord sheet ---------- */
+
+.chordsketch-sheet {
+  font-family: inherit;
+}
+
+.chordsketch-sheet[aria-busy='true'] {
+  opacity: 0.75;
+  transition: opacity 0.15s ease-in-out;
+}
+
+.chordsketch-sheet__text {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.chordsketch-sheet__error {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  font-size: 0.9em;
+}
+
+/* ---------- Split-pane editor ---------- */
+
+.chordsketch-textarea {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 20rem;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.chordsketch-textarea__textarea {
+  min-height: 20rem;
+  padding: 0.75rem;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  border: none;
+  /* Separate the textarea from the preview pane with a currentColor
+     divider. Dark-mode consumers get a light divider, light-mode a
+     dark one — the divider inherits the surrounding text colour
+     instead of using a hard-coded hex. */
+  border-right: 1px solid currentColor;
+  outline: none;
+  resize: none;
+  /* Leave the background transparent so the host decides the editor
+     surface. */
+  background: transparent;
+  color: inherit;
+  tab-size: 4;
+}
+
+.chordsketch-textarea__textarea:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.chordsketch-textarea__preview {
+  padding: 0.75rem;
+  overflow: auto;
+  background: transparent;
+}
+
+@media (max-width: 40rem) {
+  .chordsketch-textarea {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .chordsketch-textarea__textarea {
+    border-right: none;
+    border-bottom: 1px solid currentColor;
+  }
+}
+
+/* ---------- Chord diagram ---------- */
+
+.chordsketch-diagram {
+  display: inline-block;
+  color: inherit;
+  font-family: inherit;
+}
+
+.chordsketch-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  /* Let the host decide the diagram's colour by inheriting
+     currentColor on every stroke / fill the renderer emits. */
+  color: inherit;
+}
+
+.chordsketch-diagram__notfound,
+.chordsketch-diagram__error,
+.chordsketch-diagram__loading {
+  padding: 0.4rem 0.6rem;
+  border: 1px dashed currentColor;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.chordsketch-diagram__loading {
+  border-style: dotted;
+  opacity: 0.7;
+}
+
+.chordsketch-diagram__error {
+  border-style: solid;
+}
+
+/* ---------- PDF export ---------- */
+
+.chordsketch-pdf-export__error {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+  font-size: 0.9em;
+}

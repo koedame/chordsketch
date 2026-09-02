@@ -1,0 +1,77 @@
+name: "@chordsketch/vue"
+
+# Typecheck, test, and build the @chordsketch/vue package on every PR
+# that touches it, plus pushes to main for post-merge verification.
+# Publish-on-tag is intentionally NOT handled here — per ADR-0008,
+# every npm publish for every ChordSketch-distributed package is a
+# maintainer-local manual operation. The maintainer runs
+# `cd packages/vue && npm run build && npm publish --access public`
+# on the release machine.
+#
+# Unlike @chordsketch/react, this package does not type-check against
+# the in-tree wasm build: every wasm call site casts the dynamic
+# import to its own narrow structural interface, and the ambient
+# `declare module` shims cover resolution. There is therefore
+# deliberately no Rust toolchain / wasm-pack / in-tree wasm build
+# step — npm ci alone resolves everything it needs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/vue/**'
+      - '.github/workflows/vue.yml'
+  pull_request:
+    paths:
+      - 'packages/vue/**'
+      - '.github/workflows/vue.yml'
+
+# Cancel stale PR runs on force-push / rebase. Main / workflow_dispatch
+# runs always go to completion (gated on pull_request event).
+concurrency:
+  group: vue-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: packages/vue
+
+jobs:
+  build-and-test:
+    name: Build and test @chordsketch/vue
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/vue/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Run vitest tests
+        run: npm test
+
+      - name: Build (tsup ESM + CJS + .d.ts)
+        run: npm run build
+
+      - name: Verify dist/ contents
+        run: |
+          set -euo pipefail
+          test -f dist/index.js     # ESM
+          test -f dist/index.cjs    # CJS
+          test -f dist/index.d.ts   # Types for the ESM branch
+          test -f dist/index.d.cts  # Types for the CJS branch (exports."."["require"].types)
+          test -f dist/styles.css   # Component stylesheet
+          echo "dist/ contents:"
+          ls -la dist/

@@ -307,6 +307,9 @@ println!("{svg}");
 | [`@chordsketch/node`](crates/napi) | `crates/napi` | Native Node.js addon (prebuilt binaries, no Rust required) |
 | [`@chordsketch/ui-irealb-editor`](packages/ui-irealb-editor) | `packages/ui-irealb-editor` | **Internal.** Bar-grid GUI editor for iReal Pro charts; co-designed with the playground. External integrators should use `@chordsketch/react`'s `<IrealBarGrid>` / `<IrealProEditor>` instead. |
 | [`@chordsketch/react`](packages/react) | `packages/react` | React component library — embeds ChordPro **and** iReal Pro editors + previews in a few lines of React. |
+| [`@chordsketch/vue`](packages/vue) | `packages/vue` | Vue 3 component library — the same ChordPro preview, editor, chord diagrams, transpose control and PDF export, as Composition-API components. |
+| [`@chordsketch/react-ui`](packages/react-ui) | `packages/react-ui` | Wasm-free React design-system primitives (buttons, cards, badges, form controls) for building app chrome around the editor. |
+| [`@chordsketch/wasm-export`](packages/npm-export) | `packages/npm-export` | npm WASM package with the PDF / PNG export surface; loaded on demand by the export components. |
 | [Python `chordsketch`](crates/ffi) | `crates/ffi` | Python package via UniFFI + maturin |
 | [Swift `ChordSketch`](packages/swift) | `packages/swift` | Swift package with XCFramework |
 | [Kotlin `chordsketch`](packages/kotlin) | `packages/kotlin` | Kotlin/JVM package via JNI |

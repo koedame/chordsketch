@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`@chordsketch/vue@0.1.0` — Vue 3 bindings for the ChordPro
+  surface.** `<ChordSheet>`, `<ChordTextarea>`, `<ChordDiagram>`,
+  `<Transpose>` and `<PdfExport>`, plus the `useChordRender` /
+  `useChordDiagram` / `usePdfExport` / `useTranspose` /
+  `useDebounced` composables behind them, with the same prop names,
+  defaults and class vocabulary as `@chordsketch/react`. Vue 3.3+ is a
+  peer dependency; `@chordsketch/wasm-export` is an optional peer used
+  only by `<PdfExport>`. `<ChordSheet format="html">` renders the
+  static-output HTML surface (`render_html_body`) and injects
+  `render_html_css` rewritten so every rule is scoped to the
+  component's own wrapper, leaving the host page untouched. Dual ESM +
+  CJS build via tsup; CSS at `@chordsketch/vue/styles.css`; published
+  manually per [ADR-0008](docs/adr/0008-npm-publishing-is-local.md).
+
 ### Fixed
 
 - The `x86_64-unknown-linux-gnu` release archive now runs on
