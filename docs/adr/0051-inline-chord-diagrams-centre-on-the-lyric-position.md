@@ -101,8 +101,10 @@ to `.line--inline-diagrams` directly (see Rationale).
   `packages/playground/tests-e2e/diagrams-inline-hover.spec.ts`: the diagram's
   measured centre against its lyric segment's left edge (the pre-ADR layout
   measures 31.5px off; #2742's `align-items: center` measures 44px off), the
-  lyric segments staying flush with each other (the property #2742 broke), and
-  the leading diagram staying inside the preview pane.
+  lyric segments staying flush with each other (the property #2742 broke), the
+  leading diagram staying inside the preview pane, and a `.comment` staying
+  aligned with a chord-bearing `.line` (the property a line-scoped gutter
+  broke).
 - When the Rust renderers eventually gain inline-diagram placement (the
   ADR-0027 follow-up) they inherit this decision: the diagram is centred on the
   position the chord marks, the chord name stays left-aligned.
@@ -132,7 +134,9 @@ to `.line--inline-diagrams` directly (see Rationale).
   compact-diagram mode this refines
 - [ADR-0017](0017-react-renders-from-ast.md) — the React JSX walker as a
   renderer sister site
-- `packages/react/src/styles.css` — the two `.line--inline-diagrams` rules
+- `packages/react/src/styles.css` — the `.line--inline-diagrams
+  .chord-block-inline-diagram` centring rule and the `.song--diagrams-inline`
+  gutter rule
 - `packages/playground/tests-e2e/diagrams-inline-hover.spec.ts` — the
   real-browser smoke
 - #2741 — implementing issue; #2742 / #2743 — the reverted first attempt
