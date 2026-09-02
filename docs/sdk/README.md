@@ -12,6 +12,11 @@ runtime. Pick a starting point that fits how you are integrating:
   component surface (`<ChordProEditor>`, `<ChordSheet>`,
   `<IrealProEditor>`, `<PdfExport>`, custom AST rendering, SSR
   notes).
+- [Embed ChordPro in a Vue app](tasks/embed-vue.md) — the same
+  recipes in the same order for `@chordsketch/vue`
+  (`<ChordTextarea>`, `<ChordSheet>`, `<PdfExport>`, the
+  composables, Nuxt notes), plus what the Vue package does not
+  cover.
 
 Each task page shows the same operation across every binding, so
 you can copy the snippet that matches your stack.
@@ -48,10 +53,21 @@ bindings (e.g. matching desktop and web renderings).
   popover-based per-bar chord editing. See the
   [Embed ChordPro and iReal Pro in a React app](tasks/embed-react.md)
   recipe guide.
-- **Vue / Svelte / others** are tracked under
-  [#2039](https://github.com/koedame/chordsketch/issues/2039) and
-  not yet released. When they ship they will get their own task
-  pages here.
+- **Vue**:
+  [`@chordsketch/vue`](https://www.npmjs.com/package/@chordsketch/vue)
+  — the ChordPro surface as Vue 3 Composition-API components, with
+  the same prop names, defaults and class vocabulary as the React
+  package. See the [Embed ChordPro in a Vue app](tasks/embed-vue.md)
+  recipe guide. The iReal Pro surface and the AST-walker interaction
+  props are React-only.
+- **Svelte**:
+  [`@chordsketch/svelte`](https://www.npmjs.com/package/@chordsketch/svelte)
+  — the same ChordPro surface as Svelte 5 runes-based components.
+  Its API table lives in
+  [`packages/svelte/README.md`](../../packages/svelte/README.md); a
+  task page here is still to be written.
+- **Other frameworks** are tracked under
+  [#2039](https://github.com/koedame/chordsketch/issues/2039).
 
 ## How the SDK fits together
 
@@ -97,17 +113,20 @@ fix-propagation rule (`.claude/rules/fix-propagation.md`).
 
 ## Status
 
-This guide is being written incrementally. Two task pages are
-landed (render, transpose); they cover every existing binding
-(Rust, WASM, NAPI, CLI, Python, Swift, Kotlin, Ruby). Future
-additions will track new bindings and new operations as they are
-exposed:
+This guide is being written incrementally. Four task pages are
+landed. Two are per-operation (render, transpose) and cover every
+existing binding (Rust, WASM, NAPI, CLI, Python, Swift, Kotlin,
+Ruby); two are per-framework (embed-react, embed-vue) and cover the
+UI component packages. Future additions will track new bindings and
+new operations as they are exposed:
 
-- **AST-direct parse + traversal**: only the Rust crate currently
-  exposes the AST as a host object graph; the WASM / NAPI / UniFFI
-  bindings expose the parser only via the `parse_and_render_*`
-  one-shot. When AST-projection lands in those bindings, a
-  `tasks/parse.md` page will be added.
+- **AST-direct parse + traversal**: the Rust crate exposes the AST
+  as a host object graph, and `@chordsketch/wasm` exposes it as JSON
+  through `parseChordpro` (which is what `@chordsketch/react`'s
+  `useChordproAst` decodes). The NAPI and UniFFI bindings still
+  expose the parser only via the `parse_and_render_*` one-shot. When
+  AST projection lands there too, a `tasks/parse.md` page will be
+  added.
 - **Serialise back to ChordPro**: not currently exposed by any
   binding. Tracked as part of the v0.3.0 multi-format track
   (#2050).

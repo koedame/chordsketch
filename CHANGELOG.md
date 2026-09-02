@@ -40,6 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CJS build via tsup; CSS at `@chordsketch/vue/styles.css`; published
   manually per [ADR-0008](docs/adr/0008-npm-publishing-is-local.md).
 
+- **Docs site: "Embed in a Vue app" recipe page**
+  (`/chordsketch/docs/embed-vue/`). Eight copy-paste recipes for
+  `@chordsketch/vue` in the same order as the React page — editor
+  drop-in, read-only sheet, custom layout, transposition, PDF export,
+  chord diagrams, `useChordRender`, and SSR / Nuxt — plus an explicit
+  table of the React surfaces (iReal Pro, the AST walker and the
+  interaction props built on it) that have no Vue counterpart. Vue
+  SFC fences are syntax-highlighted at build time like every other
+  language in the corpus.
+
 ### Fixed
 
 - `@chordsketch/react`'s wasm-backed hooks and components now load
