@@ -42,6 +42,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `@chordsketch/react`'s wasm-backed hooks and components now load
+  correctly under Node, SSR and `jsdom`. Every one of the twelve call
+  sites that lazily import a `@chordsketch/wasm` /
+  `@chordsketch/wasm-export` module — `useChordRender`,
+  `useChordDiagram`, `useChordDiagramPitches`, `useChordStaff`,
+  `useChordproAst`, `useIrealParse`, `useIrealRender`,
+  `useIrealSerialize`, `usePdfExport`, `usePitchModule` (backing
+  `useChordAudio` / `useKeyAudio`), the CodeMirror directive-completion
+  catalog, and `<IrealBarGrid>` — called `mod.default()`
+  unconditionally after the import resolved. `default` is the init
+  function `wasm-pack --target web` (the browser build) exports; the
+  `--target nodejs` build is CommonJS that instantiates itself at
+  require time and exports no init at all, so under ESM interop
+  `default` is the module namespace object instead — calling it threw
+  `mod.default is not a function`, which each hook's `try`/`catch`
+  turned into a permanent `error` state with no preview ever
+  rendering. All twelve sites now route through a shared `initWasm`
+  helper (`packages/react/src/wasm-init.ts`) that calls `default` only
+  when it is callable, the same guard `@chordsketch/vue` and
+  `@chordsketch/svelte` already used in their `loadWasm` helper.
+
 - The `x86_64-unknown-linux-gnu` release archive now runs on
   distributions older than the CI runner. It was the only Linux target
   built natively on `ubuntu-latest` instead of through `cross`, so it

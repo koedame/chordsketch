@@ -1,5 +1,7 @@
 import type { CompletionContext, CompletionResult, CompletionSource } from '@codemirror/autocomplete';
 
+import { initWasm } from './wasm-init';
+
 /**
  * CodeMirror 6 autocomplete for ChordPro directives and their values,
  * backed by the shared `@chordsketch/wasm` directive catalog (ADR-0028).
@@ -41,7 +43,8 @@ export interface ChordproCatalog {
 export type ChordproCatalogLoader = () => Promise<ChordproCatalog>;
 
 interface WasmCatalogModule {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   listDirectives: () => DirectiveCatalogEntry[];
   directiveValueOptions: (name: string) => string[] | null | undefined;
 }
@@ -56,9 +59,7 @@ interface WasmCatalogModule {
  */
 export const loadChordproCatalog: ChordproCatalogLoader = async () => {
   const mod = (await import('@chordsketch/wasm')) as unknown as WasmCatalogModule;
-  // Both wasm-pack outputs expose a `default` init; the nodejs build's is a
-  // no-op, the web build's loads the `.wasm`. Mirrors `useChordDiagram`.
-  await mod.default();
+  await initWasm(mod);
   return {
     listDirectives: () => mod.listDirectives(),
     directiveValueOptions: (name: string) => mod.directiveValueOptions(name),

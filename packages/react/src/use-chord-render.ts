@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { initWasm } from './wasm-init';
+
 // Narrow subset of the `@chordsketch/wasm` module surface this hook
 // touches. Defined structurally (rather than re-exported from the
 // WASM package) so the React bundle does not pull the WASM glue
@@ -7,7 +9,8 @@ import { useEffect, useRef, useState } from 'react';
 // at runtime. Keep in sync with the paired stub in
 // `tests/helpers/wasm-stub.ts`.
 interface ChordRenderer {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   render_html: (input: string) => string;
   render_text: (input: string) => string;
   render_html_with_options: (
@@ -103,9 +106,7 @@ export function useChordRender(
       try {
         if (rendererRef.current === null) {
           const mod = await loaderRef.current();
-          // `init()` is a no-op on the Node build of
-          // `@chordsketch/wasm` and required on the browser build.
-          await mod.default();
+          await initWasm(mod);
           // Cache the renderer BEFORE the cancellation guard so a
           // subsequent effect (source change mid-init) can reuse
           // the already-loaded module — otherwise rendererRef stays

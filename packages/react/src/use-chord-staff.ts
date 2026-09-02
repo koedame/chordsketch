@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { initWasm } from './wasm-init';
+
 // Narrow WASM surface this hook touches. Kept structural so the React
 // package does not drag the WASM glue into its type graph — the module is
 // dynamically imported at runtime. Mirrors the `chordStaffNotes` export added
 // in #2695 (sister to `chordsketch_chordpro::chord_staff_notes`).
 interface StaffNotesModule {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   /**
    * Constituent tones of `chord` spelled for staff notation, ascending by
    * pitch (a slash bass sorts first), or `null` / `undefined` when the
@@ -101,7 +104,7 @@ export function useChordStaff(
       try {
         if (moduleRef.current === null) {
           const mod = await loaderRef.current();
-          await mod.default();
+          await initWasm(mod);
           if (cancelled) return;
           moduleRef.current = mod;
         }

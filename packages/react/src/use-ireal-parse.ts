@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { initWasm } from './wasm-init';
+
 import type { IrealSong } from './ireal-ast';
 
 // Narrow subset of the `@chordsketch/wasm` module surface this hook
@@ -7,7 +9,8 @@ import type { IrealSong } from './ireal-ast';
 // the wasm glue does not enter `@chordsketch/react`'s type graph.
 // Keep in sync with the stub in `tests/helpers/wasm-stub.ts`.
 interface IrealParser {
-  default: () => Promise<unknown>;
+  /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
+  default?: unknown;
   parseIrealb: (input: string) => string;
 }
 
@@ -72,7 +75,7 @@ export function useIrealParse(
       try {
         if (parserRef.current === null) {
           const mod = await loaderRef.current();
-          await mod.default();
+          await initWasm(mod);
           parserRef.current = mod;
           if (cancelled) return;
         }
