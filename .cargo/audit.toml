@@ -1,0 +1,27 @@
+# `cargo audit` configuration — the advisory ignore list and its contract.
+#
+# `.github/workflows/dependency-audit.yml` runs `cargo audit` daily and on
+# every pull request that changes the dependency graph (ADR-0048). An entry
+# here mutes one advisory for both.
+#
+# Muting an advisory is a decision with an owner and an expiry, not a way to
+# make CI quiet. Every entry MUST carry both comments, on their own lines,
+# immediately above the id:
+#
+#   ignore = [
+#     # why: <why this advisory cannot be fixed here, and why that is safe>
+#     # review-by: YYYY-MM-DD
+#     "RUSTSEC-YYYY-NNNN",
+#   ]
+#
+# `scripts/audit-advisories.py` enforces the shape: a missing `why:`, a
+# missing or malformed `review-by:`, or a review date that has passed is
+# reported exactly like an advisory — the daily run opens (or updates) the
+# tracking issue and the next dependency-touching pull request fails. That is
+# what keeps a mute from silently becoming permanent.
+#
+# When adding an entry, prefer the shortest honest review date. A crate
+# waiting on an upstream release gets weeks, not a year.
+
+[advisories]
+ignore = []
