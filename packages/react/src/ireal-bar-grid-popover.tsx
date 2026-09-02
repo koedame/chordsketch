@@ -168,6 +168,19 @@ function parseBassInput(s: string): IrealChordRoot | null | 'invalid' {
   return { note, accidental };
 }
 
+/** Narrow a bass value to what the structured picker can express: a
+ * plain `A`..`G` letter plus an accidental. Returns `null` both for
+ * "no bass" and for a bass the picker cannot model — `IrealChordRoot`
+ * types `note` as a free string, so a chart can carry a note letter
+ * outside the seven the picker offers. Callers leave every chip
+ * unpressed in that case and the free-form field below owns the value.
+ * Sister-site: `popover.ts` `pickableBass`; the ChordPro footer's
+ * equivalent is `splitBassNote` in `chord-source-edit.ts`. */
+function pickableBass(bass: IrealChordRoot | null): IrealChordRoot | null {
+  if (bass === null) return null;
+  return (NOTE_LETTERS as ReadonlyArray<string>).includes(bass.note) ? bass : null;
+}
+
 /** Default new chord row used by "+ Add chord". C major on beat 1.
  * Sister-site: `popover.ts:595-604` `makeDefaultBarChord`. */
 function makeDefaultBarChord(): IrealBarChord {
@@ -477,6 +490,21 @@ function ChordRowEditor({
     });
   };
 
+  // The bass as the structured picker can express it (`null` when the
+  // chord has no bass, and when the bass is not a plain A–G letter).
+  const pickable = pickableBass(barChord.chord.bass);
+
+  // The structured picker writes `IrealChordRoot | null` straight to the
+  // AST. The free-form field below follows automatically: the edit gives
+  // `ChordRowEditor` a new `barChord`, and the prop-sync effect above
+  // rewrites `bassRaw` from it (and clears any `--invalid` flag).
+  const setBass = (next: IrealChordRoot | null): void => {
+    onChange({
+      ...barChord,
+      chord: { ...barChord.chord, bass: next },
+    });
+  };
+
   const handleBassChange = (raw: string): void => {
     setBassRaw(raw);
     const result = parseBassInput(raw);
@@ -557,17 +585,73 @@ function ChordRowEditor({
           />
         </label>
       )}
-      <label className="chordsketch-ireal-bar-grid__field">
-        <span>Bass</span>
-        <input
-          type="text"
-          placeholder="/X (optional)"
-          value={bassRaw}
-          onChange={(e) => handleBassChange(e.target.value)}
-          className={bassInvalid ? 'chordsketch-ireal-bar-grid__input--invalid' : undefined}
-          aria-invalid={bassInvalid || undefined}
-        />
-      </label>
+      {/* Slash bass. Two controls writing one value: the structured
+          picker ("None" + the seven letters + natural / sharp / flat) is
+          the primary affordance — the same one the ChordPro chord-editor
+          footer offers (`<ChordInspector>`) — and the free-form field
+          beside it stays as the escape hatch, keeping `parseBassInput`'s
+          three-valued path for a bass the picker cannot express. */}
+      <div className="chordsketch-ireal-bar-grid__popover-bass">
+        <span className="chordsketch-ireal-bar-grid__popover-basslabel">Bass</span>
+        <div
+          className="chordsketch-ireal-bar-grid__seg"
+          role="group"
+          aria-label="Bass note"
+        >
+          <button
+            type="button"
+            aria-pressed={barChord.chord.bass === null}
+            onClick={() => setBass(null)}
+          >
+            None
+          </button>
+          {NOTE_LETTERS.map((letter) => (
+            <button
+              key={letter}
+              type="button"
+              aria-pressed={pickable?.note === letter}
+              // Keep the chosen accidental when switching note (parity with
+              // the ChordPro footer); natural when there is no bass yet.
+              onClick={() =>
+                setBass({ note: letter, accidental: pickable?.accidental ?? 'natural' })
+              }
+            >
+              {letter}
+            </button>
+          ))}
+        </div>
+        <div
+          className="chordsketch-ireal-bar-grid__seg"
+          role="group"
+          aria-label="Bass accidental"
+        >
+          {ACCIDENTAL_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              aria-label={`Bass ${o.value}`}
+              // The accidental belongs to a bass note; inert until the
+              // picker has one, so a click cannot invent a noteless bass.
+              disabled={pickable === null}
+              aria-pressed={pickable !== null && pickable.accidental === o.value}
+              onClick={() => pickable && setBass({ note: pickable.note, accidental: o.value })}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <label className="chordsketch-ireal-bar-grid__field">
+          <span>/ Bass</span>
+          <input
+            type="text"
+            placeholder="G, F♯…"
+            value={bassRaw}
+            onChange={(e) => handleBassChange(e.target.value)}
+            className={bassInvalid ? 'chordsketch-ireal-bar-grid__input--invalid' : undefined}
+            aria-invalid={bassInvalid || undefined}
+          />
+        </label>
+      </div>
       <label className="chordsketch-ireal-bar-grid__field">
         <span>Pos.</span>
         <select

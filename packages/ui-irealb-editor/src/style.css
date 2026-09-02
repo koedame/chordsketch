@@ -530,11 +530,81 @@
   letter-spacing: 0;
 }
 
+/* Wrapping flex row rather than fixed grid columns: the bass picker
+ * added below claims a whole line, which auto-placement in a
+ * `repeat(5, 1fr)` grid would follow by stretching the reorder /
+ * remove buttons across fr columns. Flex also matches the React
+ * sister (`.chordsketch-ireal-bar-grid__popover-chordrow`), so the two
+ * chord rows wrap the same way. */
 .irealb-editor__popover-chordrow {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) auto auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
   align-items: end;
+}
+
+/* Structured slash-bass picker. Gives this popover the same Bass
+ * affordance the ChordPro chord-editor footer has, with the free-form
+ * field kept beside it for a bass the picker cannot express. Takes a
+ * line of its own because eleven chips plus the field do not fit next
+ * to the selects. Sister-site:
+ * `.chordsketch-ireal-bar-grid__popover-bass` in
+ * `packages/react/src/styles.css`. */
+.irealb-editor__popover-bass {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  flex-basis: 100%;
+}
+
+.irealb-editor__popover-basslabel {
+  font-family: var(--font-latin);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-600);
+}
+
+.irealb-editor__seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  background: var(--ink-100);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r-2);
+}
+
+.irealb-editor__seg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-1);
+  padding: 4px 8px;
+  min-width: 30px;
+  font: 600 0.8125rem/1 var(--font-latin);
+  color: var(--ink-600);
+  cursor: pointer;
+}
+
+.irealb-editor__seg button[aria-pressed='true'] {
+  background: var(--ink-0);
+  color: var(--crimson-600);
+  box-shadow: var(--e-1);
+}
+
+/* An accidental chip with no bass note to attach to. Declared after
+ * the pressed rule so an inert chip never paints as active. */
+.irealb-editor__seg button:disabled {
+  background: transparent;
+  color: var(--ink-500);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.irealb-editor__seg button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 }
 
 .irealb-editor__popover-rowbtn {
