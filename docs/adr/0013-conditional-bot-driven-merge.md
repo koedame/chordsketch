@@ -1,6 +1,6 @@
 # 0013. Bot-driven merge is allowed under explicit session permission
 
-- **Status**: Accepted (condition 4 updated by ADR-0015 on 2026-05-03; clause 1 extended for unattended Dependabot merge by ADR-0024 on 2026-05-25)
+- **Status**: Accepted (condition 4 updated by ADR-0015 on 2026-05-03; clause 1 extended for unattended Dependabot merge by ADR-0024 on 2026-05-25; clause 1 generalized to authorization in any of three forms by ADR-0047 on 2026-09-02)
 - **Date**: 2026-04-29
 
 > **Update (2026-05-03):** Condition (4) below ("Merge queue path
@@ -24,6 +24,17 @@
 > the human path. Every non-Dependabot bot-initiated merge still
 > requires explicit current-session permission per condition (1).
 > Conditions (2)–(4) are unchanged.
+
+> **Update (2026-09-02):** Condition (1) is generalized by
+> [ADR-0047](0047-merge-authorization-may-precede-the-work.md). The
+> grant no longer has to be spoken inside the session that performs the
+> merge: it may also be given up front with a self-contained unit of
+> work — covering the PRs the assistant opens as part of that unit —
+> or by naming the PR to be merged. Authorization still may not be
+> inferred, and it does not carry over between sessions or work units.
+> ADR-0024's Dependabot path becomes an instance of the first form
+> rather than an exception. Conditions (2)–(4) are unchanged and apply
+> to every merge, including PRs the assistant opened itself.
 
 ## Context
 
@@ -232,6 +243,9 @@ failure surface.
 - `.claude/rules/pr-workflow.md` "Why bots do not merge"
   section — superseded by the conditional clauses introduced
   in this ADR.
+- [ADR-0047](0047-merge-authorization-may-precede-the-work.md) —
+  generalizes condition (1) from per-session permission to
+  authorization in any of three forms.
 - Memory `feedback_no_bot_merge` — superseded; the persistent
   memory will be updated to reflect the new policy in a
   later session.
