@@ -171,6 +171,33 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest scripts/test_check_zero_deps.py
 
+  glibc-floor:
+    name: Linux glibc floor
+    # Guards the support floor of the `*-unknown-linux-*` release
+    # archives. A Linux target in `release.yml`'s build matrix without
+    # `cross: true` is compiled against the `ubuntu-latest` runner's
+    # glibc, which produces an archive that installs cleanly on the
+    # runner and then fails to start on any older distribution
+    # ("version `GLIBC_2.39' not found"). Nothing on a PR would notice:
+    # `readme-smoke.yml` only ever exercises `ubuntu-latest`, so the
+    # first report comes from a user. This job answers the config half
+    # of that question on every PR; `release.yml`'s "Verify glibc floor"
+    # step answers the artifact half at tag time, before the release is
+    # created.
+    #
+    # Guarantee-style check per `.claude/rules/ci-parallelization.md`
+    # §3 — no paths: filter, runs on every PR. Python-only, sub-second
+    # wall clock; no rust-cache needed (§2).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Check release matrix cross-compiles every Linux target
+        run: python3 scripts/check-glibc-floor.py
+
+      - name: Unit tests
+        run: python3 -m unittest scripts/test_check_glibc_floor.py
+
   macports-portfile-sync:
     name: MacPorts Portfile sync
     # Guards against the `cargo.crates` block in

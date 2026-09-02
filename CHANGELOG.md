@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The `x86_64-unknown-linux-gnu` release archive now runs on
+  distributions older than the CI runner. It was the only Linux target
+  built natively on `ubuntu-latest` instead of through `cross`, so it
+  linked against that runner's glibc 2.39 and died with
+  ``version `GLIBC_2.39' not found`` on Ubuntu 22.04, Debian 11 and
+  RHEL 8 — after installing successfully. Every Linux target now builds
+  through `cross`, putting the gnu archives back on a glibc 2.18 floor,
+  and `scripts/check-glibc-floor.py` fails the release build if a future
+  archive raises it again. Affects every channel that redistributes the
+  gnu tarball (Homebrew, AUR, Flatpak, Snap), not only Homebrew where it
+  was reported. See
+  [ADR-0046](docs/adr/0046-linux-release-binaries-target-an-old-glibc.md).
+
 ### Changed
 
 - `packaging/macports/Portfile`'s `cargo.crates` block is now
