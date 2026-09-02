@@ -4,7 +4,7 @@
 `cargo audit` answers one question — "does the lockfile contain a crate
 version named in the RustSec database?" — and answers it the same way for
 every caller. This script adds the three project-specific decisions that
-sit on top of that answer (ADR-0046):
+sit on top of that answer (ADR-0048):
 
 1. **Scope.** A crate reachable only through `[dev-dependencies]` edges
    never ships in a release artefact, so its advisory is triaged

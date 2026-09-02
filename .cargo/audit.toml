@@ -1,7 +1,7 @@
 # `cargo audit` configuration — the advisory ignore list and its contract.
 #
 # `.github/workflows/dependency-audit.yml` runs `cargo audit` daily and on
-# every pull request that changes the dependency graph (ADR-0046). An entry
+# every pull request that changes the dependency graph (ADR-0048). An entry
 # here mutes one advisory for both.
 #
 # Muting an advisory is a decision with an owner and an expiry, not a way to

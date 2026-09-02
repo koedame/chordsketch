@@ -1,6 +1,6 @@
 name: Dependency Audit
 
-# Scans `Cargo.lock` against the RustSec advisory database (ADR-0046).
+# Scans `Cargo.lock` against the RustSec advisory database (ADR-0048).
 #
 # The schedule is the load-bearing trigger: an advisory is published
 # against a version this repo already depends on, so a dependency-change
