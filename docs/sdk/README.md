@@ -17,6 +17,11 @@ runtime. Pick a starting point that fits how you are integrating:
   (`<ChordTextarea>`, `<ChordSheet>`, `<PdfExport>`, the
   composables, Nuxt notes), plus what the Vue package does not
   cover.
+- [Embed ChordPro in a Svelte app](tasks/embed-svelte.md) — the
+  same recipes again for `@chordsketch/svelte` (runes-backed state
+  helpers, snippets instead of render props, `bind:` instead of
+  change callbacks, SvelteKit notes), plus what the Svelte package
+  does not cover.
 
 Each task page shows the same operation across every binding, so
 you can copy the snippet that matches your stack.
@@ -62,10 +67,14 @@ bindings (e.g. matching desktop and web renderings).
   props are React-only.
 - **Svelte**:
   [`@chordsketch/svelte`](https://www.npmjs.com/package/@chordsketch/svelte)
-  — the same ChordPro surface as Svelte 5 runes-based components.
-  Its API table lives in
-  [`packages/svelte/README.md`](../../packages/svelte/README.md); a
-  task page here is still to be written.
+  — the same ChordPro surface as Svelte 5 runes-based components,
+  with the same prop names, defaults and class vocabulary as the
+  React package. See the
+  [Embed ChordPro in a Svelte app](tasks/embed-svelte.md) recipe
+  guide, and
+  [`packages/svelte/README.md`](../../packages/svelte/README.md) for
+  the full API table. The iReal Pro surface and the AST-walker
+  interaction props are React-only.
 - **Other frameworks** are tracked under
   [#2039](https://github.com/koedame/chordsketch/issues/2039).
 
@@ -113,12 +122,12 @@ fix-propagation rule (`.claude/rules/fix-propagation.md`).
 
 ## Status
 
-This guide is being written incrementally. Four task pages are
+This guide is being written incrementally. Five task pages are
 landed. Two are per-operation (render, transpose) and cover every
 existing binding (Rust, WASM, NAPI, CLI, Python, Swift, Kotlin,
-Ruby); two are per-framework (embed-react, embed-vue) and cover the
-UI component packages. Future additions will track new bindings and
-new operations as they are exposed:
+Ruby); three are per-framework (embed-react, embed-vue,
+embed-svelte) and cover the UI component packages. Future additions
+will track new bindings and new operations as they are exposed:
 
 - **AST-direct parse + traversal**: the Rust crate exposes the AST
   as a host object graph, and `@chordsketch/wasm` exposes it as JSON
