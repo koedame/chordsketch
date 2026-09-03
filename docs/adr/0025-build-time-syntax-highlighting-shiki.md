@@ -90,12 +90,15 @@ the existing `marked` → `DOMPurify` pipeline at
 - Theme: `github-dark` (revised to `github-dark-default` by
   [ADR-0055](0055-docs-shiki-theme-matches-the-code-surface.md), which
   records the contrast criterion the choice has to meet). A Shiki
-  transformer strips the
-  wrapper-level inline `style` / `tabindex` Shiki emits on
+  transformer strips the wrapper-level inline `style` Shiki emits on
   `<pre>` so the existing `.docs-prose pre` CSS rule keeps
   controlling background, padding, and border radius — the
   per-token coloured spans inside `<code>` are the only inline
-  styles that survive.
+  styles that survive. `tabindex` is kept rather than stripped: a
+  fence long enough to make `<pre>` scroll needs it for keyboard
+  focus (WCAG 2.1.1), and `SHIKI_PRE_KEEP_PROPERTIES` in
+  `packages/playground/scripts/lib/docs-render.mjs` allowlists it
+  for that reason.
 - DOMPurify's allowlist is widened to accept `style` on
   `<pre>` / `<code>` / `<span>` (three tags Shiki emits). The
   `afterSanitizeAttributes` hook narrows the allowance to those
