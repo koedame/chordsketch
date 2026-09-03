@@ -251,7 +251,7 @@
   font-family: var(--cs-font-jp, inherit);
   font-size: var(--cs-fs-12, 0.75rem);
   line-height: 1;
-  color: var(--cs-text-tertiary, #8A8790);
+  color: var(--cs-text-secondary, #67646D);
 }
 .chordsketch-capo__hint--error {
   color: var(--cs-danger-fg, #A30F37);
@@ -516,11 +516,11 @@
 }
 .chordsketch-sheet__content .meta--attribution-secondary {
   font-size: 0.8125rem;
-  color: var(--cs-ink-500, #8a8790);
+  color: var(--cs-text-secondary, #67646d);
   margin-bottom: 0.8em;
 }
 .chordsketch-sheet__content .meta__label {
-  color: var(--cs-ink-500, #8a8790);
+  color: var(--cs-text-secondary, #67646d);
   font-weight: 400;
 }
 
@@ -553,7 +553,7 @@
    as a footnote. */
 .chordsketch-sheet__content .meta--supplementary {
   font-size: 0.75rem;
-  color: var(--cs-ink-400, #a8a4ad);
+  color: var(--cs-text-secondary, #67646d);
   margin-bottom: 0.4em;
 }
 
@@ -1066,7 +1066,7 @@
   text-align: left;
 }
 .chordsketch-sheet__content .grid-no-chord {
-  color: var(--cs-ink-500, #67646d);
+  color: var(--cs-text-secondary, #67646d);
   font-style: italic;
   font-weight: 500;
 }
@@ -1331,7 +1331,7 @@
 }
 .chordsketch-sheet__content .grid-strum__antic {
   font-style: italic;
-  color: var(--cs-ink-500, #8a8790);
+  color: var(--cs-text-secondary, #67646d);
   margin-right: 0.1em;
 }
 .chordsketch-sheet__content .grid-strum__sep {
@@ -1714,7 +1714,7 @@
 }
 .chordsketch-staff__loading {
   font-size: 0.6875rem;
-  color: var(--cs-text-tertiary, #8a8790);
+  color: var(--cs-text-secondary, #67646d);
 }
 .chordsketch-sheet__cins-close {
   width: 28px;
@@ -2103,7 +2103,7 @@
 .chordsketch-sheet__content .comment {
   font-family: var(--cs-font-latin, "Inter", system-ui, -apple-system, sans-serif);
   font-style: italic;
-  color: var(--cs-ink-500, #8a8790);
+  color: var(--cs-text-secondary, #67646d);
   margin: 0.3em 0;
 }
 /* Comment-family directives are line-level per spec — each comment
