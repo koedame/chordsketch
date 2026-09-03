@@ -14,6 +14,12 @@ render the same output from the same engine. Where the Vue package
 has no counterpart for a React recipe, that is called out in
 [§What the Vue package does not cover](#what-the-vue-package-does-not-cover).
 
+> **Try it first.** Recipes 1 and 4 — `<ChordTextarea>` and
+> `<Transpose>` — are running as an editable page at
+> <https://chordsketch.koeda.me/vue/>, built on this package. Type
+> ChordPro there and watch the engine render it before you install
+> anything ([ADR-0053](../../adr/0053-framework-demos-live-in-the-playground.md)).
+
 > **Prerequisite.** `npm install @chordsketch/vue vue`. Vue 3.3 or
 > newer is a peer dependency. The PDF / PNG export bundle is a
 > separate optional peer — see [§Export to PDF](#recipe-5-export-to-pdf)

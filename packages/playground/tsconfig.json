@@ -8,6 +8,7 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
@@ -18,7 +19,11 @@
       "@chordsketch/react-ui": ["../react-ui/src/index.ts"],
       "@chordsketch/react-ui/styles.css": ["../react-ui/src/styles.css"],
       "@chordsketch/ui-irealb-editor": ["../ui-irealb-editor/src/index.ts"],
-      "@chordsketch/ui-irealb-editor/style.css": ["../ui-irealb-editor/src/style.css"]
+      "@chordsketch/ui-irealb-editor/style.css": ["../ui-irealb-editor/src/style.css"],
+      "@chordsketch/vue": ["../vue/src/index.ts"],
+      "@chordsketch/vue/styles.css": ["../vue/src/styles.css"],
+      "@chordsketch/svelte": ["../svelte/src/index.ts"],
+      "@chordsketch/svelte/styles.css": ["../svelte/src/styles.css"]
     }
   },
   "include": [
@@ -29,6 +34,7 @@
     "playwright.config.ts",
     "../react/src",
     "../react-ui/src",
-    "../ui-irealb-editor/src"
+    "../ui-irealb-editor/src",
+    "../vue/src"
   ]
 }

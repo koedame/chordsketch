@@ -86,6 +86,12 @@ ChordPro and iReal Pro rendering directly in your browser, no installation
 required. The format toggle in the header switches between the ChordPro
 text editor and the iReal Pro bar-grid GUI editor at runtime.
 
+The same engine embedded through each UI package, one editable page per
+binding: [Vue](https://koedame.github.io/chordsketch/vue/) and
+[Svelte](https://koedame.github.io/chordsketch/svelte/). The ChordPro
+playground above is the `@chordsketch/react` surface
+([ADR-0053](docs/adr/0053-framework-demos-live-in-the-playground.md)).
+
 ## Documentation
 
 **[ChordSketch Docs](https://koedame.github.io/chordsketch/docs/)** —
