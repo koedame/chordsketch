@@ -87,12 +87,18 @@ the existing `marked` → `DOMPurify` pipeline at
   custom Shiki language (`name: 'chordpro'`) so ChordPro fences
   highlight against the same grammar VS Code and JetBrains
   already use.
-- Theme: `github-dark`. A Shiki transformer strips the
-  wrapper-level inline `style` / `tabindex` Shiki emits on
+- Theme: `github-dark` (revised to `github-dark-default` by
+  [ADR-0055](0055-docs-shiki-theme-matches-the-code-surface.md), which
+  records the contrast criterion the choice has to meet). A Shiki
+  transformer strips the wrapper-level inline `style` Shiki emits on
   `<pre>` so the existing `.docs-prose pre` CSS rule keeps
   controlling background, padding, and border radius — the
   per-token coloured spans inside `<code>` are the only inline
-  styles that survive.
+  styles that survive. `tabindex` is kept rather than stripped: a
+  fence long enough to make `<pre>` scroll needs it for keyboard
+  focus (WCAG 2.1.1), and `SHIKI_PRE_KEEP_PROPERTIES` in
+  `packages/playground/scripts/lib/docs-render.mjs` allowlists it
+  for that reason.
 - DOMPurify's allowlist is widened to accept `style` on
   `<pre>` / `<code>` / `<span>` (three tags Shiki emits). The
   `afterSanitizeAttributes` hook narrows the allowance to those
@@ -186,6 +192,13 @@ context, and (c) is the most widely-recognised dark theme so the
 on-page docs visual matches reader expectations from GitHub's own
 code rendering. A light-mode toggle is out of scope for this ADR
 (none of the rest of the docs site supports one yet).
+
+Reason (a) is what later turned out to be load-bearing and
+unmet: the transformer above leaves the theme painting
+foregrounds onto `--cs-ink-1000`, not onto the `#24292E` this
+theme's palette assumes. [ADR-0055](0055-docs-shiki-theme-matches-the-code-surface.md)
+revises the pick to `github-dark-default` and states the
+criterion; (b) and (c) are unaffected.
 
 ## Consequences
 

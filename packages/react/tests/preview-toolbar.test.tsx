@@ -171,7 +171,7 @@ describe('<PreviewToolbar>', () => {
         onChordAudioToggle={onChordAudioToggle}
       />,
     );
-    const toggle = screen.getByRole('button', { name: 'Play chords on click' });
+    const toggle = screen.getByRole('button', { name: 'Chord audio' });
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(toggle);
     expect(onChordAudioToggle).toHaveBeenCalledWith(true);
@@ -185,7 +185,7 @@ describe('<PreviewToolbar>', () => {
         onChordAudioToggle={onChordAudioToggle}
       />,
     );
-    const pressed = screen.getByRole('button', { name: 'Play chords on click' });
+    const pressed = screen.getByRole('button', { name: 'Chord audio' });
     expect(pressed.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(pressed);
     expect(onChordAudioToggle).toHaveBeenLastCalledWith(false);
@@ -201,7 +201,7 @@ describe('<PreviewToolbar>', () => {
         onChordAudioToggle={vi.fn()}
       />,
     );
-    const off = screen.getByRole('button', { name: 'Play chords on click' });
+    const off = screen.getByRole('button', { name: 'Chord audio' });
     // The on/off state must be visible without relying on colour (#2669,
     // #2676): the off state draws the muted-speaker glyph, tagged with the
     // geometry-independent `data-audio-icon="off"` marker. Asserting on the
@@ -222,7 +222,7 @@ describe('<PreviewToolbar>', () => {
         onChordAudioToggle={vi.fn()}
       />,
     );
-    const on = screen.getByRole('button', { name: 'Play chords on click' });
+    const on = screen.getByRole('button', { name: 'Chord audio' });
     // The on state swaps to the volume-waves glyph (`data-audio-icon="on"`),
     // so the visible icon flips with state.
     expect(on.querySelector('[data-audio-icon="on"]')).not.toBeNull();

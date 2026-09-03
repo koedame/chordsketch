@@ -77,6 +77,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Every playground route scores 100 for accessibility.** Lighthouse
+  measured `/chordsketch/chordpro/` at 91, `/chordsketch/irealpro/` at
+  95 and each docs recipe page at 95 before this change; all seven
+  deployed routes are at 100 after it. Six distinct defects:
+
+  - *Small copy painted with the tertiary ink.* `--cs-text-tertiary`
+    (`#8A8790`) is 3.53:1 on white and 3.38:1 on the canvas, under the
+    4.5:1 WCAG 1.4.3 asks of text below 18.66px. The pane-head meta
+    caption, the sample-picker and iReal Pro toolbar eyebrows, the
+    URL-card and inspector labels, the CodeMirror line-number gutter,
+    the chord-editor eyebrow and the inline `{key}` / `{tempo}` chip
+    labels now use `--cs-text-secondary` (5.80:1 / 5.55:1). The token
+    keeps its value and is documented as a non-text tone —
+    separators, borders and disabled controls still use it
+    ([ADR-0054](docs/adr/0054-tertiary-ink-is-not-a-body-text-tone.md)).
+  - *The preview toolbar's labels were muted with `opacity: 0.7`*,
+    compositing `--cs-text-secondary` down to 3.03:1 against the
+    toolbar. They now name the tone instead of thinning it.
+  - *Docs code fences used a theme built for a different surface.* The
+    build strips the Shiki theme's own background so the code surface
+    is `--cs-ink-1000`, but `github-dark`'s palette assumes `#24292E`
+    and paints comments `#6A737D` — 4.11:1 on ours. The theme is now
+    `github-dark-default`, designed for a `#0D1117` surface, whose
+    lowest token colour over the docs corpus is 6.43:1
+    ([ADR-0055](docs/adr/0055-docs-shiki-theme-matches-the-code-surface.md)).
+  - *`role="status"` on the status bar's `<footer>`* is not a role
+    ARIA in HTML allows there. The polite live region now rides on the
+    global `aria-live` attribute, and the element keeps its
+    `contentinfo` landmark.
+  - *The CodeMirror editing surface had no accessible name.* Its
+    `contenteditable` div carries `role="textbox"`, and
+    `aria-placeholder` does not name a control; `<ChordSourceArea>`
+    gained an `ariaLabel` prop, defaulting to "ChordPro source".
+  - *Three buttons named themselves after their action, not their
+    visible text*, failing WCAG 2.5.3 (Label in Name). The chord-audio
+    toggle drops its redundant `aria-label` so the visible "Chord
+    audio" is its name; the `{key}` and `{tempo}` chips lead with the
+    text on screen. The tempo chip's separating space also moved out
+    of `.meta-inline__marking` and into its parent, matching
+    `chordsketch-render-html` — a leading space inside the child span
+    is trimmed out of the computed visible label, which made
+    "80 BPM (Andante)" read as "80 BPM(Andante)".
+
+  `tests-e2e/accessibility.spec.ts` now runs axe-core — the engine
+  behind Lighthouse's accessibility category — against all seven
+  routes on every PR, so the class fails CI instead of waiting for the
+  next manual audit.
+
 - **Docs sidebar and outline labels meet the WCAG contrast floor.**
   `.docs-nav-group-label` and `.docs-outline-label` were painted with
   `--cs-text-tertiary`, 3.38:1 against the docs canvas and below the
