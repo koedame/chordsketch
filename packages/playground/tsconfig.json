@@ -35,6 +35,18 @@
     "../react/src",
     "../react-ui/src",
     "../ui-irealb-editor/src",
+    // `../svelte/src` is deliberately NOT listed here, unlike its Vue
+    // sibling above. Vue's index.ts re-exports only from `.ts` files
+    // (`defineComponent` render functions); Svelte's re-exports named
+    // members (`TRANSPOSE_DEFAULT_MAX`, `TRANSPOSE_DEFAULT_MIN`,
+    // `PDF_EXPORT_DEFAULT_LABEL`) straight from `.svelte` SFCs, and
+    // `src/framework-demo.d.ts`'s `declare module '*.svelte'` shim
+    // only models a default export. Adding this directory to
+    // `include` makes tsc treat `../svelte/src/index.ts` as a root
+    // file and fails with TS2614 on those named re-exports. The
+    // package's own `svelte-check` already typechecks this directory
+    // in full; that coverage is what this line would otherwise
+    // duplicate.
     "../vue/src"
   ]
 }
