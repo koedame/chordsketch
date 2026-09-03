@@ -77,6 +77,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Docs sidebar and outline labels meet the WCAG contrast floor.**
+  `.docs-nav-group-label` and `.docs-outline-label` were painted with
+  `--cs-text-tertiary`, 3.38:1 against the docs canvas and below the
+  4.5:1 minimum WCAG 1.4.3 sets for text that size — the one
+  accessibility failure Lighthouse reports against the deployed docs
+  route. Both now use `--cs-text-secondary` (5.55:1). Same defect and
+  same fix as the playground toolbar labels above.
+
 - **Playground toolbar labels meet the WCAG contrast floor.** The
   eyebrow label beside each toolbar control (`.tool-group .label`) was
   painted with `--cs-text-tertiary`, 3.53:1 against the white toolbar
