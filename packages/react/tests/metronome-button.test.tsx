@@ -39,8 +39,9 @@ describe('<MetronomeButton>', () => {
     expect(button.classList.contains('meta-inline--tempo')).toBe(true);
     expect(button.getAttribute('type')).toBe('button');
     expect(button.getAttribute('aria-pressed')).toBe('false');
-    // The Italian marking is folded into the label so AT still hears
-    // it (the button's aria-label overrides the inner readout text).
+    // The label leads with the visible readout (WCAG 2.5.3, Label in
+    // Name) and folds the Italian marking in, so AT still hears it —
+    // the button's aria-label overrides the inner readout text.
     expect(button.getAttribute('aria-label')).toBe('120 BPM (Allegro) — play metronome');
     // The readout lives inside the button (so clicking the text also
     // toggles), and the glyph is hidden from AT (button names itself).
