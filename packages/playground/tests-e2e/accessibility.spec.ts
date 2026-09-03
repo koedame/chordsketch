@@ -48,9 +48,12 @@ const ROUTES: readonly Route[] = [
   // Recipe pages — the docs shape that carries syntax-highlighted code
   // fences, which the docs index does not. `embed-react` is here as
   // well as `embed-vue` because its fences are the ones long enough to
-  // overflow, making its `<pre>` a scrollable region.
+  // overflow, making its `<pre>` a scrollable region. `embed-svelte`
+  // is the third page built from the same recipe template and Shiki
+  // pipeline — no overflow, but the same contrast / ARIA surface.
   { path: './docs/embed-vue/' },
   { path: './docs/embed-react/' },
+  { path: './docs/embed-svelte/' },
   // A reference page: the other docs shape, and the second one whose
   // fences overflow.
   { path: './docs/reference/ireal-components/' },
