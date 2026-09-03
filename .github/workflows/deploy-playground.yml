@@ -40,6 +40,11 @@ on:
       # docs go silently stale.
       - 'docs/sdk/**'
       - '.github/workflows/deploy-playground.yml'
+      # The `wasm-pack` pin this workflow consumes through the
+      # composite action (#2225). The deployed playground ships the
+      # bundle wasm-pack produces, so a pin bump must redeploy or
+      # the live site keeps serving output from the previous pin.
+      - '.github/actions/install-wasm-pack/action.yml'
   workflow_dispatch:
 
 concurrency:
