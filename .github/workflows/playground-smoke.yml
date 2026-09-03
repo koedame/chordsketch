@@ -121,6 +121,21 @@ jobs:
         run: npm ci
         working-directory: packages/react-ui
 
+      - name: Install @chordsketch/vue dependencies
+        # The playground mounts both binding packages on its `/vue/`
+        # and `/svelte/` demo routes through source aliases (#2046),
+        # so `tsc` walks into `../vue/src` and Vite compiles
+        # `../svelte/src/*.svelte`. Each needs its own `node_modules`
+        # for `vue` / `svelte` / `esm-env` to resolve, exactly as the
+        # React siblings above do. Both are aliased to source, so
+        # neither needs `npm run build`.
+        run: npm ci
+        working-directory: packages/vue
+
+      - name: Install @chordsketch/svelte dependencies
+        run: npm ci
+        working-directory: packages/svelte
+
       - name: Build playground (production bundle the smoke serves)
         run: npm run build
         working-directory: packages/playground

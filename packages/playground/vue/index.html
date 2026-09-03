@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+  <title>ChordSketch · Vue live demo</title>
+  <meta name="description" content="Live, editable demo of the @chordsketch/vue components — edit ChordPro on the left, see the rendered chord sheet on the right." />
+  <!--
+    Design-system fonts, same set the ChordPro playground loads:
+    Noto Sans JP (Japanese UI / display), Inter (Latin / eyebrow
+    labels), JetBrains Mono (source / mono), Roboto (chord glyphs).
+    See DESIGN.md §3 for the role table.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700;900&family=Roboto:wght@400;500;700;900&display=swap"
+  />
+</head>
+<body>
+  <!--
+    The page chrome is static HTML on purpose. The demo itself is the
+    editor; everything around it is site furniture, and shipping it
+    pre-rendered means the browser paints the page before the Vue
+    bundle has loaded rather than showing a blank canvas until it
+    mounts. `#app` reserves the editor's height so the mount does not
+    shift the text above it.
+  -->
+  <div class="chordsketch-app framework-demo">
+    <nav class="topnav">
+      <a class="brand" href="../">
+        <span class="mark" aria-hidden="true"></span>ChordSketch
+      </a>
+      <span class="crumbs">
+        <span class="sep">/</span>
+        <span class="current">Vue live demo</span>
+      </span>
+      <div class="actions">
+        <a href="../docs/embed-vue/">Recipes</a>
+        <a href="https://www.npmjs.com/package/@chordsketch/vue" target="_blank" rel="noreferrer noopener">npm &#8599;</a>
+      </div>
+    </nav>
+
+    <main class="framework-demo__body">
+      <h1 class="framework-demo__title">Edit ChordPro, see it render &#8212; in Vue</h1>
+      <p class="framework-demo__lede">
+        This page is a real Vue 3 app built on <code>&#64;chordsketch/vue</code>.
+        Type on the left and the preview on the right re-renders through the
+        same WebAssembly engine the ChordPro playground uses.
+        <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>&#8593;</kbd>/<kbd>&#8595;</kbd>
+        in the editor steps the transposition.
+      </p>
+      <div id="app" class="framework-demo__mount"></div>
+    </main>
+  </div>
+  <script type="module" src="/src/vue/main.ts"></script>
+</body>
+</html>

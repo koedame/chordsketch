@@ -25,6 +25,8 @@ Any PR that
   the desktop app,
 - adds a new format-toggle entry to the playground (currently
   ChordPro / iRealb),
+- adds a route that mounts a UI binding package (the `/vue/` and
+  `/svelte/` demos),
 - changes the playground's mount sequence (init order, render
   ordering, error-recovery path),
 - changes `Renderers.init` semantics, or
@@ -45,6 +47,16 @@ actually works in the deployed bundle.
   (`pageerror` listener — covers the pre-#2397 failure surface and
   any future regression in the same class), clicking a bar opens
   the popover dialog.
+- `tests-e2e/framework-demos.spec.ts`: the per-binding live demos at
+  `/chordsketch/vue/` and `/chordsketch/svelte/`
+  ([ADR-0053](../../docs/adr/0053-framework-demos-live-in-the-playground.md),
+  #2046) — each route mounts its package's `<ChordTextarea>` against
+  the real wasm module, renders the sample, re-renders from typed
+  source, re-renders on transpose, and links back to the site root
+  and its recipe page. These are the only place `@chordsketch/vue`
+  and `@chordsketch/svelte` run in a browser: both packages' own
+  suites are jsdom with a stubbed wasm loader, which is exactly the
+  blind spot this rule exists for.
 - `tests-e2e/docs.spec.ts` + `tests-e2e/docs-links.spec.ts`: static
   docs deploy at `/chordsketch/docs/`
   ([ADR-0021](../../docs/adr/0021-docs-site-co-located-with-playground.md),

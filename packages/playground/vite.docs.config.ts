@@ -1,6 +1,6 @@
-// Docs-only Vite config — skips the wasm-backed chordpro / irealpro
-// entries so the docs SSG can be exercised without a built
-// `@chordsketch/wasm` artefact. Not consumed by
+// Docs-only Vite config — skips every wasm-backed entry (chordpro,
+// irealpro, and the vue / svelte demo routes) so the docs SSG can be
+// exercised without a built `@chordsketch/wasm` artefact. Not consumed by
 // `deploy-playground.yml`; the canonical CI build runs
 // `vite.config.ts`. Wired into `npm run build:docs` / `npm run
 // dev:docs` for local iteration on the docs route.

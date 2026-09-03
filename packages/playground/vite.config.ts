@@ -2,12 +2,17 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import vue from '@vitejs/plugin-vue';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   base: '/chordsketch/',
-  plugins: [react()],
+  // One plugin per binding. Each only claims its own file
+  // extensions (`.tsx` / `.vue` / `.svelte`), so the three coexist
+  // and every entry pays for exactly the framework it mounts.
+  plugins: [react(), vue(), svelte()],
   build: {
     outDir: 'dist',
     rollupOptions: {
@@ -25,6 +30,13 @@ export default defineConfig({
         // Vite owns only `docs.css` so the asset participates in
         // the production bundle and gets content-hashed.
         docs: resolve(here, 'docs/index.html'),
+        // Per-binding live demos (#2046). The React binding's live
+        // surface is the ChordPro playground above; `@chordsketch/
+        // vue` and `@chordsketch/svelte` had no browser surface at
+        // all until these, so a regression in either could only be
+        // caught by their jsdom unit suites — which stub wasm.
+        vue: resolve(here, 'vue/index.html'),
+        svelte: resolve(here, 'svelte/index.html'),
       },
     },
   },
@@ -67,6 +79,15 @@ export default defineConfig({
         here,
         '../ui-irealb-editor/src/index.ts',
       ),
+      // Vue / Svelte component libraries (#2046). Same alias
+      // pattern as the React package — Vite consumes the TS /
+      // `.svelte` sources directly, so the demos always exercise
+      // the working tree rather than a published copy. Longer
+      // specifiers first (Vite alias resolution is first-match).
+      '@chordsketch/vue/styles.css': resolve(here, '../vue/src/styles.css'),
+      '@chordsketch/vue': resolve(here, '../vue/src/index.ts'),
+      '@chordsketch/svelte/styles.css': resolve(here, '../svelte/src/styles.css'),
+      '@chordsketch/svelte': resolve(here, '../svelte/src/index.ts'),
     },
   },
   server: {
@@ -84,6 +105,8 @@ export default defineConfig({
         resolve(here, '../react'),
         resolve(here, '../react-ui'),
         resolve(here, '../ui-irealb-editor'),
+        resolve(here, '../vue'),
+        resolve(here, '../svelte'),
       ],
     },
   },

@@ -21,10 +21,12 @@
     "@codemirror/view": "^6.42.1",
     "@lezer/highlight": "^1.2.3",
     "@playwright/test": "^1.49.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-vue": "^5.2.1",
     "codemirror": "^6.0.2",
     "dompurify": "^3.4.5",
     "jsdom": "^25.0.1",
@@ -33,8 +35,10 @@
     "react-dom": "^18.3.1",
     "react-grab": "^0.1.33",
     "shiki": "^4.1.0",
+    "svelte": "^5.19.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "vue": "^3.5.13"
   }
 }

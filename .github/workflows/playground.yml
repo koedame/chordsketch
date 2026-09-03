@@ -73,6 +73,20 @@ jobs:
         working-directory: packages/react-ui
         run: npm ci
 
+      - name: Install @chordsketch/vue dependencies
+        # The playground mounts both binding packages on its `/vue/`
+        # and `/svelte/` demo routes through source aliases (#2046),
+        # so `tsc` walks into `../vue/src` and needs `vue` resolvable
+        # there. `packages/svelte` is installed for the same reason
+        # the smoke build needs it — the demo compiles that package's
+        # `.svelte` sources.
+        working-directory: packages/vue
+        run: npm ci
+
+      - name: Install @chordsketch/svelte dependencies
+        working-directory: packages/svelte
+        run: npm ci
+
       - name: Typecheck (tsc --noEmit)
         # `packages/playground/src/wasm.d.ts` declares an ambient
         # module for `@chordsketch/wasm` covering every export the

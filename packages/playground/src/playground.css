@@ -269,7 +269,12 @@ a {
   font-weight: 600;
   font-size: 0.75rem;
   letter-spacing: 0;
-  color: var(--cs-text-tertiary, #8A8790);
+  /* `--cs-text-tertiary` (#8A8790) is 3.53:1 on the white toolbar —
+   * below the 4.5:1 WCAG 1.4.3 floor for text this size, and the one
+   * accessibility failure Lighthouse reports against the toolbar.
+   * `--cs-text-secondary` (#67646D) is 5.8:1 and still reads as a
+   * de-emphasised eyebrow next to the control it labels. */
+  color: var(--cs-text-secondary, #67646D);
   margin-right: 0.5rem;
 }
 

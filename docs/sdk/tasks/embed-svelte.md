@@ -16,6 +16,12 @@ output from the same engine. Where the Svelte package has no
 counterpart for a React recipe, that is called out in
 [§What the Svelte package does not cover](#what-the-svelte-package-does-not-cover).
 
+> **Try it first.** Recipes 1 and 4 — `<ChordTextarea>` and
+> `<Transpose>` — are running as an editable page at
+> <https://chordsketch.koeda.me/svelte/>, built on this package. Type
+> ChordPro there and watch the engine render it before you install
+> anything ([ADR-0053](../../adr/0053-framework-demos-live-in-the-playground.md)).
+
 > **Prerequisite.** `npm install @chordsketch/svelte svelte`. Svelte
 > 5.0 or newer is a peer dependency — the components are written
 > with runes and do not run on Svelte 4. The package ships
