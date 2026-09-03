@@ -1,0 +1,126 @@
+/*
+ * Page shell for the per-framework live demos at
+ * `/chordsketch/vue/` and `/chordsketch/svelte/`.
+ *
+ * The chrome (`.chordsketch-app`, `.topnav`, `.toolbar`,
+ * `.tool-group`) and the `--cs-*` token layer come from
+ * `playground.css`, which both demo entries import first — this file
+ * only adds what a read-and-type demo page needs on top: a scrolling
+ * body with a prose intro above the embedded editor. Keeping the
+ * tokens in one place is deliberate; `playground.css`'s `:root`
+ * block is already the playground's single mirror of
+ * `design-system/tokens.css` (see `.claude/rules/design-tokens.md`).
+ *
+ * The Vue and Svelte demos share this stylesheet verbatim — the two
+ * pages are the same page with a different binding underneath, so a
+ * visual change to one must land for both by construction.
+ */
+
+.framework-demo__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+.framework-demo .topnav .actions {
+  margin-left: auto;
+}
+
+.framework-demo .topnav .actions a {
+  font-family: var(--cs-font-latin, 'Inter', system-ui, sans-serif);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cs-text-secondary, #67646D);
+  text-decoration: none;
+  padding: 0.375rem 0.625rem;
+  border-radius: 6px;
+}
+
+.framework-demo .topnav .actions a:hover {
+  color: var(--cs-crimson-500, #BD1642);
+  background: var(--cs-ink-100, #F6F4F7);
+}
+
+.framework-demo .topnav .actions a:focus-visible {
+  outline: 2px solid var(--cs-crimson-500, #BD1642);
+  outline-offset: 2px;
+}
+
+.framework-demo__title {
+  font-family: var(--cs-font-jp, 'Noto Sans JP', system-ui, sans-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--cs-text-primary, #0A0A0B);
+  margin: 0 0 0.5rem;
+}
+
+.framework-demo__lede {
+  font-family: var(--cs-font-latin, 'Inter', system-ui, sans-serif);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  /* `--cs-text-secondary` is #67646D on the #FAFAF7 canvas — 5.4:1,
+   * clear of the 4.5:1 floor WCAG 1.4.3 sets for body text. */
+  color: var(--cs-text-secondary, #67646D);
+  max-width: 44rem;
+  margin: 0 0 1.5rem;
+}
+
+.framework-demo__lede code,
+.framework-demo__version {
+  font-family: var(--cs-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 0.8125rem;
+  color: var(--cs-text-primary, #0A0A0B);
+}
+
+.framework-demo__lede kbd {
+  font-family: var(--cs-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 0.75rem;
+  padding: 0.0625rem 0.3125rem;
+  border: 1px solid var(--cs-border, #E8E6EA);
+  border-radius: 4px;
+  background: var(--cs-surface, #FFFFFF);
+  color: var(--cs-text-primary, #0A0A0B);
+}
+
+/* Reserve the mounted editor's height before the framework bundle
+ * arrives. Without it the heading and lede above would jump when the
+ * editor appears — the layout shift Lighthouse scores under CLS. The
+ * value is the toolbar strip (44px) plus the editor's own
+ * `min-height`. */
+.framework-demo__mount {
+  min-height: calc(28rem + 44px);
+}
+
+/* The toolbar sits inside the mounted region, so it reads as the
+ * editor card's header strip rather than the full-bleed bar the
+ * playground routes put under the top nav. */
+.framework-demo__toolbar {
+  border: 1px solid var(--cs-border, #E8E6EA);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  padding-left: 0.75rem;
+}
+
+/* The editor / preview split the package ships is transparent by
+ * design so the host owns the surface (see the package stylesheet's
+ * header). Paint it as a card here, matching the playground's
+ * `.pane` treatment. */
+.framework-demo .chordsketch-textarea {
+  border-color: var(--cs-border, #E8E6EA);
+  border-radius: 0 0 6px 6px;
+  background: var(--cs-surface, #FFFFFF);
+  min-height: 28rem;
+}
+
+.framework-demo .chordsketch-textarea__textarea {
+  border-right-color: var(--cs-border, #E8E6EA);
+  font-family: var(--cs-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+}
+
+@media (max-width: 40rem) {
+  .framework-demo .chordsketch-textarea__textarea {
+    border-bottom-color: var(--cs-border, #E8E6EA);
+  }
+}

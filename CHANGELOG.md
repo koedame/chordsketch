@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Live demo pages for the Vue and Svelte bindings.** The playground
+  now serves `/chordsketch/vue/` and `/chordsketch/svelte/` — one
+  editable page per UI package, mounting that package's
+  `<ChordTextarea>` and `<Transpose>` against the same WebAssembly
+  engine the ChordPro playground uses. Both are linked from the
+  playground landing page and from their recipe page under
+  `docs/sdk/tasks/`; React's live surface stays the ChordPro
+  playground. They are also the only browser coverage either binding
+  has had — `tests-e2e/framework-demos.spec.ts` asserts on every PR
+  that each one boots the real wasm module, renders, re-renders from
+  typed input, and re-renders on transpose. Closes the
+  `examples/docs-site/` request in #2046 without a second site
+  ([ADR-0053](docs/adr/0053-framework-demos-live-in-the-playground.md)).
+
 - **`@chordsketch/svelte@0.1.0` — Svelte 5 bindings for the ChordPro
   surface.** `<ChordSheet>`, `<ChordTextarea>`, `<ChordDiagram>`,
   `<Transpose>` and `<PdfExport>`, plus the `useChordRender` /
@@ -62,6 +76,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   corpus.
 
 ### Fixed
+
+- **Playground toolbar labels meet the WCAG contrast floor.** The
+  eyebrow label beside each toolbar control (`.tool-group .label`) was
+  painted with `--cs-text-tertiary`, 3.53:1 against the white toolbar
+  and below the 4.5:1 minimum WCAG 1.4.3 sets for text that size — the
+  one accessibility failure Lighthouse reported against every
+  playground route. It now uses `--cs-text-secondary` (5.8:1), which
+  still reads as de-emphasised next to the control it labels.
 
 - `@chordsketch/react`'s wasm-backed hooks and components now load
   correctly under Node, SSR and `jsdom`. Every one of the twelve call
