@@ -478,7 +478,7 @@ const SHIKI_STYLE_DECL_RE = new RegExp(
 );
 const PURIFY_CONFIG = {
   USE_PROFILES: { html: true },
-  ADD_ATTR: ['id', 'style'],
+  ADD_ATTR: ['id', 'style', 'tabindex'],
 };
 
 /** Fail-closed: returns true ONLY when every `;`-separated
@@ -596,7 +596,18 @@ const SHIKI_LANGS = [
   'vue',
   { ...CHORDPRO_GRAMMAR, name: 'chordpro' },
 ];
-const SHIKI_THEME = 'github-dark';
+// `SHIKI_PRE_KEEP_PROPERTIES` below strips the theme's own background
+// from the `<pre>`, so the code surface is `docs.css`'s
+// `--cs-ink-1000` (#0A0A0B) and the theme only contributes foreground
+// colours. The theme therefore has to be one designed for a near-black
+// surface: `github-dark`'s palette assumes its own #24292E background
+// and paints comments #6A737D, which is 4.11:1 on #0A0A0B — under the
+// 4.5:1 WCAG 1.4.3 floor, and enough to cost every docs page with a
+// code fence its Lighthouse accessibility score.
+// `github-dark-default` is GitHub's current dark palette, tuned for a
+// #0D1117 surface that is 1.05:1 from ours, and its lowest token
+// colour lands at 6.43:1. See ADR-0055.
+const SHIKI_THEME = 'github-dark-default';
 let HIGHLIGHTER;
 try {
   HIGHLIGHTER = await createHighlighter({
@@ -625,12 +636,21 @@ const SHIKI_LANG_ALIASES = new Map([
 const SHIKI_LOADED_LANGS = new Set(HIGHLIGHTER.getLoadedLanguages());
 
 // HAST `<pre>` properties to keep on Shiki output. Everything else
-// — Shiki's inline `style="background-color:..."`, `tabindex`, any
-// future string- or symbol-keyed property — is stripped so the
-// `.docs-prose pre` CSS rule keeps controlling background, padding,
-// and border-radius. Allowlist semantics: future Shiki versions
-// adding new wrapper attrs cannot leak into the deployed HTML.
-const SHIKI_PRE_KEEP_PROPERTIES = new Set(['class']);
+// — Shiki's inline `style="background-color:..."`, any future string-
+// or symbol-keyed property — is stripped so the `.docs-prose pre` CSS
+// rule keeps controlling background, padding, and border-radius.
+// Allowlist semantics: future Shiki versions adding new wrapper attrs
+// cannot leak into the deployed HTML.
+//
+// `tabindex` is kept. `.docs-prose pre` is `overflow-x: auto`, so a
+// fence with a long line is a scrollable region — and a scrollable
+// region a keyboard user cannot focus is one they cannot scroll (WCAG
+// 2.1.1). Shiki emits `tabindex="0"` for exactly that reason; it was
+// swept up with `style` when this allowlist was written for the CSS
+// reason above, which cost `/chordsketch/docs/embed-react/` and
+// `/chordsketch/docs/reference/ireal-components/` — the two pages whose
+// fences actually overflow — a `scrollable-region-focusable` failure.
+const SHIKI_PRE_KEEP_PROPERTIES = new Set(['class', 'tabindex']);
 const stripPreWrapper = {
   pre(node) {
     if (!node.properties) {

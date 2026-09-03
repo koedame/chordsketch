@@ -53,7 +53,7 @@ describe('<KeySignatureButton>', () => {
     expect(button.classList.contains('meta-inline')).toBe(true);
     expect(button.classList.contains('meta-inline--key')).toBe(true);
     expect(button.getAttribute('type')).toBe('button');
-    expect(button.getAttribute('aria-label')).toBe('Play the G major scale and chord');
+    expect(button.getAttribute('aria-label')).toBe('Key: G major — play the G major scale and chord');
     // The readout + label live inside the button so the whole pill is a
     // single click target.
     expect(button.querySelector('.meta-inline__label')?.textContent).toBe('Key:');
@@ -70,7 +70,7 @@ describe('<KeySignatureButton>', () => {
     );
     const button = container.querySelector('button') as HTMLButtonElement;
     expect(button.querySelector('.meta-inline__value')?.textContent).toBe('B♭ major');
-    expect(button.getAttribute('aria-label')).toBe('Play the B♭ major scale and chord');
+    expect(button.getAttribute('aria-label')).toBe('Key: B♭ major — play the B♭ major scale and chord');
   });
 
   test('renders an Original → Playing pair and auditions the sounding key', () => {
@@ -91,7 +91,7 @@ describe('<KeySignatureButton>', () => {
     expect(groups[1]?.querySelector('.meta-inline__value')?.textContent).toBe('A major');
     // The audition plays what the reader hears — the sounding key.
     expect(button.getAttribute('aria-label')).toBe(
-      'Play the A major scale and chord (transposed from G major)',
+      'Original: G major Playing: A major — play the A major scale and chord',
     );
   });
 
