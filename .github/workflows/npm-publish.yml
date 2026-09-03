@@ -55,10 +55,10 @@ jobs:
       # heavy renderer surface that ships in the sister package
       # `@chordsketch/wasm-export` (#2466). Without this flag this
       # workflow would publish a ~25× larger bundle that contradicts
-      # the split. Forwarding via `--` is required because wasm-pack
-      # 0.14.0's own argument parser otherwise misinterprets the
-      # positional path when `--no-default-features` is interleaved
-      # before `--target`.
+      # the split. Forwarding via `--` is required because
+      # wasm-pack's own argument parser otherwise reads the value of
+      # `--target` as a Rust target triple when `--no-default-features`
+      # is interleaved before it (`rustup target add web`).
       - name: Build WASM (web target, lean)
         run: wasm-pack build crates/wasm --release --target web --out-dir ../../packages/npm/web -- --no-default-features
 
