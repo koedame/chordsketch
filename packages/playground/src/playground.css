@@ -64,6 +64,13 @@ body,
   --cs-text-primary: var(--cs-ink-1000);
   --cs-text-strong: var(--cs-ink-700);
   --cs-text-secondary: var(--cs-ink-600);
+  /* Not a body-text tone. `--cs-ink-500` is 3.53:1 on `--cs-surface`
+   * and 3.38:1 on `--cs-canvas`, which clears the 3:1 floor WCAG
+   * asks of non-text UI (1.4.11) and large text but not the 4.5:1
+   * floor 1.4.3 asks of text below 18.66px. Small copy uses
+   * `--cs-text-secondary` (5.8:1 / 5.55:1); this tone is for
+   * separators, disabled controls and other 3:1 surfaces. See
+   * ADR-0054. */
   --cs-text-tertiary: var(--cs-ink-500);
 
   --cs-success-fg: #1A6B3A;
@@ -269,11 +276,6 @@ a {
   font-weight: 600;
   font-size: 0.75rem;
   letter-spacing: 0;
-  /* `--cs-text-tertiary` (#8A8790) is 3.53:1 on the white toolbar —
-   * below the 4.5:1 WCAG 1.4.3 floor for text this size, and the one
-   * accessibility failure Lighthouse reports against the toolbar.
-   * `--cs-text-secondary` (#67646D) is 5.8:1 and still reads as a
-   * de-emphasised eyebrow next to the control it labels. */
   color: var(--cs-text-secondary, #67646D);
   margin-right: 0.5rem;
 }
@@ -412,7 +414,7 @@ a {
 .pane-head .meta {
   font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
   font-size: 0.75rem;
-  color: var(--cs-text-tertiary, #8A8790);
+  color: var(--cs-text-secondary, #67646D);
   font-feature-settings: "tnum" 1;
   /* Push the meta caption + everything that follows it to the
    * right edge of the pane head. The Export PDF button (when
@@ -515,7 +517,7 @@ a {
 }
 
 .chordsketch-app__textarea::placeholder {
-  color: var(--cs-text-tertiary);
+  color: var(--cs-text-secondary);
 }
 
 .chordsketch-app__iframe {
@@ -548,7 +550,7 @@ a {
   justify-content: center;
   font-family: var(--cs-font-latin);
   font-size: var(--cs-fs-14);
-  color: var(--cs-text-tertiary);
+  color: var(--cs-text-secondary);
   background: var(--cs-canvas);
 }
 
@@ -576,7 +578,7 @@ a {
   font-family: var(--cs-font-latin);
   font-weight: 600;
   font-size: var(--cs-fs-12);
-  color: var(--cs-text-tertiary);
+  color: var(--cs-text-secondary);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -688,7 +690,7 @@ a {
   font-family: var(--cs-font-latin);
   font-weight: 600;
   font-size: var(--cs-fs-12);
-  color: var(--cs-text-tertiary);
+  color: var(--cs-text-secondary);
   margin-right: var(--cs-sp-2);
 }
 
@@ -795,7 +797,7 @@ a {
   font-family: var(--cs-font-latin);
   font-weight: 600;
   font-size: var(--cs-fs-12);
-  color: var(--cs-text-tertiary);
+  color: var(--cs-text-secondary);
 }
 .meta-field input,
 .meta-field select {
@@ -923,7 +925,7 @@ a {
 .chordsketch-app--irealb .inspector header .pos {
   font-family: var(--cs-font-mono);
   font-size: var(--cs-fs-12);
-  color: var(--cs-text-tertiary);
+  color: var(--cs-text-secondary);
 }
 .chordsketch-app--irealb .inspector .row {
   display: flex;
@@ -935,7 +937,7 @@ a {
   font-family: var(--cs-font-latin);
   font-weight: 600;
   font-size: var(--cs-fs-12);
-  color: var(--cs-text-tertiary);
+  color: var(--cs-text-secondary);
 }
 .inspector__nav {
   display: flex;
@@ -975,7 +977,7 @@ a {
 .inspector__placeholder {
   font-family: var(--cs-font-latin);
   font-size: var(--cs-fs-13);
-  color: var(--cs-text-tertiary);
+  color: var(--cs-text-secondary);
   margin: 0;
 }
 
@@ -1167,7 +1169,7 @@ a {
   font-weight: 600;
   font-size: 0.75rem;
   letter-spacing: 0;
-  color: var(--cs-text-tertiary, #8A8790);
+  color: var(--cs-text-secondary, #67646D);
 }
 
 /* `.segmented` already styles the View pill; the modifier hook

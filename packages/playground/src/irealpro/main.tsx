@@ -459,7 +459,12 @@ function PlaygroundApp(): JSX.Element {
         </div>
       </main>
 
-      <footer className="status" role="status" aria-live="polite">
+      {/* `role="status"` is not one of the roles ARIA in HTML allows on
+          `<footer>`, and setting it there cost the route an
+          `aria-allowed-role` failure. `aria-live` is a global attribute,
+          so a polite live region survives dropping the role — and the
+          element keeps its `contentinfo` landmark. */}
+      <footer className="status" aria-live="polite">
         <span className={`status__parsed${error ? ' status__parsed--warn' : ''}`}>
           <span className={error ? 'warn' : 'ok'}>●</span>
           {error ? 'Parse error' : song ? 'Parsed · 0 warnings' : 'Loading…'}

@@ -80,10 +80,22 @@ export function MetronomeButton({
 
   const marking = tempoMarkingFor(bpm);
   const readout = bpmRaw ?? String(bpm);
+  // The space before the marking is a text node of `__value`, not the
+  // first character inside `__marking`. An accessible-name check walks
+  // the subtree element by element and trims each one, so a leading
+  // space inside the child span disappears and the visible label reads
+  // "80 BPM(Andante)" — which no natural aria-label contains, failing
+  // WCAG 2.5.3. Emitting the separator outside the span is also what
+  // `chordsketch-render-html` does (`crates/render-html/src/lib.rs`).
   const value = (
     <span className="meta-inline__value">
       {readout} BPM
-      {marking != null ? <span className="meta-inline__marking">{` (${marking})`}</span> : null}
+      {marking != null ? (
+        <>
+          {' '}
+          <span className="meta-inline__marking">{`(${marking})`}</span>
+        </>
+      ) : null}
     </span>
   );
 
@@ -100,13 +112,13 @@ export function MetronomeButton({
     );
   }
 
-  // Fold the Italian marking into the label so AT users still hear it
-  // — the button's aria-label overrides the inner readout text, which
-  // is the only other place the marking is exposed.
-  const tempoText = marking != null ? `${bpm} BPM, ${marking}` : `${bpm} BPM`;
+  // The label leads with the chip's visible readout so the accessible
+  // name contains it, as WCAG 2.5.3 (Label in Name) requires — the
+  // marking is parenthesised here exactly as it is on screen.
+  const tempoText = marking != null ? `${readout} BPM (${marking})` : `${readout} BPM`;
   const label = metronome.isPlaying
-    ? `Stop metronome (${tempoText})`
-    : `Play metronome at ${tempoText}`;
+    ? `${tempoText} — stop metronome`
+    : `${tempoText} — play metronome`;
   // The frame-pulse period (shared clamp with the pendulum swing) is
   // published as a CSS custom property the `cs-tempo-frame` keyframes
   // consume. The cast keeps CSSProperties happy (custom props aren't

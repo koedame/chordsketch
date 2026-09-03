@@ -34,7 +34,7 @@ test.describe('chord-audio toggle on the ChordPro preview', () => {
     });
     await expect(toolbar).toBeVisible();
 
-    const toggle = toolbar.getByRole('button', { name: 'Play chords on click' });
+    const toggle = toolbar.getByRole('button', { name: 'Chord audio' });
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     // The toggle must read its state visibly, not only via aria-pressed

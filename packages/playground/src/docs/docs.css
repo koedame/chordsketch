@@ -37,6 +37,9 @@ body,
   --cs-text-primary: var(--cs-ink-1000);
   --cs-text-strong: var(--cs-ink-700);
   --cs-text-secondary: var(--cs-ink-600);
+  /* Not a body-text tone — 3.38:1 on `--cs-canvas`, below the 4.5:1
+   * WCAG 1.4.3 floor for text under 18.66px. Small copy uses
+   * `--cs-text-secondary`. See ADR-0054. */
   --cs-text-tertiary: var(--cs-ink-500);
 
   --cs-focus-ring: 0 0 0 2px var(--cs-ink-0), 0 0 0 4px var(--cs-crimson-500);
@@ -174,13 +177,6 @@ body {
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  /* `--cs-text-tertiary` (#8A8790) is 3.38:1 on the `--cs-canvas`
-   * sidebar — below the 4.5:1 WCAG 1.4.3 floor, and the one
-   * accessibility failure Lighthouse reports against the deployed
-   * docs route. `--cs-text-secondary` (#67646D) is 5.55:1 and still
-   * reads as a de-emphasised group label above the links it heads.
-   * Same defect and same fix as `.tool-group .label` in
-   * `playground.css` (#2834). */
   color: var(--cs-text-secondary);
   font-weight: 700;
   margin: 0 0 var(--cs-sp-2);
@@ -351,6 +347,11 @@ body {
   border: 1px solid var(--cs-border);
 }
 
+/* The Shiki `<pre>` arrives with its theme's own background stripped
+ * (`SHIKI_PRE_KEEP_PROPERTIES` in `scripts/lib/docs-render.mjs`), so the
+ * code surface is this token rather than the theme's. The theme in
+ * `SHIKI_THEME` must therefore be one whose token palette clears 4.5:1
+ * against `--cs-ink-1000` — see ADR-0055. */
 .docs-prose pre {
   background: var(--cs-ink-1000);
   color: #f3f3f5;

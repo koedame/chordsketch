@@ -64,7 +64,7 @@ Not pure gray. A faint red tint keeps it in harmony with crimson.
 | `--ink-100`  | `#F6F4F7` | Hover surface |
 | `--ink-200`  | `#E8E6EA` | Hairline / subtle border |
 | `--ink-300`  | `#D4D1D6` | Border |
-| `--ink-500`  | `#8A8790` | Text-tertiary |
+| `--ink-500`  | `#8A8790` | Text-tertiary — **not a body-text tone**, see §2.4 |
 | `--ink-600`  | `#67646D` | Text-secondary |
 | `--ink-700`  | `#44424A` | Text-strong (sub) |
 | `--ink-1000` | `#0A0A0B` | Text-primary |
@@ -81,9 +81,17 @@ Not pure gray. A faint red tint keeps it in harmony with crimson.
 ### 2.4 Contrast
 
 - Body text on background must meet WCAG AA (≥ 4.5:1).
-- `--ink-1000` on `--ink-50` = 18.7:1 ✓
+- `--ink-1000` on `--ink-50` = 18.9:1 ✓
 - `#fff` on `--crimson-500` = 6.2:1 ✓
-- `--ink-500` is for supporting copy only; never use it for body text.
+- `--ink-500` never paints text below 18.66px bold / 24px regular. It is
+  3.53:1 on `--ink-0`, 3.38:1 on `--ink-50` and 3.23:1 on `--ink-100`,
+  which clears the 3:1 WCAG 1.4.11 asks of non-text UI and 1.4.3 asks of
+  large text, but not the 4.5:1 that 1.4.3 asks of everything smaller.
+  Its uses are separators, icon strokes, borders, large text and
+  disabled controls (1.4.3 exempts inactive components). Small
+  supporting copy — labels, captions, timestamps, placeholders — uses
+  `--ink-600` / `--text-secondary` (5.80:1 / 5.55:1 / 5.30:1 on the same
+  three surfaces). See [ADR-0054](../docs/adr/0054-tertiary-ink-is-not-a-body-text-tone.md).
 
 Ratios verified with the [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/).
 Re-measure when a token's hex value changes.

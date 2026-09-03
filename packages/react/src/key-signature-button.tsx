@@ -120,11 +120,15 @@ export function KeySignatureButton({
   }
 
   const audibleDisplay = unicodeAccidentals(audibleKey);
-  const label = isPair
-    ? `Play the ${audibleDisplay} scale and chord (transposed from ${unicodeAccidentals(
-        keyName,
-      )})`
-    : `Play the ${audibleDisplay} scale and chord`;
+  // WCAG 2.5.3 (Label in Name) wants the accessible name to contain the
+  // control's visible text, so the label leads with the chip's own copy
+  // — "Key: G major" (or "Original: … Playing: …" while transposed) —
+  // and appends what activating it does. A name that only described the
+  // action left speech-input users with no way to say the chip's name.
+  const visible = isPair
+    ? `Original: ${unicodeAccidentals(keyName)} Playing: ${audibleDisplay}`
+    : `Key: ${audibleDisplay}`;
+  const label = `${visible} — play the ${audibleDisplay} scale and chord`;
 
   return (
     <button

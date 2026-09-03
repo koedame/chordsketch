@@ -123,6 +123,15 @@ export interface ChordSourceAreaProps extends Omit<HTMLAttributes<HTMLDivElement
   /** Placeholder rendered while the editor is empty. */
   placeholder?: string;
   /**
+   * Accessible name for the editing surface. CodeMirror renders its
+   * document into a `contenteditable` div carrying `role="textbox"`,
+   * and an ARIA textbox with no name is an unlabelled input to a
+   * screen reader — `aria-placeholder` does not name a control. Hosts
+   * that already label the pane visually (a `<h2>` above the editor,
+   * say) can point at it instead by passing that text here.
+   */
+  ariaLabel?: string;
+  /**
    * Disable the line-number gutter. Defaults to enabled — the
    * playground and most editor UIs benefit from line numbers, but
    * embedded preview-only contexts can suppress them.
@@ -163,6 +172,9 @@ export interface ChordSourceAreaProps extends Omit<HTMLAttributes<HTMLDivElement
  * adding them is grammar work — see the docstring in
  * `chordpro-language.ts`.
  */
+/** Fallback accessible name for the editing surface. */
+const DEFAULT_ARIA_LABEL = 'ChordPro source';
+
 const designSystemHighlight = HighlightStyle.define([
   // Chord literals (`[G]`, `[Am7]`).
   {
@@ -217,7 +229,9 @@ const designSystemTheme = EditorView.theme(
     '.cm-gutters': {
       backgroundColor: 'var(--cs-surface, #FFFFFF)',
       borderRight: '1px solid var(--cs-border, #E8E6EA)',
-      color: 'var(--cs-text-tertiary, #8A8790)',
+      // Line numbers are 13px text on `--cs-surface`, so they need the
+      // 4.5:1 tone rather than the 3.53:1 tertiary one (ADR-0054).
+      color: 'var(--cs-text-secondary, #67646D)',
       fontFamily:
         '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
     },
@@ -316,6 +330,7 @@ export const ChordSourceArea = forwardRef<ChordSourceAreaHandle, ChordSourceArea
       onCaretLineChange,
       onCaretChange,
       placeholder,
+      ariaLabel = DEFAULT_ARIA_LABEL,
       noLineNumbers,
       noLineWrapping,
       className,
@@ -408,6 +423,7 @@ export const ChordSourceArea = forwardRef<ChordSourceAreaHandle, ChordSourceArea
         ]),
         ...(noLineWrapping ? [] : [EditorView.lineWrapping]),
         ...(placeholder ? [placeholderExtension(placeholder)] : []),
+        EditorView.contentAttributes.of({ 'aria-label': ariaLabel }),
         updateListener,
       ];
 
@@ -424,8 +440,9 @@ export const ChordSourceArea = forwardRef<ChordSourceAreaHandle, ChordSourceArea
       };
       // We intentionally only mount once. `value` updates flow
       // through the sync effect below; option-prop changes
-      // (`noLineNumbers`, `noLineWrapping`, `placeholder`) require
-      // a remount which the user can force via React's `key` prop.
+      // (`noLineNumbers`, `noLineWrapping`, `placeholder`,
+      // `ariaLabel`) require a remount which the user can force via
+      // React's `key` prop.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

@@ -324,7 +324,10 @@ export function PreviewToolbar({
                react-ui present (#2669). */
             className="chordsketch-preview-toolbar__audio-toggle"
             aria-pressed={Boolean(chordAudioEnabled)}
-            aria-label="Play chords on click"
+            /* No `aria-label`: the visible "Chord audio" text is the
+               control's name, and an override that did not contain it
+               would break WCAG 2.5.3 (Label in Name). The on/off state
+               rides on `aria-pressed`; `title` carries the detail. */
             title={
               chordAudioEnabled
                 ? 'Chord audio on — click to stop playing chords'

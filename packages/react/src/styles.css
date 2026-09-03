@@ -278,9 +278,14 @@
   gap: var(--cs-sp-2, 0.5rem);
 }
 
+/* The muted eyebrow next to each toolbar control. Muting used to be
+ * `opacity: 0.7`, which composited the inherited `--cs-text-secondary`
+ * against the toolbar to #959399 — 3.03:1, under the 4.5:1 WCAG 1.4.3
+ * floor for 12px text. Name the tone instead of thinning it so the
+ * rendered colour is the one the token guarantees (ADR-0054). */
 .chordsketch-preview-toolbar__label {
   font-size: 0.85em;
-  opacity: 0.7;
+  color: var(--cs-text-secondary, #67646D);
 }
 
 /* Diagrams group label matches the ChordPro editor's control-label
@@ -296,7 +301,6 @@
   font-size: 0.75rem;
   color: var(--cs-text-secondary);
   letter-spacing: 0;
-  opacity: 1;
 }
 
 /* Diagrams orientation `<select>` styling. Mirrors
@@ -605,7 +609,7 @@
   vertical-align: middle;
 }
 .chordsketch-sheet__content .meta-inline__label {
-  color: var(--cs-ink-500, #8a8790);
+  color: var(--cs-ink-600, #67646d);
   font-weight: 500;
 }
 .chordsketch-sheet__content .meta-inline__value {
@@ -616,7 +620,7 @@
    smaller and a touch muted so the numeric BPM stays the lead
    element of the chip. */
 .chordsketch-sheet__content .meta-inline__marking {
-  color: var(--cs-ink-500, #67646d);
+  color: var(--cs-ink-600, #67646d);
   font-weight: 400;
   font-style: italic;
 }
@@ -1670,7 +1674,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--cs-text-tertiary, #8a8790);
+  color: var(--cs-text-secondary, #67646d);
 }
 .chordsketch-sheet__cins-name {
   font-family: var(--cs-font-chord, "Roboto", system-ui, sans-serif);

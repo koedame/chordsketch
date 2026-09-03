@@ -519,12 +519,15 @@ describe('highlightCodeBlock', () => {
     expect(html.startsWith('<pre class="shiki')).toBe(true);
     expect(html).toMatch(COLOUR_SPAN_RE);
     expect(html).toContain('ChordSheet');
-    // Wrapper-level presentation attrs (Shiki's `style`,
-    // `tabindex`, and any future ones the `stripPreWrapper`
-    // allowlist drops) must be absent so the existing `.docs-prose
-    // pre` CSS rule keeps controlling background / padding / radius.
+    // Wrapper-level presentation attrs (Shiki's `style` and any
+    // future ones the `stripPreWrapper` allowlist drops) must be
+    // absent so the existing `.docs-prose pre` CSS rule keeps
+    // controlling background / padding / radius.
     expect(html).not.toMatch(/<pre[^>]*\sstyle=/);
-    expect(html).not.toMatch(/<pre[^>]*\stabindex=/);
+    // `tabindex` is the exception the allowlist keeps: `.docs-prose
+    // pre` scrolls horizontally, and a scrollable region a keyboard
+    // user cannot focus is one they cannot scroll (WCAG 2.1.1).
+    expect(html).toMatch(/<pre[^>]*\stabindex="0"/);
   });
 
   it('preserves tokenisation boundaries: keyword and string land in distinct coloured spans', () => {
@@ -711,7 +714,7 @@ describe('renderMarkdown code-fence integration', () => {
       "```tsx\nimport { x } from 'y';\n```\n",
       'docs/sdk/tasks/embed-react.md',
     );
-    expect(html).toMatch(/<pre class="shiki[^"]*"><code>/);
+    expect(html).toMatch(/<pre class="shiki[^"]*" tabindex="0"><code>/);
     expect(html).toMatch(COLOUR_SPAN_RE);
   });
 
