@@ -379,6 +379,9 @@ mechanical.
 - [Embed ChordPro and iReal Pro in a React app](embed-react.md) —
   the React counterpart of this page, and the home of the iReal Pro
   recipes.
+- [Embed ChordPro in a Svelte app](embed-svelte.md) — the same
+  recipes for `@chordsketch/svelte`, whose rune-backed state helpers
+  are the closest neighbour to the composables used here.
 - [Render to HTML, plain text, or PDF](render.md) — same operation
   across every binding (CLI / Rust / Python / Swift / Kotlin /
   Ruby / wasm), useful if your stack mixes a Vue client with a

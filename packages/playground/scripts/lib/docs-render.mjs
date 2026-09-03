@@ -49,6 +49,13 @@ export const DOC_GROUPS = [
         sourcePath: 'docs/sdk/tasks/embed-vue.md',
       },
       {
+        slug: 'embed-svelte',
+        title: 'Embed in a Svelte app',
+        blurb:
+          '8 copy-paste recipes for the @chordsketch/svelte component surface.',
+        sourcePath: 'docs/sdk/tasks/embed-svelte.md',
+      },
+      {
         slug: 'render',
         title: 'Render across every binding',
         blurb:
@@ -582,6 +589,7 @@ const SHIKI_LANGS = [
   'ruby',
   'rust',
   'shell',
+  'svelte',
   'swift',
   'tsx',
   'typescript',

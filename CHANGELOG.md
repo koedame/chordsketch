@@ -50,6 +50,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SFC fences are syntax-highlighted at build time like every other
   language in the corpus.
 
+- **Docs site: "Embed in a Svelte app" recipe page**
+  (`/chordsketch/docs/embed-svelte/`). The same eight recipes in the
+  same order as the React and Vue pages, written in Svelte idiom —
+  snippets instead of render-prop fallbacks, `bind:value` /
+  `bind:transpose` instead of change callbacks, getter-taking rune
+  helpers — plus the SvelteKit SSR notes and an explicit table of the
+  React surfaces (iReal Pro, the AST walker and the interaction props
+  built on it) that have no Svelte counterpart. `.svelte` fences are
+  syntax-highlighted at build time like every other language in the
+  corpus.
+
 ### Fixed
 
 - `@chordsketch/react`'s wasm-backed hooks and components now load

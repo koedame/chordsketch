@@ -240,12 +240,12 @@ describe('cleanUrlFor', () => {
 });
 
 describe('DOC_GROUPS registry', () => {
-  it('declares 19 pages across 3 groups', () => {
+  it('declares 20 pages across 3 groups', () => {
     const total = DOC_GROUPS.reduce(
       (n: number, g: { pages: readonly unknown[] }) => n + g.pages.length,
       0,
     );
-    expect(total).toBe(19);
+    expect(total).toBe(20);
     expect(DOC_GROUPS.map((g) => g.label)).toEqual([
       'Getting started',
       'Recipes',
@@ -298,6 +298,7 @@ describe('findPage / allPages', () => {
       '',
       'embed-react',
       'embed-vue',
+      'embed-svelte',
       'render',
       'transpose-task',
       'reference',
