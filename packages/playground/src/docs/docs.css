@@ -174,7 +174,14 @@ body {
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--cs-text-tertiary);
+  /* `--cs-text-tertiary` (#8A8790) is 3.38:1 on the `--cs-canvas`
+   * sidebar — below the 4.5:1 WCAG 1.4.3 floor, and the one
+   * accessibility failure Lighthouse reports against the deployed
+   * docs route. `--cs-text-secondary` (#67646D) is 5.55:1 and still
+   * reads as a de-emphasised group label above the links it heads.
+   * Same defect and same fix as `.tool-group .label` in
+   * `playground.css` (#2834). */
+  color: var(--cs-text-secondary);
   font-weight: 700;
   margin: 0 0 var(--cs-sp-2);
 }
@@ -222,7 +229,11 @@ body {
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--cs-text-tertiary);
+  /* Same size, same surface and same 3.38:1 failure as
+   * `.docs-nav-group-label` above; Lighthouse only names the sidebar
+   * because the index page it audits carries no outline. Fixed
+   * together so the pair cannot drift. */
+  color: var(--cs-text-secondary);
   font-weight: 700;
   margin: 0 0 var(--cs-sp-2);
 }
