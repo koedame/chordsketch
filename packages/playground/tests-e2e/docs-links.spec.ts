@@ -24,6 +24,7 @@ const REGISTERED_SLUGS = [
   '',
   'embed-react',
   'embed-vue',
+  'embed-svelte',
   'render',
   'transpose-task',
   'reference',

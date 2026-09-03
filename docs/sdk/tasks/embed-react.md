@@ -317,6 +317,9 @@ components are the wrong layer for non-React server rendering.
 - [Embed ChordPro in a Vue app](embed-vue.md) — the same recipes in
   the same order for `@chordsketch/vue`, and the list of surfaces on
   this page that have no Vue counterpart.
+- [Embed ChordPro in a Svelte app](embed-svelte.md) — the same
+  recipes again for `@chordsketch/svelte`, and the list of surfaces
+  on this page that have no Svelte counterpart.
 - [Render to HTML, plain text, or PDF](render.md) — same operation
   across every binding (CLI / Rust / Python / Swift / Kotlin /
   Ruby / wasm), useful if your stack mixes a React client with a
