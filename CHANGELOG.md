@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   4.5:1 minimum WCAG 1.4.3 sets for text that size — the one
   accessibility failure Lighthouse reports against the deployed docs
   route. Both now use `--cs-text-secondary` (5.55:1). Same defect and
-  same fix as the playground toolbar labels above.
+  same fix as the playground toolbar labels below.
 
 - **Playground toolbar labels meet the WCAG contrast floor.** The
   eyebrow label beside each toolbar control (`.tool-group .label`) was
