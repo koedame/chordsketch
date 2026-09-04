@@ -23,26 +23,42 @@ Workflow mode (default, runs on every PR via `ci.yml`)
     old-sysroot container, which is what keeps the floor low; a Linux
     target without it silently inherits the runner's glibc.
 
+    Assert the same thing for the desktop bundles, where it takes a
+    different form: `desktop-build.yml` and `desktop-release.yml` must
+    name a pinned Linux runner rather than `ubuntu-latest`, because a
+    Tauri build links the host's webkit2gtk and cannot be containerised
+    into an old sysroot at all. `desktop-release.yml` in particular has
+    no pull_request trigger, so this is the only per-PR signal on it.
+
 Binary mode (`--target T FILE...`)
     Read the ELF symbol versions of the artifacts that are about to be
-    packaged and fail if any of them requires a newer glibc than
-    MAX_GLIBC. This measures the artifact rather than the configuration,
-    so it also catches a `cross` image whose sysroot moved forward. For
-    musl targets it asserts the opposite: no glibc references at all.
+    packaged and fail if any of them requires a newer glibc than the
+    floor its channel declares. This measures the artifact rather than
+    the configuration, so it also catches a `cross` image whose sysroot
+    moved forward. For musl targets it asserts the opposite: no glibc
+    references at all.
 
     Run from `release.yml` (CLI archives), `napi.yml` (Node addon),
-    `ruby.yml` (gem native library) and `kotlin.yml` (JNI library), in
-    each case in the build job that the publishing job depends on, so a
-    violation blocks publication. The three binding workflows also build
+    `ruby.yml` (gem native library), `kotlin.yml` (JNI library) and
+    `.github/actions/desktop-build-steps` (the `.deb` / `.rpm` /
+    `.AppImage` bundles), in each case in the build job that the
+    publishing job depends on, so a violation blocks publication. The three binding workflows also build
     on pull requests, so for them this is a per-PR check as well — which
     is why they have no workflow-mode counterpart: their Linux builds are
     separate jobs rather than one uniform matrix, and measuring the
     artifact on every PR is the stronger of the two checks anyway.
 
-MAX_GLIBC is a support contract, not a tuning knob. Raising it drops
-every distro between the old and new value; a build that trips this
-check should be fixed by restoring the old sysroot, not by editing the
-constant.
+The desktop bundles are a second channel with its own floor
+(`--channel desktop`). They link webkit2gtk and GTK from the build
+host, so they cannot be built inside `cross`'s Ubuntu 16.04 sysroot and
+cannot reach 2.18; the oldest distribution that ships webkit2gtk 4.1 at
+all is Ubuntu 22.04, so 2.35 buys the whole reachable audience. Both
+floors are enforced the same way, from configuration on every PR and
+from the artifact before publication.
+
+Neither floor is a tuning knob. Raising one drops every distro between
+the old and new value; a build that trips this check should be fixed by
+restoring the older build host, not by editing the constant.
 """
 
 from __future__ import annotations
@@ -56,6 +72,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RELEASE_WORKFLOW = Path(".github/workflows/release.yml")
+# Both desktop workflows declare the same four-cell matrix, and only one
+# of them (`desktop-build.yml`) runs on pull requests — a `runs-on` edit
+# in the release copy alone would otherwise first be noticed at tag time.
+DESKTOP_WORKFLOWS = (
+    Path(".github/workflows/desktop-build.yml"),
+    Path(".github/workflows/desktop-release.yml"),
+)
 
 # The newest glibc symbol version a `*-linux-gnu` artifact may
 # reference. 2.18 is what the already-`cross`-built v0.5.0
@@ -67,6 +90,30 @@ RELEASE_WORKFLOW = Path(".github/workflows/release.yml")
 # every channel: a user who can run the CLI can load the gem, the JAR and
 # the Node addon too.
 MAX_GLIBC = (2, 18)
+
+# The desktop bundles cannot reach that floor and are measured against
+# their own. A Tauri app links webkit2gtk and GTK from the build host, so
+# `cross`'s Ubuntu 16.04 image — which has neither — cannot build it, and
+# the AppImage ships copies of the host's own system libraries alongside
+# the executable. The floor is therefore whatever the oldest usable build
+# host produces, and the oldest distribution carrying webkit2gtk 4.1 (the
+# ABI `apps/desktop/src-tauri` builds against, and the one the `.deb` and
+# `.rpm` name in their dependencies) is Ubuntu 22.04, glibc 2.35. Below
+# that there is nothing to reach: Debian 11 and RHEL 8 have no
+# webkit2gtk-4.1 package at any glibc version, so a lower floor would buy
+# no additional audience. Ubuntu 22.04 and Debian 12 — which install the
+# bundles today and then fail to start — are exactly what it buys.
+DESKTOP_MAX_GLIBC = (2, 35)
+
+# `--channel` selects between them. Named rather than free-form (there is
+# no `--floor 2.31`) because each value is a published support contract.
+CHANNEL_FLOORS = {"cross": MAX_GLIBC, "desktop": DESKTOP_MAX_GLIBC}
+DEFAULT_CHANNEL = "cross"
+
+# The runner label the desktop workflows' Linux cell must name. The
+# release matrix expresses the same constraint as `cross: true`; here it
+# is a pinned runner, because the build needs the host's webkit2gtk.
+DESKTOP_LINUX_RUNNER = "ubuntu-22.04"
 
 # How many offending imports to name in the failure message.
 MAX_REPORTED_SYMBOLS = 6
@@ -127,7 +174,9 @@ def read_symbol_versions(binary: Path) -> str:
 # --------------------------------------------------------------- binary mode
 
 
-def check_binaries(target: str, binaries: list[Path]) -> list[str]:
+def check_binaries(
+    target: str, binaries: list[Path], ceiling: tuple[int, ...] = MAX_GLIBC
+) -> list[str]:
     """Return one error string per binary that violates the contract."""
     errors = []
     for binary in binaries:
@@ -149,13 +198,13 @@ def check_binaries(target: str, binaries: list[Path]) -> list[str]:
         if not versions:
             continue
         highest = max(versions, key=parse_glibc_version)
-        if parse_glibc_version(highest) <= MAX_GLIBC:
+        if parse_glibc_version(highest) <= ceiling:
             continue
         # Gate on the highest version *referenced* rather than on the
         # offending imports alone: the loader rejects the binary over the
         # `.gnu.version_r` entry, which can outlive the import that
         # introduced it.
-        offenders = symbols_above(output, MAX_GLIBC)
+        offenders = symbols_above(output, ceiling)
         # A binary built against a modern sysroot trips dozens of these;
         # a handful is enough to identify the cause, and the full list
         # buries the version number that actually matters.
@@ -163,10 +212,10 @@ def check_binaries(target: str, binaries: list[Path]) -> list[str]:
         detail = ", ".join(shown) if shown else "(no named imports)"
         if len(offenders) > len(shown):
             detail += f", +{len(offenders) - len(shown)} more"
-        ceiling = ".".join(str(part) for part in MAX_GLIBC)
+        declared = ".".join(str(part) for part in ceiling)
         errors.append(
             f"{binary}: requires {highest}, above the declared floor "
-            f"GLIBC_{ceiling} — will not start on any host below it. "
+            f"GLIBC_{declared} — will not start on any host below it. "
             f"Offending imports: {detail}"
         )
     return errors
@@ -175,8 +224,15 @@ def check_binaries(target: str, binaries: list[Path]) -> list[str]:
 # ------------------------------------------------------------- workflow mode
 
 
-def parse_matrix_targets(workflow_text: str) -> list[dict[str, str]]:
-    """Extract the `build` matrix's `include:` entries.
+def parse_matrix_targets(
+    workflow_text: str, first_key: str = "target"
+) -> list[dict[str, str]]:
+    """Extract a build matrix's entries.
+
+    `first_key` is the key each list item starts with — `target` in
+    `release.yml`'s `include:` block, `label` in the desktop workflows'
+    `platform:` block. Everything indented below it until the next
+    dedent joins the same entry.
 
     Deliberately a line scanner rather than a YAML parse: every other
     workflow checker in `scripts/` sticks to the standard library, and
@@ -184,14 +240,15 @@ def parse_matrix_targets(workflow_text: str) -> list[dict[str, str]]:
     """
     entries: list[dict[str, str]] = []
     entry_indent: int | None = None
+    item_re = re.compile(rf"-\s+{re.escape(first_key)}:\s*(\S+)")
     for raw in workflow_text.splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         indent = len(raw) - len(raw.lstrip())
-        item = re.match(r"-\s+target:\s*(\S+)", raw.strip())
+        item = item_re.match(raw.strip())
         if item is not None:
             entry_indent = indent
-            entries.append({"target": item.group(1)})
+            entries.append({first_key: item.group(1)})
             continue
         if entry_indent is None:
             continue
@@ -225,11 +282,52 @@ def check_workflow(workflow_text: str) -> list[str]:
     return errors
 
 
+def check_desktop_workflow(workflow_text: str, workflow: Path) -> list[str]:
+    """Return one error string per desktop Linux cell on the wrong runner.
+
+    The desktop equivalent of `cross: true`. A Tauri bundle links the
+    build host's webkit2gtk and GTK, so the floor is set by the runner
+    label rather than by a container: `ubuntu-latest` is an alias that
+    moves with GitHub's image promotions, and moving it is invisible in
+    the diff of the workflow that inherits the newer glibc.
+    """
+    entries = parse_matrix_targets(workflow_text, first_key="label")
+    if not entries:
+        return [f"{workflow}: no `- label:` entries found in the build matrix"]
+
+    errors = []
+    for entry in entries:
+        target = entry.get("target", "")
+        if "-linux-" not in target:
+            continue
+        runner = entry.get("runner")
+        if runner != DESKTOP_LINUX_RUNNER:
+            floor = ".".join(str(part) for part in DESKTOP_MAX_GLIBC)
+            errors.append(
+                f"{workflow}: `{target}` runs on `{runner}`, not "
+                f"`{DESKTOP_LINUX_RUNNER}`. The executable links against that "
+                f"runner's glibc and the AppImage bundles that runner's system "
+                f"libraries, so any newer host raises the floor above "
+                f"GLIBC_{floor} and the bundles stop starting on Ubuntu 22.04 "
+                f"and Debian 12."
+            )
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--target",
         help="target triple of the binaries being checked (enables binary mode)",
+    )
+    parser.add_argument(
+        "--channel",
+        choices=sorted(CHANNEL_FLOORS),
+        default=DEFAULT_CHANNEL,
+        help=(
+            "which support floor the binaries are held to: `cross` "
+            "(CLI archives and language bindings) or `desktop` (Tauri bundles)"
+        ),
     )
     parser.add_argument(
         "binaries",
@@ -241,13 +339,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if bool(args.target) != bool(args.binaries):
         parser.error("--target and the binary list must be given together")
+    if args.channel != DEFAULT_CHANNEL and not args.target:
+        parser.error("--channel selects a floor for binary mode; pass --target too")
 
     if args.target:
-        errors = check_binaries(args.target, args.binaries)
-        subject = f"{args.target} binaries"
+        errors = check_binaries(args.target, args.binaries, CHANNEL_FLOORS[args.channel])
+        subject = f"{args.channel} {args.target} binaries"
     else:
         errors = check_workflow((REPO_ROOT / RELEASE_WORKFLOW).read_text(encoding="utf-8"))
-        subject = str(RELEASE_WORKFLOW)
+        for workflow in DESKTOP_WORKFLOWS:
+            errors += check_desktop_workflow(
+                (REPO_ROOT / workflow).read_text(encoding="utf-8"), workflow
+            )
+        subject = ", ".join(str(path) for path in (RELEASE_WORKFLOW, *DESKTOP_WORKFLOWS))
 
     if errors:
         for error in errors:

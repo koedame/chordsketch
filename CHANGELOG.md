@@ -191,6 +191,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publishing job can start. See
   [ADR-0046](docs/adr/0046-linux-release-binaries-target-an-old-glibc.md).
 
+- The Linux desktop bundles now start on Ubuntu 22.04 and Debian 12 —
+  the last channel with the same defect. `desktop-release.yml` built
+  them on `ubuntu-latest`, so the `desktop-v0.5.0` `.deb`, `.rpm` and
+  `.AppImage` all require GLIBC_2.39: they resolve their dependencies,
+  install, and then fail to launch with ``version `GLIBC_2.39' not
+  found``. The AppImage carried a second floor besides the executable's,
+  because `linuxdeploy` packs the build host's own webkit2gtk, systemd
+  and pango libraries (GLIBC_2.38) in beside it. `cross`'s sysroot
+  cannot build a Tauri app — it has no webkit2gtk — so both desktop
+  matrices pin `ubuntu-22.04` instead, the oldest runner image carrying
+  webkit2gtk 4.1, which puts the bundles on a measured glibc 2.35 floor.
+  The shared build composite now runs
+  `scripts/check-glibc-floor.py --channel desktop` over all three bundle
+  formats (the AppImage's bundled libraries included) before they are
+  uploaded, on pull requests as well as at tag time. The `.rpm` remains
+  Fedora-only: the RHEL family packages webkit2gtk 4.0 exclusively. See
+  [ADR-0056](docs/adr/0056-desktop-bundles-target-ubuntu-2204.md).
+
 ### Changed
 
 - Inline chord diagrams (`{diagrams: inline}`) are now centred on the lyric
