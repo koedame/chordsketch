@@ -137,6 +137,18 @@ system.
   a build whose bundles exceed 2.35 fails before its artefacts are
   uploaded — on pull requests through `desktop-build.yml` as well as at
   tag time.
+- **A pinned host has to be able to run the build's own tools, and one
+  of them could not.** `tree-sitter-cli`'s npm package contains no
+  binary: it downloads one from upstream's GitHub release, and upstream
+  builds those on `ubuntu-latest`, so 0.26.8's Linux binary requires
+  GLIBC_2.39 and cannot start on 22.04 — the desktop prebuild hook died
+  at `npx tree-sitter build --wasm`. Upstream publishes no musl build
+  and no release since has a lower floor (0.27.0 measured), so the
+  composite compiles the CLI from source at the version the npm
+  lockfile pins, and only when the downloaded binary cannot start. This
+  is the general shape of the cost: pinning the host does not just move
+  the output's floor, it constrains every prebuilt tool the build
+  consumes.
 - `desktop-v0.5.0`'s published bundles stay broken. This decision
   governs the next desktop release; nothing here rewrites an existing
   tag's assets.

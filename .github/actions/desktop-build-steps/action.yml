@@ -182,6 +182,46 @@ runs:
       run: npm ci
       working-directory: packages/tree-sitter-chordpro
 
+    - name: Make the tree-sitter CLI runnable on this host (Linux)
+      # `tree-sitter-cli`'s npm package does not contain a binary: its
+      # install script downloads one from upstream's GitHub release,
+      # and upstream builds those on `ubuntu-latest`. 0.26.8's Linux
+      # x64 binary requires GLIBC_2.39, so on the `ubuntu-22.04` host
+      # this job pins (ADR-0056) it cannot start at all, and the
+      # desktop prebuild hook dies at `npx tree-sitter build --wasm`
+      # with ``version `GLIBC_2.39' not found``. Upstream publishes no
+      # musl build, so the remedy is to compile the CLI here.
+      #
+      # The version comes from the package npm just installed, so the
+      # lockfile stays the single source of truth and a Dependabot bump
+      # cannot silently build a different CLI than the one the grammar
+      # is pinned to. The probe is the property that actually matters —
+      # "can this host run this tool" — rather than a proxy for it, so
+      # the source build stops happening by itself once upstream lowers
+      # its own floor. Either way the CLI is exercised before the build
+      # depends on it.
+      if: runner.os == 'Linux'
+      shell: bash
+      working-directory: packages/tree-sitter-chordpro
+      run: |
+        set -euo pipefail
+        cli=node_modules/tree-sitter-cli/tree-sitter
+        version=$(node -p "require('./node_modules/tree-sitter-cli/package.json').version")
+        if "./$cli" --version >/dev/null 2>&1; then
+          echo "Prebuilt tree-sitter CLI ${version} runs on this host; keeping it."
+        else
+          echo "Prebuilt tree-sitter CLI ${version} cannot start on this host;" \
+               "building ${version} from source (ADR-0056)."
+          # `rquickjs-sys`, in the CLI's dependency tree, runs bindgen and
+          # needs `libclang.so`; the runner image ships clang but not the
+          # unversioned shared library bindgen looks for.
+          sudo apt-get install -y --no-install-recommends libclang-dev
+          cargo install tree-sitter-cli \
+            --locked --version "$version" --root "${RUNNER_TEMP}/tree-sitter-cli"
+          install -m 0755 "${RUNNER_TEMP}/tree-sitter-cli/bin/tree-sitter" "$cli"
+        fi
+        "./$cli" --version
+
     - name: Build @chordsketch/react
       # `apps/desktop`'s `tsconfig.json` resolves `@chordsketch/react`
       # via the `paths` mapping to `packages/react/dist/index.d.ts`;
