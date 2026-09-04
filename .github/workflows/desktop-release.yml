@@ -74,7 +74,18 @@ jobs:
       matrix:
         platform:
           - label: linux-x86_64
-            runner: ubuntu-latest
+            # Pinned, NOT `ubuntu-latest`. A Tauri bundle links the
+            # build host's glibc, and the AppImage ships copies of that
+            # host's webkit2gtk / GTK stack next to the executable, so
+            # the runner label IS the support floor. On `ubuntu-latest`
+            # (24.04) the v0.5.0 bundles required GLIBC_2.39 and would
+            # not start on Ubuntu 22.04 or Debian 12 even though both
+            # resolve the `.deb`/`.rpm` dependencies. 22.04 is the
+            # oldest image that still carries `libwebkit2gtk-4.1-dev`,
+            # which makes glibc 2.35 the floor. Keep this label in sync
+            # with `desktop-build.yml`; `scripts/check-glibc-floor.py`
+            # asserts both on every PR. See ADR-0056.
+            runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
           - label: macos-aarch64
             runner: macos-latest

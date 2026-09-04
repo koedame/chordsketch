@@ -173,17 +173,22 @@ jobs:
 
   glibc-floor:
     name: Linux glibc floor
-    # Guards the support floor of the `*-unknown-linux-*` release
-    # archives. A Linux target in `release.yml`'s build matrix without
+    # Guards the support floor of every Linux artifact this project
+    # publishes. A Linux target in `release.yml`'s build matrix without
     # `cross: true` is compiled against the `ubuntu-latest` runner's
     # glibc, which produces an archive that installs cleanly on the
     # runner and then fails to start on any older distribution
-    # ("version `GLIBC_2.39' not found"). Nothing on a PR would notice:
-    # `readme-smoke.yml` only ever exercises `ubuntu-latest`, so the
-    # first report comes from a user. This job answers the config half
-    # of that question on every PR; `release.yml`'s "Verify glibc floor"
-    # step answers the artifact half at tag time, before the release is
-    # created.
+    # ("version `GLIBC_2.39' not found"). The desktop bundles have the
+    # same failure from the same cause, expressed as a runner label
+    # rather than a container: they link the build host's webkit2gtk, so
+    # their matrices pin `ubuntu-22.04` (ADR-0056). Nothing on a PR
+    # would notice either one: `readme-smoke.yml` only ever exercises
+    # `ubuntu-latest`, so the first report comes from a user. This job
+    # answers the config half of both questions on every PR — including
+    # for `desktop-release.yml`, which has no pull_request trigger of
+    # its own; the "Verify glibc floor" steps in `release.yml` and the
+    # desktop build composite answer the artifact half before anything
+    # is published.
     #
     # Guarantee-style check per `.claude/rules/ci-parallelization.md`
     # §3 — no paths: filter, runs on every PR. Python-only, sub-second
@@ -192,7 +197,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Check release matrix cross-compiles every Linux target
+      - name: Check the release and desktop matrices hold their floors
         run: python3 scripts/check-glibc-floor.py
 
       - name: Unit tests

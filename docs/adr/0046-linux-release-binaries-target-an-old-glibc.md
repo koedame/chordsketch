@@ -2,6 +2,15 @@
 
 - **Status**: Accepted
 - **Date**: 2026-09-02
+- **Amended by**: [ADR-0056](0056-desktop-bundles-target-ubuntu-2204.md)
+
+> Amended on 2026-09-04 by
+> [ADR-0056](0056-desktop-bundles-target-ubuntu-2204.md). "Every Linux
+> artifact" below turned out to exclude one channel: the Tauri desktop
+> bundles, which link the build host's webkit2gtk and therefore cannot
+> be built inside `cross`'s Ubuntu 16.04 image at all. They carry their
+> own measured floor of glibc 2.35. Everything in this ADR still
+> governs the CLI archives and the language bindings.
 
 ## Context
 
