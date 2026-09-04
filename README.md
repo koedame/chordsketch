@@ -229,6 +229,18 @@ Apple Developer ID signing + notarization (so the flag is not
 needed regardless of install path) is tracked in
 [#2075](https://github.com/koedame/chordsketch/issues/2075).
 
+### Linux requirements
+
+The `.deb`, `.rpm` and `.AppImage` bundles need **glibc 2.35 or newer
+and webkit2gtk 4.1** — Ubuntu 22.04 and later (`libwebkit2gtk-4.1-0`),
+Debian 12 and later (same package), Fedora (`webkit2gtk4.1`). The
+webkit2gtk half is the binding one: Debian 11 and the RHEL family
+(Rocky and AlmaLinux included, with or without EPEL) package
+webkit2gtk 4.0 only, so the bundles cannot be installed there at any
+glibc version. The CLI has no such constraint — it runs on glibc 2.18+
+with no system dependencies
+([ADR-0056](https://github.com/koedame/chordsketch/blob/main/docs/adr/0056-desktop-bundles-target-ubuntu-2204.md)).
+
 ## Usage
 
 ```bash

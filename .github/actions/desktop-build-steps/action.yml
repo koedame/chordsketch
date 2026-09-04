@@ -288,3 +288,82 @@ runs:
         else
           cargo tauri build --target "$TARGET"
         fi
+
+    - name: Verify glibc floor (Linux bundles)
+      # ADR-0056: the Linux bundles are held to glibc 2.35 — the floor
+      # an `ubuntu-22.04` build host produces, and the oldest one that
+      # webkit2gtk 4.1 is packaged for. The runner pin in the caller's
+      # matrix is the configuration half of that contract (asserted per
+      # PR by `scripts/check-glibc-floor.py`'s workflow mode); this step
+      # is the artifact half, and it runs in the same job that produces
+      # the bundles, so a violation fails the build before
+      # `desktop-release.yml`'s `release` job can publish anything.
+      #
+      # All three bundles are measured, not just the executable. They do
+      # not carry the same bytes: the `.deb` and `.rpm` payloads differ
+      # in their embedded install paths, and linuxdeploy rewrites the
+      # AppImage's copy and packs ~160 of the host's system libraries in
+      # beside it. Those libraries are what actually sets the AppImage's
+      # floor — the v0.5.0 AppImage carried `libwebkit2gtk-4.1.so.0` and
+      # `libsystemd.so.0` at GLIBC_2.38 from the 24.04 runner, so
+      # measuring the executable alone would have declared it fixed
+      # while it still could not start on Ubuntu 22.04.
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+        BUNDLE="target/${TARGET}/release/bundle"
+        WORK="$(mktemp -d)"
+
+        # `dpkg-deb` is in the runner image and the AppImage extracts
+        # itself (its runtime supports `--appimage-extract` without
+        # FUSE); `rpm2archive` has to be installed. The apt lists are
+        # fresh from the Tauri system-dependency step above.
+        sudo apt-get install -y --no-install-recommends rpm
+
+        deb=$(find "$BUNDLE/deb" -maxdepth 1 -name '*.deb' -print -quit)
+        rpm=$(find "$BUNDLE/rpm" -maxdepth 1 -name '*.rpm' -print -quit)
+        appimage=$(find "$BUNDLE/appimage" -maxdepth 1 -name '*.AppImage' -print -quit)
+        for kind in deb rpm appimage; do
+          if [ -z "${!kind}" ]; then
+            echo "ERROR: no .${kind} bundle under ${BUNDLE}" >&2
+            exit 1
+          fi
+        done
+
+        dpkg-deb -x "$deb" "$WORK/deb"
+
+        mkdir -p "$WORK/rpm"
+        cp "$rpm" "$WORK/rpm/bundle.rpm"
+        # `rpm2archive -` (stdout) is rpm >= 4.18; the 22.04 runner has
+        # 4.17, which only writes `<file>.tgz` next to its input. Hence
+        # the copy into the scratch directory first.
+        ( cd "$WORK/rpm" && rpm2archive bundle.rpm && tar -xzf bundle.rpm.tgz )
+
+        mkdir -p "$WORK/appimage"
+        cp "$appimage" "$WORK/appimage/bundle.AppImage"
+        ( cd "$WORK/appimage" \
+            && chmod +x bundle.AppImage \
+            && ./bundle.AppImage --appimage-extract >/dev/null )
+
+        # Every ELF the three bundles carry. Candidates are narrowed by
+        # name and mode first (the extracted tree also holds icons,
+        # locales and .desktop files) and then confirmed with `file`, so
+        # a non-ELF never reaches `readelf` and nothing is skipped
+        # silently.
+        mapfile -t elves < <(
+          find "$WORK" -type f \
+            \( -perm -u+x -o -name '*.so' -o -name '*.so.*' \) \
+            -exec sh -c 'file -b "$1" | grep -q "^ELF"' _ {} \; -print | sort
+        )
+        if [ "${#elves[@]}" -eq 0 ]; then
+          echo "ERROR: found no ELF files inside the Linux bundles" >&2
+          exit 1
+        fi
+        echo "Measuring ${#elves[@]} ELF files:"
+        printf '  %s\n' "${elves[@]}"
+
+        python3 scripts/check-glibc-floor.py \
+          --channel desktop --target "$TARGET" "${elves[@]}"
