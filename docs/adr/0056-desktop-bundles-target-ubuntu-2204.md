@@ -140,3 +140,15 @@ system.
 - `desktop-v0.5.0`'s published bundles stay broken. This decision
   governs the next desktop release; nothing here rewrites an existing
   tag's assets.
+
+## References
+
+- [ADR-0046](0046-linux-release-binaries-target-an-old-glibc.md) — the
+  glibc 2.18 floor this ADR carves the desktop bundles out of
+- #2817 / #2820 — the same defect fixed in the CLI archives and the
+  Node/Ruby/Kotlin bindings, the two channels ADR-0046 covered
+- **Watch signal**: a GitHub-announced retirement of the `ubuntu-22.04`
+  runner label. 22.04's own LTS window runs to April 2027 and no
+  retirement is announced as of this ADR's date; when one is, "build in
+  a container with an old base" (Alternatives above) is the option to
+  move to, since it decouples the floor from a runner image's lifetime.
