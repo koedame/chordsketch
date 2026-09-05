@@ -41,7 +41,7 @@ a { color: inherit; }
 .toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-6); background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .tool-group { display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-3); border-right: 1px solid var(--border); height: 28px; }
 .tool-group:last-of-type { border-right: 0; }
-.tool-group .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); margin-right: var(--sp-2); }
+.tool-group .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin-right: var(--sp-2); }
 .segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-2); overflow: hidden; }
 .segmented a, .segmented button { background: var(--surface); border: 0; padding: 0 var(--sp-3); height: 28px; font: 500 var(--fs-13)/1 var(--font-jp); color: var(--text-secondary); cursor: pointer; border-right: 1px solid var(--border); display: inline-flex; align-items: center; text-decoration: none; }
 .segmented a:last-child, .segmented button:last-child { border-right: 0; }
@@ -53,14 +53,14 @@ a { color: inherit; }
 .pane { display: flex; flex-direction: column; min-height: 0; }
 .pane-head { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-3) var(--sp-6); background: var(--canvas); border-bottom: 1px solid var(--border); }
 .pane-head .eyebrow { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin: 0; }
-.pane-head .meta { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); }
+.pane-head .meta { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); }
 .source { background: var(--surface); border-right: 1px solid var(--border); }
 .preview { background: var(--surface); }
 .pane-body { flex: 1; overflow: auto; padding: var(--sp-8); }
 
 .source-code { font-family: var(--font-mono); font-size: var(--fs-14); line-height: 1.857; color: var(--text-primary); white-space: pre; counter-reset: line; padding: 0; }
 .source-code .row { display: grid; grid-template-columns: 36px 1fr; gap: var(--sp-4); }
-.source-code .row::before { content: counter(line); counter-increment: line; font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-tertiary); text-align: right; user-select: none; padding-right: var(--sp-2); border-right: 1px solid var(--border); }
+.source-code .row::before { content: counter(line); counter-increment: line; font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-secondary); text-align: right; user-select: none; padding-right: var(--sp-2); border-right: 1px solid var(--border); }
 .tok-directive { color: var(--text-secondary); }
 .tok-key { color: var(--info-fg); }
 .tok-chord { color: var(--crimson-500); font-weight: 600; }

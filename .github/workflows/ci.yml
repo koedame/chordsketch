@@ -150,6 +150,28 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest scripts/test_check_fixture_counts.py
 
+  design-system-tertiary:
+    name: Design system tertiary ink
+    # Keeps the tertiary tone off small copy in the design-system static
+    # reference pages, the way `packages/react{,-ui}/tests/tertiary-ink.test.ts`
+    # keeps it off the shipped stylesheets: `--ink-500` is 3.53:1, which
+    # clears the 3:1 WCAG 1.4.11 asks of non-text UI but not the 4.5:1
+    # SC 1.4.3 asks of text below 18.66px bold / 24px regular (ADR-0054).
+    # Those pages have no test runner of their own, so the guard is a
+    # standalone script. No paths: filter — the constraint is a
+    # project-wide guarantee, so it runs on every PR the way the other
+    # guard jobs in this workflow do. Python-only, sub-second wall clock;
+    # no rust-cache needed (the job does not compile Rust).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Check tertiary-ink sites
+        run: python3 scripts/check-design-system-tertiary.py
+
+      - name: Unit tests
+        run: python3 -m unittest scripts/test_check_design_system_tertiary.py
+
   core-zero-deps:
     name: Core crate zero-deps
     # Enforces the zero-external-dependency contract for the core crates
