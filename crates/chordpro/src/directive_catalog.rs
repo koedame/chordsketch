@@ -585,6 +585,86 @@ pub const DIRECTIVES: &[DirectiveInfo] = &[
         summary: "Embed an image",
     },
 ];
+/// Directive names — canonical spellings and aliases alike — that are
+/// legal with **no value at all**: the complete set a bare `{name}`
+/// occurrence can be.
+///
+/// Two groups make up the list, and neither is derivable from
+/// [`DirectiveInfo::value`] on its own:
+///
+/// - every [`DirectiveValueKind::None`] directive (`{eoc}`,
+///   `{new_page}`, `{start_of_svg}`, …), and
+/// - the section openers plus `{chorus}`, whose label is *optional*.
+///   [`DirectiveValueKind::FreeForm`] records the shape a value takes,
+///   not whether one is required, so `{soc}` and `{start_of_verse}`
+///   are valid on their own.
+///
+/// The list exists for consumers that must recognise ChordPro *before*
+/// they can run the parser — a format sniffer deciding whether a blob
+/// is ChordPro at all. Such a sniffer cannot simply ask
+/// [`crate::ast::DirectiveKind::from_name`]: an arbitrary `{username}`
+/// resolves to `Unknown`, but so does a real directive misspelled, and
+/// the sniffer needs the positive list rather than the parser's
+/// tolerance. This is the single source of truth for that question —
+/// `@chordsketch/chordpro-lite` generates its TypeScript copy from it
+/// via `scripts/generate-bare-directives.py`, and CI fails when the two
+/// drift.
+///
+/// Kept sorted so generated copies have a stable order; the tests below
+/// enforce sorting, uniqueness, and correspondence with [`DIRECTIVES`].
+///
+/// # Examples
+///
+/// ```
+/// use chordsketch_chordpro::directive_catalog::BARE_DIRECTIVE_NAMES;
+///
+/// assert!(BARE_DIRECTIVE_NAMES.contains(&"soc"));
+/// assert!(BARE_DIRECTIVE_NAMES.contains(&"new_page"));
+/// assert!(!BARE_DIRECTIVE_NAMES.contains(&"title"));
+/// ```
+pub const BARE_DIRECTIVE_NAMES: &[&str] = &[
+    "chorus",
+    "colb",
+    "column_break",
+    "end_of_abc",
+    "end_of_bridge",
+    "end_of_chorus",
+    "end_of_grid",
+    "end_of_ly",
+    "end_of_musicxml",
+    "end_of_svg",
+    "end_of_tab",
+    "end_of_textblock",
+    "end_of_verse",
+    "eob",
+    "eoc",
+    "eog",
+    "eot",
+    "eov",
+    "new_page",
+    "new_physical_page",
+    "new_song",
+    "no_diagrams",
+    "nodiagrams",
+    "np",
+    "npp",
+    "ns",
+    "sob",
+    "soc",
+    "sog",
+    "sot",
+    "sov",
+    "start_of_abc",
+    "start_of_bridge",
+    "start_of_chorus",
+    "start_of_grid",
+    "start_of_ly",
+    "start_of_musicxml",
+    "start_of_svg",
+    "start_of_tab",
+    "start_of_textblock",
+    "start_of_verse",
+];
 
 /// Returns the full directive catalog.
 #[must_use]
@@ -705,5 +785,89 @@ mod tests {
         let values = directive_value_options("pagetype").expect("pagetype is an enum directive");
         assert!(values.contains(&"a4"));
         assert!(values.contains(&"letter"));
+    }
+
+    #[test]
+    fn every_value_less_directive_is_bare_legal() {
+        // A new `DirectiveValueKind::None` entry that nobody adds to
+        // `BARE_DIRECTIVE_NAMES` would silently stop being recognised by
+        // every consumer that sniffs for a bare `{name}`. Fail here
+        // instead, at the point the catalog entry is written.
+        for d in DIRECTIVES {
+            if d.value != DirectiveValueKind::None {
+                continue;
+            }
+            assert!(
+                BARE_DIRECTIVE_NAMES.contains(&d.name),
+                "value-less directive {:?} is missing from BARE_DIRECTIVE_NAMES",
+                d.name
+            );
+            for alias in d.aliases {
+                assert!(
+                    BARE_DIRECTIVE_NAMES.contains(alias),
+                    "alias {alias:?} of value-less directive {:?} is missing from \
+                     BARE_DIRECTIVE_NAMES",
+                    d.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_bare_directive_name_is_a_catalog_entry() {
+        // The other direction: a typo or a name the parser dropped must
+        // not survive in the bare list.
+        for name in BARE_DIRECTIVE_NAMES {
+            assert!(
+                lookup(name).is_some(),
+                "bare directive {name:?} is not in the catalog"
+            );
+            assert!(
+                !matches!(DirectiveKind::from_name(name), DirectiveKind::Unknown(_)),
+                "bare directive {name:?} is not recognised by from_name"
+            );
+        }
+    }
+
+    #[test]
+    fn no_enum_valued_directive_is_bare_legal() {
+        // `{diagrams}` / `{pagetype}` carry a value from a fixed set;
+        // bare occurrences of them are not valid ChordPro.
+        for name in BARE_DIRECTIVE_NAMES {
+            let d = lookup(name).expect("checked by every_bare_directive_name_is_a_catalog_entry");
+            assert!(
+                !matches!(d.value, DirectiveValueKind::Enum(_)),
+                "enum-valued directive {name:?} must not be listed as bare-legal"
+            );
+        }
+    }
+
+    #[test]
+    fn bare_directive_names_are_sorted_and_unique() {
+        // Generated copies (see `scripts/generate-bare-directives.py`)
+        // reproduce this order verbatim, so a reshuffle here would show
+        // up as unexplained churn downstream.
+        let mut sorted = BARE_DIRECTIVE_NAMES.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(
+            sorted.as_slice(),
+            BARE_DIRECTIVE_NAMES,
+            "BARE_DIRECTIVE_NAMES must be sorted and free of duplicates"
+        );
+    }
+
+    #[test]
+    fn optional_label_section_openers_are_bare_legal() {
+        // These are `FreeForm` in the catalog because the label they may
+        // carry is free text, but the label is optional — `{soc}` alone
+        // is valid. Pinning them keeps a future "derive this list from
+        // `value == None`" refactor from quietly dropping them.
+        for name in ["soc", "start_of_chorus", "sov", "sog", "chorus"] {
+            assert!(
+                BARE_DIRECTIVE_NAMES.contains(&name),
+                "optional-label directive {name:?} must be bare-legal"
+            );
+        }
     }
 }
