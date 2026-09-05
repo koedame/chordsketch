@@ -81,13 +81,17 @@ names are a published contract (ADR-0038, constraint 1).
   `--text-tertiary` on 12px copy. `tests-e2e/accessibility.spec.ts` runs
   axe-core against every playground route on every PR, so the class fails
   CI rather than waiting for the next manual Lighthouse run.
-- Sites outside the audited routes were not swept. `@chordsketch/react`'s
-  song `{comment}` body, `.chordsketch-capo__hint`, the secondary
-  attribution line, the CodeMirror bracket / comment syntax tones and
-  `@chordsketch/react-ui`'s `.song-card time` / `.setlist` labels /
-  `::placeholder` still paint small text with `--ink-500`. They are not
-  on a playground route, so this change has no measurement for them; they
-  need their own audit against `design-system/preview/*.html`.
+- Sites outside the audited routes were not swept when this ADR landed,
+  because Lighthouse could only measure what a playground route rendered.
+  They have been swept since, each measured on rendered output rather than
+  read off the source: the shipped stylesheets in #2838
+  (`@chordsketch/react`'s song `{comment}` body, `.chordsketch-capo__hint`,
+  the secondary attribution line; `@chordsketch/react-ui`'s
+  `.song-card time` / `.setlist` labels / `::placeholder`), the static
+  reference pages in #2840, and the CodeMirror bracket / comment syntax
+  tones in #2841. The allowlist guards those PRs added
+  (`tertiary-ink.test.ts` per package, `scripts/check-design-system-tertiary.py`
+  for the reference pages) are what keep the set from growing back.
 - `--text-tertiary` remains reachable under a name that reads like a text
   token. Renaming it is a breaking change to the published token contract
   (ADR-0038) and is deliberately not bundled with an accessibility fix.

@@ -151,8 +151,8 @@ export interface ChordSourceAreaProps extends Omit<HTMLAttributes<HTMLDivElement
  *
  *   `.tok-chord     { color: var(--crimson-500); font-weight: 600; }`
  *   `.tok-directive { color: var(--text-secondary); }`
- *   `.tok-bracket   { color: var(--text-tertiary); }`
- *   `.tok-comment   { color: var(--text-tertiary); font-style: italic; }`
+ *   `.tok-bracket   { color: var(--text-secondary); }`
+ *   `.tok-comment   { color: var(--text-secondary); font-style: italic; }`
  *
  * The chord glyph in the source editor stays in the editor's
  * monospace stack — the Roboto / 700 / 16 px treatment from
@@ -189,15 +189,20 @@ const designSystemHighlight = HighlightStyle.define([
   },
   // Directive values (text after the colon). Intentionally
   // unstyled — the reference treats values as plain copy.
-  // Curly / square brackets and the directive colon.
+  // Curly braces and the directive colon. 14px copy inside a
+  // contenteditable, which axe does not colour-check, so the 3.53:1
+  // tertiary tone sat below SC 1.4.3 here without failing a route
+  // (ADR-0054).
   {
     tag: chordProTagTable.punctuation,
-    color: 'var(--cs-text-tertiary, #8A8790)',
+    color: 'var(--cs-text-secondary, #67646D)',
   },
-  // ChordPro line comments (`# verse 1 …`).
+  // ChordPro line comments (`# verse 1 …`). Same 14px / 4.5:1
+  // reasoning as the punctuation above; the italic keeps them
+  // distinct from the directive names now sharing the tone.
   {
     tag: chordProTagTable.comment,
-    color: 'var(--cs-text-tertiary, #8A8790)',
+    color: 'var(--cs-text-secondary, #67646D)',
     fontStyle: 'italic',
   },
 ]);
@@ -278,7 +283,14 @@ const designSystemTheme = EditorView.theme(
     '&.cm-focused .cm-selectionBackground': {
       backgroundColor: '#F4B5C5 !important',
     },
-    '.cm-matchingBracket': {
+    // `bracketMatching()` ships a base theme whose selector is
+    // `&.cm-focused .cm-matchingBracket` — three classes. A bare
+    // `.cm-matchingBracket` here resolves to two, so the base rule's
+    // teal wash (`#328c8252`) won whenever the editor held focus,
+    // which is the only time a bracket match is on screen. Matching
+    // its specificity is what makes this rule apply; the unfocused
+    // selector stays so the tint survives a blur.
+    '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': {
       backgroundColor: 'var(--cs-crimson-50, #FDF2F5)',
       outline: '1px solid var(--cs-crimson-300, #EC8AA3)',
     },
