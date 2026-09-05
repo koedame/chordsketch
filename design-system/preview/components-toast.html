@@ -41,7 +41,7 @@ a { color: inherit; text-decoration: none; }
 .toast .icon { display: inline-flex; }
 .toast .body { display: flex; flex-direction: column; gap: 2px; }
 .toast .body .title { font-weight: 600; }
-.toast .body .desc { color: rgba(255, 255, 255, 0.72); font-size: var(--fs-13); }
+.toast .body .desc { font-size: var(--fs-13); }
 .toast .action { background: transparent; border: 0; color: inherit; font: 600 var(--fs-13)/1 var(--font-jp); cursor: pointer; padding: 0 var(--sp-2); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .toast .action:hover { text-decoration: none; }
 .toast .action:focus-visible { outline: none; box-shadow: 0 0 0 2px currentColor; border-radius: var(--r-1); }
@@ -56,7 +56,7 @@ a { color: inherit; text-decoration: none; }
   <a href="index.html" class="preview-back">← Components</a>
   <p class="eyebrow">Component</p>
   <h1 class="preview-h1">Toast</h1>
-  <p class="preview-deck">Default base is <code style="font-family: var(--font-mono);">--ink-1000</code>; success / danger swap to semantic foreground colors. Action buttons inherit the toast foreground and add an underline — no color shift — so contrast holds on every variant.</p>
+  <p class="preview-deck">Default base is <code style="font-family: var(--font-mono);">--ink-1000</code>; success / danger swap to semantic foreground colors. Descriptions and action buttons inherit the toast foreground — hierarchy comes from size, weight and an underline, never from a color shift — so contrast holds on every variant.</p>
 
   <section class="group">
     <h2>Default</h2>

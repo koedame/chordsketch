@@ -260,7 +260,7 @@ only in `preview/` — per ADR-0029 a category lands in this document and
 | Navigation | top nav 56px, tabs (underline + count) | Reference only (`preview/`) |
 | Modal      | 12px radius, e3 elevation, footer `--ink-50` wash to demarcate | Reference only (`preview/`) |
 | Table      | eyebrow header, tabular-nums, hover row = `--ink-50` | Reference only (`preview/`) |
-| Toast      | `--ink-1000` base / success / danger / warning, action button uses inherited foreground + underline (no color shift) so contrast holds on every variant | Reference only (`preview/`) |
+| Toast      | `--ink-1000` base / success / danger / warning, description and action button both use the inherited foreground (hierarchy from size / weight / underline, no color shift) so contrast holds on every variant | Reference only (`preview/`) |
 | Progress   | 6px bar / spinner / skeleton | Reference only (`preview/`) |
 
 ### 6.1 Prohibited treatments
