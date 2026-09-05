@@ -7,11 +7,19 @@ on:
       - "packages/vscode-extension/**"
       - "syntaxes/**"
       - ".github/workflows/vscode-extension.yml"
+      # The `wasm-pack` pin the `build` job consumes through the
+      # composite action (#2225). Without this entry a pin bump
+      # would not re-run the from-source `@chordsketch/wasm` build.
+      - ".github/actions/install-wasm-pack/action.yml"
   pull_request:
     paths:
       - "packages/vscode-extension/**"
       - "syntaxes/**"
       - ".github/workflows/vscode-extension.yml"
+      # The `wasm-pack` pin the `build` job consumes through the
+      # composite action (#2225). Without this entry a pin bump
+      # would not re-run the from-source `@chordsketch/wasm` build.
+      - ".github/actions/install-wasm-pack/action.yml"
   # Reusable: called by release.yml's fan-out after the GitHub Release
   # exists, so `build-platform` can download the per-platform
   # chordsketch-lsp archives from it (ADR-0039). A non-empty `tag` is what

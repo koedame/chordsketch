@@ -18,10 +18,11 @@ package (`packages/npm`). Not needed for core/CLI/renderer development.
 
 ```bash
 # wasm-pack: builds the WASM package via wasm-bindgen.
-# CI pins this exact version via .github/workflows/npm-publish.yml
-# (WASM_PACK_VERSION: "0.14.0"); install the same version locally to
-# avoid build-output drift between local dev and CI:
-cargo install wasm-pack --version 0.14.0
+# CI pins this exact version in one place —
+# .github/actions/install-wasm-pack/action.yml, the composite every
+# workflow consumes. Install the same version locally to avoid
+# build-output drift between local dev and CI:
+cargo install wasm-pack --version 0.15.0
 ```
 
 Node.js ≥ **22** is required to run the npm package smoke tests. This is

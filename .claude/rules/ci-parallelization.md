@@ -113,6 +113,15 @@ means: create a `.github/actions/install-<tool>/action.yml` composite,
 move every workflow's version pin into it, and append the entry here in
 the same PR.
 
+A consumer that has a `paths:` trigger filter MUST also watch the
+composite it consumes, transitively (`.github/actions/install-<tool>/
+action.yml`, alongside its own workflow path). Moving a pin into a
+composite moves it out of every consumer's watched tree, so without that
+entry a bump PR silently skips the workflows that actually build with the
+bumped tool. #2225 moved the `wasm-pack` pin without updating its
+path-filtered consumers; #2837 found four of them still unwatched, one
+through a composite that consumes another composite.
+
 ## 3. Public-repo parallelism
 
 Because this repository is public, runner minutes are free. When a job performs
