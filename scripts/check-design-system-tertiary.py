@@ -45,12 +45,6 @@ DESIGN_SYSTEM = REPO_ROOT / "design-system"
 # Sites allowed to paint with the tertiary tone, keyed by the page they
 # live on. A value is either a CSS selector or `inline <tag>` for a site
 # declared in an element's `style` attribute.
-#
-# The `.tok-bracket` / `.tok-comment` entries are the ChordPro source
-# highlighting in the two editor mockups. They mirror the CodeMirror
-# theme the React package ships, whose tone is pending its own decision,
-# so they are the only entries here that are not permanently exempt —
-# they leave this list when that colour is settled on both surfaces.
 TERTIARY_ALLOWED: dict[str, tuple[str, ...]] = {
     "preview/components-forms.html": (
         ".input:disabled, .textarea:disabled",  # disabled control
@@ -61,17 +55,9 @@ TERTIARY_ALLOWED: dict[str, tuple[str, ...]] = {
     "preview/components-table.html": (
         "table.t thead th.sortable .arrow",  # sort icon stroke
     ),
-    "ui_kits/web/editor-chord-footer.html": (
-        ".cins__chip:disabled",  # disabled control
-        ".tok-bracket",  # ChordPro source highlighting, see note above
-        ".tok-comment",  # ChordPro source highlighting, see note above
-    ),
+    "ui_kits/web/editor-chord-footer.html": (".cins__chip:disabled",),  # disabled control
     "ui_kits/web/editor-irealb.html": (".topnav .crumbs .sep",),  # separator glyph
-    "ui_kits/web/editor.html": (
-        ".topnav .crumbs .sep",  # separator glyph
-        ".tok-bracket",  # ChordPro source highlighting, see note above
-        ".tok-comment",  # ChordPro source highlighting, see note above
-    ),
+    "ui_kits/web/editor.html": (".topnav .crumbs .sep",),  # separator glyph
     "ui_kits/web/library.html": (".topnav .search svg",),  # search icon stroke
     "ui_kits/web/sidebar-floating.html": (
         ".account .chev",  # chevron icon stroke
