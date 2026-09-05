@@ -27,26 +27,28 @@ Sources checked:
      (the per-platform prebuilt-binary packages published alongside
      `@chordsketch/node`)
   8. `packages/tree-sitter-chordpro/package.json` `version`
-  9. Consumer caret-pin constraints — `^<major>.<minor>.0` for
+  9. `packages/claude-code-plugin/.claude-plugin/plugin.json` `version` and
+     the matching `.claude-plugin/marketplace.json` plugin entry
+ 10. Consumer caret-pin constraints — `^<major>.<minor>.0` for
      `@chordsketch/wasm` / `@chordsketch/wasm-export` referenced by
      `packages/vscode-extension`, `packages/react`, and
      `packages/ui-irealb-editor`. The constraint MUST cover the
      canonical workspace version; comparison runs at major.minor
      granularity (`_expected_for` strips the patch when the field
      label ends with `(^major.minor)`).
- 10. `.github/workflows/readme-smoke.yml` — three hardcoded pins:
+ 11. `.github/workflows/readme-smoke.yml` — three hardcoded pins:
        a. `npm-wasm` job's `env: WASM_VERSION: "<version>"`
        b. `npm-wasm-export` job's `env: WASM_EXPORT_VERSION: "<version>"`
        c. `library-smoke`'s `chordsketch-chordpro = "<caret>"` (and
           paired chordpro / render-text / ireal / render-ireal pins,
           all caught by the same caret regex)
- 11. `packaging/macports/Portfile` — `github.setup … <version> v`
- 12. `packaging/nix/package.nix` — `version = "X.Y.Z";`
- 13. `packaging/winget/*.yaml` — `PackageVersion: X.Y.Z`
- 14. `apps/desktop/src-tauri/Cargo.toml` — `package.version`
- 15. `apps/desktop/src-tauri/tauri.conf.json` — top-level `"version"`
- 16. `apps/desktop/package.json` — `version`
- 17. `apps/desktop/preview-handler/Cargo.toml` — `package.version`
+ 12. `packaging/macports/Portfile` — `github.setup … <version> v`
+ 13. `packaging/nix/package.nix` — `version = "X.Y.Z";`
+ 14. `packaging/winget/*.yaml` — `PackageVersion: X.Y.Z`
+ 15. `apps/desktop/src-tauri/Cargo.toml` — `package.version`
+ 16. `apps/desktop/src-tauri/tauri.conf.json` — top-level `"version"`
+ 17. `apps/desktop/package.json` — `version`
+ 18. `apps/desktop/preview-handler/Cargo.toml` — `package.version`
      (CLI and GUI are always in lockstep; the four desktop manifests
      must all agree with the workspace canonical. The preview handler
      DLL ships inside the desktop installer, so it moves with it.)
@@ -548,6 +550,44 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
     return sources
 
 
+# ------------------------------------------------- Claude Code plugin
+
+# Repo-relative paths of the Claude Code plugin's two manifests (ADR-0059).
+# The plugin directory is named once here; `load_claude_code_plugin_versions`
+# checks that the marketplace entry still points at it.
+_PLUGIN_DIR = "packages/claude-code-plugin"
+_PLUGIN_MANIFEST = f"{_PLUGIN_DIR}/.claude-plugin/plugin.json"
+_MARKETPLACE_MANIFEST = ".claude-plugin/marketplace.json"
+
+
+def load_claude_code_plugin_versions(repo_root: Path) -> list[Source]:
+    """Collect the two versions the Claude Code plugin declares.
+
+    Claude Code caches plugins under `<marketplace>/<plugin>/<version>/` and
+    will not re-fetch while the version is unchanged, so a plugin that misses
+    a release bump silently keeps serving the previous skill. Both the
+    plugin's own manifest and the root marketplace entry that points at it
+    carry the number, and both have to move.
+
+    The marketplace entry's `source` is checked here too: it is the only
+    thing tying the entry to the directory, and a rename that updates the
+    directory but not the entry produces a marketplace whose install fails
+    for everyone while every version number still agrees.
+    """
+    sources = [
+        load_package_json_version(repo_root, _PLUGIN_MANIFEST),
+        load_package_json_version(repo_root, _MARKETPLACE_MANIFEST),
+    ]
+    marketplace = repo_root / _MARKETPLACE_MANIFEST
+    text = marketplace.read_text(encoding="utf-8")
+    if f'"./{_PLUGIN_DIR}"' not in text:
+        raise SystemExit(
+            f"{_MARKETPLACE_MANIFEST}: no plugin entry sources "
+            f'"./{_PLUGIN_DIR}" (the directory holding {_PLUGIN_MANIFEST})'
+        )
+    return sources
+
+
 def load_all_sources(repo_root: Path) -> list[Source]:
     sources: list[Source] = []
     sources.extend(load_crate_versions(repo_root))
@@ -569,6 +609,7 @@ def load_all_sources(repo_root: Path) -> list[Source]:
             repo_root, "packages/tree-sitter-chordpro/package.json"
         )
     )
+    sources.extend(load_claude_code_plugin_versions(repo_root))
     sources.extend(load_napi_platform_package_versions(repo_root))
     sources.extend(load_napi_optional_deps(repo_root))
     sources.extend(load_consumer_pin_constraints(repo_root))

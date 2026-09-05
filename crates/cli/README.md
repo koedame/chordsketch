@@ -99,7 +99,7 @@ chordsketch chart.txt --from ireal # force the iReal pipeline
 | `--from` | `auto` \| `chordpro` \| `ireal` | Input format. `auto` (the default) sniffs each argument: inline `irealb://` / `irealbook://` URLs, files whose path ends in `.irealb` / `.irealbook` (case-insensitive), or files whose first non-whitespace bytes match the same prefix all route through the iReal renderer. `chordpro` and `ireal` force detection. |
 | `-o`, `--output` | *path* | Write output to a file instead of stdout. For `-f pdf` this writes the binary PDF stream. |
 | `-t`, `--transpose` | *i8* | Transpose every chord by N semitones. Combines additively with any `{transpose: N}` directive in the file. |
-| `-c`, `--config` | *path* or *preset* | Load a custom config file or the named built-in preset (`default`, `ukulele`, `piano`, `guitar`, …). May be repeated — later values override earlier ones. Paths are trusted; do not pass attacker-supplied values. |
+| `-c`, `--config` | *path* or *preset* | Load a custom config file or one of the built-in presets (`guitar`, `ukulele`, `charango`). A name that is not a preset is used as a file path. May be repeated — later values override earlier ones. Paths are trusted; do not pass attacker-supplied values. |
 | `-D`, `--define` | `key=value` | Override a single config value at runtime. Highest precedence — wins over every `--config`. |
 | `--no-default-configs` | | Skip system, user, and project config files. Only built-in defaults plus any explicit `--config` / `--define`. |
 | `--instrument` | `guitar` \| `ukulele` \| … | Select the active instrument for selector filtering (directives like `{textfont-piano: Courier}` are kept only when the selector matches). Equivalent to `--define instrument.type=<NAME>`. |

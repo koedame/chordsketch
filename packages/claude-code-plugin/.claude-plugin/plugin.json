@@ -1,0 +1,14 @@
+{
+  "name": "chordsketch",
+  "displayName": "ChordSketch",
+  "version": "0.5.0",
+  "description": "Render, transpose, validate, format and convert ChordPro and iReal Pro chord charts through the chordsketch CLI.",
+  "author": {
+    "name": "koedame",
+    "url": "https://github.com/koedame"
+  },
+  "homepage": "https://github.com/koedame/chordsketch",
+  "repository": "https://github.com/koedame/chordsketch",
+  "license": "MIT",
+  "keywords": ["chordpro", "music", "chord", "lyrics", "irealpro", "transpose"]
+}
