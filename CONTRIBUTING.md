@@ -122,3 +122,9 @@ Track progress and find available work on the
 
 By contributing, you agree that your contributions will be licensed under the
 [MIT License](LICENSE).
+
+## Trademark
+
+The MIT licence does not cover the ChordSketch name or logo. Contributing
+here needs no permission; naming something of your own after the project
+does. [TRADEMARK.md](TRADEMARK.md) has the boundary and the examples.
