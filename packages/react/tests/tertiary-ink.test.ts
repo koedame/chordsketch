@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, test } from 'vitest';
 
 import { readStylesheetSource } from './stylesheet-source';
@@ -34,7 +38,29 @@ function selectorsPaintingTertiary(css: string): string[] {
   return found;
 }
 
+/**
+ * The CodeMirror source editor paints its syntax tones from a
+ * `HighlightStyle` / `EditorView.theme` in TypeScript, not from
+ * `styles.css`, so the stylesheet walk above cannot see them. Its
+ * `punctuation` and `comment` tags carried the tertiary tone at 14px
+ * until they moved to `--cs-text-secondary`; nothing else in this
+ * package guards that, because axe does not colour-check inside a
+ * `contenteditable`.
+ */
+const editorSourcePath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../src/chord-source-area.tsx',
+);
+
 describe('tertiary ink', () => {
+  test('the CodeMirror editor paints no text with it', () => {
+    const source = readFileSync(editorSourcePath, 'utf8').replace(
+      /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+      '',
+    );
+    expect(source).not.toMatch(/color:\s*'var\(--cs-(?:text-tertiary|ink-500)\b/);
+  });
+
   test('only the documented non-text / disabled selectors paint with it', () => {
     // The generated token block declares the token itself; drop it so
     // only hand-authored component rules are considered.
