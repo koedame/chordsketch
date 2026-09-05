@@ -2,6 +2,16 @@
 
 - **Status**: Accepted
 - **Date**: 2026-09-04
+- **Amended by**: [ADR-0057](0057-desktop-rpm-stays-a-webkit2gtk-41-channel.md)
+
+> Amended on 2026-09-05 by
+> [ADR-0057](0057-desktop-rpm-stays-a-webkit2gtk-41-channel.md). The
+> claim below that the `.rpm` is "uninstallable on RHEL, Rocky and
+> AlmaLinux at any version" was measured on EL 9 only. EPEL packages
+> `webkit2gtk4.1` for EL 10, where the `.rpm` installs and the binary
+> starts; the exclusion covers EL 8 and EL 9. ADR-0057 records the
+> decision to keep the channel as it is, and the AppImage's position
+> for the RHEL family.
 
 ## Context
 
