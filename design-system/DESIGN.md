@@ -92,6 +92,13 @@ Not pure gray. A faint red tint keeps it in harmony with crimson.
   supporting copy — labels, captions, timestamps, placeholders — uses
   `--ink-600` / `--text-secondary` (5.80:1 / 5.55:1 / 5.30:1 on the same
   three surfaces). See [ADR-0054](../docs/adr/0054-tertiary-ink-is-not-a-body-text-tone.md).
+- The constraint is enforced rather than left to prose:
+  `scripts/check-design-system-tertiary.py` allowlists the sites in these
+  reference pages allowed to set `color` to the tone, and
+  `packages/react/tests/tertiary-ink.test.ts` (plus its `react-ui` twin)
+  does the same for the shipped stylesheets. Adding an entry to either
+  list means claiming the site is a separator glyph, an icon stroke, or a
+  disabled control.
 
 Ratios verified with the [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/).
 Re-measure when a token's hex value changes.

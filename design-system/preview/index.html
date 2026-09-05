@@ -21,7 +21,7 @@ h1 { font-family: var(--font-display); font-weight: 900; font-size: var(--fs-60)
 .list li { counter-increment: idx; }
 .list a { display: grid; grid-template-columns: 36px 1fr auto; gap: var(--sp-4); padding: var(--sp-5) 0; border-top: 1px solid var(--border); align-items: baseline; transition: background var(--dur-1) var(--ease-out); }
 .list a:hover { background: var(--ink-100); margin: 0 calc(var(--sp-4) * -1); padding-left: var(--sp-4); padding-right: var(--sp-4); border-radius: var(--r-2); }
-.list a::before { content: counter(idx, decimal-leading-zero); font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-tertiary); }
+.list a::before { content: counter(idx, decimal-leading-zero); font-family: var(--font-mono); font-size: var(--fs-13); color: var(--text-secondary); }
 .list .name { font-family: var(--font-jp); font-weight: 600; font-size: var(--fs-18); }
 .list .meta { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); }
 .back { font-family: var(--font-latin); font-size: var(--fs-12); font-weight: 600; letter-spacing: 0; color: var(--text-secondary); }

@@ -17,7 +17,7 @@
 html, body { margin: 0; height: 100%; }
 body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875; color: var(--text-primary); background: var(--canvas); -webkit-font-smoothing: antialiased; }
 
-.mock-cap { max-width: 1180px; margin: var(--sp-8) auto var(--sp-2); padding: 0 var(--sp-6); font: 600 var(--fs-13)/1 var(--font-latin); letter-spacing: .04em; text-transform: uppercase; color: var(--text-tertiary); }
+.mock-cap { max-width: 1180px; margin: var(--sp-8) auto var(--sp-2); padding: 0 var(--sp-6); font: 600 var(--fs-13)/1 var(--font-latin); letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary); }
 /* Large floating panel → border-led elevation (DESIGN.md §4): a stronger
    hairline + near-flat --e-panel, not a popover-weight --e-2 shadow. */
 .app { max-width: 1180px; margin: 0 auto var(--sp-8); border: 1px solid var(--border-strong); border-radius: var(--r-3); overflow: hidden; box-shadow: var(--e-panel); background: var(--surface); display: flex; flex-direction: column; height: 560px; }
@@ -38,7 +38,7 @@ body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875
 .pane.source { border-right: 1px solid var(--border); }
 .pane-head { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-2) var(--sp-5); background: var(--canvas); border-bottom: 1px solid var(--border); flex: none; }
 .pane-head .eyebrow { font: 600 var(--fs-12)/1 var(--font-latin); color: var(--text-secondary); margin: 0; }
-.pane-head .meta { font: 400 var(--fs-12)/1 var(--font-mono); color: var(--text-tertiary); }
+.pane-head .meta { font: 400 var(--fs-12)/1 var(--font-mono); color: var(--text-secondary); }
 .pane-body { flex: 1; overflow: auto; padding: var(--sp-5) var(--sp-6); }
 
 .source-code { font-family: var(--font-mono); font-size: var(--fs-13); line-height: 1.9; color: var(--text-primary); white-space: pre-wrap; margin: 0; }
@@ -58,7 +58,7 @@ body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875
 /* Lifted chord-editor footer — full-width band spanning both panes. */
 .cins { flex: none; display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5); padding: var(--sp-3) var(--sp-6); min-height: 84px; background: var(--surface); border-top: 1px solid var(--border-strong); box-shadow: 0 -8px 24px rgba(10,10,11,.05); }
 .cins__id { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding-right: var(--sp-4); border-right: 1px solid var(--border); min-width: 96px; align-self: stretch; }
-.cins__eyebrow { font: 700 var(--fs-10)/1 var(--font-latin); letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
+.cins__eyebrow { font: 700 var(--fs-10)/1 var(--font-latin); letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
 .cins__name { font: 900 var(--fs-24)/1 var(--font-chord); color: var(--crimson-500); }
 .cins__hint { font: 400 var(--fs-13)/1.35 var(--font-jp); color: var(--text-secondary); max-width: 26ch; }
 .cins__group { display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -75,7 +75,7 @@ body { font-family: var(--font-jp); font-size: var(--fs-16); line-height: 1.6875
 .cins__chip:hover:not(:disabled) { background: var(--surface-hover); }
 .cins__chip:disabled { background: var(--ink-50); border-color: var(--border); color: var(--text-tertiary); cursor: not-allowed; }
 .cins__input { height: 32px; border: 1px solid var(--border-strong); border-radius: var(--r-2); background: var(--surface); padding: 0 var(--sp-2); font: 500 var(--fs-14)/1 var(--font-chord); color: var(--text-primary); width: 5.5rem; }
-.cins__slash { color: var(--text-tertiary); font-weight: 700; }
+.cins__slash { color: var(--text-secondary); font-weight: 700; }
 .cins__btn { height: 32px; min-width: 36px; border: 1px solid var(--border-strong); background: var(--surface); border-radius: var(--r-2); font-size: var(--fs-14); color: var(--text-strong); cursor: pointer; }
 .cins__btn:disabled { opacity: .4; cursor: not-allowed; }
 .cins__spacer { flex: 1 1 var(--sp-2); }
