@@ -1,0 +1,97 @@
+name: "@chordsketch/chordpro-lite"
+
+# Typecheck, test, and build the @chordsketch/chordpro-lite package on
+# every PR that touches it, plus pushes to main for post-merge
+# verification. Publish-on-tag is intentionally NOT handled here — per
+# ADR-0008, every npm publish for every ChordSketch-distributed package
+# is a maintainer-local manual operation. The maintainer runs
+# `cd packages/chordpro-lite && npm run build && npm publish --access public`
+# on the release machine.
+#
+# Like @chordsketch/react-ui, this package carries no wasm dependency
+# (ADR-0060), so there is deliberately no Rust toolchain / wasm-pack /
+# in-tree wasm build step — npm ci alone resolves everything it needs.
+#
+# The generated `src/bare-directives.ts` is NOT guarded here: it derives
+# from the Rust directive catalog, and a catalog-only change matches
+# none of the paths below. That guard is the unfiltered
+# `directive-catalog-sync` job in `ci.yml`, which runs on every PR.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/chordpro-lite/**'
+      - '.github/workflows/chordpro-lite.yml'
+  pull_request:
+    paths:
+      - 'packages/chordpro-lite/**'
+      - '.github/workflows/chordpro-lite.yml'
+
+# Cancel stale PR runs on force-push / rebase. Main / workflow_dispatch
+# runs always go to completion (gated on pull_request event).
+concurrency:
+  group: chordpro-lite-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: packages/chordpro-lite
+
+jobs:
+  build-and-test:
+    name: Build and test @chordsketch/chordpro-lite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/chordpro-lite/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Run vitest tests
+        run: npm test
+
+      - name: Build (tsup ESM + CJS + .d.ts)
+        run: npm run build
+
+      - name: Verify dist/ contents
+        run: |
+          set -euo pipefail
+          test -f dist/index.js     # ESM
+          test -f dist/index.cjs    # CJS
+          test -f dist/index.d.ts   # Types for the ESM branch
+          test -f dist/index.d.cts  # Types for the CJS branch
+          echo "dist/ contents:"
+          ls -la dist/
+
+      - name: Smoke-test both built entry points
+        # A published consumer reaches the package through `dist/`, not
+        # through `src/`, so assert the built artefacts actually run —
+        # the vitest suite above only exercises the sources.
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "
+            import { detectFormat, extractLyrics, extractPreview } from './dist/index.js';
+            if (detectFormat('{soc}\nx') !== 'chordpro') throw new Error('ESM: directive not detected');
+            if (detectFormat('irealb://x') !== 'irealb') throw new Error('ESM: iReal URL not detected');
+            if (extractLyrics('[G]Hello [Am]world') !== 'Hello world') throw new Error('ESM: lyrics');
+            if (extractPreview('[C]word')[0].chords[0] !== 'C') throw new Error('ESM: preview');
+          "
+          node -e "
+            const m = require('./dist/index.cjs');
+            if (m.detectFormat('[Cmaj7/E]x') !== 'chordpro') throw new Error('CJS: inline chord not detected');
+            if (typeof m.version !== 'string') throw new Error('CJS: version export');
+          "

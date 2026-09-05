@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`@chordsketch/chordpro-lite@0.1.0` — dependency-free ChordPro
+  helpers.** `detectFormat` (ChordPro / `irealb://` / neither),
+  `extractLyrics` (the sung words with chord and directive scaffolding
+  removed) and `extractPreview` (the opening chord and lyric lines,
+  capped by `maxLines` / `maxChordsPerLine` / `maxLyricChars`) — the
+  three ChordPro questions that are pure string work, answered with no
+  dependencies at all so a server, an edge runtime, a build script or a
+  CLI wrapper can sniff and index charts and load the engine only when
+  it actually renders one. No `@chordsketch/wasm*` anywhere in the
+  dependency graph, asserted by `tests/no-wasm-dep.test.ts` as in
+  ADR-0029. The value-less directive names `detectFormat` recognises are
+  generated from a new `BARE_DIRECTIVE_NAMES` in the
+  [ADR-0028](docs/adr/0028-shared-directive-catalog.md) directive
+  catalog by `scripts/generate-bare-directives.py`, and the unfiltered
+  `directive-catalog-sync` CI job fails on drift, so the sniffer cannot
+  fall behind the parser
+  ([ADR-0060](docs/adr/0060-wasm-free-chordpro-text-helpers-package.md)).
+
 - **Live demo pages for the Vue and Svelte bindings.** The playground
   now serves `/chordsketch/vue/` and `/chordsketch/svelte/` — one
   editable page per UI package, mounting that package's
