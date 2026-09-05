@@ -58,13 +58,45 @@ All components are pure class composition over the canonical design-system class
 | `<Segmented>` | `<div role="group">` | Single-select button group; `options`, `value`, `onValueChange`, `ariaLabel`. |
 | `version` | `string` | The installed package version. |
 
+## Chrome & layout (CSS only)
+
+The stylesheet also ships the design system's **app-shell vocabulary**. These
+are canonical classes with no React component — they carry no behaviour and no
+state, so you write the markup and the stylesheet does the rest
+([ADR-0060](https://github.com/koedame/chordsketch/blob/main/docs/adr/0060-chrome-and-layout-css-ships-from-react-ui.md)).
+
+| Class family | What it is |
+|---|---|
+| `.topnav` | The 56px application bar. Parts: `.brand` (+ `.mark`), `.crumbs` (+ `.sep`, `.current`), `.nav-links`, `.save-state` (+ `.saved` / `.unsaved`, `.dot`), `.right`, `.actions`. |
+| `.sidenav` | 220px side navigation beside a content region. Parts: `nav` (with `h3` group headings and `a` items, active via `aria-current="page"`), `.body`. |
+| `.pane` / `.pane-head` / `.pane-body` | Split-pane frame: a header row (`.eyebrow` + `.meta`) over a scrolling body. |
+| `.stack` + `.stack-1` … `.stack-32` | The vertical-flow primitive — container-owned spacing on the `--sp-*` scale. Nest for mixed rhythm; set `--cs-stack-gap` for an off-scale gap. |
+
+```html
+<header class="topnav">
+  <a class="brand"><img class="mark" src="/logo.svg" alt=""> ChordSketch</a>
+  <nav class="crumbs"><a href="/">Library</a><span class="sep">/</span><span class="current">Song</span></nav>
+  <div class="actions"><button class="btn btn-primary btn-sm">Save</button></div>
+</header>
+<div class="pane">
+  <div class="pane-head"><h2 class="eyebrow">Source</h2><span class="meta">42 lines</span></div>
+  <div class="pane-body"><div class="stack stack-8">…</div></div>
+</div>
+```
+
+These rules are generated from the design system's reference pages, so they
+match what `design-system/` renders. Custom properties are namespaced to
+`--cs-*` (hence `--cs-stack-gap`), keeping the package from reading or writing
+your app's `:root`.
+
 ## Design system
 
 The class vocabulary, tokens, and visual contract are defined upstream in
 [`design-system/DESIGN.md`](https://github.com/koedame/chordsketch/blob/main/design-system/DESIGN.md)
 and the static references under `design-system/preview/`. This package is the
 React binding of that layer (see
-[ADR-0029](https://github.com/koedame/chordsketch/blob/main/docs/adr/0029-react-ui-primitives-package.md)); the design system itself remains the source of truth.
+[ADR-0029](https://github.com/koedame/chordsketch/blob/main/docs/adr/0029-react-ui-primitives-package.md)), plus the CSS for the chrome and layout classes above; the design system
+itself remains the source of truth.
 
 ## Links
 

@@ -29,14 +29,20 @@ body,
   height: 100%;
 }
 
-/* Design-system tokens at :root scope. `@chordsketch/react/styles.css`
- * scopes the same tokens to its component root classes
- * (`.chordsketch-chord-pro-editor`, etc.) which doesn't reach the
- * playground's own chrome. Mirroring them here keeps every selector
- * — chordpro and irealpro alike — working without sprinkling
- * `var(--cs-X, #literal)` fallbacks across every rule. Keep this
- * in lockstep with `design-system/tokens.css`. */
+/* Design-system tokens at :root scope. `@chordsketch/react/styles.css` and
+ * `@chordsketch/react-ui/styles.css` scope the same tokens to their own root
+ * classes, which does not reach the playground's own selectors. Declaring
+ * them here keeps every rule — chordpro and irealpro alike — working without
+ * sprinkling `var(--cs-X, #literal)` fallbacks across the file.
+ *
+ * GENERATED from `design-system/tokens.css` by `node scripts/build-tokens.mjs`
+ * (ADR-0038). This block used to be a hand mirror carrying the instruction to
+ * "keep it in lockstep", and it had drifted — `--cs-r-1`, `--cs-r-2`,
+ * `--cs-r-full` and `--cs-dur-2` all disagreed with the source. Edit
+ * `tokens.css` and regenerate; do not hand-edit between the markers. */
+/* @generated:start — DO NOT EDIT. Source: design-system/tokens.css. Run: node scripts/build-tokens.mjs */
 :root {
+  /* Crimson — the only accent. */
   --cs-crimson-50: #FDF2F5;
   --cs-crimson-100: #FBE1E8;
   --cs-crimson-300: #EC8AA3;
@@ -45,7 +51,9 @@ body,
   --cs-crimson-700: #87092C;
   --cs-crimson-900: #480418;
   --cs-crimson: var(--cs-crimson-500);
+  --cs-fg-on-crimson: #FFFFFF;
 
+  /* Ink — warm neutrals. */
   --cs-ink-0: #FFFFFF;
   --cs-ink-50: #FAFAF7;
   --cs-ink-100: #F6F4F7;
@@ -56,6 +64,7 @@ body,
   --cs-ink-700: #44424A;
   --cs-ink-1000: #0A0A0B;
 
+  /* Surface / border / text aliases. */
   --cs-canvas: var(--cs-ink-50);
   --cs-surface: var(--cs-ink-0);
   --cs-surface-hover: var(--cs-ink-100);
@@ -64,29 +73,32 @@ body,
   --cs-text-primary: var(--cs-ink-1000);
   --cs-text-strong: var(--cs-ink-700);
   --cs-text-secondary: var(--cs-ink-600);
-  /* Not a body-text tone. `--cs-ink-500` is 3.53:1 on `--cs-surface`
-   * and 3.38:1 on `--cs-canvas`, which clears the 3:1 floor WCAG
-   * asks of non-text UI (1.4.11) and large text but not the 4.5:1
-   * floor 1.4.3 asks of text below 18.66px. Small copy uses
-   * `--cs-text-secondary` (5.8:1 / 5.55:1); this tone is for
-   * separators, disabled controls and other 3:1 surfaces. See
-   * ADR-0054. */
   --cs-text-tertiary: var(--cs-ink-500);
 
+  /* Semantic. */
+  --cs-success-surface: #E8F3EC;
   --cs-success-fg: #1A6B3A;
+  --cs-warning-surface: #FBF1D9;
   --cs-warning-fg: #8A5A07;
   --cs-danger-surface: #FBE1E8;
   --cs-danger-fg: #A30F37;
+  --cs-info-surface: #E6EEF7;
+  --cs-info-fg: #1F4F8A;
 
+  /* Focus. */
   --cs-focus-ring: 0 0 0 2px var(--cs-ink-0), 0 0 0 4px var(--cs-crimson-500);
 
+  /* Typography families. */
   --cs-font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cs-font-display: "Noto Sans JP", system-ui, sans-serif;
   --cs-font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --cs-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --cs-font-sans: var(--cs-font-jp);
   --cs-font-chord: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --cs-font-chart-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
   --cs-font-music: "Bravura Text", "Noto Music", "Symbola", serif;
 
+  /* Type scale. */
   --cs-fs-10: 0.625rem;
   --cs-fs-12: 0.75rem;
   --cs-fs-13: 0.8125rem;
@@ -98,7 +110,10 @@ body,
   --cs-fs-30: 1.875rem;
   --cs-fs-36: 2.25rem;
   --cs-fs-48: 3rem;
+  --cs-fs-60: 3.75rem;
+  --cs-fs-72: 4.5rem;
 
+  /* 4pt spacing scale. */
   --cs-sp-1: 0.25rem;
   --cs-sp-2: 0.5rem;
   --cs-sp-3: 0.75rem;
@@ -110,17 +125,45 @@ body,
   --cs-sp-12: 3rem;
   --cs-sp-16: 4rem;
   --cs-sp-20: 5rem;
+  --cs-sp-24: 6rem;
+  --cs-sp-32: 8rem;
 
-  --cs-r-1: 4px;
-  --cs-r-2: 6px;
+  /* Radius. */
+  --cs-r-1: 2px;
+  --cs-r-2: 4px;
   --cs-r-3: 8px;
   --cs-r-4: 12px;
-  --cs-r-full: 999px;
+  --cs-r-full: 9999px;
 
-  --cs-dur-1: 120ms;
-  --cs-dur-2: 240ms;
+  /* Elevation. */
+  --cs-e-1: 0 1px 2px rgba(10, 10, 11, 0.04);
+  --cs-e-panel: 0 1px 2px rgba(10, 10, 11, 0.03);
+  --cs-e-2: 0 1px 2px rgba(10, 10, 11, 0.04), 0 4px 14px -2px rgba(10, 10, 11, 0.07);
+  --cs-e-3: 0 2px 6px rgba(10, 10, 11, 0.04), 0 16px 32px -6px rgba(10, 10, 11, 0.12);
+  --cs-e-overlay: 0 4px 10px rgba(10, 10, 11, 0.05), 0 24px 48px -10px rgba(10, 10, 11, 0.18);
+
+  /* Motion. */
   --cs-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --cs-dur-1: 120ms;
+  --cs-dur-2: 200ms;
+  --cs-dur-3: 280ms;
+  --cs-dur-4: 400ms;
+
+  /* Container max-widths. */
+  --cs-maxw-app: 1280px;
+  --cs-maxw-reading: 720px;
+  --cs-maxw-guide: 1080px;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cs-dur-1: 0ms;
+    --cs-dur-2: 0ms;
+    --cs-dur-3: 0ms;
+    --cs-dur-4: 0ms;
+  }
+}
+/* @generated:end */
 
 body {
   font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
@@ -153,64 +196,39 @@ a {
  * No save state / undo / save button: the playground has no
  * persistence, so those reference-only chrome elements are
  * intentionally omitted.
+ *
+ * The bar, brand, crumbs and actions come from
+ * `@chordsketch/react-ui/styles.css` (ADR-0060); this file only
+ * carries the playground's deltas, so a change to the canonical
+ * chrome reaches the playground the way it reaches any other
+ * consumer. Every rule below is a deliberate difference.
  * ---------------------------------------------------------------- */
 
+/* The shell is a flex column; the bar must not be squeezed by the
+   editor grid below it. */
 .topnav {
-  height: 56px;
-  background: var(--cs-surface, #FFFFFF);
-  border-bottom: 1px solid var(--cs-border, #E8E6EA);
-  display: flex;
-  align-items: center;
-  padding: 0 1.5rem;
-  gap: 1rem;
   flex-shrink: 0;
 }
 
+/* The brand is an `<a>`; the reference page sets `a { color: inherit }`
+   globally, which the playground does not. */
 .topnav .brand {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-family: var(--cs-font-jp, "Noto Sans JP", system-ui, sans-serif);
-  font-weight: 700;
-  font-size: 1rem;
-  letter-spacing: -0.01em;
-  text-decoration: none;
   color: var(--cs-text-primary, #0A0A0B);
 }
 
 .topnav .brand .mark {
-  width: 24px;
-  height: 24px;
-  border-radius: 2px;
-  display: block;
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="%23BD1642"/><path d="M82.9328334,100.501459 C84.0311093,98.5297919 86.368868,97.6656987 88.5433381,98.2694599 C88.6578145,98.3008392 88.7693854,98.3264075 88.8821185,98.3548813 C89.0669078,98.400207 89.2522781,98.4437894 89.4422973,98.4821419 C89.5375974,98.5013181 89.635222,98.5239809 89.7287788,98.5408328 C89.7729423,98.5489682 89.8165246,98.5507115 89.8606881,98.5559414 C90.8235681,98.7198111 91.8404902,98.8000027 92.9044814,98.7738532 C95.0353691,98.7209733 97.3208289,98.282244 99.5969912,97.4140831 C106.959508,94.607378 111.430478,88.4041529 109.583748,83.5589548 C108.201896,79.9334821 103.674558,78.0966301 98.3993475,78.5760363 C98.7985621,78.4499379 99.1977766,78.3168664 99.5969912,78.1646186 C106.959508,75.3579135 111.430478,69.1546885 109.583748,64.3089092 C108.201896,60.6840176 103.674558,58.8471657 98.3993475,59.3259907 C98.7985621,59.1998924 99.1977766,59.0668209 99.5969912,58.9145731 C106.959508,56.107868 111.430478,49.904643 109.583748,45.0588637 C107.736436,40.2136655 100.270484,38.5604407 92.9079679,41.3671458 C89.9879487,42.4805302 87.5246727,44.1291063 85.7284976,46.0141894 C84.9382039,46.8498088 84.3135231,47.672063 83.8195895,48.5140746 C66.608037,74.3247206 75.0897488,157.615874 75.0897488,157.615874 C75.5546275,146.069449 77.4478459,110.345846 82.9328334,100.501459 Z" fill="%23FFFFFF"/></svg>');
   background-size: cover;
   background-repeat: no-repeat;
   flex-shrink: 0;
 }
 
-.topnav .crumbs {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-left: 1.5rem;
-  font-size: 0.875rem;
-  color: var(--cs-text-secondary, #67646D);
-}
-
-.topnav .crumbs .sep {
-  color: var(--cs-text-tertiary, #8A8790);
-}
-
-.topnav .crumbs .current {
-  color: var(--cs-text-primary, #0A0A0B);
-  font-weight: 500;
-}
-
+/* The playground's actions cluster flows immediately after the
+   breadcrumb rather than sitting at the right edge, so the canonical
+   `margin-left: auto` is dropped. (`.topnav__tools` below is the
+   right-edge variant, and keeps the auto margin for itself.) */
 .topnav .actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  margin-left: 0;
 }
 
 /* Inline tools (Sample / Layout) sit BEFORE `.actions` and consume the
@@ -363,10 +381,12 @@ a {
   }
 }
 
+/* `.pane`, `.pane-head` and `.pane-body` come from
+   `@chordsketch/react-ui/styles.css` (ADR-0060); the rules here are the
+   playground's deltas. The pane body is the notable one: the canonical
+   frame scrolls a padded document, while the playground fills it with a
+   source area or a preview that scrolls itself. */
 .pane {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
   background: var(--cs-surface, #FFFFFF);
 }
 
@@ -392,29 +412,16 @@ a {
   margin: 0 auto;
 }
 
+/* The head carries three items (eyebrow, meta, Export PDF) rather than
+   the canonical two, so spacing comes from a gap plus the auto margin on
+   `.meta` below — `space-between` would strand the middle item. */
 .pane-head {
-  display: flex;
-  align-items: center;
+  justify-content: flex-start;
   gap: var(--cs-sp-3, 0.75rem);
-  padding: 0.75rem 1.5rem;
-  background: var(--cs-canvas, #FAFAF7);
-  border-bottom: 1px solid var(--cs-border, #E8E6EA);
   flex-shrink: 0;
 }
 
-.pane-head .eyebrow {
-  font-family: var(--cs-font-latin, "Inter", system-ui, sans-serif);
-  font-weight: 600;
-  font-size: 0.75rem;
-  letter-spacing: 0;
-  color: var(--cs-text-secondary, #67646D);
-  margin: 0;
-}
-
 .pane-head .meta {
-  font-family: var(--cs-font-mono, "JetBrains Mono", ui-monospace, monospace);
-  font-size: 0.75rem;
-  color: var(--cs-text-secondary, #67646D);
   font-feature-settings: "tnum" 1;
   /* Push the meta caption + everything that follows it to the
    * right edge of the pane head. The Export PDF button (when
@@ -467,11 +474,14 @@ a {
   cursor: not-allowed;
 }
 
+/* The canonical body scrolls a padded document; the playground's fills
+   with a source area or preview that owns its own padding and scrolling. */
 .pane-body {
-  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding: 0;
+  overflow: visible;
 }
 
 .pane.source .pane-body > .chordsketch-source-area {

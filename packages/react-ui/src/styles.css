@@ -30,7 +30,13 @@
 .segmented,
 .check,
 .radio,
-.switch {
+.switch,
+.topnav,
+.sidenav,
+.pane,
+.pane-head,
+.pane-body,
+.stack {
   /* Crimson — the only accent. */
   --cs-crimson-50: #FDF2F5;
   --cs-crimson-100: #FBE1E8;
@@ -158,7 +164,13 @@
   .segmented,
   .check,
   .radio,
-  .switch {
+  .switch,
+  .topnav,
+  .sidenav,
+  .pane,
+  .pane-head,
+  .pane-body,
+  .stack {
     --cs-dur-1: 0ms;
     --cs-dur-2: 0ms;
     --cs-dur-3: 0ms;
@@ -391,3 +403,250 @@
 .switch input:checked + .track { background: var(--cs-crimson-500); }
 .switch input:checked + .track::before { transform: translateX(16px); }
 .switch input:focus-visible + .track { box-shadow: var(--cs-focus-ring); }
+
+/* ------------------------------------------------------------------
+ * Chrome & layout — the app-shell vocabulary of design-system/DESIGN.md
+ * (§4.1 Stack, §6 Navigation, §9 canonical chrome vocabulary).
+ *
+ * These classes ship as CSS only: they carry no behaviour and no state,
+ * so the package exposes no React component for them (ADR-0060). Write
+ * the markup yourself — `<header class="topnav">`, `<div class="pane">`,
+ * `<div class="stack stack-8">`.
+ *
+ * The block below is GENERATED from the design-system reference pages by
+ * `scripts/build-chrome-css.mjs` and held at a zero diff by CI, so it
+ * cannot drift from `design-system/`. Custom properties are projected
+ * into the `--cs-*` namespace like every other variable here, so the
+ * Stack's gap knob is `--cs-stack-gap` (the framework-agnostic layer
+ * keeps the bare `--stack-gap` name).
+ * ------------------------------------------------------------------ */
+/* @generated:chrome:start — DO NOT EDIT. Source: design-system/ (see scripts/build-chrome-css.mjs). Run: node scripts/build-chrome-css.mjs */
+/* Top navigation — the app bar and its editor-side parts — design-system/ui_kits/web/editor.html */
+.topnav {
+  height: 56px;
+  background: var(--cs-surface);
+  border-bottom: 1px solid var(--cs-border);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--cs-sp-6);
+  gap: var(--cs-sp-4);
+}
+.topnav .brand {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-3);
+  font-family: var(--cs-font-jp);
+  font-weight: 700;
+  font-size: var(--cs-fs-16);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+.topnav .brand .mark {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--cs-r-1);
+  display: block;
+}
+.topnav .crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-3);
+  margin-left: var(--cs-sp-6);
+  font-size: var(--cs-fs-14);
+  color: var(--cs-text-secondary);
+}
+.topnav .crumbs a {
+  text-decoration: none;
+}
+.topnav .crumbs .sep {
+  color: var(--cs-text-tertiary);
+}
+.topnav .crumbs .current {
+  color: var(--cs-text-primary);
+  font-weight: 500;
+}
+.topnav .save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+  font-family: var(--cs-font-latin);
+  font-weight: 500;
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-secondary);
+  margin-left: var(--cs-sp-3);
+}
+.topnav .save-state.saved {
+  color: var(--cs-success-fg);
+}
+.topnav .save-state.unsaved {
+  color: var(--cs-warning-fg);
+}
+.topnav .save-state .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--cs-r-full);
+  background: currentColor;
+}
+.topnav .actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+}
+
+/* Top navigation — the link row and trailing meta — design-system/preview/components-navigation.html */
+.topnav .nav-links {
+  display: flex;
+  gap: var(--cs-sp-1);
+  margin-left: var(--cs-sp-6);
+}
+.topnav .nav-links a {
+  font-family: var(--cs-font-jp);
+  font-size: var(--cs-fs-14);
+  padding: var(--cs-sp-1) var(--cs-sp-3);
+  border-radius: var(--cs-r-2);
+  color: var(--cs-text-secondary);
+}
+.topnav .nav-links a[aria-current="page"] {
+  background: var(--cs-ink-100);
+  color: var(--cs-text-primary);
+}
+.topnav .nav-links a:hover:not([aria-current="page"]) {
+  color: var(--cs-text-primary);
+}
+.topnav .right {
+  margin-left: auto;
+  display: flex;
+  gap: var(--cs-sp-3);
+  align-items: center;
+  font-size: var(--cs-fs-13);
+  color: var(--cs-text-secondary);
+}
+
+/* Side navigation — design-system/preview/components-navigation.html */
+.sidenav {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 320px;
+}
+.sidenav nav {
+  background: var(--cs-canvas);
+  border-right: 1px solid var(--cs-border);
+  padding: var(--cs-sp-4);
+}
+.sidenav nav h3 {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  letter-spacing: 0;
+  color: var(--cs-text-secondary);
+  margin: var(--cs-sp-4) var(--cs-sp-2) var(--cs-sp-2);
+}
+.sidenav nav h3:first-child {
+  margin-top: 0;
+}
+.sidenav nav a {
+  display: flex;
+  align-items: center;
+  gap: var(--cs-sp-2);
+  padding: var(--cs-sp-2) var(--cs-sp-3);
+  border-radius: var(--cs-r-2);
+  font-size: var(--cs-fs-14);
+  color: var(--cs-text-secondary);
+}
+.sidenav nav a[aria-current="page"] {
+  background: var(--cs-ink-1000);
+  color: var(--cs-ink-0);
+}
+.sidenav nav a:hover:not([aria-current="page"]) {
+  background: var(--cs-ink-100);
+  color: var(--cs-text-primary);
+}
+.sidenav .body {
+  padding: var(--cs-sp-6);
+  color: var(--cs-text-secondary);
+  font-size: var(--cs-fs-14);
+}
+
+/* Panes — the split-pane frame — design-system/ui_kits/web/editor.html */
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cs-sp-3) var(--cs-sp-6);
+  background: var(--cs-canvas);
+  border-bottom: 1px solid var(--cs-border);
+}
+.pane-head .eyebrow {
+  font-family: var(--cs-font-latin);
+  font-weight: 600;
+  font-size: var(--cs-fs-12);
+  letter-spacing: 0;
+  color: var(--cs-text-secondary);
+  margin: 0;
+}
+.pane-head .meta {
+  font-family: var(--cs-font-mono);
+  font-size: var(--cs-fs-12);
+  color: var(--cs-text-secondary);
+}
+.pane-body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--cs-sp-8);
+}
+
+/* Stack — the vertical-flow primitive (DESIGN.md §4.1) — design-system/preview/layout-stack.html */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cs-stack-gap, var(--cs-sp-4));
+}
+.stack > * {
+  margin-block: 0;
+}
+.stack-1 {
+  --cs-stack-gap: var(--cs-sp-1);
+}
+.stack-2 {
+  --cs-stack-gap: var(--cs-sp-2);
+}
+.stack-3 {
+  --cs-stack-gap: var(--cs-sp-3);
+}
+.stack-4 {
+  --cs-stack-gap: var(--cs-sp-4);
+}
+.stack-5 {
+  --cs-stack-gap: var(--cs-sp-5);
+}
+.stack-6 {
+  --cs-stack-gap: var(--cs-sp-6);
+}
+.stack-8 {
+  --cs-stack-gap: var(--cs-sp-8);
+}
+.stack-10 {
+  --cs-stack-gap: var(--cs-sp-10);
+}
+.stack-12 {
+  --cs-stack-gap: var(--cs-sp-12);
+}
+.stack-16 {
+  --cs-stack-gap: var(--cs-sp-16);
+}
+.stack-20 {
+  --cs-stack-gap: var(--cs-sp-20);
+}
+.stack-24 {
+  --cs-stack-gap: var(--cs-sp-24);
+}
+.stack-32 {
+  --cs-stack-gap: var(--cs-sp-32);
+}
+/* @generated:chrome:end */
