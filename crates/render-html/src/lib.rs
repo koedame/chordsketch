@@ -1243,11 +1243,11 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .meta { font-family: \"JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; font-size: 0.8125rem; color: #67646D; margin: 0 0 0.4em; font-feature-settings: \"tnum\" 1; }
 .song-header > .meta:last-of-type { margin-bottom: 1.5em; }
 .meta--attribution { font-family: \"Inter\", system-ui, sans-serif; font-size: 1rem; color: #4A4750; margin: 0.1em 0; }
-.meta--attribution-secondary { font-size: 0.8125rem; color: #8A8790; margin-bottom: 0.8em; }
-.meta__label { color: #8A8790; font-weight: 400; }
+.meta--attribution-secondary { font-size: 0.8125rem; color: #67646D; margin-bottom: 0.8em; }
+.meta__label { color: #67646D; font-weight: 400; }
 .meta--params { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0.2em 0 0.8em; }
 .meta__chip { display: inline-block; padding: 0.15em 0.6em; border: 1px solid #D4D1D6; border-radius: 4px; background-color: #FAFAFA; color: #2A262E; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; font-feature-settings: \"tnum\" 1; }
-.meta--supplementary { font-size: 0.75rem; color: #A8A4AD; margin-bottom: 0.4em; }
+.meta--supplementary { font-size: 0.75rem; color: #67646D; margin-bottom: 0.4em; }
 .meta-inline { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.15em 0.3em 0.15em 0; padding: 0 0.5rem; box-sizing: border-box; min-height: 1.6rem; border-radius: 2px; background-color: #F6F4F7; border: 1px solid #E8E6EA; font-family: \"JetBrains Mono\", ui-monospace, monospace; font-size: 0.75rem; color: #44424A; line-height: 1.2; letter-spacing: 0.02em; font-feature-settings: \"tnum\" 1; vertical-align: middle; }
 .meta-inline__label { color: #67646D; font-weight: 500; }
 .meta-inline__value { color: #0A0A0B; font-weight: 600; }
@@ -1271,7 +1271,7 @@ h2 { font-family: \"Noto Sans JP\", system-ui, -apple-system, sans-serif; font-w
 .empty-line { height: 1em; }
 section { margin: 1em 0; }
 section > .section-label, .chorus-recall > .section-label { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 0.75rem; color: #67646D; margin: 0 0 0.5em; line-height: 1.4; }
-.comment { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-style: italic; color: #8A8790; margin: 0.3em 0; }
+.comment { font-family: \"Inter\", system-ui, -apple-system, sans-serif; font-style: italic; color: #67646D; margin: 0.3em 0; }
 .comment-box { border: 1px solid #D4D1D6; border-radius: 4px; padding: 0.2em 0.5em; display: block; width: fit-content; margin: 0.3em 0; }
 .comment.comment--highlight { background-color: #FFF3A3; color: #1A1718; font-style: normal; font-weight: 600; padding: 0.15em 0.4em; border-radius: 3px; display: block; width: fit-content; }
 .comment.comment--highlight mark { background: none; color: inherit; }

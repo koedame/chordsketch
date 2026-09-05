@@ -237,7 +237,7 @@
 .song-card h3 { font-family: var(--cs-font-jp); font-weight: 700; font-size: var(--cs-fs-18); line-height: 1.4; letter-spacing: -0.01em; margin: 0 0 var(--cs-sp-4); }
 .song-card .meta { display: flex; gap: var(--cs-sp-3); flex-wrap: wrap; font-family: var(--cs-font-mono); font-size: var(--cs-fs-12); color: var(--cs-text-secondary); margin-bottom: var(--cs-sp-4); font-variant-numeric: tabular-nums; }
 .song-card .footer { display: flex; align-items: center; justify-content: space-between; padding-top: var(--cs-sp-3); border-top: 1px solid var(--cs-border); }
-.song-card time { font-family: var(--cs-font-latin); font-weight: 500; font-size: var(--cs-fs-12); color: var(--cs-text-tertiary); font-variant-numeric: tabular-nums; }
+.song-card time { font-family: var(--cs-font-latin); font-weight: 500; font-size: var(--cs-fs-12); color: var(--cs-text-secondary); font-variant-numeric: tabular-nums; }
 
 .setlist {
   background: var(--cs-surface);
@@ -252,8 +252,8 @@
 .setlist .stats { display: flex; gap: var(--cs-sp-6); padding: var(--cs-sp-3) 0; border-top: 1px solid var(--cs-border); border-bottom: 1px solid var(--cs-border); margin-bottom: var(--cs-sp-4); }
 .setlist .stat { display: flex; flex-direction: column; gap: var(--cs-sp-1); }
 .setlist .stat .num { font-family: var(--cs-font-mono); font-weight: 600; font-size: var(--cs-fs-24); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.setlist .stat .label { font-family: var(--cs-font-latin); font-weight: 600; font-size: var(--cs-fs-12); letter-spacing: 0; color: var(--cs-text-tertiary); }
-.setlist time { font-family: var(--cs-font-mono); font-size: var(--cs-fs-12); color: var(--cs-text-tertiary); margin-top: auto; }
+.setlist .stat .label { font-family: var(--cs-font-latin); font-weight: 600; font-size: var(--cs-fs-12); letter-spacing: 0; color: var(--cs-text-secondary); }
+.setlist time { font-family: var(--cs-font-mono); font-size: var(--cs-fs-12); color: var(--cs-text-secondary); margin-top: auto; }
 
 .featured-card {
   background: var(--cs-surface);
@@ -330,7 +330,7 @@
 .input.error { border-color: var(--cs-danger-fg); }
 .input:disabled,
 .textarea:disabled { background: var(--cs-ink-50); color: var(--cs-text-tertiary); cursor: not-allowed; }
-.input::placeholder { color: var(--cs-text-tertiary); }
+.input::placeholder { color: var(--cs-text-secondary); }
 
 .select {
   width: 100%;
