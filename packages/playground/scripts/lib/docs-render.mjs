@@ -56,6 +56,13 @@ export const DOC_GROUPS = [
         sourcePath: 'docs/sdk/tasks/embed-svelte.md',
       },
       {
+        slug: 'mcp',
+        title: 'Use from an AI assistant (MCP)',
+        blurb:
+          'Serve ChordPro render / parse / validate / format as MCP tools from the CLI.',
+        sourcePath: 'docs/sdk/tasks/mcp.md',
+      },
+      {
         slug: 'render',
         title: 'Render across every binding',
         blurb:

@@ -27,6 +27,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fall behind the parser
   ([ADR-0060](docs/adr/0060-wasm-free-chordpro-text-helpers-package.md)).
 
+- **`chordsketch mcp` — a Model Context Protocol server.** An AI
+  assistant that speaks MCP can now render, parse, validate, format
+  and draw diagrams from ChordPro charts by calling tools instead of
+  shelling out and scraping output. Six tools ship: `render_chordpro`
+  (text / HTML, with transpose), `parse_chordpro` (the syntax tree as
+  JSON — the one operation the command line has no path for),
+  `validate_chordpro` (parse errors with positions, plus semantic
+  warnings), `format_chordpro`, `chord_diagram_svg` (guitar / ukulele
+  / piano) and `list_directives`. The server rides the existing binary
+  rather than a new package, so every install channel and the Docker
+  image serve it: point a client at `{"command": "chordsketch",
+  "args": ["mcp"]}`. It has no filesystem and no network access —
+  every tool takes the song's source as a string. PDF and iReal Pro
+  are deliberately not exposed; the CLI keeps those
+  ([ADR-0063](docs/adr/0063-mcp-server-is-a-cli-subcommand.md),
+  [docs/sdk/tasks/mcp.md](docs/sdk/tasks/mcp.md)).
+
 - **Live demo pages for the Vue and Svelte bindings.** The playground
   now serves `/chordsketch/vue/` and `/chordsketch/svelte/` — one
   editable page per UI package, mounting that package's

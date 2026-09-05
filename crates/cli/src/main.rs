@@ -62,9 +62,10 @@ fn read_stdin_clamped() -> Result<String, String> {
 ///
 /// Escapes the characters mandated by RFC 8259 §7: `"`, `\`, and the
 /// control range U+0000–U+001F (tab/LF/CR via their shorthand, the rest
-/// via `\uXXXX`). Avoids a `serde_json` dependency — the CLI currently
-/// has no serde in its dependency tree and we only need to serialize
-/// two string fields.
+/// via `\uXXXX`). `serde_json` is reachable from this crate (the `mcp`
+/// subcommand pulls it in through `chordsketch-mcp`), but building a
+/// `Value` to serialize two string fields on the warning path buys
+/// nothing over this.
 fn json_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 8);
     for c in s.chars() {
@@ -181,6 +182,19 @@ struct Cli {
 /// Available subcommands.
 #[derive(Subcommand)]
 enum Commands {
+    /// Serve the Model Context Protocol over stdin/stdout.
+    ///
+    /// Exposes ChordPro render / parse / validate / format / chord-diagram
+    /// operations as MCP tools an AI assistant can call. The process speaks
+    /// JSON-RPC on stdout and runs until the client disconnects, so it is
+    /// meant to be launched by an MCP client rather than run by hand:
+    ///
+    ///   {"mcpServers": {"chordsketch": {"command": "chordsketch",
+    ///                                   "args": ["mcp"]}}}
+    ///
+    /// See docs/sdk/tasks/mcp.md for the tool list and client setup.
+    Mcp,
+
     /// Format ChordPro source files.
     ///
     /// Normalize directive names, spacing, chord spelling, and blank lines.
@@ -289,6 +303,9 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     // Dispatch subcommands.
+    if let Some(Commands::Mcp) = cli.command {
+        return run_mcp();
+    }
     if let Some(Commands::Fmt { files, check }) = cli.command {
         return run_fmt(&files, check);
     }
@@ -703,6 +720,26 @@ fn write_bytes(path: &Option<String>, content: &[u8]) -> io::Result<()> {
             let stdout = io::stdout();
             let mut handle = stdout.lock();
             handle.write_all(content)
+        }
+    }
+}
+
+/// Run the `mcp` subcommand: serve the Model Context Protocol over
+/// stdin/stdout until the client disconnects.
+///
+/// The transport owns stdout, so nothing here may print to it — the
+/// failure path writes to stderr only.
+///
+/// # Exit codes
+///
+/// * `0` — the client disconnected cleanly.
+/// * `1` — the server could not start, or stopped abnormally.
+fn run_mcp() -> ExitCode {
+    match chordsketch_mcp::serve_stdio() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
         }
     }
 }

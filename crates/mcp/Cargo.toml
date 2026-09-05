@@ -1,0 +1,27 @@
+[package]
+name = "chordsketch-mcp"
+version = "0.5.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories = ["development-tools", "text-processing"]
+readme = "README.md"
+description = "Model Context Protocol server exposing ChordPro operations as AI tools"
+
+[dependencies]
+chordsketch-chordpro = { version = "0.5.0", path = "../chordpro" }
+chordsketch-render-html = { version = "0.5.0", path = "../render-html" }
+chordsketch-render-text = { version = "0.5.0", path = "../render-text" }
+rmcp = { version = "3", features = ["transport-io"] }
+schemars = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["io-std", "rt"] }
+
+[dev-dependencies]
+rmcp = { version = "3", features = ["client", "transport-async-rw"] }
+tokio = { version = "1", features = ["io-util", "macros", "rt-multi-thread"] }

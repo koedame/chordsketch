@@ -1154,3 +1154,49 @@ fn ireal_multi_arg_produces_single_xml_declaration() {
             out.matches("<svg ").count() == 2
         }));
 }
+
+/// One MCP `initialize` request, framed the way the stdio transport
+/// expects: a single line of JSON-RPC.
+const MCP_INITIALIZE: &str = concat!(
+    r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"#,
+    r#""protocolVersion":"2025-06-18","capabilities":{},"#,
+    r#""clientInfo":{"name":"cli-test","version":"0"}}}"#,
+    "\n",
+);
+
+#[test]
+fn mcp_subcommand_answers_an_initialize_request_and_exits_when_stdin_closes() {
+    // The wiring between the CLI subcommand and the server crate is not
+    // covered by `chordsketch-mcp`'s own tests, which drive the server
+    // over an in-memory pipe. This is the only test that exercises the
+    // shipped binary the way an MCP client launches it.
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg("mcp")
+        .write_stdin(MCP_INITIALIZE)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#""name":"chordsketch""#))
+        .stdout(predicate::str::contains(r#""tools""#))
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn mcp_subcommand_writes_nothing_but_protocol_messages_to_stdout() {
+    // stdout *is* the transport: one stray line of logging or banner
+    // text desynchronises the client. Every line must parse as JSON.
+    let output = Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg("mcp")
+        .write_stdin(MCP_INITIALIZE)
+        .output()
+        .expect("the server runs");
+    let stdout = String::from_utf8(output.stdout).expect("stdout is UTF-8");
+    assert!(!stdout.trim().is_empty(), "the server answered");
+    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            line.trim_start().starts_with('{'),
+            "every stdout line is a JSON-RPC message, got {line:?}"
+        );
+    }
+}
