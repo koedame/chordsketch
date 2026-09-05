@@ -1,0 +1,35 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "ChordSketch",
+  "description": "Rust implementation of the ChordPro and iReal Pro chord chart formats: parse to an AST, render to text / HTML / PDF / SVG, transpose, and convert between the two formats.",
+  "folders": [],
+  "excludeFolders": [
+    ".claude",
+    ".github",
+    "apps",
+    "ci",
+    "docs/adr",
+    "packages/playground",
+    "packages/ui-irealb-editor",
+    "packaging",
+    "scripts",
+    "tests"
+  ],
+  "excludeFiles": [
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "dev-setup.md",
+    "releasing.md"
+  ],
+  "rules": [
+    "ChordSketch is pre-1.0. Any 0.x release may change the public API, rendered output, CLI flags and binding surfaces without a deprecation cycle, so pin an exact version.",
+    "In Rust, chordsketch-chordpro parses ChordPro into the AST with zero external dependencies; rendering lives in the sibling chordsketch-render-text, chordsketch-render-html and chordsketch-render-pdf crates.",
+    "In JavaScript, @chordsketch/wasm covers parsing, transposing and text / HTML / SVG rendering. render_pdf, render_pdf_with_options, renderIrealPng and renderIrealPdf live in the much larger @chordsketch/wasm-export; dynamic-import it only when exporting.",
+    "Call await init() once before the first @chordsketch/wasm call in the browser; the Node build loads synchronously and needs no init call.",
+    "Write explicit chord extensions: G7(13) or G7(9,11,13) rather than G13, and Cadd9 or C7(9) rather than C(9). The bare stacks still parse but are reported as ambiguous by every renderer.",
+    "@chordsketch/vue and @chordsketch/svelte cover the ChordPro surface only. The iReal Pro components and the AST-walker interaction props (chord selection, drag-to-reposition, chord audio) are React-only.",
+    "@chordsketch/ui-irealb-editor is a private workspace package and is not published to npm. Third-party apps embed @chordsketch/react's <IrealProEditor> or <IrealBarGrid> instead."
+  ]
+}
