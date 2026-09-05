@@ -116,17 +116,22 @@ mod tests {
         );
     }
 
+    /// `OBJECT_COUNT` is process-global and `cargo test` runs the
+    /// harness on parallel threads, so the whole zero → live → zero
+    /// sequence has to be asserted by one test: a sibling reading the
+    /// count would observe the `object_created()` below. Keep every
+    /// assertion about the count in here rather than splitting it back
+    /// out per state.
     #[test]
-    fn test_dll_can_unload_now_reports_unloadable_while_no_object_is_alive() {
+    fn test_dll_can_unload_now_reports_busy_only_while_an_object_is_alive() {
         assert_eq!(OBJECT_COUNT.load(Ordering::Relaxed), 0);
         assert_eq!(DllCanUnloadNow(), S_OK);
-    }
 
-    #[test]
-    fn test_dll_can_unload_now_reports_busy_while_an_object_is_alive() {
         object_created();
         assert_eq!(DllCanUnloadNow(), S_FALSE);
+
         object_destroyed();
+        assert_eq!(OBJECT_COUNT.load(Ordering::Relaxed), 0);
         assert_eq!(DllCanUnloadNow(), S_OK);
     }
 
