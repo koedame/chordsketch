@@ -1065,11 +1065,6 @@ fn parse_chord_chart_with_header_ts(
 /// post-`T` slice. Returns `Some((TimeSignature, consumed_bytes))`
 /// on success or `None` if the digit run does not form a
 /// recognised iReal time signature.
-///
-/// Implemented as a free function (rather than a `let`-chain
-/// inline match) because the workspace pins `rust-version = 1.85`,
-/// which predates stable `if let && let` chains (#53667 — those
-/// landed in 1.88).
 fn parse_time_signature(after_t: &str) -> Option<(TimeSignature, usize)> {
     let digits: String = after_t.chars().take_while(|c| c.is_ascii_digit()).collect();
     if digits.len() >= 3 {
