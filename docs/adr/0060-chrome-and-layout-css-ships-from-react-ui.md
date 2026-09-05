@@ -17,9 +17,14 @@
   frame, and the `.stack` vertical-flow primitive with its `--stack-gap`
   modifiers. §4.1 specifies `.stack` in prose *and CSS*; §9 states outright
   that the class names in `ui_kits/web/editor.html` "are the canonical chrome
-  vocabulary". That list is broader than the vocabulary above — it also
+  vocabulary". §9's own parenthetical enumeration of that list is not a
+  superset of the vocabulary above: it omits `.sidenav` and `.stack` (neither
+  appears anywhere in `ui_kits/web/editor.html`; `.stack`'s canonical status
+  rests on §4.1, not §9) and does not spell out `.pane-body` by name even
+  though the class itself is present in `ui_kits/web/editor.html`. It also
   names `.toolbar` / `.tool-group`, `.segmented`, `.status`, and `.btn` +
-  variants. `.segmented` and `.btn` are Primitives, already bound and
+  variants, none of which appear in the list above. `.segmented` and
+  `.btn` are Primitives, already bound and
   shipped from `@chordsketch/react-ui` (§6); `.toolbar`, `.tool-group`, and
   `.status` are editor-internal chrome with no existing binding anywhere —
   `@chordsketch/react`'s `<PreviewToolbar>` composes a same-named but
