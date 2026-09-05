@@ -231,15 +231,26 @@ needed regardless of install path) is tracked in
 
 ### Linux requirements
 
-The `.deb`, `.rpm` and `.AppImage` bundles need **glibc 2.35 or newer
-and webkit2gtk 4.1** — Ubuntu 22.04 and later (`libwebkit2gtk-4.1-0`),
-Debian 12 and later (same package), Fedora (`webkit2gtk4.1`). The
-webkit2gtk half is the binding one: Debian 11 and the RHEL family
-(Rocky and AlmaLinux included, with or without EPEL) package
-webkit2gtk 4.0 only, so the bundles cannot be installed there at any
-glibc version. The CLI has no such constraint — it runs on glibc 2.18+
-with no system dependencies
-([ADR-0056](https://github.com/koedame/chordsketch/blob/main/docs/adr/0056-desktop-bundles-target-ubuntu-2204.md)).
+All three bundles need **glibc 2.35 or newer**. Where they differ is
+webkit2gtk 4.1.
+
+The `.deb` and the `.rpm` take it from the distribution, so they
+install only where the distribution packages it: Ubuntu 22.04 and later
+and Debian 12 and later (`libwebkit2gtk-4.1-0`), Fedora
+(`webkit2gtk4.1`), and RHEL 10 / Rocky 10 / AlmaLinux 10 with EPEL
+enabled (`webkit2gtk4.1`). Debian 11 and RHEL 8 / 9 — Rocky and
+AlmaLinux included, with or without EPEL — package webkit2gtk 4.0 only,
+so neither bundle can be installed there at any glibc version. In
+practice the `.rpm` is a Fedora channel that also serves RHEL 10.
+
+The `.AppImage` carries its own webkit2gtk 4.1 and asks the
+distribution for nothing, but the glibc floor still applies: it runs on
+RHEL 10 (glibc 2.39) and not on RHEL 8 (2.28) or RHEL 9 (2.34). RHEL 8
+and 9 therefore have no desktop bundle in any format. The CLI is the
+option there — it has no such constraint, running on glibc 2.18+ with
+no system dependencies
+([ADR-0056](https://github.com/koedame/chordsketch/blob/main/docs/adr/0056-desktop-bundles-target-ubuntu-2204.md),
+[ADR-0057](https://github.com/koedame/chordsketch/blob/main/docs/adr/0057-desktop-rpm-stays-a-webkit2gtk-41-channel.md)).
 
 ## Usage
 
