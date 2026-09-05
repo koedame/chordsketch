@@ -389,6 +389,7 @@ reference and additional examples.
 - [GitHub Action reference](docs/github-action.md)
 - [Architecture decision records](docs/adr/README.md)
 - [SECURITY.md](SECURITY.md)
+- [TRADEMARK.md](TRADEMARK.md)
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## License
@@ -396,3 +397,10 @@ reference and additional examples.
 SDK crates (core, renderers, CLI): [MIT](LICENSE)
 
 Future application layer (Forum, Playground, Desktop): AGPL-3.0-only
+
+## Trademark
+
+The licences above cover the code, not the name. Describing, packaging, and
+building on ChordSketch never needs permission; naming your own product
+ChordSketch does. Forks are welcome and must rename — see
+[TRADEMARK.md](TRADEMARK.md).
