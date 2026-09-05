@@ -89,6 +89,7 @@ chordsketch chart.txt --from ireal # force the iReal pipeline
 | `chordsketch [FILES]...` | Render one or more ChordPro files with the options below. |
 | `chordsketch fmt [FILES]...` | Normalize directive names, spacing, and blank lines. Supports `-` for stdin. `--check` returns non-zero when any file would be modified. |
 | `chordsketch convert [FILES]...` | Import from plain-text / ABC / MusicXML, or export to MusicXML via `--to musicxml`. Format is auto-detected from extension and content unless `--from <F>` is given. |
+| `chordsketch mcp` | Serve the Model Context Protocol over stdin/stdout so an AI assistant can call ChordPro operations as tools. Launched by an MCP client, not run by hand — see [docs/sdk/tasks/mcp.md](../../docs/sdk/tasks/mcp.md). |
 | `chordsketch help [COMMAND]` | Print detailed help for any subcommand. |
 
 ## Options

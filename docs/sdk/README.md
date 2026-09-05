@@ -6,6 +6,10 @@ runtime. Pick a starting point that fits how you are integrating:
 ## I want to do a specific thing
 
 - [Render to HTML, plain text, or PDF](tasks/render.md)
+- [Use ChordSketch from an AI assistant](tasks/mcp.md) — the
+  `chordsketch mcp` Model Context Protocol server: six tools an
+  assistant can call to render, parse, validate, format, and draw
+  chord diagrams, with no shell in between.
 - [Transpose chords by N semitones](tasks/transpose.md)
 - [Embed ChordPro and iReal Pro in a React app](tasks/embed-react.md)
   — 10 copy-paste recipes covering the `@chordsketch/react`
@@ -122,19 +126,21 @@ fix-propagation rule (`.claude/rules/fix-propagation.md`).
 
 ## Status
 
-This guide is being written incrementally. Five task pages are
+This guide is being written incrementally. Six task pages are
 landed. Two are per-operation (render, transpose) and cover every
 existing binding (Rust, WASM, NAPI, CLI, Python, Swift, Kotlin,
 Ruby); three are per-framework (embed-react, embed-vue,
-embed-svelte) and cover the UI component packages. Future additions
-will track new bindings and new operations as they are exposed:
+embed-svelte) and cover the UI component packages; one (mcp) covers
+the tool surface an AI assistant calls. Future additions will track
+new bindings and new operations as they are exposed:
 
 - **AST-direct parse + traversal**: the Rust crate exposes the AST
-  as a host object graph, and `@chordsketch/wasm` exposes it as JSON
+  as a host object graph, `@chordsketch/wasm` exposes it as JSON
   through `parseChordpro` (which is what `@chordsketch/react`'s
-  `useChordproAst` decodes). The NAPI and UniFFI bindings still
-  expose the parser only via the `parse_and_render_*` one-shot. When
-  AST projection lands there too, a `tasks/parse.md` page will be
+  `useChordproAst` decodes), and the MCP server exposes it as the
+  `parse_chordpro` tool. The NAPI and UniFFI bindings still expose
+  the parser only via the `parse_and_render_*` one-shot. When AST
+  projection lands there too, a `tasks/parse.md` page will be
   added.
 - **Serialise back to ChordPro**: not currently exposed by any
   binding. Tracked as part of the v0.3.0 multi-format track
