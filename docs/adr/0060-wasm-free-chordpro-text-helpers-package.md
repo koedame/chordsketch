@@ -1,4 +1,4 @@
-# 0060. Dependency-free ChordPro text helpers ship as `@chordsketch/chordpro-lite`, with its directive list generated from the catalog
+# 0060. Dependency-free ChordPro text helpers ship as `@chordsketch/chordpro-lite`
 
 - **Status**: Accepted
 - **Date**: 2026-09-06
