@@ -75,9 +75,10 @@ You can also pass a preset name instead of a file path:
 ```bash
 chordsketch -c guitar song.cho
 chordsketch -c ukulele song.cho
+chordsketch -c charango song.cho
 ```
 
-Available presets: `guitar`, `ukulele`.
+Available presets: `guitar`, `ukulele`, `charango`.
 
 ### `--define` / `-D`
 

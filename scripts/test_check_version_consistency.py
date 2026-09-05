@@ -16,6 +16,9 @@ Tests cover:
   7. Allowlist with empty reason fails hard validation
   8. Crates disagreeing among themselves fails
   9. readme-smoke pins are detected correctly (regex integration smoke test)
+ 10. Claude Code plugin / marketplace version drift is detected, and a
+     marketplace entry whose `source` no longer names the plugin
+     directory fails hard
 """
 
 from __future__ import annotations
@@ -51,6 +54,9 @@ def _build_repo(
     vscode_version: str = "0.2.0",
     napi_version: str = "0.2.0",
     tree_sitter_version: str = "0.2.0",
+    plugin_version: str = "0.2.0",
+    marketplace_version: str = "0.2.0",
+    plugin_source: str = "packages/claude-code-plugin",
     smoke_npm_pin: str = "0.2.0",
     smoke_caret: str = "0.2",
     macports_version: str = "0.2.0",
@@ -115,6 +121,25 @@ def _build_repo(
     ts_dir.mkdir(parents=True, exist_ok=True)
     (ts_dir / "package.json").write_text(
         f'{{\n  "name": "tree-sitter-chordpro",\n  "version": "{tree_sitter_version}"\n}}\n',
+        encoding="utf-8",
+    )
+
+    # The Claude Code plugin's two manifests (ADR-0059). Both declare the
+    # same version: the plugin's own, and the root marketplace entry that
+    # points at it.
+    plugin_dir = root / "packages" / "claude-code-plugin" / ".claude-plugin"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    (plugin_dir / "plugin.json").write_text(
+        f'{{\n  "name": "chordsketch",\n  "version": "{plugin_version}"\n}}\n',
+        encoding="utf-8",
+    )
+    marketplace_dir = root / ".claude-plugin"
+    marketplace_dir.mkdir(parents=True, exist_ok=True)
+    (marketplace_dir / "marketplace.json").write_text(
+        f'{{\n  "name": "chordsketch",\n  "plugins": [\n'
+        f'    {{ "name": "chordsketch", "source": "./{plugin_source}",\n'
+        f'      "version": "{marketplace_version}" }}\n'
+        f"  ]\n}}\n",
         encoding="utf-8",
     )
 
@@ -313,6 +338,33 @@ class CheckRunTests(unittest.TestCase):
             _build_repo(root, tree_sitter_version="0.1.0")
             rc = check_version_consistency.run(root, root / "nonexistent.toml")
             self.assertEqual(rc, 1)
+
+    def test_claude_code_plugin_drift_detected(self) -> None:
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            _build_repo(root, plugin_version="0.1.0")
+            rc = check_version_consistency.run(root, root / "nonexistent.toml")
+            self.assertEqual(rc, 1)
+
+    def test_marketplace_entry_drift_detected(self) -> None:
+        # The marketplace entry is a second copy of the same number; a bump
+        # that updates only plugin.json leaves installs pointing at the old
+        # version, so it has to fail on its own.
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            _build_repo(root, marketplace_version="0.1.0")
+            rc = check_version_consistency.run(root, root / "nonexistent.toml")
+            self.assertEqual(rc, 1)
+
+    def test_marketplace_source_pointing_elsewhere_fails_hard(self) -> None:
+        # Every version can agree while the entry names a directory that does
+        # not exist — the install then fails for everyone and no version check
+        # notices.
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            _build_repo(root, plugin_source="packages/renamed-plugin")
+            with self.assertRaises(SystemExit):
+                check_version_consistency.run(root, root / "nonexistent.toml")
 
     def test_allowlisted_drift_passes(self) -> None:
         with TemporaryDirectory() as td:

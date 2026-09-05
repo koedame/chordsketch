@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "chordsketch",
+  "description": "ChordSketch plugins for Claude Code. Install the chordsketch plugin to get the /chordpro skill.",
+  "owner": {
+    "name": "koedame",
+    "url": "https://github.com/koedame"
+  },
+  "plugins": [
+    {
+      "name": "chordsketch",
+      "source": "./packages/claude-code-plugin",
+      "version": "0.5.0",
+      "category": "productivity",
+      "description": "Render, transpose, validate, format and convert ChordPro and iReal Pro chord charts through the chordsketch CLI.",
+      "homepage": "https://github.com/koedame/chordsketch"
+    }
+  ]
+}

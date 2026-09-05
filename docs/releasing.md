@@ -122,6 +122,11 @@ at post-release verification rather than before the tag is cut.
    - `crates/napi/package.json` — both the main package and the per-platform
      manifests under `crates/napi/npm/<triple>/package.json`
    - `packages/tree-sitter-chordpro/package.json`
+   - `packages/claude-code-plugin/.claude-plugin/plugin.json` and the
+     matching entry in `.claude-plugin/marketplace.json` — Claude Code
+     caches plugins per version and will not re-fetch an unchanged one, so
+     this bump is what makes the release's skill reach installed clients
+     ([ADR-0059](adr/0059-claude-code-skill-ships-as-a-marketplace-plugin.md))
 
    Desktop (CLI and GUI are always in lockstep — same version number):
    - `apps/desktop/src-tauri/Cargo.toml` — `package.version`
