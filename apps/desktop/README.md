@@ -58,13 +58,19 @@ apps/desktop/
 
 ## Runtime requirements (Linux)
 
-The published bundles are built on `ubuntu-22.04` and need **glibc 2.35+
-and webkit2gtk 4.1** on the user's machine: Ubuntu 22.04+, Debian 12+,
-Fedora. Debian 11 and the RHEL family package webkit2gtk 4.0 only and
-cannot install them at all. The build host is pinned for that reason —
-the executable links the host's glibc and the AppImage ships the host's
-webkit2gtk / GTK stack, so moving the runner moves the floor. See
-[ADR-0056](../../docs/adr/0056-desktop-bundles-target-ubuntu-2204.md);
+The published bundles are built on `ubuntu-22.04` and need **glibc
+2.35+** on the user's machine. The `.deb` and `.rpm` also need
+**webkit2gtk 4.1 from the distribution** — Ubuntu 22.04+, Debian 12+,
+Fedora, and RHEL 10 with EPEL; Debian 11 and RHEL 8 / 9 package
+webkit2gtk 4.0 only and cannot install them at all. The `.AppImage`
+bundles its own webkit2gtk and needs only the glibc floor, which still
+rules out RHEL 8 (glibc 2.28) and RHEL 9 (2.34). The build host is
+pinned for that reason — the executable links the host's glibc and the
+AppImage ships the host's webkit2gtk / GTK stack, so moving the runner
+moves the floor. See
+[ADR-0056](../../docs/adr/0056-desktop-bundles-target-ubuntu-2204.md)
+and
+[ADR-0057](../../docs/adr/0057-desktop-rpm-stays-a-webkit2gtk-41-channel.md);
 `scripts/check-glibc-floor.py --channel desktop` measures the bundles in
 CI before they are uploaded.
 
