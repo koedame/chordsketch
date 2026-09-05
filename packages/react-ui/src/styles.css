@@ -409,7 +409,7 @@
  * (§4.1 Stack, §6 Navigation, §9 canonical chrome vocabulary).
  *
  * These classes ship as CSS only: they carry no behaviour and no state,
- * so the package exposes no React component for them (ADR-0060). Write
+ * so the package exposes no React component for them (ADR-0061). Write
  * the markup yourself — `<header class="topnav">`, `<div class="pane">`,
  * `<div class="stack stack-8">`.
  *

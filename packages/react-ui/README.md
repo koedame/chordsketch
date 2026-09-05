@@ -63,7 +63,7 @@ All components are pure class composition over the canonical design-system class
 The stylesheet also ships the design system's **app-shell vocabulary**. These
 are canonical classes with no React component — they carry no behaviour and no
 state, so you write the markup and the stylesheet does the rest
-([ADR-0060](https://github.com/koedame/chordsketch/blob/main/docs/adr/0060-chrome-and-layout-css-ships-from-react-ui.md)).
+([ADR-0061](https://github.com/koedame/chordsketch/blob/main/docs/adr/0061-chrome-and-layout-css-ships-from-react-ui.md)).
 
 | Class family | What it is |
 |---|---|

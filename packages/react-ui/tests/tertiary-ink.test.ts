@@ -21,7 +21,7 @@ import { describe, expect, test } from 'vitest';
  * `.song-card time`, `.setlist .stat .label`, `.setlist time` and
  * `.input::placeholder` moved there after being measured at 3.53:1.
  *
- * The scan covers the generated chrome region too (ADR-0060): rules
+ * The scan covers the generated chrome region too (ADR-0061): rules
  * projected out of `design-system/` are shipped by this package and are
  * held to the same bar as the hand-authored ones.
  */

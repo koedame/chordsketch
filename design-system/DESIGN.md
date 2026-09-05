@@ -254,7 +254,7 @@ this document towards a consumer: it ships a `@chordsketch/react-ui`
 primitive, it ships from that package as **CSS only** (canonical classes,
 no component), or it is a reference spec realised only in `preview/`. Per
 ADR-0029 a category lands in this document and `preview/` first, then gets
-a React binding when a consumer needs it; ADR-0060 adds the intermediate
+a React binding when a consumer needs it; ADR-0061 adds the intermediate
 state for classes that carry no behaviour.
 
 | Category   | Variants | React binding |
@@ -296,7 +296,7 @@ state for classes that carry no behaviour.
 
 The app-shell vocabulary is canonical in the same sense the components
 are, and it ships from the same stylesheet — but as classes only, with no
-React component to import (ADR-0060). Write the markup yourself and load
+React component to import (ADR-0061). Write the markup yourself and load
 `@chordsketch/react-ui/styles.css`:
 
 | Class family | What it is | Canonical reference |
@@ -403,7 +403,7 @@ layout in either place.
 The chrome and layout families listed in §6.2 are **generated**
 into `packages/react-ui/src/styles.css` from these reference pages
 by `node scripts/build-chrome-css.mjs`, one named source file per
-family (ADR-0060), so a consumer of the published stylesheet gets
+family (ADR-0061), so a consumer of the published stylesheet gets
 the same rules this reference renders. The generated region is
 delimited by `/* @generated:chrome:start */` …
 `/* @generated:chrome:end */`, is committed, and is held at a zero
@@ -462,15 +462,6 @@ its 52px bar does not.
 - **v1.3** — Annotated §6 with each category's React binding (which ship a
   `@chordsketch/react-ui` primitive vs are reference-only in `preview/`), and
   added §11 Versioning. Documentation only — no token or class changes.
-- **v1.5** — Chrome and layout became a distributable. The canonical
-  app-shell classes (`.topnav` and its parts, `.sidenav`, `.pane` /
-  `.pane-head` / `.pane-body`, `.stack` + modifiers) now ship as CSS from
-  `@chordsketch/react-ui/styles.css`, generated from the reference pages
-  named in §6.2 (ADR-0060). §6 gains a **CSS only** binding state for
-  canonical classes that carry no behaviour, §6.2 documents the families,
-  and §9 documents the generator. No token or class definition changes —
-  the rules are the ones the reference already rendered (MINOR: existing
-  classes become available from a package).
 - **v1.4** — Modernised the elevation system (§4). Added the `--e-panel`
   token: a near-flat, border-led lift for large floating panels, so an
   app-shell sidebar no longer borrows the popover-weight `--e-2` (the source
@@ -480,6 +471,15 @@ its 52px bar does not.
   (`ui_kits/web/sidebar-floating.html`) now uses `--e-panel` + `--border-strong`.
   Token addition (MINOR) plus value refinements (PATCH); the bare `--e-*`
   names are unchanged, so no consumer breaks.
+- **v1.5** — Chrome and layout became a distributable. The canonical
+  app-shell classes (`.topnav` and its parts, `.sidenav`, `.pane` /
+  `.pane-head` / `.pane-body`, `.stack` + modifiers) now ship as CSS from
+  `@chordsketch/react-ui/styles.css`, generated from the reference pages
+  named in §6.2 (ADR-0061). §6 gains a **CSS only** binding state for
+  canonical classes that carry no behaviour, §6.2 documents the families,
+  and §9 documents the generator. No token or class definition changes —
+  the rules are the ones the reference already rendered (MINOR: existing
+  classes become available from a package).
 
 ---
 

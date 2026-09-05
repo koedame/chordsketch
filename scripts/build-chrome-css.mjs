@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Chrome / layout CSS generator (ADR-0060).
+ * Chrome / layout CSS generator (ADR-0061).
  *
  * `design-system/DESIGN.md` names two canonical class families. The primitives
  * (`.btn`, `.input`, `.badge`, …) ship from `@chordsketch/react-ui`; the chrome

@@ -22,7 +22,7 @@ they cannot drift from the source.
   `packages/react-ui/src/styles.css` carries a second machine-owned block
   between `/* @generated:chrome:start … */` and `/* @generated:chrome:end */`,
   projected from the design system's reference pages by
-  `scripts/build-chrome-css.mjs` (ADR-0060). To change `.topnav` / `.sidenav` /
+  `scripts/build-chrome-css.mjs` (ADR-0061). To change `.topnav` / `.sidenav` /
   `.pane*` / `.stack*`, edit the canonical reference page the generator names
   for that family, run `node scripts/build-chrome-css.mjs`, and commit the
   regenerated stylesheet in the same PR.

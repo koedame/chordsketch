@@ -198,7 +198,7 @@ a {
  * intentionally omitted.
  *
  * The bar, brand, crumbs and actions come from
- * `@chordsketch/react-ui/styles.css` (ADR-0060); this file only
+ * `@chordsketch/react-ui/styles.css` (ADR-0061); this file only
  * carries the playground's deltas, so a change to the canonical
  * chrome reaches the playground the way it reaches any other
  * consumer. Every rule below is a deliberate difference.
@@ -382,7 +382,7 @@ a {
 }
 
 /* `.pane`, `.pane-head` and `.pane-body` come from
-   `@chordsketch/react-ui/styles.css` (ADR-0060); the rules here are the
+   `@chordsketch/react-ui/styles.css` (ADR-0061); the rules here are the
    playground's deltas. The pane body is the notable one: the canonical
    frame scrolls a padded document, while the playground fills it with a
    source area or a preview that scrolls itself. */
