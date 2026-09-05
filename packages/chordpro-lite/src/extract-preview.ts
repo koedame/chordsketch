@@ -44,8 +44,14 @@ const DEFAULTS = { maxLines: 2, maxChordsPerLine: 6, maxLyricChars: 40 } as cons
  * replacement glyph. Iterating code points puts every boundary between
  * characters. Combining marks and ZWJ sequences can still split, which
  * degrades to a visibly shorter preview rather than to invalid text.
+ *
+ * `max <= 0` is handled explicitly and returns `''`: `Array.prototype.slice`
+ * treats a negative end as counting from the array's end, so
+ * `points.slice(0, max)` for a negative `max` would keep everything but the
+ * last `|max|` code points instead of nothing.
  */
 function truncateCodePoints(text: string, max: number): string {
+  if (max <= 0) return '';
   const points = Array.from(text);
   return points.length <= max ? text : points.slice(0, max).join('');
 }

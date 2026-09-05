@@ -63,7 +63,7 @@ extractPreview(chart);
 |---|---|---|---|
 | `maxLines` | `number` | `2` | Maximum preview lines returned. Scanning stops once the cap is reached, so a long chart costs only its opening lines. `0` or less returns `[]`. |
 | `maxChordsPerLine` | `number` | `6` | Maximum chord symbols kept per line; the rest are dropped. |
-| `maxLyricChars` | `number` | `40` | Maximum lyric length per line, counted in code points so a truncation never splits a character. |
+| `maxLyricChars` | `number` | `40` | Maximum lyric length per line, counted in code points so a truncation never splits a character. `0` or less returns `''`. |
 
 ### How `detectFormat` decides
 

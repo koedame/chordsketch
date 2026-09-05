@@ -91,6 +91,20 @@ describe('extractPreview', () => {
     ]);
   });
 
+  it('returns an empty lyric when maxLyricChars is zero', () => {
+    expect(extractPreview('[C]abcdefghij', { maxLyricChars: 0 })).toEqual([
+      { chords: ['C'], lyric: '' },
+    ]);
+  });
+
+  it('returns an empty lyric rather than trimming from the end when maxLyricChars is negative', () => {
+    // `Array.prototype.slice`'s negative-end semantics would otherwise
+    // keep everything but the last |max| code points instead of nothing.
+    expect(extractPreview('[C]abcdefghij', { maxLyricChars: -5 })).toEqual([
+      { chords: ['C'], lyric: '' },
+    ]);
+  });
+
   it('truncates on a character boundary when the limit falls inside a surrogate pair', () => {
     // Three code points, two of them astral: cutting at two must keep
     // whole characters rather than emit a lone surrogate.
