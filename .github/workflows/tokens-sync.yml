@@ -7,7 +7,7 @@ name: Design System Sync Check
 #     design-system/tokens.css into the per-package token blocks (the `--cs-*`
 #     blocks in @chordsketch/react{,-ui} and the bare `:root` block in
 #     @chordsketch/ui-irealb-editor).
-#   - Chrome & layout (ADR-0060): scripts/build-chrome-css.mjs projects the
+#   - Chrome & layout (ADR-0061): scripts/build-chrome-css.mjs projects the
 #     canonical `.topnav` / `.sidenav` / `.pane*` / `.stack*` rules out of the
 #     design-system reference pages into @chordsketch/react-ui's stylesheet.
 #
