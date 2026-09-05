@@ -14,10 +14,18 @@ on:
     paths:
       - 'packages/react/**'
       - '.github/workflows/react.yml'
+      # The `wasm-pack` pin this workflow consumes through the
+      # composite action (#2225). Without this entry a pin bump
+      # would not re-run the wasm build that depends on it.
+      - '.github/actions/install-wasm-pack/action.yml'
   pull_request:
     paths:
       - 'packages/react/**'
       - '.github/workflows/react.yml'
+      # The `wasm-pack` pin this workflow consumes through the
+      # composite action (#2225). Without this entry a pin bump
+      # would not re-run the wasm build that depends on it.
+      - '.github/actions/install-wasm-pack/action.yml'
 
 # Cancel stale PR runs on force-push / rebase. Main / workflow_dispatch
 # runs always go to completion (gated on pull_request event).

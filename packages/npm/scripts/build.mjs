@@ -50,11 +50,12 @@ function run(cmd, args) {
 }
 
 function buildTarget(target, outDir) {
-  // wasm-pack 0.14.0 has a fragile argument parser: putting
+  // wasm-pack has a fragile argument parser: putting
   // `--no-default-features` between `--release` and `--target`
-  // makes it consume the next token as `--target`'s value
-  // incorrectly. Pass cargo-forwarding flags after the path via
-  // the `--` separator so they reach `cargo build` unambiguously.
+  // makes it read `--target`'s value as a Rust target triple
+  // (`rustup target add web`). Pass cargo-forwarding flags after
+  // the path via the `--` separator so they reach `cargo build`
+  // unambiguously.
   run("wasm-pack", [
     "build",
     CRATE_DIR,

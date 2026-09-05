@@ -53,10 +53,14 @@ on:
       - ".github/workflows/desktop-build.yml"
       # The composite action this workflow consumes; without this
       # entry a PR that only bumps the composite (e.g. Tauri CLI
-      # version, wasm-pack pin, apt-get list) would NOT trigger
-      # the 4-cell matrix, defeating #2223's purpose of giving
-      # both desktop workflows a single point of truth.
+      # version, apt-get list) would NOT trigger the 4-cell matrix,
+      # defeating #2223's purpose of giving both desktop workflows a
+      # single point of truth. The `wasm-pack` pin left this composite
+      # for `install-wasm-pack` in #2225 and `desktop-build-steps`
+      # consumes it in turn, so it needs its own entry for the same
+      # reason.
       - ".github/actions/desktop-build-steps/**"
+      - ".github/actions/install-wasm-pack/action.yml"
   pull_request:
     paths:
       - "apps/desktop/**"
@@ -84,10 +88,14 @@ on:
       - ".github/workflows/desktop-build.yml"
       # The composite action this workflow consumes; without this
       # entry a PR that only bumps the composite (e.g. Tauri CLI
-      # version, wasm-pack pin, apt-get list) would NOT trigger
-      # the 4-cell matrix, defeating #2223's purpose of giving
-      # both desktop workflows a single point of truth.
+      # version, apt-get list) would NOT trigger the 4-cell matrix,
+      # defeating #2223's purpose of giving both desktop workflows a
+      # single point of truth. The `wasm-pack` pin left this composite
+      # for `install-wasm-pack` in #2225 and `desktop-build-steps`
+      # consumes it in turn, so it needs its own entry for the same
+      # reason.
       - ".github/actions/desktop-build-steps/**"
+      - ".github/actions/install-wasm-pack/action.yml"
   workflow_dispatch:
 
 # PR-scoped cancel-in-progress per the §5 shape in
