@@ -1,4 +1,4 @@
-# 0060. Chrome and layout CSS ships from `@chordsketch/react-ui`, generated from the design-system reference
+# 0061. Chrome and layout CSS ships from `@chordsketch/react-ui`, generated from the design-system reference
 
 - **Status**: Accepted
 - **Date**: 2026-09-06
