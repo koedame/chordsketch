@@ -24,6 +24,7 @@ a { color: inherit; }
 .topnav .search { margin-left: auto; flex: 0 1 360px; position: relative; }
 .topnav .search input { width: 100%; height: 36px; padding: 0 var(--sp-3) 0 36px; border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 400 var(--fs-14)/1 var(--font-jp); color: var(--text-primary); transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
 .topnav .search input:focus { outline: none; border-color: var(--crimson-500); box-shadow: var(--focus-ring); }
+.topnav .search input::placeholder { color: var(--text-secondary); }
 .topnav .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); }
 .topnav .actions { display: flex; align-items: center; gap: var(--sp-3); }
 

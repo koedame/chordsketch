@@ -43,7 +43,7 @@ a { color: inherit; }
 .toc ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-3); counter-reset: toc; }
 .toc li { counter-increment: toc; }
 .toc a { text-decoration: none; display: flex; gap: var(--sp-3); padding: var(--sp-2) 0; font-size: var(--fs-14); border-top: 1px solid var(--border); }
-.toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); color: var(--text-tertiary); font-size: var(--fs-12); }
+.toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); color: var(--text-secondary); font-size: var(--fs-12); }
 
 .section { padding: var(--sp-16) 0; border-top: 1px solid var(--border); }
 .section:first-of-type { border-top: 0; }
@@ -64,7 +64,7 @@ a { color: inherit; }
 
 .specimen { display: grid; grid-template-columns: 200px 1fr; gap: var(--sp-6); padding: var(--sp-5) 0; border-bottom: 1px solid var(--border); align-items: baseline; }
 .specimen .role { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); }
-.specimen .role .meta { display: block; font-family: var(--font-mono); font-size: var(--fs-12); letter-spacing: 0; text-transform: none; color: var(--text-tertiary); margin-top: var(--sp-1); }
+.specimen .role .meta { display: block; font-family: var(--font-mono); font-size: var(--fs-12); letter-spacing: 0; text-transform: none; color: var(--text-secondary); margin-top: var(--sp-1); }
 .spec-display { font-family: var(--font-display); font-weight: 900; font-size: var(--fs-60); line-height: 1.05; letter-spacing: -0.03em; margin: 0; }
 .spec-h1 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-48); line-height: 1.1; letter-spacing: -0.02em; margin: 0; }
 .spec-h2 { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-36); line-height: 1.111; letter-spacing: -0.02em; margin: 0; }
@@ -110,9 +110,9 @@ a { color: inherit; }
 table.voice { width: 100%; border-collapse: collapse; }
 table.voice thead th { text-align: left; font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border-strong); }
 table.voice td { padding: var(--sp-4) var(--sp-6) var(--sp-4) 0; border-bottom: 1px solid var(--border); vertical-align: top; width: 50%; }
-table.voice td.avoid { color: var(--text-tertiary); text-decoration: line-through; text-decoration-color: var(--ink-300); }
+table.voice td.avoid { color: var(--text-secondary); text-decoration: line-through; text-decoration-color: var(--ink-300); }
 
-.site-footer { padding: var(--sp-12) 0 var(--sp-16); color: var(--text-tertiary); border-top: 1px solid var(--border); margin-top: var(--sp-16); font-size: var(--fs-13); }
+.site-footer { padding: var(--sp-12) 0 var(--sp-16); color: var(--text-secondary); border-top: 1px solid var(--border); margin-top: var(--sp-16); font-size: var(--fs-13); }
 .site-footer a { color: var(--text-secondary); text-decoration: none; }
 .site-footer a:hover { color: var(--text-primary); }
 .site-footer .row { display: flex; justify-content: space-between; gap: var(--sp-8); flex-wrap: wrap; }
@@ -212,7 +212,7 @@ table.voice td.avoid { color: var(--text-tertiary); text-decoration: line-throug
     <ul class="spec-small" style="margin: 0; padding-left: var(--sp-6);">
       <li><code style="font-family: var(--font-mono);">--ink-1000</code> on <code style="font-family: var(--font-mono);">--ink-50</code> — 18.7:1 ✓</li>
       <li><code style="font-family: var(--font-mono);">#fff</code> on <code style="font-family: var(--font-mono);">--crimson-500</code> — 6.2:1 ✓</li>
-      <li><code style="font-family: var(--font-mono);">--ink-500</code> is for supporting copy only.</li>
+      <li><code style="font-family: var(--font-mono);">--ink-500</code> never paints text below 18.66px bold / 24px regular — separators, icon strokes and disabled controls only. Small supporting copy uses <code style="font-family: var(--font-mono);">--ink-600</code>.</li>
     </ul>
   </section>
 

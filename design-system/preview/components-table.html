@@ -49,14 +49,15 @@ table.t .artist { color: var(--text-secondary); }
 table.t .key { font-family: var(--font-mono); font-weight: 600; }
 table.t .key.crimson { color: var(--crimson-500); }
 table.t .badge { display: inline-flex; align-items: center; padding: 2px var(--sp-2); border-radius: var(--r-1); font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-12); background: var(--ink-100); color: var(--text-strong); border: 1px solid var(--border); }
-table.t .more { color: var(--text-tertiary); }
+table.t .more { color: var(--text-secondary); }
 
 .toolbar { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
 .toolbar input { height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 400 var(--fs-13)/1 var(--font-jp); width: 220px; }
 .toolbar input:focus { outline: none; border-color: var(--crimson-500); box-shadow: var(--focus-ring); }
-.toolbar .count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); }
+.toolbar input::placeholder { color: var(--text-secondary); }
+.toolbar .count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); }
 
-caption { caption-side: top; text-align: left; padding: var(--sp-4) var(--sp-4) var(--sp-2); font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
+caption { caption-side: top; text-align: left; padding: var(--sp-4) var(--sp-4) var(--sp-2); font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); }
 </style>
 </head>
 <body>

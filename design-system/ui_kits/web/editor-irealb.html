@@ -68,7 +68,7 @@ a { color: inherit; text-decoration: none; }
 .toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-6); background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .tool-group { display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-3); border-right: 1px solid var(--border); height: 28px; }
 .tool-group:last-of-type { border-right: 0; }
-.tool-group .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); margin-right: var(--sp-2); }
+.tool-group .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin-right: var(--sp-2); }
 .segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-2); overflow: hidden; }
 .segmented a, .segmented button { background: var(--surface); border: 0; padding: 0 var(--sp-3); height: 28px; font: 500 var(--fs-13)/1 var(--font-jp); color: var(--text-secondary); cursor: pointer; border-right: 1px solid var(--border); display: inline-flex; align-items: center; text-decoration: none; }
 .segmented a:last-child, .segmented button:last-child { border-right: 0; }
@@ -89,7 +89,7 @@ a { color: inherit; text-decoration: none; }
    the chart. Single source of truth so the two surfaces don't drift
    apart when the design token set evolves. */
 .meta-field label,
-.width-mode-row > .width-mode-card > .caption { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
+.width-mode-row > .width-mode-card > .caption { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); }
 .meta-field input { height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--ink-50); font: 500 var(--fs-14)/1 var(--font-mono); color: var(--text-primary); transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); font-variant-numeric: tabular-nums; }
 .meta-field input:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
 /* Select — white surface matching the canonical `.select` and the
@@ -677,11 +677,12 @@ a { color: inherit; text-decoration: none; }
 .inspector { position: sticky; top: var(--sp-8); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: var(--sp-5); }
 .inspector header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); border-bottom: 1px solid var(--border); }
 .inspector header .title { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-16); }
-.inspector header .pos { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-tertiary); }
+.inspector header .pos { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-secondary); }
 .inspector .row { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
-.inspector .row > .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); }
+.inspector .row > .label { font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); }
 .inspector input.chord-input { width: 100%; height: 36px; padding: 0 var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--r-2); font: 500 var(--fs-18)/1 var(--font-chord); color: var(--ink-1000); background: var(--ink-50); }
 .inspector input.chord-input:focus { outline: none; border-color: var(--crimson-500); background: var(--surface); box-shadow: var(--focus-ring); }
+.inspector input.chord-input::placeholder { color: var(--text-secondary); }
 .inspector .chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 .inspector .chip { display: inline-flex; align-items: center; padding: var(--sp-1) var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--r-full); background: var(--surface); font: 500 var(--fs-13)/1 var(--font-chord); color: var(--text-secondary); cursor: pointer; min-height: 28px; }
 /* SMuFL music-symbol chips render their glyph larger than the regular
@@ -910,7 +911,7 @@ a { color: inherit; text-decoration: none; }
         <div class="meta-field"><label for="tempo">Tempo</label><input id="tempo" type="number" value="124"></div>
       </div>
       <div style="display: flex; gap: var(--sp-2); margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--border); align-items: center;">
-        <span style="font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-tertiary); margin-right: var(--sp-2);">Key change</span>
+        <span style="font-family: var(--font-latin); font-weight: 600; font-size: var(--fs-12); letter-spacing: 0; color: var(--text-secondary); margin-right: var(--sp-2);">Key change</span>
         <button class="btn btn-secondary btn-sm" title="Update the key signature display only — chord symbols are unchanged">Set</button>
         <button class="btn btn-secondary btn-sm" title="Change the key and transpose every chord in the chart to match">Set and Transpose</button>
       </div>
