@@ -58,7 +58,8 @@ const html: string      = render_html(input);
 const text: string      = render_text(input);
 
 // PDF lives in the sister package — see below
-const { render_pdf } = await import('@chordsketch/wasm-export');
+const { default: initExport, render_pdf } = await import('@chordsketch/wasm-export');
+await initExport(); // browser only — Node auto-loads via wasm-pack --target nodejs
 const pdf:  Uint8Array  = render_pdf(input);
 ```
 

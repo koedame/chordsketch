@@ -49,7 +49,8 @@ which is ~25x larger — dynamic-import it only when the user actually
 triggers an export:
 
 ```js
-const { render_pdf } = await import('@chordsketch/wasm-export');
+const { default: initExport, render_pdf } = await import('@chordsketch/wasm-export');
+await initExport(); // browser only — Node auto-loads via wasm-pack --target nodejs
 const pdfBytes = render_pdf(chordpro); // Uint8Array
 ```
 
