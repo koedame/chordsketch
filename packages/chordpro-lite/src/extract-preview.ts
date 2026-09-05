@@ -11,11 +11,14 @@ export interface PreviewLine {
 
 /** Caps for {@link extractPreview}; every one has a thumbnail-sized default. */
 export interface PreviewOptions {
-  /** Maximum preview lines to return. Default 2. */
+  /** Maximum preview lines to return. Default 2; `0` or less returns `[]`. */
   maxLines?: number;
   /** Maximum chord symbols kept per line. Default 6. */
   maxChordsPerLine?: number;
-  /** Maximum lyric characters (code points) kept per line. Default 40. */
+  /**
+   * Maximum lyric characters (code points) kept per line. Default 40;
+   * `0` or less leaves every lyric empty.
+   */
   maxLyricChars?: number;
 }
 
