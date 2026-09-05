@@ -83,11 +83,13 @@ names are a published contract (ADR-0038, constraint 1).
   CI rather than waiting for the next manual Lighthouse run.
 - Sites outside the audited routes were not swept. `@chordsketch/react`'s
   song `{comment}` body, `.chordsketch-capo__hint`, the secondary
-  attribution line, the CodeMirror bracket / comment syntax tones and
-  `@chordsketch/react-ui`'s `.song-card time` / `.setlist` labels /
-  `::placeholder` still paint small text with `--ink-500`. They are not
-  on a playground route, so this change has no measurement for them; they
-  need their own audit against `design-system/preview/*.html`.
+  attribution line, and `@chordsketch/react-ui`'s `.song-card time` /
+  `.setlist` labels / `::placeholder` still paint small text with
+  `--ink-500`. They are not on a playground route, so this change has no
+  measurement for them; they need their own audit against
+  `design-system/preview/*.html`. (The CodeMirror bracket / comment syntax
+  tones named in this bullet at ADR creation time moved to
+  `--text-secondary` in #2841.)
 - `--text-tertiary` remains reachable under a name that reads like a text
   token. Renaming it is a breaking change to the published token contract
   (ADR-0038) and is deliberately not bundled with an accessibility fix.
