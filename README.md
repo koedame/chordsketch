@@ -351,6 +351,7 @@ println!("{svg}");
 | [`@chordsketch/vue`](packages/vue) | `packages/vue` | Vue 3 component library — the same ChordPro preview, editor, chord diagrams, transpose control and PDF export, as Composition-API components. |
 | [`@chordsketch/svelte`](packages/svelte) | `packages/svelte` | Svelte 5 component library — the same ChordPro preview, editor, chord diagrams, transpose control and PDF export, as runes-based components. |
 | [`@chordsketch/react-ui`](packages/react-ui) | `packages/react-ui` | Wasm-free React design-system primitives (buttons, cards, badges, form controls) for building app chrome around the editor. |
+| [`@chordsketch/chordpro-lite`](packages/chordpro-lite) | `packages/chordpro-lite` | Dependency-free ChordPro helpers — format detection, lyric extraction, preview sampling — for consumers that must sniff or index a chart before loading the engine. |
 | [`@chordsketch/wasm-export`](packages/npm-export) | `packages/npm-export` | npm WASM package with the PDF / PNG export surface; loaded on demand by the export components. |
 | [Python `chordsketch`](crates/ffi) | `crates/ffi` | Python package via UniFFI + maturin |
 | [Swift `ChordSketch`](packages/swift) | `packages/swift` | Swift package with XCFramework |

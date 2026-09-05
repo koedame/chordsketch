@@ -289,6 +289,32 @@ jobs:
       - name: Unit tests for the regen script
         run: python3 -m unittest scripts/test_macports_regen_cargo_crates.py
 
+  directive-catalog-sync:
+    name: Directive catalog sync
+    # Guards `packages/chordpro-lite/src/bare-directives.ts` — the
+    # generated TypeScript copy of `BARE_DIRECTIVE_NAMES` in
+    # `crates/chordpro/src/directive_catalog.rs` — against drifting from
+    # the catalog. A directive added to the catalog alone would leave the
+    # wasm-free format sniffer unable to recognise it, which is the
+    # duplicated-list failure ADR-0028 exists to prevent and ADR-0060
+    # inherits.
+    #
+    # Deliberately NOT a step in `chordpro-lite.yml`: that workflow is
+    # path-filtered on the package, so a catalog-only change — exactly
+    # the drift direction that matters — would not trigger it. Same
+    # guarantee-style trigger as `fixture-counts` and
+    # `macports-portfile-sync`: every PR, no path filter, Python-only,
+    # < 1 s wall clock.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Verify the generated bare-directive list matches the catalog
+        run: python3 scripts/generate-bare-directives.py --check
+
+      - name: Unit tests for the generator script
+        run: python3 -m unittest scripts/test_generate_bare_directives.py
+
   release-publish-steps:
     name: Release publication steps
     # Exercises the code that only ever runs during a release fan-out: the

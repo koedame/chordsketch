@@ -234,6 +234,11 @@ at post-release verification rather than before the tag is cut.
    #     svelte-package, which emits sources + declarations rather than
    #     a bundle.
    cd packages/svelte && npm run build && npm publish && cd ../..
+
+   # 7i. @chordsketch/chordpro-lite (dependency-free ChordPro helpers,
+   #     ADR-0060). Carries no dependency on @chordsketch/wasm and
+   #     versions on its own cadence, like @chordsketch/react-ui.
+   cd packages/chordpro-lite && npm run build && npm publish && cd ../..
    ```
 
    `npm whoami` should print `unchidev` before any publish; if not,
@@ -248,6 +253,7 @@ at post-release verification rather than before the tag is cut.
    npm view @chordsketch/react version          # should show X.Y.Z
    npm view @chordsketch/vue version            # should show X.Y.Z
    npm view @chordsketch/svelte version         # should show X.Y.Z
+   npm view @chordsketch/chordpro-lite version  # should show X.Y.Z
    npm view tree-sitter-chordpro version        # should show X.Y.Z
    npm view @chordsketch/node version          # should show X.Y.Z
    for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
