@@ -133,6 +133,39 @@ jobs:
         run: |
           python3 -m unittest scripts/test_check_version_consistency.py scripts/test_check_release_channels.py
 
+  msrv-consistency:
+    name: MSRV consistency
+    # Keeps every restatement of `rust-version` in step with the
+    # workspace declaration: the `FROM rust:<tag>@sha256:<digest>`
+    # builder pin in every Dockerfile, and README's "Requires Rust N.M
+    # or later." sentence under the from-source install section.
+    #
+    # Neither site is built or asserted by anything else on a PR.
+    # `docker.yml` publishes from `Dockerfile.release`, which copies a
+    # prebuilt musl binary and never compiles Rust, so the from-source
+    # `Dockerfile` is baked by no workflow at all; `readme-sync.yml`
+    # snapshots the bash commands in that README section, not the prose
+    # around them. A pin left behind by an MSRV bump therefore stays
+    # green until a user runs `docker build .` — which is how the
+    # builder sat on `rust:1.85-bookworm` after the workspace moved to
+    # 1.88, where `cargo build` refuses to compile at all.
+    #
+    # Guarantee-style check like the guard jobs around it: no paths:
+    # filter, runs on every PR. Python-only, no network and no docker
+    # pull, sub-second wall clock; no rust-cache needed (per
+    # `.claude/rules/ci-parallelization.md` §2 the job does not compile
+    # Rust). See ADR-0062 for why this is a text check rather than a
+    # `docker build` job.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Check the MSRV restatements
+        run: python3 scripts/check-msrv-consistency.py
+
+      - name: Unit tests
+        run: python3 -m unittest scripts/test_check_msrv_consistency.py
+
   fixture-counts:
     name: Fixture counts
     # Enforces the minimum per-renderer golden fixture counts documented in
