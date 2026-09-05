@@ -51,7 +51,8 @@ const html = render_html_with_options(input, { transpose: 2 });
 the `i8` range (`-128..=127`) reject with an error to match the
 other bindings (#1826). The `_with_options` variants exist for
 each format (`render_html_with_options` / `render_text_with_options`
-/ `render_pdf_with_options`).
+in this package; `render_pdf_with_options` in
+`@chordsketch/wasm-export`).
 
 ## `@chordsketch/node`
 

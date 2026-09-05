@@ -28,7 +28,7 @@ npm install @chordsketch/wasm
 ```
 
 ```js
-import { render_html, render_text, render_pdf, version } from '@chordsketch/wasm';
+import { render_html, render_text, version } from '@chordsketch/wasm';
 
 const chordpro = `{title: Amazing Grace}
 {key: G}
@@ -37,8 +37,21 @@ const chordpro = `{title: Amazing Grace}
 
 const html = render_html(chordpro);
 const text = render_text(chordpro);
-const pdfBytes = render_pdf(chordpro); // Uint8Array
 console.log(version());
+```
+
+PDF (`render_pdf` / `render_pdf_with_options`) and iReal Pro PNG / PDF
+(`renderIrealPng` / `renderIrealPdf`) are gated behind this crate's
+default-on `png-pdf` Cargo feature, and `@chordsketch/wasm` is built with
+`--no-default-features`. From npm they ship in the sister package
+[`@chordsketch/wasm-export`](https://www.npmjs.com/package/@chordsketch/wasm-export),
+which is ~25x larger — dynamic-import it only when the user actually
+triggers an export:
+
+```js
+const { default: initExport, render_pdf } = await import('@chordsketch/wasm-export');
+await initExport(); // browser only — Node auto-loads via wasm-pack --target nodejs
+const pdfBytes = render_pdf(chordpro); // Uint8Array
 ```
 
 See [`packages/npm/README.md`](https://github.com/koedame/chordsketch/blob/main/packages/npm/README.md)
@@ -64,6 +77,11 @@ hook and the `console` `extern "C"` shim are intentionally
 omitted). The `### iReal Pro` subsection mirrors the structure of
 the
 [`### iReal Pro conversion` table in `packages/npm/README.md`](https://github.com/koedame/chordsketch/blob/main/packages/npm/README.md#ireal-pro-conversion).
+
+The tables describe the crate built with its default features. The
+`render_pdf*` / `renderPdfWithWarnings*` / `renderIrealPng` /
+`renderIrealPdf` entries are gated behind `png-pdf`, so on npm they are
+exports of `@chordsketch/wasm-export`, not of `@chordsketch/wasm`.
 
 ### Basic rendering
 

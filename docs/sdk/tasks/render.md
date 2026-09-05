@@ -50,13 +50,16 @@ API reference: [docs.rs/chordsketch-render-html](https://docs.rs/chordsketch-ren
 import init, {
   render_html,
   render_text,
-  render_pdf,
 } from '@chordsketch/wasm';
 
 await init(); // browser only — Node auto-loads via wasm-pack --target nodejs
 
 const html: string      = render_html(input);
 const text: string      = render_text(input);
+
+// PDF lives in the sister package — see below
+const { default: initExport, render_pdf } = await import('@chordsketch/wasm-export');
+await initExport(); // browser only — Node auto-loads via wasm-pack --target nodejs
 const pdf:  Uint8Array  = render_pdf(input);
 ```
 
@@ -64,6 +67,13 @@ The browser build requires `await init()` once before the first
 call; the Node.js build auto-loads synchronously via `require`.
 See [`packages/npm/README.md`](../../../packages/npm/README.md) for
 the runtime-detection details and the dual-package layout.
+
+`@chordsketch/wasm` is the lean bundle: parse, transpose, and text /
+HTML / SVG rendering. `render_pdf` / `render_pdf_with_options` and the
+iReal Pro `renderIrealPng` / `renderIrealPdf` ship in
+`@chordsketch/wasm-export`, which carries the rasteriser and PDF-writer
+dependency tree and is ~25x larger. Install it alongside and
+dynamic-import it only when an export is actually triggered.
 
 ## `@chordsketch/node` (Node.js native addon)
 
