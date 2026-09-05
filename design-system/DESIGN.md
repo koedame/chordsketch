@@ -225,6 +225,10 @@ uniform; vary the rhythm by nesting — e.g. a tight `.stack-2` heading
 group (title + lede) inside a looser `.stack-8` page. For a dynamic or
 off-scale gap, set `--stack-gap` directly instead of using a modifier.
 
+The rules above ship as CSS from `@chordsketch/react-ui/styles.css`
+(§6.2), where the gap knob is namespaced to `--cs-stack-gap` along with
+every other variable that package scopes to its own selectors.
+
 ---
 
 ## 5. Motion
@@ -245,10 +249,13 @@ requirements are listed here; visual detail will live in
 `design-system.html` and `preview/components-*.html` once
 those artifacts are produced.
 
-The **React binding** column says whether a category ships a
-`@chordsketch/react-ui` primitive or is, for now, a reference spec realised
-only in `preview/` — per ADR-0029 a category lands in this document and
-`preview/` first, then gets a React binding when a consumer needs it.
+The **React binding** column says how far a category has travelled from
+this document towards a consumer: it ships a `@chordsketch/react-ui`
+primitive, it ships from that package as **CSS only** (canonical classes,
+no component), or it is a reference spec realised only in `preview/`. Per
+ADR-0029 a category lands in this document and `preview/` first, then gets
+a React binding when a consumer needs it; ADR-0061 adds the intermediate
+state for classes that carry no behaviour.
 
 | Category   | Variants | React binding |
 |---|---|---|
@@ -257,7 +264,7 @@ only in `preview/` — per ADR-0029 a category lands in this document and
 | Cards      | song / setlist / featured (uniform 1px `--crimson-500` border; surface, type, and other tokens unchanged) | `@chordsketch/react-ui` `<Card>` |
 | Badges     | status (4 semantic + crimson + muted) / key (mono on ink-1000 or crimson) / genre (pill) | `@chordsketch/react-ui` `<Badge>` / `<Pill>` |
 | Avatars    | 24 / 28 / 36 / 48 px, stacked +N | Reference only (`preview/`) |
-| Navigation | top nav 56px, tabs (underline + count) | Reference only (`preview/`) |
+| Navigation | top nav 56px, tabs (underline + count) | CSS only — `.topnav` / `.sidenav` ship from `@chordsketch/react-ui/styles.css` (§6.2); tabs and breadcrumbs are reference only (`preview/`) |
 | Modal      | 12px radius, e3 elevation, footer `--ink-50` wash to demarcate | Reference only (`preview/`) |
 | Table      | eyebrow header, tabular-nums, hover row = `--ink-50` | Reference only (`preview/`) |
 | Toast      | `--ink-1000` base / success / danger / warning, description and action button both use the inherited foreground (hierarchy from size / weight / underline, no color shift) so contrast holds on every variant | Reference only (`preview/`) |
@@ -282,6 +289,32 @@ only in `preview/` — per ADR-0029 a category lands in this document and
   repeat-sign barlines, and similar staff-notation elements ARE
   notation, not decoration. The rule fires when the left edge is
   used as a visual emphasis stripe on a generic content block.
+
+---
+
+### 6.2 Chrome & layout — shipped as CSS
+
+The app-shell vocabulary is canonical in the same sense the components
+are, and it ships from the same stylesheet — but as classes only, with no
+React component to import (ADR-0061). Write the markup yourself and load
+`@chordsketch/react-ui/styles.css`:
+
+| Class family | What it is | Canonical reference |
+|---|---|---|
+| `.topnav` (+ `.brand`, `.crumbs`, `.save-state`, `.nav-links`, `.right`, `.actions`) | The 56px application bar | `ui_kits/web/editor.html`, `preview/components-navigation.html` |
+| `.sidenav` (+ `nav`, `.body`) | 220px side navigation beside a content region | `preview/components-navigation.html` |
+| `.pane`, `.pane-head`, `.pane-body` | The split-pane frame (eyebrow + meta header over a scrolling body) | `ui_kits/web/editor.html` |
+| `.stack`, `.stack-*` | The vertical-flow primitive (§4.1) | `preview/layout-stack.html` |
+
+```html
+<link rel="stylesheet" href="node_modules/@chordsketch/react-ui/dist/styles.css">
+<header class="topnav">…</header>
+```
+
+These rules are **generated** from the reference pages named above by
+`scripts/build-chrome-css.mjs`, so the published stylesheet cannot drift
+from this design system; see §9. A React binding may follow if a consumer
+needs one — the CSS is what was missing.
 
 ---
 
@@ -367,6 +400,20 @@ check fails on drift — never hand-edit them (ADR-0038,
 playground re-uses them verbatim so contributors recognise the
 layout in either place.
 
+The chrome and layout families listed in §6.2 are **generated**
+into `packages/react-ui/src/styles.css` from these reference pages
+by `node scripts/build-chrome-css.mjs`, one named source file per
+family (ADR-0061), so a consumer of the published stylesheet gets
+the same rules this reference renders. The generated region is
+delimited by `/* @generated:chrome:start */` …
+`/* @generated:chrome:end */`, is committed, and is held at a zero
+diff by the same `tokens-sync` CI check — edit the reference page
+and regenerate; never hand-edit the block. Editing a value in
+`ui_kits/web/editor.html` or `preview/components-navigation.html`
+therefore changes what ships, which is the point; the deliberately
+denser `ui_kits/web/editor-chord-footer.html` is not a source and
+its 52px bar does not.
+
 | File | Contents |
 |---|---|
 | `tokens.css` | Source of truth for every design token |
@@ -424,6 +471,15 @@ layout in either place.
   (`ui_kits/web/sidebar-floating.html`) now uses `--e-panel` + `--border-strong`.
   Token addition (MINOR) plus value refinements (PATCH); the bare `--e-*`
   names are unchanged, so no consumer breaks.
+- **v1.5** — Chrome and layout became a distributable. The canonical
+  app-shell classes (`.topnav` and its parts, `.sidenav`, `.pane` /
+  `.pane-head` / `.pane-body`, `.stack` + modifiers) now ship as CSS from
+  `@chordsketch/react-ui/styles.css`, generated from the reference pages
+  named in §6.2 (ADR-0061). §6 gains a **CSS only** binding state for
+  canonical classes that carry no behaviour, §6.2 documents the families,
+  and §9 documents the generator. No token or class definition changes —
+  the rules are the ones the reference already rendered (MINOR: existing
+  classes become available from a package).
 
 ---
 
