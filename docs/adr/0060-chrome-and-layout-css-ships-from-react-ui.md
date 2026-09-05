@@ -17,7 +17,17 @@
   frame, and the `.stack` vertical-flow primitive with its `--stack-gap`
   modifiers. §4.1 specifies `.stack` in prose *and CSS*; §9 states outright
   that the class names in `ui_kits/web/editor.html` "are the canonical chrome
-  vocabulary".
+  vocabulary". That list is broader than the vocabulary above — it also
+  names `.toolbar` / `.tool-group`, `.segmented`, `.status`, and `.btn` +
+  variants. `.segmented` and `.btn` are Primitives, already bound and
+  shipped from `@chordsketch/react-ui` (§6); `.toolbar`, `.tool-group`, and
+  `.status` are editor-internal chrome with no existing binding anywhere —
+  `@chordsketch/react`'s `<PreviewToolbar>` composes a same-named but
+  distinct playground-legacy `.pane-toolbar` / `.tool-group` pair
+  (`packages/playground/src/playground.css`), not the design-system classes
+  of the same name. Distributing that internal-editor trio is a separate
+  decision from the app-shell vocabulary this ADR resolves and is left for
+  later.
 
 Both families are canonical. **Only the first one is distributed.** The
 chrome and layout rules exist solely as `<style>` blocks inside the
@@ -205,8 +215,8 @@ Two constraints bound the answer:
   system, and single-sourced component CSS ownership.
 - ADR-0038 — single-sourced design tokens; the generator + committed output +
   CI zero-diff idiom this ADR reuses, and the `--cs-*` scoping constraint.
-- ADR-0008 §6 — `@chordsketch`-scope criterion and the manual per-package
-  publish flow a new package would inherit.
+- ADR-0008 §3, §6 — the manual per-package publish flow a new package
+  would inherit, and the `@chordsketch`-scope criterion.
 - `design-system/DESIGN.md` §4.1 (`.stack`), §6 (component table and its
   React-binding column), §9 (canonical chrome vocabulary and the file
   inventory), §11 (versioning).
