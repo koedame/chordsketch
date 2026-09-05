@@ -126,6 +126,28 @@ Install the `/chordpro` skill, which drives the CLI from natural language:
 See [packages/claude-code-plugin](packages/claude-code-plugin) for what it
 covers.
 
+### AI assistants (MCP)
+
+The `chordsketch` binary is also a
+[Model Context Protocol](https://modelcontextprotocol.io/) server, so an
+assistant that speaks MCP can render, parse, validate and tidy charts by
+calling tools instead of shelling out. Point the client at the `mcp`
+subcommand:
+
+```json
+{
+  "mcpServers": {
+    "chordsketch": {
+      "command": "chordsketch",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+See [docs/sdk/tasks/mcp.md](docs/sdk/tasks/mcp.md) for the tool list and
+what the server deliberately leaves to the CLI.
+
 ## Installation
 
 ### npm (WASM)
@@ -339,6 +361,7 @@ println!("{svg}");
 | [`chordsketch-napi`](crates/napi) | Native Node.js addon via napi-rs |
 | [`chordsketch`](crates/cli) | Command-line tool |
 | [`chordsketch-lsp`](crates/lsp) | Language Server Protocol server |
+| [`chordsketch-mcp`](crates/mcp) | Model Context Protocol server (served by `chordsketch mcp`) |
 
 ### Packages
 

@@ -1,0 +1,30 @@
+[package]
+name = "chordsketch-mcp"
+version = "0.5.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories = ["development-tools", "text-processing"]
+readme = "README.md"
+description = "Model Context Protocol server exposing ChordPro operations as AI tools"
+
+[dependencies]
+chordsketch-chordpro = { version = "0.5.0", path = "../chordpro" }
+chordsketch-render-html = { version = "0.5.0", path = "../render-html" }
+chordsketch-render-text = { version = "0.5.0", path = "../render-text" }
+rmcp = { version = "3", features = ["transport-io"] }
+schemars = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# `time` is what `Builder::enable_all` needs beyond the current-thread
+# runtime and stdio handles; declare it rather than relying on `rmcp`
+# happening to turn it on.
+tokio = { version = "1", features = ["io-std", "rt", "time"] }
+
+[dev-dependencies]
+rmcp = { version = "3", features = ["client", "transport-async-rw"] }
+tokio = { version = "1", features = ["io-util", "macros", "rt-multi-thread"] }
