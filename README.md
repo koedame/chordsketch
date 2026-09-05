@@ -114,6 +114,18 @@ support for multiple editors:
 
 See [docs/editors.md](docs/editors.md) for detailed setup instructions.
 
+### Claude Code
+
+Install the `/chordpro` skill, which drives the CLI from natural language:
+
+```
+/plugin marketplace add koedame/chordsketch
+/plugin install chordsketch@chordsketch
+```
+
+See [packages/claude-code-plugin](packages/claude-code-plugin) for what it
+covers.
+
 ## Installation
 
 ### npm (WASM)
@@ -350,6 +362,7 @@ println!("{svg}");
 | [`tree-sitter-chordpro`](packages/tree-sitter-chordpro) | `packages/tree-sitter-chordpro` | Tree-sitter grammar for ChordPro |
 | [GitHub Action](packages/github-action) | `packages/github-action` | Composite action for rendering ChordPro in CI |
 | [Playground](packages/playground) | `packages/playground` | Browser-based ChordPro and iReal Pro editor and renderer |
+| [Claude Code plugin](packages/claude-code-plugin) | `packages/claude-code-plugin` | `/chordpro` skill for Claude Code, installed from this repository as a plugin marketplace |
 
 ## GitHub Actions
 
