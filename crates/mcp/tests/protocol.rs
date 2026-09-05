@@ -140,24 +140,159 @@ async fn calling_render_over_the_wire_returns_the_chart_for_the_requested_format
 }
 
 #[tokio::test]
-async fn calling_render_with_a_format_the_server_does_not_have_fails_the_request() {
+async fn calling_render_with_a_format_the_server_does_not_have_tells_the_model_why() {
+    // A bad argument value comes back as a tool error, not a protocol
+    // error: most clients render a protocol error opaquely, so a model
+    // that guessed "pdf" would never learn what it should have sent.
     let (client, server) = connect().await;
 
-    let error = client
-        .call_tool(
-            CallToolRequestParams::new("render_chordpro").with_arguments(
-                serde_json::json!({ "source": SONG, "format": "pdf" })
-                    .as_object()
-                    .cloned()
-                    .expect("object"),
-            ),
-        )
-        .await
-        .expect_err("pdf is not a format this server renders");
+    let result = call(
+        &client,
+        "render_chordpro",
+        serde_json::json!({ "source": SONG, "format": "pdf" }),
+    )
+    .await;
+    assert_eq!(result.is_error, Some(true));
     assert!(
-        error.to_string().contains("pdf"),
-        "the rejected value is named, got {error}"
+        body(&result).contains("pdf") && body(&result).contains("text"),
+        "the rejected value and the accepted ones are named, got {}",
+        body(&result)
     );
+
+    client.cancel().await.expect("the client shuts down");
+    server.waiting().await.expect("the server shuts down");
+}
+
+#[tokio::test]
+async fn calling_render_with_a_transpose_over_the_wire_shifts_the_chords() {
+    // The only coverage that the optional `transpose` argument survives
+    // schema generation and decoding.
+    let (client, server) = connect().await;
+
+    let result = call(
+        &client,
+        "render_chordpro",
+        serde_json::json!({ "source": "[C]Hello\n", "transpose": 2 }),
+    )
+    .await;
+    assert!(
+        body(&result).contains('D') && !body(&result).contains('C'),
+        "C transposed up two semitones is D, got {}",
+        body(&result)
+    );
+
+    client.cancel().await.expect("the client shuts down");
+    server.waiting().await.expect("the server shuts down");
+}
+
+#[tokio::test]
+async fn a_rendered_chart_carries_the_parser_diagnostics_after_it() {
+    // The chart is short a line; without this block the caller cannot
+    // tell that from a short song.
+    let (client, server) = connect().await;
+
+    let result = call(
+        &client,
+        "render_chordpro",
+        serde_json::json!({ "source": "{title: Test}\n{bad\n[G]Hello\n" }),
+    )
+    .await;
+    let text = body(&result);
+    assert!(text.contains("Hello"), "got {text}");
+    assert!(
+        text.contains("Warnings:") && text.contains("line 2"),
+        "the diagnostics ride along with the chart, got {text}"
+    );
+
+    client.cancel().await.expect("the client shuts down");
+    server.waiting().await.expect("the server shuts down");
+}
+
+#[tokio::test]
+async fn calling_parse_over_the_wire_returns_json_even_when_the_source_is_malformed() {
+    // The tool is documented as returning JSON. A source the parser had
+    // to recover from is exactly when a caller reaches for the tree, so
+    // the diagnostics have to be a field rather than a trailing note.
+    let (client, server) = connect().await;
+
+    let result = call(
+        &client,
+        "parse_chordpro",
+        serde_json::json!({ "source": "{title: Test}\n{bad\n[G]Hello\n" }),
+    )
+    .await;
+    let tree: serde_json::Value =
+        serde_json::from_str(&body(&result)).expect("the payload is JSON");
+    assert_eq!(tree["songs"][0]["metadata"]["title"], "Test", "got {tree}");
+    assert_eq!(tree["errors"][0]["line"], 2, "got {tree}");
+
+    client.cancel().await.expect("the client shuts down");
+    server.waiting().await.expect("the server shuts down");
+}
+
+#[tokio::test]
+async fn calling_format_over_the_wire_returns_normalised_source() {
+    let (client, server) = connect().await;
+
+    let result = call(
+        &client,
+        "format_chordpro",
+        serde_json::json!({ "source": "{t: Test}\n[am]Hello\n" }),
+    )
+    .await;
+    let text = body(&result);
+    assert!(
+        text.contains("{title: Test}") && text.contains("[Am]"),
+        "got {text}"
+    );
+
+    client.cancel().await.expect("the client shuts down");
+    server.waiting().await.expect("the server shuts down");
+}
+
+#[tokio::test]
+async fn asking_for_a_diagram_on_an_instrument_the_server_does_not_draw_names_the_ones_it_does() {
+    // Also the only coverage that the optional `instrument` argument is
+    // decoded at all — every other case takes the default.
+    let (client, server) = connect().await;
+
+    let result = call(
+        &client,
+        "chord_diagram_svg",
+        serde_json::json!({ "chord": "Am", "instrument": "banjo" }),
+    )
+    .await;
+    assert_eq!(result.is_error, Some(true));
+    assert!(
+        body(&result).contains("banjo") && body(&result).contains("guitar"),
+        "got {}",
+        body(&result)
+    );
+
+    let piano = call(
+        &client,
+        "chord_diagram_svg",
+        serde_json::json!({ "chord": "Am", "instrument": "piano" }),
+    )
+    .await;
+    assert!(body(&piano).starts_with("<svg"), "a known instrument draws");
+
+    client.cancel().await.expect("the client shuts down");
+    server.waiting().await.expect("the server shuts down");
+}
+
+#[tokio::test]
+async fn an_oversized_argument_is_refused_before_the_parser_sees_it() {
+    let (client, server) = connect().await;
+
+    let result = call(
+        &client,
+        "chord_diagram_svg",
+        serde_json::json!({ "chord": "A".repeat(chordsketch_mcp::ops::MAX_CHORD_BYTES + 1) }),
+    )
+    .await;
+    assert_eq!(result.is_error, Some(true));
+    assert!(body(&result).contains("exceeds"), "got {}", body(&result));
 
     client.cancel().await.expect("the client shuts down");
     server.waiting().await.expect("the server shuts down");

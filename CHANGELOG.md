@@ -31,8 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assistant that speaks MCP can now render, parse, validate, format
   and draw diagrams from ChordPro charts by calling tools instead of
   shelling out and scraping output. Six tools ship: `render_chordpro`
-  (text / HTML, with transpose), `parse_chordpro` (the syntax tree as
-  JSON — the one operation the command line has no path for),
+  (text / HTML, with transpose), `parse_chordpro` (one syntax tree per
+  song as JSON — the one operation the command line has no path for),
   `validate_chordpro` (parse errors with positions, plus semantic
   warnings), `format_chordpro`, `chord_diagram_svg` (guitar / ukulele
   / piano) and `list_directives`. The server rides the existing binary

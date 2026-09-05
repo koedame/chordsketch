@@ -57,7 +57,7 @@ hangs — it is waiting for a client on stdin. Ctrl-D ends it.)
 | Tool | Ask it for | Returns |
 |---|---|---|
 | `render_chordpro` | a readable chart, a web page, or the song in another key | The rendered chart, followed by any renderer warnings |
-| `parse_chordpro` | the structure — directives, chords with positions, section boundaries | The syntax tree as JSON |
+| `parse_chordpro` | the structure — directives, chords with positions, section boundaries | JSON with `songs` (one syntax tree per song) and `errors` |
 | `validate_chordpro` | whether a file is broken | JSON with `errors` (line, column, message) and `warnings` |
 | `format_chordpro` | tidy source | Normalised ChordPro |
 | `chord_diagram_svg` | a fingering or keyboard diagram | An SVG fragment |
@@ -80,8 +80,17 @@ Every tool that reads a song takes its **source text**, not a path:
 ```
 
 The server has no filesystem and no network access — the assistant reads
-the file with its own tools and passes the contents. Sources are capped
-at 10 MiB, the parser's own limit.
+the file with its own tools and passes the contents. Each tool rejects a
+`source` larger than 10 MiB (the parser's own limit) and a `chord` longer
+than 128 bytes before doing any work.
+
+A source the parser has to recover from still renders: ChordPro parsing
+is lenient, so the lines it cannot read are dropped and the rest comes
+back. `render_chordpro` appends those diagnostics under a `Warnings:`
+heading after the chart, and `parse_chordpro` and `validate_chordpro`
+carry them as an `errors` field with a line and column counted from the
+start of the file — so a chart that came back short is never silently
+short.
 
 ## What it does not do
 

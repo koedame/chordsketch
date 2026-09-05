@@ -1184,18 +1184,24 @@ fn mcp_subcommand_answers_an_initialize_request_and_exits_when_stdin_closes() {
 #[test]
 fn mcp_subcommand_writes_nothing_but_protocol_messages_to_stdout() {
     // stdout *is* the transport: one stray line of logging or banner
-    // text desynchronises the client. Every line must parse as JSON.
+    // text desynchronises the client. Every line must be a JSON-RPC
+    // message, which is checked by decoding it rather than by looking at
+    // its first character — a banner starting with `{` would pass that.
     let output = Command::cargo_bin("chordsketch")
         .unwrap()
         .arg("mcp")
         .write_stdin(MCP_INITIALIZE)
         .output()
         .expect("the server runs");
+    assert!(output.status.success(), "status: {}", output.status);
     let stdout = String::from_utf8(output.stdout).expect("stdout is UTF-8");
-    assert!(!stdout.trim().is_empty(), "the server answered");
-    for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
-        assert!(
-            line.trim_start().starts_with('{'),
+    let lines: Vec<&str> = stdout.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert!(!lines.is_empty(), "the server answered");
+    for line in lines {
+        let message: serde_json::Value =
+            serde_json::from_str(line).unwrap_or_else(|e| panic!("not JSON: {line:?} ({e})"));
+        assert_eq!(
+            message["jsonrpc"], "2.0",
             "every stdout line is a JSON-RPC message, got {line:?}"
         );
     }

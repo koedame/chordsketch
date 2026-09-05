@@ -2,7 +2,7 @@
 
 ## Versioning Policy
 
-All thirteen Rust crates in the workspace share the same version number and are
+All fourteen Rust crates in the workspace share the same version number and are
 bumped in lockstep. This project follows [Semantic Versioning](https://semver.org/):
 
 - **Major** (1.0.0) — breaking API changes
@@ -98,7 +98,7 @@ at post-release verification rather than before the tag is cut.
 
 1. **Update version** in every versioned manifest:
 
-   Workspace Cargo.toml files (all thirteen crates):
+   Workspace Cargo.toml files (all fourteen crates):
    - `crates/chordpro/Cargo.toml`
    - `crates/ireal/Cargo.toml`
    - `crates/render-text/Cargo.toml`
@@ -112,6 +112,7 @@ at post-release verification rather than before the tag is cut.
    - `crates/ffi/Cargo.toml`
    - `crates/napi/Cargo.toml`
    - `crates/lsp/Cargo.toml`
+   - `crates/mcp/Cargo.toml`
    - Update inter-crate dependency `version = ` fields to match.
 
    Non-Rust manifests:

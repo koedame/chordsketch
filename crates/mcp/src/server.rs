@@ -6,14 +6,14 @@
 //! not about the protocol belongs in `ops`, where it can be tested without
 //! a peer.
 //!
-//! Two failure modes are distinguished, per the MCP specification:
-//!
-//! - A bad **argument** (an unknown format name, an oversized source) is a
-//!   protocol error — `Err(ErrorData::invalid_params(..))`. The caller sent
-//!   something the server cannot act on.
-//! - A bad **song** (a chord with no voicing, an instrument the caller
-//!   asked for) is a tool error — `Ok(CallToolResult::error(..))`, so the
-//!   explanation reaches the model rather than being rendered opaquely.
+//! Anything the caller can correct — an unknown format name, an
+//! instrument that is not one of the three, an oversized argument, a
+//! chord with no voicing — comes back as a **tool** error
+//! (`Ok(CallToolResult::error(..))`), because a tool error's content
+//! reaches the model and a protocol error is rendered opaquely by most
+//! clients. It is also what `rmcp` itself does with a missing required
+//! field. `Err(ErrorData)` is reserved for failures the caller cannot
+//! do anything about, which here means a defect on this side.
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ContentBlock, ErrorData};
@@ -91,17 +91,17 @@ fn json(value: &impl serde::Serialize) -> Result<CallToolResult, ErrorData> {
     Ok(text(body))
 }
 
-/// Rejects a source argument the server will not act on.
-fn check_source(source: &str) -> Result<(), ErrorData> {
-    ops::check_source_size(source).map_err(|message| ErrorData::invalid_params(message, None))
-}
-
-/// Appends the renderer's warnings to `output` as a trailing block.
+/// Appends the diagnostics to a rendered chart as a trailing block.
 ///
-/// Warnings ride in the same text payload rather than a second content
-/// block so a caller that reads only the first block still sees them —
-/// they are advisory, but silently dropping them would make a
-/// half-broken chart look clean.
+/// They ride in the same text payload rather than a second content
+/// block so a caller that reads only the first block still sees them.
+/// Dropping them would make a half-broken chart look clean: the lenient
+/// parser skips the lines it cannot read, so a chart can come back
+/// shorter than the song with nothing to say why.
+///
+/// Only ever applied to a text payload. A tool whose body is JSON
+/// carries its diagnostics as a field instead, so the body stays
+/// parseable.
 fn with_warnings(output: String, warnings: &[String]) -> String {
     if warnings.is_empty() {
         return output;
@@ -131,11 +131,15 @@ impl ChordSketchServer {
         &self,
         Parameters(params): Parameters<RenderParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        check_source(&params.source)?;
+        if let Err(message) = ops::check_source_size(&params.source) {
+            return Ok(tool_error(message));
+        }
         let format = match params.format.as_deref() {
             None => ops::RenderFormat::Text,
-            Some(name) => ops::RenderFormat::parse(name)
-                .map_err(|message| ErrorData::invalid_params(message, None))?,
+            Some(name) => match ops::RenderFormat::parse(name) {
+                Ok(format) => format,
+                Err(message) => return Ok(tool_error(message)),
+            },
         };
         let rendered = ops::render(&params.source, format, params.transpose.unwrap_or(0));
         Ok(text(with_warnings(rendered.output, &rendered.warnings)))
@@ -144,16 +148,22 @@ impl ChordSketchServer {
     /// Parse a ChordPro song and return its syntax tree as JSON — every
     /// directive, every chord with its position, every section
     /// boundary. Use this when the structure itself is the answer, not
-    /// the rendered chart. The tree reflects the source as written: it
-    /// is not transposed and directive values are not normalised.
+    /// the rendered chart. Returns `{"songs": [...], "errors": [...]}`:
+    /// one tree per song (input with no `{new_song}` directive gives
+    /// exactly one), and any parse errors with their line and column.
+    /// The trees reflect the source as written — not transposed, and
+    /// directive values not normalised.
     #[tool(name = "parse_chordpro")]
     fn parse_chordpro(
         &self,
         Parameters(params): Parameters<SourceParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        check_source(&params.source)?;
-        let parsed = ops::parse_ast(&params.source);
-        Ok(text(with_warnings(parsed.output, &parsed.warnings)))
+        if let Err(message) = ops::check_source_size(&params.source) {
+            return Ok(tool_error(message));
+        }
+        let parsed = ops::parse_ast(&params.source)
+            .map_err(|message| ErrorData::internal_error(message, None))?;
+        json(&parsed)
     }
 
     /// Check a ChordPro song for problems. Returns JSON with `errors`
@@ -167,7 +177,9 @@ impl ChordSketchServer {
         &self,
         Parameters(params): Parameters<SourceParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        check_source(&params.source)?;
+        if let Err(message) = ops::check_source_size(&params.source) {
+            return Ok(tool_error(message));
+        }
         json(&ops::validate(&params.source))
     }
 
@@ -180,7 +192,9 @@ impl ChordSketchServer {
         &self,
         Parameters(params): Parameters<SourceParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        check_source(&params.source)?;
+        if let Err(message) = ops::check_source_size(&params.source) {
+            return Ok(tool_error(message));
+        }
         Ok(text(ops::format_source(&params.source)))
     }
 
@@ -193,9 +207,12 @@ impl ChordSketchServer {
         &self,
         Parameters(params): Parameters<ChordDiagramParams>,
     ) -> Result<CallToolResult, ErrorData> {
+        if let Err(message) = ops::check_chord_size(&params.chord) {
+            return Ok(tool_error(message));
+        }
         let instrument = params.instrument.as_deref().unwrap_or("guitar");
         match ops::chord_diagram_svg(&params.chord, instrument) {
-            Err(message) => Err(ErrorData::invalid_params(message, None)),
+            Err(message) => Ok(tool_error(message)),
             Ok(None) => Ok(tool_error(format!(
                 "no {instrument} diagram is available for chord {:?}",
                 params.chord

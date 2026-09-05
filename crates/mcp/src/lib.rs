@@ -81,6 +81,14 @@ impl std::error::Error for ServeError {
 /// Nothing may be written to stdout other than protocol messages — the
 /// stream *is* the transport — so this function installs no logging.
 ///
+/// The size limits in [`ops`] are per **argument**, checked once a
+/// request has been decoded; the SDK's stdio transport reads a whole
+/// line before that and exposes no bound on it. The peer here is the
+/// process that spawned this one, so an unbounded line is the local
+/// client's own memory rather than an exposed surface — but a host that
+/// wants a bound on the wire has to supply its own transport rather than
+/// this function.
+///
 /// # Errors
 ///
 /// Returns [`ServeError`] when the runtime cannot start, the handshake

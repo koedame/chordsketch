@@ -36,7 +36,7 @@ disconnects. There is nothing to run by hand.
 | Tool | Arguments | Returns |
 |---|---|---|
 | `render_chordpro` | `source`, `format` (`text` \| `html`), `transpose` | The rendered chart, plus any renderer warnings |
-| `parse_chordpro` | `source` | The syntax tree as JSON |
+| `parse_chordpro` | `source` | JSON with `songs` (one syntax tree per song) and `errors` |
 | `validate_chordpro` | `source` | JSON with `errors` (line / column / message) and `warnings` |
 | `format_chordpro` | `source` | Normalised ChordPro source |
 | `chord_diagram_svg` | `chord`, `instrument` (`guitar` \| `ukulele` \| `piano`) | An SVG fragment |
@@ -44,7 +44,9 @@ disconnects. There is nothing to run by hand.
 
 `source` is ChordPro **text**, not a path: the server has no filesystem
 and no network access, so the caller reads the file and passes its
-contents. Sources are capped at the parser's own 10 MiB limit.
+contents. Each tool rejects a `source` larger than the parser's own
+10 MiB limit, and a `chord` longer than 128 bytes, before doing any
+work.
 
 PDF export and iReal Pro charts are deliberately absent — a PDF returned
 over MCP is base64 in the model's context, which helps nobody. Use the

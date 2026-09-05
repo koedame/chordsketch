@@ -13,6 +13,8 @@
 //! built-in configuration, so a running server has no filesystem surface
 //! at all.
 
+use std::fmt;
+
 use chordsketch_chordpro::ParseOptions;
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::json::ToJson;
@@ -29,19 +31,42 @@ pub fn max_source_bytes() -> usize {
     ParseOptions::default().max_input_size
 }
 
+/// Maximum accepted size of a `chord` argument, in bytes.
+///
+/// A chord name is a handful of characters — the longest the editor can
+/// compose is on the order of `F#m7b5(9,11,13)/C#` — and the diagram
+/// renderer echoes whatever it is given into the SVG's title, so an
+/// unbounded name is a 1:1 amplifier into the caller's context. 128
+/// bytes leaves an order of magnitude of headroom over any real chord.
+pub const MAX_CHORD_BYTES: usize = 128;
+
 /// Returns `Err` with a caller-facing message when `source` is larger
 /// than [`max_source_bytes`].
 ///
 /// # Errors
 ///
 /// Returns the rejection message when the limit is exceeded.
+#[must_use = "an oversized source must not be processed"]
 pub fn check_source_size(source: &str) -> Result<(), String> {
-    let limit = max_source_bytes();
-    if source.len() > limit {
+    check_size("source", source, max_source_bytes())
+}
+
+/// Returns `Err` with a caller-facing message when `chord` is larger
+/// than [`MAX_CHORD_BYTES`].
+///
+/// # Errors
+///
+/// Returns the rejection message when the limit is exceeded.
+#[must_use = "an oversized chord name must not be processed"]
+pub fn check_chord_size(chord: &str) -> Result<(), String> {
+    check_size("chord", chord, MAX_CHORD_BYTES)
+}
+
+fn check_size(field: &str, value: &str, limit: usize) -> Result<(), String> {
+    if value.len() > limit {
         return Err(format!(
-            "source is {} bytes, which exceeds the {} byte limit",
-            source.len(),
-            limit
+            "{field} is {} bytes, which exceeds the {limit} byte limit",
+            value.len()
         ));
     }
     Ok(())
@@ -67,6 +92,7 @@ impl RenderFormat {
     /// # Errors
     ///
     /// Returns a caller-facing message when `name` is not a known format.
+    #[must_use = "an unknown format must not fall back to a default"]
     pub fn parse(name: &str) -> Result<Self, String> {
         match name {
             "text" => Ok(Self::Text),
@@ -78,8 +104,7 @@ impl RenderFormat {
     }
 }
 
-/// An output plus the semantic warnings the renderer raised while
-/// producing it.
+/// An output plus the diagnostics raised while producing it.
 ///
 /// Warnings are advisory — the output is complete and usable. They are
 /// carried separately (rather than folded into the output) so a caller
@@ -88,19 +113,29 @@ impl RenderFormat {
 pub struct Rendered {
     /// The rendered chart.
     pub output: String,
-    /// Semantic warnings, in the order the renderer raised them.
+    /// Parse diagnostics first, then the renderer's semantic warnings.
     pub warnings: Vec<String>,
 }
 
 /// A parse error, positioned in the source.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Diagnostic {
-    /// 1-based line number.
+    /// 1-based line number, counted from the start of the whole source.
     pub line: usize,
     /// 1-based column number.
     pub column: usize,
     /// What the parser could not make sense of.
     pub message: String,
+}
+
+impl fmt::Display for Diagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "parse error at line {} column {}: {}",
+            self.line, self.column, self.message
+        )
+    }
 }
 
 /// The result of checking a source for problems.
@@ -113,6 +148,17 @@ pub struct Validation {
     /// `{transpose}` value, an out-of-range `{capo}`, an ambiguous chord
     /// spelling. The source still renders.
     pub warnings: Vec<String>,
+}
+
+/// A parsed source: one syntax tree per song, plus any parse errors.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Parsed {
+    /// One tree per song. Input with no `{new_song}` directive yields
+    /// exactly one entry.
+    pub songs: Vec<serde_json::Value>,
+    /// Structural problems the parser recovered from while building the
+    /// trees above.
+    pub errors: Vec<Diagnostic>,
 }
 
 /// One entry of the directive catalog.
@@ -137,6 +183,11 @@ pub struct DirectiveInfo {
 /// single document, matching the CLI. `transpose` composes with any
 /// `{transpose}` directive in the source the same way `chordsketch -t N`
 /// does.
+///
+/// A source the parser had to recover from still renders — the parser is
+/// lenient — but the lines it could not read are missing from the
+/// output, so those diagnostics lead [`Rendered::warnings`]. A caller
+/// that shows the chart without them shows a silently shortened song.
 #[must_use]
 pub fn render(source: &str, format: RenderFormat, transpose: i8) -> Rendered {
     let config = Config::defaults();
@@ -149,26 +200,41 @@ pub fn render(source: &str, format: RenderFormat, transpose: i8) -> Rendered {
             chordsketch_render_html::render_songs_with_warnings(&songs, transpose, &config)
         }
     };
+    let mut warnings: Vec<String> = diagnostics(source)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    warnings.extend(result.warnings);
     Rendered {
         output: result.output,
-        warnings: result.warnings,
+        warnings,
     }
 }
 
-/// Parses ChordPro source and returns the syntax tree as a JSON
-/// document, plus any recoverable parse warnings.
+/// Parses ChordPro source into one syntax tree per song.
 ///
-/// The tree is the parser's own AST, serialised by
-/// [`chordsketch_chordpro::json`]. It is not transposed and its `{key}`
-/// directives are not canonicalised — this is what the file says, not
-/// what a preview would show.
-#[must_use]
-pub fn parse_ast(source: &str) -> Rendered {
-    let result = chordsketch_chordpro::parse_lenient(source);
-    Rendered {
-        output: result.song.to_json_string(),
-        warnings: result.errors.iter().map(ToString::to_string).collect(),
+/// The trees are the parser's own AST, serialised by
+/// [`chordsketch_chordpro::json`]. They are not transposed and their
+/// `{key}` directives are not canonicalised — this is what the file
+/// says, not what a preview would show.
+///
+/// # Errors
+///
+/// Returns a message when a serialised tree is not valid JSON, which
+/// would mean a defect in the serialiser rather than anything the caller
+/// did.
+pub fn parse_ast(source: &str) -> Result<Parsed, String> {
+    let mut songs = Vec::new();
+    for song in parse_songs(source) {
+        let json = song.to_json_string();
+        let value = serde_json::from_str(&json)
+            .map_err(|e| format!("the parser produced a tree that is not valid JSON: {e}"))?;
+        songs.push(value);
     }
+    Ok(Parsed {
+        songs,
+        errors: diagnostics(source),
+    })
 }
 
 /// Checks ChordPro source for structural errors and semantic warnings.
@@ -179,25 +245,16 @@ pub fn parse_ast(source: &str) -> Rendered {
 /// `warnings` means the file renders but something in it is suspect.
 #[must_use]
 pub fn validate(source: &str) -> Validation {
-    let parsed = chordsketch_chordpro::parse_multi_lenient(source);
-    let errors = parsed
-        .results
-        .iter()
-        .flat_map(|r| r.errors.iter())
-        .map(|e| Diagnostic {
-            line: e.line(),
-            column: e.column(),
-            message: e.message.clone(),
-        })
-        .collect();
     // The renderer is what raises semantic warnings, so validation runs
     // one: the text renderer, because it is the cheapest of the three
     // and every warning is raised before any format-specific work.
-    let songs: Vec<_> = parsed.results.into_iter().map(|r| r.song).collect();
-    let rendered =
-        chordsketch_render_text::render_songs_with_warnings(&songs, 0, &Config::defaults());
+    let rendered = chordsketch_render_text::render_songs_with_warnings(
+        &parse_songs(source),
+        0,
+        &Config::defaults(),
+    );
     Validation {
-        errors,
+        errors: diagnostics(source),
         warnings: rendered.warnings,
     }
 }
@@ -227,6 +284,7 @@ pub fn format_source(source: &str) -> String {
 ///
 /// Returns a caller-facing message when `instrument` is not one of the
 /// accepted names.
+#[must_use = "the caller must distinguish an unknown instrument from an undrawable chord"]
 pub fn chord_diagram_svg(chord: &str, instrument: &str) -> Result<Option<String>, String> {
     use chordsketch_chordpro::chord_diagram::{
         DiagramSize, render_keyboard_svg_with_size, render_svg_with_options, resolve_orientation,
@@ -280,6 +338,28 @@ pub fn directives() -> Vec<DirectiveInfo> {
         .collect()
 }
 
+/// Parse diagnostics for the whole source, positioned against the
+/// **file**.
+///
+/// Deliberately not taken from [`parse_songs`]: the multi-song parser
+/// splits at `{new_song}` and lexes each segment from line 1, so its
+/// error positions are relative to the segment. A caller holding the
+/// file cannot resolve those without knowing where the segments began.
+/// The single-pass lenient parser sees the same structural problems
+/// (splitting neither creates nor removes them) and positions them
+/// against the file, which is what a caller can act on.
+fn diagnostics(source: &str) -> Vec<Diagnostic> {
+    chordsketch_chordpro::parse_lenient(source)
+        .errors
+        .iter()
+        .map(|e| Diagnostic {
+            line: e.line(),
+            column: e.column(),
+            message: e.message.clone(),
+        })
+        .collect()
+}
+
 /// Parses `source` into the song list every renderer takes, splitting at
 /// `{new_song}` boundaries the way the CLI does.
 fn parse_songs(source: &str) -> Vec<chordsketch_chordpro::ast::Song> {
@@ -296,6 +376,15 @@ mod tests {
 
     const SONG: &str =
         "{title: Scarborough Fair}\n{key: Em}\nAre you [Em]going to [G]Scarborough [Em]Fair\n";
+
+    /// Two songs, both well-formed.
+    const MULTI_SONG: &str =
+        "{title: Alpha}\nAlpha [G]lyric\n{new_song}\n{title: Beta}\nBeta [C]lyric\n";
+
+    /// Two songs where the unclosed directive is on **line 5 of the
+    /// file**, but line 2 of the second song's segment.
+    const MULTI_SONG_WITH_ERROR: &str =
+        "{title: A}\n[G]ok\n{new_song}\n{title: B}\n{bad\n[G]Hello\n";
 
     #[test]
     fn rendering_a_song_to_text_puts_its_chords_above_the_lyrics() {
@@ -359,27 +448,102 @@ mod tests {
     }
 
     #[test]
-    fn parsing_a_song_returns_a_json_tree_carrying_its_metadata() {
-        let parsed = parse_ast(SONG);
-        let value: serde_json::Value =
-            serde_json::from_str(&parsed.output).expect("the tree is valid JSON");
-        assert_eq!(
-            value["metadata"]["title"], "Scarborough Fair",
-            "the title is on the tree, got {value}"
+    fn rendering_a_song_the_parser_had_to_recover_from_reports_where_it_gave_up() {
+        // The lenient parser drops what it cannot read, so the chart comes
+        // back shorter than the song. Without a diagnostic the caller has
+        // no way to know a line went missing.
+        let source = "{title: Test}\n{bad\n[G]Hello\n";
+        let rendered = render(source, RenderFormat::Text, 0);
+        assert!(
+            rendered.output.contains("Hello"),
+            "the rest of the song still renders, got {:?}",
+            rendered.output
         );
-        assert!(parsed.warnings.is_empty(), "a clean song warns nothing");
+        assert!(
+            !rendered.output.contains("bad"),
+            "the unreadable line is not in the chart, got {:?}",
+            rendered.output
+        );
+        assert!(
+            rendered
+                .warnings
+                .iter()
+                .any(|w| w.contains("line 2") && w.contains("parse error")),
+            "the missing line is reported with its position, got {:?}",
+            rendered.warnings
+        );
     }
 
     #[test]
-    fn parsing_a_song_with_an_unclosed_directive_still_returns_a_tree_and_warns() {
-        let parsed = parse_ast("{title: Test}\n{bad\n[G]Hello\n");
+    fn parse_errors_come_before_renderer_warnings() {
+        // Both layers land in one list; the structural problem is the one
+        // that changed the output, so it reads first.
+        let rendered = render("{bad\n{transpose: up2}\n[C]Hello\n", RenderFormat::Text, 0);
+        assert!(rendered.warnings.len() >= 2, "got {:?}", rendered.warnings);
         assert!(
-            !parsed.warnings.is_empty(),
-            "the unclosed directive is reported"
+            rendered.warnings[0].contains("parse error"),
+            "got {:?}",
+            rendered.warnings
         );
-        let value: serde_json::Value =
-            serde_json::from_str(&parsed.output).expect("the tree is still valid JSON");
-        assert_eq!(value["metadata"]["title"], "Test");
+        assert!(
+            rendered.warnings.iter().any(|w| w.contains("up2")),
+            "the renderer's warning survives too, got {:?}",
+            rendered.warnings
+        );
+    }
+
+    #[test]
+    fn parsing_a_song_returns_one_tree_carrying_its_metadata() {
+        let parsed = parse_ast(SONG).expect("the tree serialises");
+        assert_eq!(parsed.songs.len(), 1, "one song in, one tree out");
+        assert_eq!(
+            parsed.songs[0]["metadata"]["title"], "Scarborough Fair",
+            "the title is on the tree, got {:?}",
+            parsed.songs[0]
+        );
+        assert!(parsed.errors.is_empty(), "a clean song reports nothing");
+    }
+
+    #[test]
+    fn parsing_a_song_with_an_unclosed_directive_still_returns_a_tree_and_reports_the_error() {
+        let parsed = parse_ast("{title: Test}\n{bad\n[G]Hello\n").expect("the tree serialises");
+        assert_eq!(parsed.errors.len(), 1, "the unclosed directive is reported");
+        assert_eq!(parsed.errors[0].line, 2);
+        assert_eq!(parsed.songs[0]["metadata"]["title"], "Test");
+    }
+
+    #[test]
+    fn parsing_a_multi_song_file_returns_one_tree_per_song_in_order() {
+        // The renderer splits at `{new_song}`; the parse tool must agree
+        // with it, or "the title of the first song" answers with the last
+        // song's title.
+        let parsed = parse_ast(MULTI_SONG).expect("the trees serialise");
+        assert_eq!(parsed.songs.len(), 2, "got {:?}", parsed.songs);
+        assert_eq!(parsed.songs[0]["metadata"]["title"], "Alpha");
+        assert_eq!(parsed.songs[1]["metadata"]["title"], "Beta");
+    }
+
+    #[test]
+    fn parse_errors_in_a_later_song_are_positioned_against_the_whole_file() {
+        // The multi-song parser lexes each segment from line 1, so a
+        // diagnostic taken from it would say line 2 for a problem the
+        // caller sees on line 5 of the file they hold.
+        let parsed = parse_ast(MULTI_SONG_WITH_ERROR).expect("the trees serialise");
+        assert_eq!(
+            parsed.errors[0].line, 5,
+            "the position is the one in the file, got {:?}",
+            parsed.errors
+        );
+    }
+
+    #[test]
+    fn validation_errors_in_a_later_song_are_positioned_against_the_whole_file() {
+        let result = validate(MULTI_SONG_WITH_ERROR);
+        assert_eq!(
+            result.errors[0].line, 5,
+            "the position is the one in the file, got {:?}",
+            result.errors
+        );
     }
 
     #[test]
@@ -450,14 +614,50 @@ mod tests {
 
     #[test]
     fn instrument_names_are_accepted_case_insensitively_and_by_alias() {
-        assert_eq!(
-            chord_diagram_svg("Am", "GUITAR").unwrap(),
-            chord_diagram_svg("Am", "guitar").unwrap()
+        let uppercase = chord_diagram_svg("Am", "GUITAR").unwrap();
+        assert!(
+            uppercase.as_deref().is_some_and(|s| s.starts_with("<svg")),
+            "an uppercase instrument name still draws a diagram"
         );
-        assert_eq!(
-            chord_diagram_svg("Am", "uke").unwrap(),
-            chord_diagram_svg("Am", "ukulele").unwrap()
+        assert_eq!(uppercase, chord_diagram_svg("Am", "guitar").unwrap());
+
+        let alias = chord_diagram_svg("Am", "uke").unwrap();
+        assert!(
+            alias.as_deref().is_some_and(|s| s.starts_with("<svg")),
+            "the alias still draws a diagram"
         );
+        assert_eq!(alias, chord_diagram_svg("Am", "ukulele").unwrap());
+    }
+
+    #[test]
+    fn a_chord_name_within_the_limit_is_accepted_and_one_over_it_is_not() {
+        assert!(check_chord_size(&"A".repeat(MAX_CHORD_BYTES)).is_ok());
+        let error = check_chord_size(&"A".repeat(MAX_CHORD_BYTES + 1)).expect_err("over the limit");
+        assert!(error.contains("chord"), "got {error:?}");
+        assert!(
+            error.contains(&MAX_CHORD_BYTES.to_string()),
+            "the limit is named, got {error:?}"
+        );
+    }
+
+    #[test]
+    fn every_chord_the_diagram_renderer_draws_stays_well_inside_the_name_limit() {
+        // The limit is only defensible if no real chord approaches it.
+        for chord in [
+            "Am",
+            "G7(9,11,13)",
+            "F#m7b5/C#",
+            "Cadd9",
+            "Bbmaj7#11/D",
+            "C#dim7",
+        ] {
+            assert!(
+                chord.len() < MAX_CHORD_BYTES,
+                "{chord} is {} bytes, close to the {MAX_CHORD_BYTES} byte limit",
+                chord.len()
+            );
+            assert!(check_chord_size(chord).is_ok());
+        }
     }
 
     #[test]

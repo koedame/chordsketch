@@ -741,6 +741,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "predicates",
+ "serde_json",
  "tempfile",
 ]
 

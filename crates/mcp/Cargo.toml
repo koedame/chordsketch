@@ -20,7 +20,10 @@ rmcp = { version = "3", features = ["transport-io"] }
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["io-std", "rt"] }
+# `time` is what `Builder::enable_all` needs beyond the current-thread
+# runtime and stdio handles; declare it rather than relying on `rmcp`
+# happening to turn it on.
+tokio = { version = "1", features = ["io-std", "rt", "time"] }
 
 [dev-dependencies]
 rmcp = { version = "3", features = ["client", "transport-async-rw"] }
