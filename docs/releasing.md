@@ -224,33 +224,42 @@ at post-release verification rather than before the tag is cut.
    # 7e. @chordsketch/react-ui (wasm-free React design-system primitives,
    #     ADR-0029). Independent of @chordsketch/wasm; versions on its own
    #     cadence (same manual-publish pattern as the other scoped packages).
-   cd packages/react-ui && npm run build && npm publish && cd ../..
+   cd packages/react-ui && npm ci && npm run build && npm publish && cd ../..
 
    # 7f. @chordsketch/react (React component library). Versions on its
    #     own cadence, like the other framework packages.
-   cd packages/react && npm run build && npm publish && cd ../..
+   cd packages/react && npm ci && npm run build && npm publish && cd ../..
 
    # 7g. @chordsketch/vue (Vue 3 component library). Same shape as
    #     @chordsketch/react and versioned on its own cadence.
-   cd packages/vue && npm run build && npm publish && cd ../..
+   cd packages/vue && npm ci && npm run build && npm publish && cd ../..
 
    # 7h. @chordsketch/svelte (Svelte 5 component library). Same cadence
    #     as the other framework packages; `npm run build` runs
    #     svelte-package, which emits sources + declarations rather than
    #     a bundle.
-   cd packages/svelte && npm run build && npm publish && cd ../..
+   cd packages/svelte && npm ci && npm run build && npm publish && cd ../..
 
    # 7i. @chordsketch/chordpro-lite (dependency-free ChordPro helpers,
    #     ADR-0060). Carries no dependency on @chordsketch/wasm and
    #     versions on its own cadence, like @chordsketch/react-ui.
-   cd packages/chordpro-lite && npm run build && npm publish && cd ../..
+   cd packages/chordpro-lite && npm ci && npm run build && npm publish && cd ../..
    ```
 
    `npm whoami` should print `unchidev` before any publish; if not,
    run `npm login` (interactive 2FA via browser) first. Each
    `npm publish` will prompt for a 2FA OTP.
 
-   Verify:
+   Run the packages one at a time and read each result. The snippet
+   above chains with `&&`, so a failed publish leaves the shell inside
+   that package directory and every later line then runs against the
+   wrong `packages/<name>`.
+
+   Verify — but not immediately. npm's read path lags the write path
+   by up to a couple of minutes, so `npm view` can still 404 on a
+   package that published seconds earlier. A 404 here means "not
+   propagated yet", not "publish failed": wait a minute and re-run. The
+   authoritative answer is whether the `npm publish` itself exited 0.
    ```bash
    npm view @chordsketch/wasm version          # should show X.Y.Z
    npm view @chordsketch/wasm-export version    # should show X.Y.Z
@@ -366,8 +375,12 @@ When adding a new channel, update both.
 | GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml`, called by `release.yml` on tag push | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
 | Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml`, called by `release.yml` on tag push | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
 | npm (wasm) | `@chordsketch/wasm` | manual local `npm publish` (Step 7a) — see ADR-0008 | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-wasm` job |
+| npm (wasm-export) | `@chordsketch/wasm-export` | manual local `npm publish` (Step 7d) — see ADR-0008. Ships in lockstep with `@chordsketch/wasm` (#2466). | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-wasm-export` job |
 | npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | manual local `crates/napi/scripts/local-publish.sh` (Step 7c) — see ADR-0008. CI uploads platform tarballs to the GitHub Release. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `napi-node` job |
 | npm (tree-sitter) | `tree-sitter-chordpro` | manual local `npm publish --access public` (Step 7b) — see ADR-0008 | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-tree-sitter` rollup entry |
+| npm (React) | `@chordsketch/react-ui` (design-system primitives, ADR-0029) + `@chordsketch/react` (component library) | manual local `npm publish` (Steps 7e-7f) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | source-side only: `react-ui.yml` / `react.yml` / `playground-smoke.yml` build and test the packages from the workspace. Rollup entries are `skip` — no registry probe. |
+| npm (Vue) | `@chordsketch/vue` | manual local `npm publish` (Step 7g) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | source-side only: `vue.yml` / `playground-smoke.yml`. Rollup entry is `skip` — no registry probe. |
+| npm (Svelte) | `@chordsketch/svelte` | manual local `npm publish` (Step 7h) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | source-side only: `svelte.yml` / `playground-smoke.yml`. Rollup entry is `skip` — no registry probe. |
 | Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `homebrew` job |
 | Scoop bucket | `koedame/scoop-bucket/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `scoop` job |
 | AUR | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `AUR_SSH_KEY` | `aur` rollup entry |
