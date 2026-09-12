@@ -1,4 +1,8 @@
 [Installation] npm install @chordsketch/wasm
+[Installation] npm install @chordsketch/react react react-dom
+[Installation] npm install @chordsketch/vue vue
+[Installation] npm install @chordsketch/svelte svelte
+[Installation] npm install @chordsketch/react-ui react react-dom
 [Installation] brew install --formula koedame/tap/chordsketch
 [Installation] brew install --cask koedame/tap/chordsketch
 [Installation] sudo port install chordsketch
