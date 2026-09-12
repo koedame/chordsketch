@@ -42,9 +42,12 @@ is. `npm-chordpro-lite` takes it.
 
 For an npm channel the check resolves `registry.npmjs.org/<pkg>/latest`
 anonymously and then fetches the first byte of the `dist.tarball` it points
-at. The tarball is the byte stream `npm install` downloads and is served from
-a different host than the metadata, so resolving the packument alone is not
-yet installability.
+at, after confirming that URL is still `https://registry.npmjs.org/…` — the
+packument is server-supplied, so a malformed or compromised response must
+not turn the probe into a request against an arbitrary host. The tarball is
+the byte stream `npm install` downloads, at a different path than the
+metadata endpoint, so resolving the packument alone is not yet
+installability.
 
 The four framework bindings stay on `skip`. `readme-smoke.yml` already
 installs each of them daily and server-renders a component from the result —

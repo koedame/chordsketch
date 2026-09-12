@@ -446,6 +446,27 @@ class VerifyChannelTests(unittest.TestCase):
         self.assertEqual(result.observed, "0.1.0")
         self.assertIn("tarball is not anonymously fetchable", result.detail)
 
+    def test_exists_channel_rejects_tarball_on_unexpected_host(self) -> None:
+        """A packument is server-supplied; a hostile or corrupted one must not
+        turn the probe into a request against an arbitrary host (SSRF via a
+        compromised registry response)."""
+        hostile_payload = {
+            "version": "0.1.0",
+            "dist": {"tarball": "https://evil.example/chordpro-lite-0.1.0.tgz"},
+        }
+        with patch(
+            "check_release_channels._http_get_json",
+            return_value=hostile_payload,
+        ), patch(
+            "check_release_channels._http_head_ok",
+        ) as mock_head:
+            result = check_release_channels.verify_channel(
+                self._exists_channel(), "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertIn("unexpected dist.tarball host", result.detail)
+        mock_head.assert_not_called()
+
     def test_exists_channel_force_stale_keeps_the_exists_expectation(self) -> None:
         """The red-path dry run must not claim the tag was the expectation."""
         result = check_release_channels.verify_channel(

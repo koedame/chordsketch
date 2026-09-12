@@ -255,11 +255,27 @@ def _check_npm_exists(channel: Channel) -> CheckResult:
             f"npm served {channel.package}@{observed} with no dist.tarball URL",
         )
 
+    # `tarball` is server-supplied, not config from the manifest, so it gets
+    # the same scheme/host check any externally-sourced URL needs before this
+    # script issues a request to it — a malformed or malicious packument
+    # (compromised registry, corrupted response) must not turn this probe
+    # into a request against an arbitrary host. registry.npmjs.org's own
+    # tarball URLs live under its own host; nothing legitimate points
+    # elsewhere.
+    parsed_tarball = urllib.parse.urlsplit(tarball)
+    if parsed_tarball.scheme != "https" or parsed_tarball.hostname != "registry.npmjs.org":
+        return _error(
+            channel,
+            "<exists>",
+            f"npm served {channel.package}@{observed} with an unexpected "
+            f"dist.tarball host: {tarball!r} (expected https://registry.npmjs.org/…)",
+        )
+
     # Resolving the packument is not yet installability: the tarball it
-    # points at is the byte stream `npm install` actually fetches, and it
-    # is served from a different host than the metadata. Fetching its first
-    # byte anonymously is the closest this stdlib-only script gets to the
-    # install the README documents.
+    # points at is the byte stream `npm install` actually fetches, at a
+    # different path than the metadata endpoint. Fetching its first byte
+    # anonymously is the closest this stdlib-only script gets to the install
+    # the README documents.
     if not _http_head_ok(tarball):
         return CheckResult(
             channel_id=channel.id,
