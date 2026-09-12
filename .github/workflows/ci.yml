@@ -226,6 +226,30 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest scripts/test_check_zero_deps.py
 
+  webview-lockstep:
+    name: WebView2 stack lockstep
+    # The Windows preview handler and the desktop app ship in one
+    # installer and embed WebView2 through the same `wry` / `windows` /
+    # `windows-core`, so the handler's requirements are held at the
+    # versions Tauri resolves (ADR-0066). A caret requirement left behind
+    # when Tauri moves — or bumped ahead of it — puts a second copy of the
+    # stack in `Cargo.lock` without failing any build, so this job
+    # compares the two consumers' lock entries directly.
+    #
+    # Guarantee-style check per `.claude/rules/ci-parallelization.md`
+    # §3 — no paths: filter, runs on every PR (the drift arrives through
+    # `Cargo.lock` in dependency-update PRs). Python-only, sub-second
+    # wall clock; no rust-cache needed (§2).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Compare the handler's and Tauri's WebView2 crates
+        run: python3 scripts/check-webview-lockstep.py
+
+      - name: Unit tests
+        run: python3 -m unittest scripts/test_check_webview_lockstep.py
+
   glibc-floor:
     name: Linux glibc floor
     # Guards the support floor of every Linux artifact this project
