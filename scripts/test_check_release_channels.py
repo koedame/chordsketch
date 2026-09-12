@@ -102,6 +102,28 @@ def _snap_entry(track: str, risk: str, architecture: str, version: str) -> dict:
     }
 
 
+def _npm_404(package: str) -> urllib.error.HTTPError:
+    """What registry.npmjs.org answers for a package it will not serve."""
+    return urllib.error.HTTPError(
+        url=f"https://registry.npmjs.org/{package}/latest",
+        code=404,
+        msg="Not Found",
+        hdrs=None,  # type: ignore[arg-type]
+        fp=None,
+    )
+
+
+def _npm_latest(version: str) -> dict:
+    """Trimmed `/<pkg>/latest` payload — the two fields the checker reads."""
+    return {
+        "version": version,
+        "dist": {
+            "tarball": "https://registry.npmjs.org/@chordsketch/chordpro-lite/"
+            f"-/chordpro-lite-{version}.tgz"
+        },
+    }
+
+
 def _chocolatey_404(version: str) -> urllib.error.HTTPError:
     return urllib.error.HTTPError(
         url="https://community.chocolatey.org/api/v2/"
@@ -227,6 +249,64 @@ expected_version = "skip"
                 load_channels(path)
             self.assertIn("skip_reason", str(ctx.exception))
 
+    def test_exists_is_accepted_without_skip_reason(self) -> None:
+        """`exists` asserts the package is served, so there is nothing to excuse.
+
+        Requiring a `skip_reason` for it would push maintainers back toward
+        `skip` — the mode that performs no request at all — for a channel the
+        rollup can perfectly well check.
+        """
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as td:
+            path = _write_manifest(
+                Path(td),
+                """
+[[channels]]
+id = "x"
+display = "X"
+kind = "npm"
+package = "@scope/p"
+expected_version = "exists"
+""",
+            )
+            channels = load_channels(path)
+            self.assertTrue(channels[0].is_exists)
+            self.assertFalse(channels[0].is_skip)
+
+    def test_exists_without_package_is_rejected(self) -> None:
+        """There is nothing to look up without a package name."""
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as td:
+            path = _write_manifest(
+                Path(td),
+                """
+[[channels]]
+id = "x"
+display = "X"
+kind = "npm"
+expected_version = "exists"
+""",
+            )
+            with self.assertRaises(ManifestError) as ctx:
+                load_channels(path)
+            self.assertIn("must have a package", str(ctx.exception))
+
+    def test_chordpro_lite_is_checked_for_existence(self) -> None:
+        """Regression guard for the hole ADR-0065 closed.
+
+        `@chordsketch/chordpro-lite` is the one published package that no
+        smoke job installs, because it is not advertised under README
+        `## Installation`. While its entry said `skip` the rollup issued no
+        request for it at all, so an unpublish was invisible. Flipping it
+        back to `skip` must fail here.
+        """
+        channel = next(
+            c for c in load_channels() if c.id == "npm-chordpro-lite"
+        )
+        self.assertEqual(channel.expected_version, "exists")
+
 
 # ---------------------------------------------------------------- verify_channel
 
@@ -286,6 +366,109 @@ class VerifyChannelTests(unittest.TestCase):
         # npm returns a 404 for @chordsketch/wasm while happily serving
         # %40chordsketch%2Fwasm. This has bitten projects before.
         self.assertIn("%40chordsketch%2Fwasm", called_url)
+
+    # -------------------------------------------------- expected_version = exists
+
+    def _exists_channel(self, kind: str = "npm") -> Channel:
+        return _fake_channel(
+            channel_id="npm-chordpro-lite",
+            kind=kind,
+            package="@chordsketch/chordpro-lite",
+            expected_version="exists",
+        )
+
+    def test_exists_channel_ignores_the_tag(self) -> None:
+        """The whole point of the mode: a version the tag never promised is OK.
+
+        `@chordsketch/chordpro-lite` is at 0.1.0 while the workspace tag is
+        far ahead of it. Under `tag` that reads as a stale channel; under
+        `exists` the only question is whether npm still serves it.
+        """
+        with patch(
+            "check_release_channels._http_get_json",
+            return_value=_npm_latest("0.1.0"),
+        ) as mock_http, patch(
+            "check_release_channels._http_head_ok",
+            return_value=True,
+        ) as mock_head:
+            result = check_release_channels.verify_channel(
+                self._exists_channel(), "v9.9.9", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertEqual(result.observed, "0.1.0")
+        self.assertEqual(result.expected, "<exists>")
+        self.assertIn("%40chordsketch%2Fchordpro-lite", mock_http.call_args.args[0])
+        # The tarball, not the metadata URL, is what `npm install` fetches.
+        self.assertIn("chordpro-lite-0.1.0.tgz", mock_head.call_args.args[0])
+
+    def test_exists_channel_is_absent_on_404(self) -> None:
+        """An unpublish — or a scope flipped private — reads as 404 here."""
+        with patch(
+            "check_release_channels._http_get_json",
+            side_effect=_npm_404("@chordsketch%2Fchordpro-lite"),
+        ):
+            result = check_release_channels.verify_channel(
+                self._exists_channel(), "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<absent>")
+        self.assertIn("not served by the public npm registry", result.detail)
+
+    def test_exists_channel_reports_transport_error_separately(self) -> None:
+        """A registry that fails to answer is `<error>`, not `<absent>`.
+
+        Same split `_check_chocolatey` introduced: a network problem must not
+        be read as a missing publish.
+        """
+        with patch(
+            "check_release_channels._http_get_json",
+            side_effect=urllib.error.URLError("connection reset"),
+        ):
+            result = check_release_channels.verify_channel(
+                self._exists_channel(), "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<error>")
+
+    def test_exists_channel_fails_when_tarball_is_unreachable(self) -> None:
+        """Metadata resolving is not the same as the artifact being fetchable."""
+        with patch(
+            "check_release_channels._http_get_json",
+            return_value=_npm_latest("0.1.0"),
+        ), patch(
+            "check_release_channels._http_head_ok",
+            return_value=False,
+        ):
+            result = check_release_channels.verify_channel(
+                self._exists_channel(), "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "0.1.0")
+        self.assertIn("tarball is not anonymously fetchable", result.detail)
+
+    def test_exists_channel_force_stale_keeps_the_exists_expectation(self) -> None:
+        """The red-path dry run must not claim the tag was the expectation."""
+        result = check_release_channels.verify_channel(
+            self._exists_channel(), "v0.5.0", force_stale=True
+        )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "<forced-stale>")
+        self.assertEqual(result.expected, "<exists>")
+
+    def test_exists_channel_on_unimplemented_kind_is_loud(self) -> None:
+        """Never silently fall back to the tag-equality checker.
+
+        Only `npm` has an existence checker today. A future `exists` entry on
+        another kind must fail with an actionable message rather than assert
+        tag-equality, which the manifest did not ask for.
+        """
+        with patch("check_release_channels._http_get_json") as mock_http:
+            result = check_release_channels.verify_channel(
+                self._exists_channel(kind="crates-io"), "v0.5.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertIn("_EXISTS_DISPATCH", result.detail)
+        mock_http.assert_not_called()
 
     def test_ghcr_head_ok_path(self) -> None:
         channel = _fake_channel(kind="ghcr", package="koedame/chordsketch")

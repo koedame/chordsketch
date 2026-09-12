@@ -378,10 +378,10 @@ When adding a new channel, update both.
 | npm (wasm-export) | `@chordsketch/wasm-export` | manual local `npm publish` (Step 7d) — see ADR-0008. Ships in lockstep with `@chordsketch/wasm` (#2466). | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-wasm-export` job |
 | npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | manual local `crates/napi/scripts/local-publish.sh` (Step 7c) — see ADR-0008. CI uploads platform tarballs to the GitHub Release. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `napi-node` job |
 | npm (tree-sitter) | `tree-sitter-chordpro` | manual local `npm publish --access public` (Step 7b) — see ADR-0008 | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-tree-sitter` rollup entry |
-| npm (React) | `@chordsketch/react-ui` (design-system primitives, ADR-0029) + `@chordsketch/react` (component library) | manual local `npm publish` (Steps 7e-7f) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | source-side only: `react-ui.yml` / `react.yml` / `playground-smoke.yml` build and test the packages from the workspace. Rollup entries are `skip` — no registry probe. |
-| npm (Vue) | `@chordsketch/vue` | manual local `npm publish` (Step 7g) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | source-side only: `vue.yml` / `playground-smoke.yml`. Rollup entry is `skip` — no registry probe. |
-| npm (Svelte) | `@chordsketch/svelte` | manual local `npm publish` (Step 7h) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | source-side only: `svelte.yml` / `playground-smoke.yml`. Rollup entry is `skip` — no registry probe. |
-| npm (chordpro-lite) | `@chordsketch/chordpro-lite` | manual local `npm publish` (Step 7i) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | source-side only: `chordpro-lite.yml` plus the unfiltered `directive-catalog-sync` job in `ci.yml`. Rollup entry is `skip` — no registry probe. |
+| npm (React) | `@chordsketch/react-ui` (design-system primitives, ADR-0029) + `@chordsketch/react` (component library) | manual local `npm publish` (Steps 7e-7f) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-react-ui` / `npm-react` jobs in `readme-smoke.yml` install the `latest` dist-tag daily and server-render a component (ADR-0064), plus source-side `react-ui.yml` / `react.yml` / `playground-smoke.yml`. Rollup entries are `skip` — the daily install is the stronger check. |
+| npm (Vue) | `@chordsketch/vue` | manual local `npm publish` (Step 7g) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-vue` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064), plus source-side `vue.yml` / `playground-smoke.yml`. Rollup entry is `skip` — the daily install is the stronger check. |
+| npm (Svelte) | `@chordsketch/svelte` | manual local `npm publish` (Step 7h) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-svelte` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064), plus source-side `svelte.yml` / `playground-smoke.yml`. Rollup entry is `skip` — the daily install is the stronger check. |
+| npm (chordpro-lite) | `@chordsketch/chordpro-lite` | manual local `npm publish` (Step 7i) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | rollup entry is `expected_version = "exists"` (ADR-0065): the daily `release-verify.yml` run asserts npm still serves it anonymously and its tarball is still fetchable. No `readme-smoke.yml` job — it is not an install method under README `## Installation`. Source side: `chordpro-lite.yml` plus the unfiltered `directive-catalog-sync` job in `ci.yml`. |
 | Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `homebrew` job |
 | Scoop bucket | `koedame/scoop-bucket/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `scoop` job |
 | AUR | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `AUR_SSH_KEY` | `aur` rollup entry |
@@ -888,7 +888,10 @@ Specifically:
   remove the README subsection, regenerate the snapshot, delete the
   smoke job, and delete the `ci/release-channels.toml` entry (or mark
   it `expected_version = "skip"` with a `skip_reason` if removal is
-  temporary).
+  temporary). A channel that stays published but stops being advertised
+  under `## Installation` loses its smoke job, so it takes
+  `expected_version = "exists"` rather than `"skip"`, which issues no
+  request at all (ADR-0065).
 
 - **Channel renamed.** Treat it as "remove old + add new" in the same
   PR.
