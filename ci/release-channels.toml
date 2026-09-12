@@ -37,7 +37,8 @@
 #     winget, nixpkgs, MacPorts).
 #   - The channel publishes on its own cadence, decoupled from the workspace
 #     tag, so tag-equality is not a true statement about it (the
-#     `@chordsketch/{react-ui,react,vue,svelte}` framework packages).
+#     `@chordsketch/{react-ui,react,vue,svelte}` framework packages and
+#     `@chordsketch/chordpro-lite`).
 
 # ---------------------------------------------------------------- crates.io
 
@@ -245,6 +246,30 @@ rollup's tag-equality assertion does not apply. First published at
 """
 required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
 notes = "Manual local publish per ADR-0008 (docs/releasing.md Step 7h). npm run build runs svelte-package, which emits sources + declarations rather than a bundle."
+
+# ------------------------------------------------ npm (chordpro-lite)
+#
+# @chordsketch/chordpro-lite is not a framework binding but shares their
+# release shape: published from packages/chordpro-lite/ on its own cadence
+# (docs/releasing.md Step 7i), decoupled from the workspace version the
+# release tag carries, so the same `skip` reasoning applies. Its per-PR
+# verification is source-side: chordpro-lite.yml typechecks, tests and
+# builds it, and the unfiltered directive-catalog-sync job in ci.yml fails
+# if its generated directive list drifts from the Rust catalog (ADR-0060).
+
+[[channels]]
+id = "npm-chordpro-lite"
+display = "npm — @chordsketch/chordpro-lite"
+kind = "npm"
+package = "@chordsketch/chordpro-lite"
+expected_version = "skip"
+skip_reason = """
+Versions on its own cadence, not on the workspace release tag, so the
+rollup's tag-equality assertion does not apply. First published at
+0.1.0 on 2026-09-12.
+"""
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
+notes = "Manual local publish per ADR-0008 (docs/releasing.md Step 7i). Carries no @chordsketch/wasm dependency (ADR-0060)."
 
 # ---------------------------------------------------------------- installers
 
