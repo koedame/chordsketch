@@ -190,6 +190,11 @@ notes = "Unscoped per ADR-0008 §Decision 6 (tree-sitter ecosystem convention). 
 # promised. Their per-PR verification is source-side: react-ui.yml,
 # react.yml, vue.yml, svelte.yml and playground-smoke.yml build and test
 # each package from the workspace on every PR that touches it.
+#
+# `skip` here does not mean nothing watches the registry. That these four
+# are installable from npm is asserted daily by readme-smoke.yml's
+# npm-react-ui / npm-react / npm-vue / npm-svelte jobs, which install the
+# `latest` dist-tag and server-render a component from it (ADR-0064).
 
 [[channels]]
 id = "npm-react-ui"

@@ -159,6 +159,30 @@ npm install @chordsketch/wasm
 See the [@chordsketch/wasm README](packages/npm/README.md) for usage with
 JavaScript/TypeScript.
 
+### npm (framework components)
+
+React, Vue and Svelte bindings that embed the ChordPro preview and
+editor:
+
+```bash
+npm install @chordsketch/react react react-dom
+npm install @chordsketch/vue vue
+npm install @chordsketch/svelte svelte
+```
+
+The wasm-free design-system primitives (buttons, cards, badges, form
+controls) ship on their own:
+
+```bash
+npm install @chordsketch/react-ui react react-dom
+```
+
+Usage lives in each package's README:
+[@chordsketch/react](packages/react/README.md),
+[@chordsketch/vue](packages/vue/README.md),
+[@chordsketch/svelte](packages/svelte/README.md),
+[@chordsketch/react-ui](packages/react-ui/README.md).
+
 ### Homebrew (macOS / Linux)
 
 CLI (formula):
