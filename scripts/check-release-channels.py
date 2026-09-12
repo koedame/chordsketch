@@ -25,6 +25,12 @@ accepted the release but has not published it yet — a state only Chocolatey's
 community moderation produces (ADR-0049). It exits 0, because no action here
 can clear it, and the rollup renders it as its own row rather than as a pass.
 
+Which question a channel is asked comes from its `expected_version` in the
+manifest: `"tag"` asks whether the newest published version equals the release
+tag, `"exists"` asks only whether the package is still publicly served (for a
+package published on its own cadence, where tag-equality is not a true
+statement but "still installable" is — ADR-0065), and `"skip"` asks nothing.
+
 Stdlib only — no external deps. HTTP goes through urllib with an explicit
 15s timeout and a named User-Agent so registry rate limiters can identify
 us if we misbehave.
@@ -206,6 +212,89 @@ def _check_npm(channel: Channel, version: str) -> CheckResult:
         return _error(channel, version, f"npm registry error: {exc}")
     observed = str(payload.get("version") or "<missing>")
     return _compare(channel, version, observed)
+
+
+# ------------------------------------------------- per-kind existence checkers
+#
+# Used by `expected_version = "exists"` channels, which assert that the
+# package is still publicly served without asserting which version that is.
+# Separate from the `_DISPATCH` checkers above because they take no version
+# to compare against: the whole point is that there is no version this
+# release tag promised.
+
+
+def _check_npm_exists(channel: Channel) -> CheckResult:
+    encoded = urllib.parse.quote(channel.package, safe="")
+    url = f"https://registry.npmjs.org/{encoded}/latest"
+    try:
+        payload = _http_get_json(url)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            # npm answers 404 both for a package that was never published
+            # and for one the registry will not serve anonymously — an
+            # unpublish, or a scope flipped private. Either way the install
+            # command in the package README is broken for everyone.
+            return _absent(
+                channel,
+                "<exists>",
+                f"{channel.package} is not served by the public npm registry "
+                f"(404) — it was unpublished, or its access was flipped to "
+                f"restricted. Re-publish per docs/releasing.md, or `npm access "
+                f"set status=public {channel.package}`.",
+            )
+        return _error(channel, "<exists>", f"npm registry error: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        return _error(channel, "<exists>", f"npm registry error: {exc}")
+
+    observed = str(payload.get("version") or "<missing>")
+    tarball = str(payload.get("dist", {}).get("tarball") or "")
+    if not tarball:
+        return _error(
+            channel,
+            "<exists>",
+            f"npm served {channel.package}@{observed} with no dist.tarball URL",
+        )
+
+    # `tarball` is server-supplied, not config from the manifest, so it gets
+    # the same scheme/host check any externally-sourced URL needs before this
+    # script issues a request to it — a malformed or malicious packument
+    # (compromised registry, corrupted response) must not turn this probe
+    # into a request against an arbitrary host. registry.npmjs.org's own
+    # tarball URLs live under its own host; nothing legitimate points
+    # elsewhere.
+    parsed_tarball = urllib.parse.urlsplit(tarball)
+    if parsed_tarball.scheme != "https" or parsed_tarball.hostname != "registry.npmjs.org":
+        return _error(
+            channel,
+            "<exists>",
+            f"npm served {channel.package}@{observed} with an unexpected "
+            f"dist.tarball host: {tarball!r} (expected https://registry.npmjs.org/…)",
+        )
+
+    # Resolving the packument is not yet installability: the tarball it
+    # points at is the byte stream `npm install` actually fetches, at a
+    # different path than the metadata endpoint. Fetching its first byte
+    # anonymously is the closest this stdlib-only script gets to the install
+    # the README documents.
+    if not _http_head_ok(tarball):
+        return CheckResult(
+            channel_id=channel.id,
+            ok=False,
+            observed=observed,
+            expected="<exists>",
+            detail=(
+                f"npm served metadata for {channel.package}@{observed} but its "
+                f"tarball is not anonymously fetchable: {tarball}"
+            ),
+        )
+
+    return CheckResult(
+        channel_id=channel.id,
+        ok=True,
+        observed=observed,
+        expected="<exists>",
+        detail=f"published and anonymously installable at {observed}",
+    )
 
 
 def _check_ghcr(channel: Channel, version: str) -> CheckResult:
@@ -777,6 +866,14 @@ _DISPATCH: dict[str, Callable[[Channel, str], CheckResult]] = {
     "manual": _check_manual,
 }
 
+# Existence checkers, keyed the same way. Only the kinds that actually carry
+# an `exists` channel are implemented; `verify_channel` reports a loud error
+# for any other kind rather than falling back to the tag-equality checker,
+# which would assert something the manifest did not ask for.
+_EXISTS_DISPATCH: dict[str, Callable[[Channel], CheckResult]] = {
+    "npm": _check_npm_exists,
+}
+
 
 def verify_channel(channel: Channel, tag: str, force_stale: bool) -> CheckResult:
     """Verify one channel. `tag` is the git tag, e.g. `v0.2.0`.
@@ -790,15 +887,27 @@ def verify_channel(channel: Channel, tag: str, force_stale: bool) -> CheckResult
         return _check_manual(channel, "<skip>")
 
     version = _normalize_tag(tag)
+    expected = "<exists>" if channel.is_exists else version
 
     if force_stale:
         return CheckResult(
             channel_id=channel.id,
             ok=False,
             observed="<forced-stale>",
-            expected=version,
+            expected=expected,
             detail="synthetic failure injected via --force-stale for red-path test",
         )
+
+    if channel.is_exists:
+        exists_checker = _EXISTS_DISPATCH.get(channel.kind)
+        if exists_checker is None:
+            return _error(
+                channel,
+                expected,
+                f"no existence checker implemented for kind {channel.kind!r} — "
+                f"add one to _EXISTS_DISPATCH",
+            )
+        return exists_checker(channel)
 
     checker = _DISPATCH.get(channel.kind)
     if checker is None:

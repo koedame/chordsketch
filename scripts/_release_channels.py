@@ -45,13 +45,16 @@ KNOWN_KINDS = frozenset(
     }
 )
 
-# The complete set of `expected_version` values. `verify_channel` only ever
-# compares a channel against the release tag, so "tag" and "skip" are the only
-# values that mean anything: anything else would be silently verified as if it
-# said "tag", which fails the moment the pinned version differs from the tag.
-# Rejecting unknown values here keeps the manifest from promising a mode the
-# verifier does not implement.
-EXPECTED_VERSION_VALUES = frozenset({"tag", "skip"})
+# The complete set of `expected_version` values, each naming a question the
+# rollup asks of the registry:
+#   "tag"    — is the newest published version equal to the release tag?
+#   "exists" — is the package served publicly at all, whatever its version?
+#   "skip"   — ask nothing; the entry exists to record the channel.
+# A version string is deliberately NOT accepted: the rollup runs once per
+# release tag, so a pin would go stale the moment an independently-versioned
+# package is bumped between tags. Rejecting unknown values here keeps the
+# manifest from promising a mode the verifier does not implement.
+EXPECTED_VERSION_VALUES = frozenset({"tag", "exists", "skip"})
 
 
 @dataclass(frozen=True)
@@ -68,7 +71,7 @@ class Channel:
     display: str
     kind: str
     package: str
-    expected_version: str  # "tag" | "skip" (see EXPECTED_VERSION_VALUES)
+    expected_version: str  # "tag" | "exists" | "skip" (see EXPECTED_VERSION_VALUES)
     required_secrets: tuple[str, ...]
     skip_reason: str
     notes: str
@@ -77,6 +80,16 @@ class Channel:
     def is_skip(self) -> bool:
         """True if this channel is intentionally skipped from the rollup."""
         return self.expected_version == "skip"
+
+    @property
+    def is_exists(self) -> bool:
+        """True if the rollup only asserts the package is publicly served.
+
+        For a package published on its own cadence the tag-equality question
+        is not a true statement about it, but "is it still installable" is —
+        and that is the question a silent unpublish breaks.
+        """
+        return self.expected_version == "exists"
 
 
 class ManifestError(Exception):
@@ -87,8 +100,8 @@ def load_channels(path: Path = MANIFEST_PATH) -> list[Channel]:
     """Load and validate every channel entry from the manifest.
 
     Raises `ManifestError` on any structural problem: unknown `kind`, unknown
-    `expected_version`, missing required field, duplicate `id`, or a `skip`
-    entry without `skip_reason`.
+    `expected_version`, missing required field, duplicate `id`, a `skip`
+    entry without `skip_reason`, or a non-`skip` entry without `package`.
     Validation is intentionally strict — the whole point of the manifest is
     to be the single source of truth, so silent drift is worse than a loud
     error at CI time.
@@ -148,9 +161,9 @@ def load_channels(path: Path = MANIFEST_PATH) -> list[Channel]:
             allowed = ", ".join(sorted(EXPECTED_VERSION_VALUES))
             raise ManifestError(
                 f"channels[{index}] ({channel_id}): unknown expected_version "
-                f"{expected_version!r} — must be one of: {allowed}. The rollup "
-                f"only ever compares against the release tag, so a pinned "
-                f"version would be verified as if it said 'tag'."
+                f"{expected_version!r} — must be one of: {allowed}. A pinned "
+                f"version is not among them: the rollup runs once per release "
+                f"tag, so a pin would go stale between tags."
             )
 
         skip_reason = str(row.get("skip_reason", "")).strip()
@@ -199,7 +212,12 @@ def main() -> int:
         return 1
     print(f"loaded {len(channels)} channels from {MANIFEST_PATH}")
     for channel in channels:
-        marker = "SKIP" if channel.is_skip else "    "
+        if channel.is_skip:
+            marker = "SKIP  "
+        elif channel.is_exists:
+            marker = "EXISTS"
+        else:
+            marker = "      "
         print(f"  {marker} {channel.id:<28} [{channel.kind}]")
     return 0
 
