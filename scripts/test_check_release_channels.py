@@ -183,6 +183,32 @@ expected_version = "tag"
                 load_channels(path)
             self.assertIn("unknown kind", str(ctx.exception))
 
+    def test_pinned_expected_version_is_rejected(self) -> None:
+        """An explicit version is not a mode the verifier implements.
+
+        `verify_channel` always compares against the release tag, so a
+        manifest that pins `expected_version = "0.1.0"` would be verified as
+        if it said "tag" and turn red on every release. Fail loudly at load
+        time instead.
+        """
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as td:
+            path = _write_manifest(
+                Path(td),
+                """
+[[channels]]
+id = "x"
+display = "X"
+kind = "npm"
+package = "@scope/p"
+expected_version = "0.1.0"
+""",
+            )
+            with self.assertRaises(ManifestError) as ctx:
+                load_channels(path)
+            self.assertIn("unknown expected_version", str(ctx.exception))
+
     def test_skip_without_reason(self) -> None:
         from tempfile import TemporaryDirectory
 

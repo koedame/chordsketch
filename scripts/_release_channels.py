@@ -45,6 +45,14 @@ KNOWN_KINDS = frozenset(
     }
 )
 
+# The complete set of `expected_version` values. `verify_channel` only ever
+# compares a channel against the release tag, so "tag" and "skip" are the only
+# values that mean anything: anything else would be silently verified as if it
+# said "tag", which fails the moment the pinned version differs from the tag.
+# Rejecting unknown values here keeps the manifest from promising a mode the
+# verifier does not implement.
+EXPECTED_VERSION_VALUES = frozenset({"tag", "skip"})
+
 
 @dataclass(frozen=True)
 class Channel:
@@ -60,7 +68,7 @@ class Channel:
     display: str
     kind: str
     package: str
-    expected_version: str  # "tag" | "skip" | an explicit version string
+    expected_version: str  # "tag" | "skip" (see EXPECTED_VERSION_VALUES)
     required_secrets: tuple[str, ...]
     skip_reason: str
     notes: str
@@ -78,8 +86,9 @@ class ManifestError(Exception):
 def load_channels(path: Path = MANIFEST_PATH) -> list[Channel]:
     """Load and validate every channel entry from the manifest.
 
-    Raises `ManifestError` on any structural problem: unknown `kind`, missing
-    required field, duplicate `id`, or a `skip` entry without `skip_reason`.
+    Raises `ManifestError` on any structural problem: unknown `kind`, unknown
+    `expected_version`, missing required field, duplicate `id`, or a `skip`
+    entry without `skip_reason`.
     Validation is intentionally strict — the whole point of the manifest is
     to be the single source of truth, so silent drift is worse than a loud
     error at CI time.
@@ -133,6 +142,15 @@ def load_channels(path: Path = MANIFEST_PATH) -> list[Channel]:
         ):
             raise ManifestError(
                 f"channels[{index}] ({channel_id}): required_secrets must be a list of strings"
+            )
+
+        if expected_version not in EXPECTED_VERSION_VALUES:
+            allowed = ", ".join(sorted(EXPECTED_VERSION_VALUES))
+            raise ManifestError(
+                f"channels[{index}] ({channel_id}): unknown expected_version "
+                f"{expected_version!r} — must be one of: {allowed}. The rollup "
+                f"only ever compares against the release tag, so a pinned "
+                f"version would be verified as if it said 'tag'."
             )
 
         skip_reason = str(row.get("skip_reason", "")).strip()
