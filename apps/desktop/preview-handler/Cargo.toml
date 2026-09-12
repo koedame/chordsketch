@@ -33,8 +33,11 @@ chordsketch-chordpro = { path = "../../../crates/chordpro" }
 chordsketch-render-html = { path = "../../../crates/render-html" }
 
 [target.'cfg(windows)'.dependencies]
-# Versions match the ones Tauri already pins in `Cargo.lock` so the DLL
-# and the desktop binary share one copy of each crate in the tree.
+# `wry`, `windows` and `windows-core` stay on the versions Tauri resolves
+# in `Cargo.lock` so the DLL and the desktop binary share one WebView2
+# stack (ADR-0066). `scripts/check-webview-lockstep.py` fails CI when the
+# two sides resolve different entries; move these requirements together,
+# after Tauri does, rather than bumping them on their own.
 raw-window-handle = "0.6"
 # `windows::core::implement` expands to absolute `::windows_core::`
 # paths, so the crate behind that re-export has to be a direct
