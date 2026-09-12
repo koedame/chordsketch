@@ -40,11 +40,16 @@ raw-window-handle = "0.6"
 # paths, so the crate behind that re-export has to be a direct
 # dependency as well.
 windows-core = "0.61"
+# Every `windows` feature this crate's own code reaches for is listed
+# here rather than left to Cargo's feature unification with `wry`. An
+# omission is invisible while `wry` pulls the same `windows` major and
+# turns into a compile error the moment it moves to the next one.
 windows = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_System_Com",
     "Win32_System_Ole",
+    "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",
     "Win32_UI_Shell_PropertiesSystem",
     "Win32_UI_WindowsAndMessaging",
