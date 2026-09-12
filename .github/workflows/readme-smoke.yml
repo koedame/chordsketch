@@ -14,8 +14,8 @@ on:
     # Daily at 06:00 UTC — catches registry-side regressions without coupling
     # to the release cadence.
     - cron: "0 6 * * *"
-  # Scoped to the README system on PRs (ADR-0041). On a PR event 12
-  # of the 15 smoke jobs install from a PUBLISHED artifact (GHCR,
+  # Scoped to the README system on PRs (ADR-0041). On a PR event 16
+  # of the 19 smoke jobs install from a PUBLISHED artifact (GHCR,
   # Docker Hub, crates.io, npm, a tap, scoop, winget, chocolatey,
   # snap, the MacPorts ports tree). No PR diff can change what those
   # registries serve, so their failure mode is time-based, not
@@ -377,6 +377,247 @@ jobs:
           console.log('render_pdf OK (' + pdf.length + ' bytes)');
           EOF
           node smoke.mjs
+
+  # The four framework bindings (#606). Unlike the two jobs above,
+  # these install the `latest` dist-tag — the literal command
+  # README ## Installation documents — rather than a pinned version.
+  # Two reasons:
+  #
+  #   1. They version independently of the Rust workspace (react is
+  #      at 0.4.0 while react-ui / vue / svelte are at 0.1.0 and the
+  #      workspace is at 0.5.0), so a pin here would be invisible to
+  #      scripts/check-version-consistency.py and would never be
+  #      bumped by a release cut. It would keep asserting one frozen
+  #      release while the advertised `latest` rotted unwatched.
+  #   2. No pin means no release-cut window to tolerate: there is no
+  #      version that can be ahead of the registry, so these jobs need
+  #      none of the probe-and-skip machinery above.
+  #
+  # What each asserts beyond `npm install` exiting 0: the published
+  # tarball resolves and loads, its components server-render the
+  # design-system markup, and the stylesheet subpath every quick start
+  # imports resolves. These exist because `@chordsketch/react` was
+  # advertised in the docs from 2026-04 and the other three from the
+  # day they were added, while none of them were on npm — nothing in
+  # CI ever talked to the registry, so `npm install` returned 404 for
+  # months without a single red build.
+
+  npm-react:
+    name: npm (@chordsketch/react)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Install @chordsketch/react in scratch directory
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/react-smoke
+          cd /tmp/react-smoke
+          npm init -y
+          # Exactly the command README ## Installation documents.
+          npm install @chordsketch/react react react-dom
+
+      - name: Smoke test server render
+        run: |
+          set -euo pipefail
+          cd /tmp/react-smoke
+          # `<Transpose>` is the one component that renders its full
+          # markup without the wasm engine, so it exercises the
+          # published bundle end-to-end in Node without a browser.
+          cat > smoke.mjs << 'EOF'
+          import { createRequire } from 'node:module';
+          import { createElement } from 'react';
+          import { renderToStaticMarkup } from 'react-dom/server';
+          import { Transpose, version } from '@chordsketch/react';
+
+          const v = version();
+          if (!v) throw new Error('version() returned empty');
+          console.log('version:', v);
+
+          const html = renderToStaticMarkup(
+            createElement(Transpose, { value: 2, onChange: () => {} }),
+          );
+          if (!html.includes('chordsketch-transpose__select')) {
+            throw new Error('<Transpose> is missing the design-system class: ' + html);
+          }
+          if (!html.includes('>+2<')) {
+            throw new Error('<Transpose> did not render the +2 option: ' + html);
+          }
+          console.log('<Transpose> server render OK');
+
+          // The quick start opens with this import; a `files` /
+          // `exports` regression would break it while the component
+          // import above still worked.
+          createRequire(import.meta.url).resolve('@chordsketch/react/styles.css');
+          console.log('styles.css subpath export OK');
+          EOF
+          node smoke.mjs
+
+  npm-react-ui:
+    name: npm (@chordsketch/react-ui)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Install @chordsketch/react-ui in scratch directory
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/react-ui-smoke
+          cd /tmp/react-ui-smoke
+          npm init -y
+          npm install @chordsketch/react-ui react react-dom
+
+      - name: Smoke test server render
+        run: |
+          set -euo pipefail
+          cd /tmp/react-ui-smoke
+          # This package carries no wasm dependency at all (ADR-0029),
+          # so every component renders in Node. `<Button>` / `<Badge>`
+          # cover the class-composition contract the whole package is.
+          cat > smoke.mjs << 'EOF'
+          import { createRequire } from 'node:module';
+          import { createElement } from 'react';
+          import { renderToStaticMarkup } from 'react-dom/server';
+          import { Badge, Button, version } from '@chordsketch/react-ui';
+
+          // Exported as a string constant here, not a function as in
+          // the other three packages.
+          if (!version) throw new Error('version is empty');
+          console.log('version:', version);
+
+          const html = renderToStaticMarkup(
+            createElement(
+              'div',
+              null,
+              createElement(Button, { variant: 'primary' }, 'Save'),
+              createElement(Badge, { variant: 'success', dot: true }, 'Saved'),
+            ),
+          );
+          if (!html.includes('btn btn-primary')) {
+            throw new Error('<Button> is missing the design-system classes: ' + html);
+          }
+          if (!html.includes('badge success dot')) {
+            throw new Error('<Badge> is missing the design-system classes: ' + html);
+          }
+          console.log('<Button> / <Badge> server render OK');
+
+          createRequire(import.meta.url).resolve('@chordsketch/react-ui/styles.css');
+          console.log('styles.css subpath export OK');
+          EOF
+          node smoke.mjs
+
+  npm-vue:
+    name: npm (@chordsketch/vue)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Install @chordsketch/vue in scratch directory
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/vue-smoke
+          cd /tmp/vue-smoke
+          npm init -y
+          npm install @chordsketch/vue vue
+          # Test-harness only — `@vue/server-renderer` is how this job
+          # renders without a browser; consumers do not need it.
+          npm install --save-dev @vue/server-renderer
+
+      - name: Smoke test server render
+        run: |
+          set -euo pipefail
+          cd /tmp/vue-smoke
+          cat > smoke.mjs << 'EOF'
+          import { createRequire } from 'node:module';
+          import { createSSRApp, h } from 'vue';
+          import { renderToString } from '@vue/server-renderer';
+          import { Transpose, version } from '@chordsketch/vue';
+
+          const v = version();
+          if (!v) throw new Error('version() returned empty');
+          console.log('version:', v);
+
+          const html = await renderToString(
+            createSSRApp({ render: () => h(Transpose, { modelValue: 2 }) }),
+          );
+          if (!html.includes('chordsketch-transpose__select')) {
+            throw new Error('<Transpose> is missing the design-system class: ' + html);
+          }
+          if (!html.includes('>+2<')) {
+            throw new Error('<Transpose> did not render the +2 option: ' + html);
+          }
+          console.log('<Transpose> server render OK');
+
+          createRequire(import.meta.url).resolve('@chordsketch/vue/styles.css');
+          console.log('styles.css subpath export OK');
+          EOF
+          node smoke.mjs
+
+  npm-svelte:
+    name: npm (@chordsketch/svelte)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Install @chordsketch/svelte in scratch directory
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/svelte-smoke
+          cd /tmp/svelte-smoke
+          npm init -y
+          npm pkg set type=module
+          npm install @chordsketch/svelte svelte
+          # Test-harness only. This package ships uncompiled `.svelte`
+          # sources by convention, so the consumer's bundler compiles
+          # them — the smoke has to go through one too, and a Vite SSR
+          # build is the closest thing to what a consumer actually
+          # runs. That also makes this the only framework job that
+          # cannot import the package straight from Node.
+          npm install --save-dev vite @sveltejs/vite-plugin-svelte
+
+      - name: Smoke test server render
+        run: |
+          set -euo pipefail
+          cd /tmp/svelte-smoke
+          cat > vite.config.js << 'EOF'
+          import { svelte } from '@sveltejs/vite-plugin-svelte';
+
+          export default {
+            plugins: [svelte()],
+            build: { outDir: 'dist-smoke', minify: false },
+          };
+          EOF
+          cat > smoke.js << 'EOF'
+          import { createRequire } from 'node:module';
+          import { render } from 'svelte/server';
+          import { Transpose, version } from '@chordsketch/svelte';
+
+          const v = version();
+          if (!v) throw new Error('version() returned empty');
+          console.log('version:', v);
+
+          const { body } = render(Transpose, { props: { value: 2 } });
+          if (!body.includes('chordsketch-transpose__select')) {
+            throw new Error('<Transpose> is missing the design-system class: ' + body);
+          }
+          if (!body.includes('>+2<')) {
+            throw new Error('<Transpose> did not render the +2 option: ' + body);
+          }
+          console.log('<Transpose> server render OK');
+
+          createRequire(import.meta.url).resolve('@chordsketch/svelte/styles.css');
+          console.log('styles.css subpath export OK');
+          EOF
+          npx vite build --ssr smoke.js
+          node dist-smoke/smoke.js
 
   cargo-install:
     name: cargo install chordsketch
@@ -917,6 +1158,10 @@ jobs:
       - docker-hub
       - npm-wasm
       - npm-wasm-export
+      - npm-react
+      - npm-react-ui
+      - npm-vue
+      - npm-svelte
       - cargo-install
       - source-build
       - homebrew
