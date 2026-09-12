@@ -51,4 +51,4 @@ windows = { version = "0.61", features = [
 ] }
 # Same WebView2 embedding layer the desktop app itself runs on, so the
 # preview pane and the app render through one code path.
-wry = "0.55"
+wry = "0.57"
