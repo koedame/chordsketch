@@ -24,10 +24,20 @@
 #     `.claude/rules/readme-sync.md`.
 #   - Update `docs/releasing.md` Step 1 bump list if the channel has a manifest.
 #
-# When intentionally skipping a channel (e.g. manual PR flows such as winget),
-# set `expected_version = "skip"` and fill in `skip_reason` — the post-release
-# verifier uses these fields to distinguish "no publish expected" from
-# "publish missing".
+# `expected_version` takes exactly two values. `"tag"` means the rollup asserts
+# the registry's newest version equals the release tag. `"skip"` means the
+# rollup makes no assertion at all and `skip_reason` must say why. There is no
+# third "pin an explicit version here" mode: the rollup runs once per workspace
+# release tag, so a pinned version would go stale — and turn the rollup red —
+# the moment an independently-versioned package is bumped between tags.
+# `scripts/_release_channels.py` rejects any other value.
+#
+# Two situations call for `"skip"`:
+#   - The channel has no publish on this tag at all (manual PR flows such as
+#     winget, nixpkgs, MacPorts).
+#   - The channel publishes on its own cadence, decoupled from the workspace
+#     tag, so tag-equality is not a true statement about it (the
+#     `@chordsketch/{react-ui,react,vue,svelte}` framework packages).
 
 # ---------------------------------------------------------------- crates.io
 
@@ -166,6 +176,75 @@ package = "tree-sitter-chordpro"
 expected_version = "tag"
 required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
 notes = "Unscoped per ADR-0008 §Decision 6 (tree-sitter ecosystem convention). Manual local publish; version tracks workspace releases."
+
+# ------------------------------------------------ npm (framework packages)
+#
+# @chordsketch/react-ui, @chordsketch/react, @chordsketch/vue and
+# @chordsketch/svelte are published from packages/<name>/ on their own
+# release cadence (docs/releasing.md Steps 7e-7h), decoupled from the
+# workspace version that the release tag carries. The rollup's only
+# assertion is "the registry's newest version equals the tag", which is
+# not a claim that holds for these packages, so they carry
+# `expected_version = "skip"` rather than a version the tag never
+# promised. Their per-PR verification is source-side: react-ui.yml,
+# react.yml, vue.yml, svelte.yml and playground-smoke.yml build and test
+# each package from the workspace on every PR that touches it.
+
+[[channels]]
+id = "npm-react-ui"
+display = "npm — @chordsketch/react-ui"
+kind = "npm"
+package = "@chordsketch/react-ui"
+expected_version = "skip"
+skip_reason = """
+Versions on its own cadence per ADR-0029, not on the workspace release
+tag, so the rollup's tag-equality assertion does not apply. First
+published at 0.1.0 on 2026-09-12.
+"""
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
+notes = "Manual local publish per ADR-0008 (docs/releasing.md Step 7e). Carries no @chordsketch/wasm dependency."
+
+[[channels]]
+id = "npm-react"
+display = "npm — @chordsketch/react"
+kind = "npm"
+package = "@chordsketch/react"
+expected_version = "skip"
+skip_reason = """
+Versions on its own cadence, not on the workspace release tag, so the
+rollup's tag-equality assertion does not apply. First published at
+0.4.0 on 2026-09-12.
+"""
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
+notes = "Manual local publish per ADR-0008 (docs/releasing.md Step 7f)."
+
+[[channels]]
+id = "npm-vue"
+display = "npm — @chordsketch/vue"
+kind = "npm"
+package = "@chordsketch/vue"
+expected_version = "skip"
+skip_reason = """
+Versions on its own cadence, not on the workspace release tag, so the
+rollup's tag-equality assertion does not apply. First published at
+0.1.0 on 2026-09-12.
+"""
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
+notes = "Manual local publish per ADR-0008 (docs/releasing.md Step 7g)."
+
+[[channels]]
+id = "npm-svelte"
+display = "npm — @chordsketch/svelte"
+kind = "npm"
+package = "@chordsketch/svelte"
+expected_version = "skip"
+skip_reason = """
+Versions on its own cadence, not on the workspace release tag, so the
+rollup's tag-equality assertion does not apply. First published at
+0.1.0 on 2026-09-12.
+"""
+required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
+notes = "Manual local publish per ADR-0008 (docs/releasing.md Step 7h). npm run build runs svelte-package, which emits sources + declarations rather than a bundle."
 
 # ---------------------------------------------------------------- installers
 
