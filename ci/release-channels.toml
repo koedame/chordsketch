@@ -19,26 +19,36 @@
 #     required_secrets.
 #   - If you add it behind an environment gate, also create that environment
 #     in repo settings and add its secrets.
-#   - Register the channel in README.md `## Installation` if it is user-facing.
-#   - Add smoke coverage under `.github/workflows/readme-smoke.yml` per
-#     `.claude/rules/readme-sync.md`.
+#   - Register the channel in README.md `## Installation` if it is user-facing,
+#     and add smoke coverage under `.github/workflows/readme-smoke.yml` per
+#     `.claude/rules/readme-sync.md`. A channel that is NOT advertised there
+#     gets no smoke job, so give it `expected_version = "exists"` unless the
+#     tag-equality check already covers it.
 #   - Update `docs/releasing.md` Step 1 bump list if the channel has a manifest.
 #
-# `expected_version` takes exactly two values. `"tag"` means the rollup asserts
-# the registry's newest version equals the release tag. `"skip"` means the
-# rollup makes no assertion at all and `skip_reason` must say why. There is no
-# third "pin an explicit version here" mode: the rollup runs once per workspace
-# release tag, so a pinned version would go stale — and turn the rollup red —
-# the moment an independently-versioned package is bumped between tags.
-# `scripts/_release_channels.py` rejects any other value.
+# `expected_version` names the question the rollup asks of the registry, and
+# takes exactly three values. `scripts/_release_channels.py` rejects any other.
+#
+#   "tag"    — the registry's newest version equals the release tag.
+#   "exists" — the package is still served publicly, whatever its version
+#              (ADR-0065). For a channel that publishes on its own cadence,
+#              tag-equality is not a true statement about it but "still
+#              installable" is, and that is what a silent unpublish breaks.
+#   "skip"   — no assertion at all; `skip_reason` must say why. The entry
+#              exists to record the channel.
+#
+# There is no "pin an explicit version here" mode: the rollup runs once per
+# workspace release tag, so a pinned version would go stale — and turn the
+# rollup red — the moment an independently-versioned package is bumped
+# between tags.
 #
 # Two situations call for `"skip"`:
 #   - The channel has no publish on this tag at all (manual PR flows such as
 #     winget, nixpkgs, MacPorts).
-#   - The channel publishes on its own cadence, decoupled from the workspace
-#     tag, so tag-equality is not a true statement about it (the
-#     `@chordsketch/{react-ui,react,vue,svelte}` framework packages and
-#     `@chordsketch/chordpro-lite`).
+#   - The channel publishes on its own cadence AND something else already
+#     asserts it is installable — the `@chordsketch/{react-ui,react,vue,svelte}`
+#     framework packages, which readme-smoke.yml installs daily (ADR-0064).
+#     Off-cadence channels with no such coverage take `"exists"` instead.
 
 # ---------------------------------------------------------------- crates.io
 
@@ -257,8 +267,15 @@ notes = "Manual local publish per ADR-0008 (docs/releasing.md Step 7h). npm run 
 # @chordsketch/chordpro-lite is not a framework binding but shares their
 # release shape: published from packages/chordpro-lite/ on its own cadence
 # (docs/releasing.md Step 7i), decoupled from the workspace version the
-# release tag carries, so the same `skip` reasoning applies. Its per-PR
-# verification is source-side: chordpro-lite.yml typechecks, tests and
+# release tag carries, so tag-equality is not a statement about it either.
+#
+# Unlike the four above it is not advertised under README ## Installation —
+# it is a helper for consumers already using the engine, listed in the
+# packages table — so readme-smoke.yml has no job for it and nothing was
+# asking npm about it at all. This is the channel `exists` was added for
+# (ADR-0065): the rollup asserts daily that the registry still serves it
+# anonymously and that its tarball is still fetchable. Its per-PR
+# verification stays source-side: chordpro-lite.yml typechecks, tests and
 # builds it, and the unfiltered directive-catalog-sync job in ci.yml fails
 # if its generated directive list drifts from the Rust catalog (ADR-0060).
 
@@ -267,14 +284,9 @@ id = "npm-chordpro-lite"
 display = "npm — @chordsketch/chordpro-lite"
 kind = "npm"
 package = "@chordsketch/chordpro-lite"
-expected_version = "skip"
-skip_reason = """
-Versions on its own cadence, not on the workspace release tag, so the
-rollup's tag-equality assertion does not apply. First published at
-0.1.0 on 2026-09-12.
-"""
+expected_version = "exists"
 required_secrets = []  # Per ADR-0008: maintainer-local manual publish.
-notes = "Manual local publish per ADR-0008 (docs/releasing.md Step 7i). Carries no @chordsketch/wasm dependency (ADR-0060)."
+notes = "Manual local publish per ADR-0008 (docs/releasing.md Step 7i). Carries no @chordsketch/wasm dependency (ADR-0060). First published at 0.1.0 on 2026-09-12."
 
 # ---------------------------------------------------------------- installers
 
