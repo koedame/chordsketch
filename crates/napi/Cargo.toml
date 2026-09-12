@@ -31,4 +31,4 @@ napi = { version = "=3.4.0", features = ["napi9"] }
 napi-derive = "=3.3.0"
 
 [build-dependencies]
-napi-build = "=2.2.4"
+napi-build = "=2.4.1"
