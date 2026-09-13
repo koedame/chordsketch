@@ -30,3 +30,101 @@
 #                    human-actionable)
 #   tracking_issue — GitHub issue number, as a string or integer
 
+
+# v0.6.0 release-cut window.
+#
+# The workspace bumps to 0.6.0 in the release-cut PR, but the consumer
+# pins on `@chordsketch/wasm` / `@chordsketch/wasm-export` cannot move
+# to `^0.6.0` in that same PR: every consumer's `npm ci` would fail with
+# ETARGET until the maintainer-local `npm publish` of 0.6.0 runs after
+# merge (ADR-0008). Same deferral as v0.4.0 and v0.5.0. The follow-up
+# PR that bumps these pins removes every entry below in the same diff.
+# vue and svelte join the list this cycle; they were missing from the
+# consumer-pin loader until the v0.6.0 cut.
+[[allowed_skews]]
+file = "packages/vscode-extension/package.json"
+field = "dependencies[@chordsketch/wasm] (^major.minor)"
+current_value = "0.5"
+reason = """
+Must reach `^0.6.0` once `@chordsketch/wasm@0.6.0` is on npm. Bumping
+it in the release-cut PR breaks the extension's `npm ci` until then.
+The published VSIX is unaffected: vscode-extension.yml builds
+@chordsketch/wasm from source on the publish path.
+"""
+expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm per docs/releasing.md Step 7a)"
+tracking_issue = "2884"
+
+[[allowed_skews]]
+file = "packages/react/package.json"
+field = "dependencies[@chordsketch/wasm] (^major.minor)"
+current_value = "0.5"
+reason = """
+The next `@chordsketch/react` publish needs `^0.6.0` so `npm install
+@chordsketch/react` pulls the matching wasm; `^0.5.0` keeps the
+in-window `npm ci` working.
+"""
+expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm)"
+tracking_issue = "2884"
+
+[[allowed_skews]]
+file = "packages/react/package.json"
+field = "peerDependencies[@chordsketch/wasm-export] (^major.minor)"
+current_value = "0.5"
+reason = """
+`@chordsketch/wasm-export` ships in lockstep with `@chordsketch/wasm`
+(#2466); deferred for the same reason as the runtime dep above.
+"""
+expires_at = "post-publish follow-up PR (after `@chordsketch/wasm-export@0.6.0` lands on npm per docs/releasing.md Step 7d)"
+tracking_issue = "2884"
+
+[[allowed_skews]]
+file = "packages/vue/package.json"
+field = "dependencies[@chordsketch/wasm] (^major.minor)"
+current_value = "0.5"
+reason = """
+Same release-cut-window deferral as the react runtime dep above.
+"""
+expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm)"
+tracking_issue = "2884"
+
+[[allowed_skews]]
+file = "packages/vue/package.json"
+field = "peerDependencies[@chordsketch/wasm-export] (^major.minor)"
+current_value = "0.5"
+reason = """
+Same release-cut-window deferral as the react peer dep above.
+"""
+expires_at = "post-publish follow-up PR (after `@chordsketch/wasm-export@0.6.0` lands on npm)"
+tracking_issue = "2884"
+
+[[allowed_skews]]
+file = "packages/svelte/package.json"
+field = "dependencies[@chordsketch/wasm] (^major.minor)"
+current_value = "0.5"
+reason = """
+Same release-cut-window deferral as the react runtime dep above.
+"""
+expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm)"
+tracking_issue = "2884"
+
+[[allowed_skews]]
+file = "packages/svelte/package.json"
+field = "peerDependencies[@chordsketch/wasm-export] (^major.minor)"
+current_value = "0.5"
+reason = """
+Same release-cut-window deferral as the react peer dep above.
+"""
+expires_at = "post-publish follow-up PR (after `@chordsketch/wasm-export@0.6.0` lands on npm)"
+tracking_issue = "2884"
+
+[[allowed_skews]]
+file = "packages/ui-irealb-editor/package.json"
+field = "peerDependencies[@chordsketch/wasm] (^major.minor)"
+current_value = "0.5"
+reason = """
+Private workspace package, but its `npm ci` in ui-irealb-editor.yml
+strict-checks the peer constraint against the registry, so `^0.6.0`
+fails with ETARGET until `@chordsketch/wasm@0.6.0` is published.
+"""
+expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm)"
+tracking_issue = "2884"

@@ -42,6 +42,10 @@ version if you depend on this crate today. The full policy is in
 - Font, size, and color directives
 - Image directive
 - Multi-page PDF with page control
+- Audible preview in the React components: with chord audio switched on,
+  click a chord diagram to hear the voicing it draws; click the `{key}`
+  chip to hear the scale and tonic chord, or the `{tempo}` chip for a
+  metronome
 
 ### iReal Pro
 
@@ -274,6 +278,10 @@ ChordSketch also ships a native desktop editor (Tauri v2) with
 live ChordPro preview, syntax highlighting, transpose, file
 open/save, and PDF / HTML export. Install via the Homebrew cask
 under `### Homebrew (macOS / Linux)` above.
+
+On Windows the installer also registers a File Explorer preview
+handler, so `.cho` / `.chopro` / `.crd` / `.chordpro` files render
+in Explorer's preview pane.
 
 If you instead download the `.dmg` directly from a GitHub
 Release (bypassing Homebrew), macOS Gatekeeper will block the

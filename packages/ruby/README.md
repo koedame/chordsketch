@@ -105,6 +105,28 @@ errors = Chordsketch.validate(source)  # Array<ValidationError> — empty if cle
 errors.each { |e| puts "line #{e.line}, column #{e.column}: #{e.message}" }
 ```
 
+### Chord diagrams
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `Chordsketch.chord_diagram_svg(chord, instrument)` | `String \| nil` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `nil` when the chord is not in the built-in voicing database; raises `Chordsketch::ChordSketchError` on unknown instrument. |
+| `Chordsketch.chord_diagram_svg_with_defines(chord, instrument, defines)` | `String \| nil` | Like `chord_diagram_svg` but consults song-level `{define}` voicings first. `defines` is `Array<ChordDefine>`. |
+| `Chordsketch.chord_diagram_svg_with_orientation(chord, instrument, orientation)` | `String \| nil` | Orientation-aware variant. `orientation` (`String \| nil`) accepts `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention); `nil` or an unrecognised value falls back to vertical. Horizontal mode is reader-view only; see ADR-0026. |
+| `Chordsketch.chord_diagram_svg_with_defines_orientation(chord, instrument, defines, orientation)` | `String \| nil` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
+| `Chordsketch.chord_pitches(chord)` | `Array<Integer> \| nil` | Constituent pitches of a chord as MIDI note numbers, for driving an audio synth. Returns a block voicing (root, third, fifth, plus any extension / altered / added tones, with a slash bass dropped one octave below the root); `nil` when the chord is not parseable as a chord. Does not raise. |
+| `Chordsketch.diagram_pitches(chord, instrument, defines)` | `Array<Integer> \| nil` | MIDI note numbers **sounded** by the chord diagram drawn for `(chord, instrument)` — for auditioning a diagram as exactly the shape it depicts, rather than the instrument-agnostic block voicing `chord_pitches` returns from the chord name. Fretted instruments return one pitch per non-muted string in string (strum) order; keyboard instruments return the highlighted keys. `defines` is the same `Array<ChordDefine>` `chord_diagram_svg_with_defines` accepts (ignored for keyboard). Unlike the SVG methods, an instrument outside `"guitar"` / `"ukulele"` / `"uke"` / `"piano"` / `"keyboard"` / `"keys"` returns `nil` rather than raising. Also `nil` when no diagram is available for the chord. Does not raise. |
+| `Chordsketch.chord_staff_notes(chord)` | `Array<StaffNote> \| nil` | Constituent tones of a chord spelled for staff notation, ascending by pitch (a slash bass sorts first). Each tone is spelled diatonically from the chord's structure so it lands on its conventional staff line (e.g. `Ebm7` → E♭ G♭ B♭ D♭, not D♯ F♯ A♯ C♯). `nil` when the chord is not parseable as a chord. Does not raise. |
+| `Chordsketch.key_scale_pitches(key)` | `Array<Integer> \| nil` | Ascending one-octave scale of a musical key as MIDI note numbers — the movable-do "do re mi fa sol la ti do". Major keys yield the major scale; minor keys the natural-minor scale. Eight values; `nil` when the key is not parseable as a chord. Does not raise. |
+| `Chordsketch.key_tonic_triad(key)` | `Array<Integer> \| nil` | Tonic triad of a musical key as MIDI note numbers (the "do mi sol" chord). Major / minor per the key; extensions on the spelling are ignored (a strict key grammar rejects them outright). Three values; `nil` when the key is not a well-formed key. Does not raise. |
+
+`ChordDefine` exposes `name` and `raw` (both `String`) — a single
+`{define: <name> <raw>}` voicing entry.
+
+`StaffNote` exposes `letter` (`String`, `"A"`–`"G"`), `accidental`
+(`Integer`, signed semitone offset from the letter), `octave`
+(`Integer`, scientific-pitch-notation octave, middle C = C4), and
+`midi` (`Integer`, absolute MIDI note number).
+
 ### Utility
 
 ```ruby
