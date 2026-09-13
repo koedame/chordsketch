@@ -52,7 +52,7 @@ The published VSIX is unaffected: vscode-extension.yml builds
 @chordsketch/wasm from source on the publish path.
 """
 expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm per docs/releasing.md Step 7a)"
-tracking_issue = "__RELEASE_PR__"
+tracking_issue = "2884"
 
 [[allowed_skews]]
 file = "packages/react/package.json"
@@ -64,7 +64,7 @@ The next `@chordsketch/react` publish needs `^0.6.0` so `npm install
 in-window `npm ci` working.
 """
 expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm)"
-tracking_issue = "__RELEASE_PR__"
+tracking_issue = "2884"
 
 [[allowed_skews]]
 file = "packages/react/package.json"
@@ -75,7 +75,7 @@ reason = """
 (#2466); deferred for the same reason as the runtime dep above.
 """
 expires_at = "post-publish follow-up PR (after `@chordsketch/wasm-export@0.6.0` lands on npm per docs/releasing.md Step 7d)"
-tracking_issue = "__RELEASE_PR__"
+tracking_issue = "2884"
 
 [[allowed_skews]]
 file = "packages/vue/package.json"
@@ -85,7 +85,7 @@ reason = """
 Same release-cut-window deferral as the react runtime dep above.
 """
 expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm)"
-tracking_issue = "__RELEASE_PR__"
+tracking_issue = "2884"
 
 [[allowed_skews]]
 file = "packages/vue/package.json"
@@ -95,7 +95,7 @@ reason = """
 Same release-cut-window deferral as the react peer dep above.
 """
 expires_at = "post-publish follow-up PR (after `@chordsketch/wasm-export@0.6.0` lands on npm)"
-tracking_issue = "__RELEASE_PR__"
+tracking_issue = "2884"
 
 [[allowed_skews]]
 file = "packages/svelte/package.json"
@@ -105,7 +105,7 @@ reason = """
 Same release-cut-window deferral as the react runtime dep above.
 """
 expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm)"
-tracking_issue = "__RELEASE_PR__"
+tracking_issue = "2884"
 
 [[allowed_skews]]
 file = "packages/svelte/package.json"
@@ -115,7 +115,7 @@ reason = """
 Same release-cut-window deferral as the react peer dep above.
 """
 expires_at = "post-publish follow-up PR (after `@chordsketch/wasm-export@0.6.0` lands on npm)"
-tracking_issue = "__RELEASE_PR__"
+tracking_issue = "2884"
 
 [[allowed_skews]]
 file = "packages/ui-irealb-editor/package.json"
@@ -127,4 +127,4 @@ strict-checks the peer constraint against the registry, so `^0.6.0`
 fails with ETARGET until `@chordsketch/wasm@0.6.0` is published.
 """
 expires_at = "post-publish follow-up PR (after `@chordsketch/wasm@0.6.0` lands on npm)"
-tracking_issue = "__RELEASE_PR__"
+tracking_issue = "2884"
