@@ -338,6 +338,19 @@ jobs:
       version: ${{ needs.release.outputs.version }}
     secrets: inherit
 
+  swift:
+    name: Swift Package
+    needs: [release]
+    # `publish` uploads the xcframework; `update-swift-package` opens its
+    # PR with CLAUDE_PAT, not this token, so `contents: write` is the
+    # whole union.
+    permissions:
+      contents: write
+    uses: ./.github/workflows/swift.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
+
   post-release:
     name: Post-Release Package Updates
     needs: [release]
