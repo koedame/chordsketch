@@ -179,6 +179,28 @@ interface RenderOptions {
 Each `ValidationError` is `{line, column, message}` with one-based line
 and column numbers. Matches the NAPI (`@chordsketch/node`) binding.
 
+### Chord diagrams
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `chord_diagram_svg(chord, instrument)` | `string \| null` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws on unknown instrument. Exported without a `js_name` rename, so it keeps its snake\_case Rust name (like `render_html` / `render_text`) rather than the camelCase used by every other function in this table. |
+| `chordDiagramSvgWithDefines(chord, instrument, defines)` | `string \| null` | Like `chord_diagram_svg` but consults song-level `{define}` voicings first. `defines` is an array of `[name, raw]` tuples (e.g. `[["Gsus4", "base-fret 1 frets 3 3 0 0 1 3"]]`). |
+| `chordDiagramSvgWithOrientation(chord, instrument, orientation?)` | `string \| null` | Orientation-aware variant. `orientation` (exported as the `ChordDiagramOrientation` type): `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention). Horizontal mode is reader-view only (high pitch on top, matches tablature stave order); see ADR-0026. `null` / `undefined` / unrecognised strings fall back to vertical. |
+| `chordDiagramSvgWithDefinesOrientation(chord, instrument, defines, orientation?)` | `string \| null` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
+| `chordDiagramSvgWithDefinesOrientationCompact(chord, instrument, defines, orientation?)` | `string \| null` | Compact-size counterpart of `chordDiagramSvgWithDefinesOrientation` — renders the smaller above-a-lyric layout used for `{diagrams: inline}` / `{diagrams: hover}`, honouring the same `{define}` voicings and orientation knob. The returned SVG carries an extra `chord-diagram-compact` (or `keyboard-diagram-compact`) class on its root element. |
+| `chordPitches(chord)` | `Uint8Array \| undefined` | Constituent pitches of a chord as MIDI note numbers, for driving an audio synth. Returns a block voicing (root, third, fifth, plus any extension / altered / added tones, with a slash bass an octave below the root); `undefined` when the chord is not parseable. |
+| `diagramPitches(chord, instrument, defines)` | `Uint8Array \| undefined` | MIDI note numbers **sounded** by the chord diagram drawn for `(chord, instrument)` — for auditioning a diagram as exactly the shape it depicts, rather than the name-based block voicing `chordPitches` returns. Fretted instruments return one pitch per non-muted string in string order; keyboard instruments return the highlighted keys. `defines` is the same `[name, raw]` tuple list `chordDiagramSvgWithDefines` accepts. `undefined` when no diagram is available. Throws when `defines` is malformed. |
+| `chordStaffNotes(chord)` | `StaffNote[] \| undefined` (`{letter, accidental, octave, midi}`) | Constituent tones of a chord spelled for staff notation, ascending by pitch (a slash bass sorts first). Each tone is spelled diatonically from the chord's structure so it lands on its conventional staff line (e.g. `Ebm7` → E♭ G♭ B♭ D♭, not D♯ F♯ A♯ C♯). `undefined` when the chord is not parseable. |
+| `keyScalePitches(key)` | `Uint8Array \| undefined` | Ascending one-octave scale of a musical key as MIDI note numbers — the movable-do "do re mi fa sol la ti do". Major keys yield the major scale; minor keys the natural-minor scale. Eight bytes; `undefined` when the key is not parseable. |
+| `keyTonicTriad(key)` | `Uint8Array \| undefined` | Tonic triad of a musical key as MIDI note numbers (the "do mi sol" chord). Major / minor per the key; extensions on the spelling are ignored. Three bytes; `undefined` when the key is not parseable. |
+| `listDirectives()` | `DirectiveInfo[]` (`{name, aliases, valueKind, values, summary}`) | Return the ChordPro directive catalog (ADR-0028). Each entry carries the directive's canonical name, its aliases, the `valueKind` (`"none"` / `"freeform"` / `"enum"`), the allowed `values` (non-empty only for `"enum"`), and a one-line summary. |
+| `directiveValueOptions(name)` | `string[] \| null` | Return the allowed value set for an enum-valued directive (alias-aware), or `null` for free-form / value-less directives and unknown names (ADR-0028). |
+
+> **Note:** Pitch- and note-returning functions here return `undefined` for
+> "not found", not `null`. This differs from `@chordsketch/node`, where the
+> equivalent functions return `null`. The SVG-returning functions
+> (`chord_diagram_svg` and its variants) return `null` on both bindings.
+
 ### Utility
 
 | Function | Output |
