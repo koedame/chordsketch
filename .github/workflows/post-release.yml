@@ -341,6 +341,18 @@ jobs:
             packaging/cocoapods/ChordSketch.podspec.template > ChordSketch.podspec
           cat ChordSketch.podspec
 
+      - name: Wait for xcframework asset
+        # The podspec's source is chordsketch-xcframework.zip on this
+        # release, and `pod trunk push` downloads it during validation.
+        # swift.yml uploads it from a separate run triggered by the same
+        # tag push, so pushing before it lands fails with a 404.
+        uses: ./.github/actions/wait-for-release-asset
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+          asset: chordsketch-xcframework.zip
+          producer: swift.yml's publish job
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Push to CocoaPods trunk
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
@@ -498,28 +510,15 @@ jobs:
           tag: ${{ steps.version.outputs.tag }}
 
       - name: Wait for xcframework asset
-        id: wait
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          # swift.yml's publish job runs in parallel with this workflow
-          # (both are triggered by the same tag push). The xcframework
-          # asset may not be on the release yet — poll up to 30 minutes.
-          ASSET="chordsketch-xcframework.zip"
-          for attempt in $(seq 1 60); do
-            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
-                --json assets --jq '.assets[].name' \
-                | grep -Fxq "$ASSET"; then
-              echo "Asset found on attempt ${attempt}"
-              exit 0
-            fi
-            echo "Attempt ${attempt}: ${ASSET} not yet on release ${TAG}, waiting 30s..."
-            sleep 30
-          done
-          echo "Timed out waiting for ${ASSET} on release ${TAG}." >&2
-          echo "swift.yml's publish job may have failed; check that workflow." >&2
-          exit 1
+        # swift.yml's publish job runs in parallel with this workflow
+        # (both are triggered by the same tag push), so the asset may
+        # not be on the release yet.
+        uses: ./.github/actions/wait-for-release-asset
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+          asset: chordsketch-xcframework.zip
+          producer: swift.yml's publish job
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download xcframework
         env:

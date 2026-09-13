@@ -1,0 +1,54 @@
+name: "Wait for release asset"
+description: >
+  Poll a GitHub Release until a named asset is attached. Several
+  post-release jobs consume an asset that a separate tag-triggered
+  workflow uploads (swift.yml attaches chordsketch-xcframework.zip),
+  and nothing orders the two runs, so the consumer has to wait for
+  the asset rather than assume it is already there.
+inputs:
+  tag:
+    description: >
+      The release tag to poll. Must already be format-validated by
+      ./.github/actions/validate-release-tag.
+    required: true
+  asset:
+    description: The exact asset file name to wait for.
+    required: true
+  producer:
+    description: >
+      The workflow that uploads the asset, named in the timeout
+      message so a failure points at the job that actually broke.
+    required: true
+  token:
+    description: Token used by `gh release view`.
+    required: true
+  attempts:
+    description: Number of polls, 30 seconds apart.
+    required: false
+    default: "60"
+runs:
+  using: "composite"
+  steps:
+    - name: Wait for ${{ inputs.asset }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        TAG: ${{ inputs.tag }}
+        ASSET: ${{ inputs.asset }}
+        PRODUCER: ${{ inputs.producer }}
+        ATTEMPTS: ${{ inputs.attempts }}
+      run: |
+        set -euo pipefail
+        for attempt in $(seq 1 "$ATTEMPTS"); do
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name' \
+              | grep -Fxq "$ASSET"; then
+            echo "Asset found on attempt ${attempt}"
+            exit 0
+          fi
+          echo "Attempt ${attempt}: ${ASSET} not yet on release ${TAG}, waiting 30s..."
+          sleep 30
+        done
+        echo "Timed out waiting for ${ASSET} on release ${TAG}." >&2
+        echo "${PRODUCER} may have failed; check that workflow." >&2
+        exit 1
