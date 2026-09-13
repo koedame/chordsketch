@@ -219,7 +219,7 @@ jobs:
     # check (.github/workflows/readme-sync.yml) does not catch this
     # automatically because the version string lives only here.
     env:
-      WASM_VERSION: "0.5.0"
+      WASM_VERSION: "0.6.0"
     steps:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -317,7 +317,7 @@ jobs:
     # gzipped. Same pinning + release-cut tolerance pattern as the
     # `npm-wasm` job above.
     env:
-      WASM_EXPORT_VERSION: "0.5.0"
+      WASM_EXPORT_VERSION: "0.6.0"
     steps:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -385,7 +385,7 @@ jobs:
   #
   #   1. They version independently of the Rust workspace (react is
   #      at 0.4.0 while react-ui / vue / svelte are at 0.1.0 and the
-  #      workspace is at 0.5.0), so a pin here would be invisible to
+  #      workspace is at 0.6.0), so a pin here would be invisible to
   #      scripts/check-version-consistency.py and would never be
   #      bumped by a release cut. It would keep asserting one frozen
   #      release while the advertised `latest` rotted unwatched.
@@ -1019,17 +1019,17 @@ jobs:
             INCLUDE_IREAL=1
             MODE="workspace path deps (PR, ChordPro + iReal)"
           else
-            # Cargo `^0.5` means `>=0.5.0, <0.6.0` (the caret rules treat
+            # Cargo `^0.6` means `>=0.6.0, <0.7.0` (the caret rules treat
             # the leftmost non-zero as the breaking-change boundary).
-            # Bump policy: when the workspace bumps to 0.6.x, update all
-            # four constraints below to `^0.6` in the same release PR.
+            # Bump policy: when the workspace bumps to 0.7.x, update all
+            # four constraints below to `^0.7` in the same release PR.
             # Otherwise, daily smoke tests will silently stop resolving.
-            CORE_DEP='chordsketch-chordpro = "^0.5"'
-            RENDER_DEP='chordsketch-render-text = "^0.5"'
-            IREAL_DEP='chordsketch-ireal = "^0.5"'
-            IREAL_RENDER_DEP='chordsketch-render-ireal = "^0.5"'
+            CORE_DEP='chordsketch-chordpro = "^0.6"'
+            RENDER_DEP='chordsketch-render-text = "^0.6"'
+            IREAL_DEP='chordsketch-ireal = "^0.6"'
+            IREAL_RENDER_DEP='chordsketch-render-ireal = "^0.6"'
             INCLUDE_IREAL=1
-            MODE="crates.io published (ChordPro + iReal, ^0.5)"
+            MODE="crates.io published (ChordPro + iReal, ^0.6)"
           fi
           echo "library-smoke mode: $MODE"
           {

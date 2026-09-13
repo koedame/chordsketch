@@ -1,7 +1,7 @@
 {
   "name": "chordsketch",
   "displayName": "ChordSketch",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Render, transpose, validate, format and convert ChordPro and iReal Pro chord charts through the chordsketch CLI.",
   "author": {
     "name": "koedame",

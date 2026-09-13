@@ -24,6 +24,7 @@ Tests cover:
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import textwrap
 import unittest
@@ -195,6 +196,30 @@ def _build_repo(
         + "\n",
         encoding="utf-8",
     )
+
+    # packages/vue/package.json and packages/svelte/package.json — the
+    # same dep + peerDep pin shape as react, each on its own version track.
+    for framework in ("vue", "svelte"):
+        framework_dir = root / "packages" / framework
+        framework_dir.mkdir(parents=True, exist_ok=True)
+        (framework_dir / "package.json").write_text(
+            textwrap.dedent(
+                f"""
+                {{
+                  "name": "@chordsketch/{framework}",
+                  "version": "0.1.0",
+                  "dependencies": {{
+                    "@chordsketch/wasm": "{consumer_pin}"
+                  }},
+                  "peerDependencies": {{
+                    "@chordsketch/wasm-export": "{consumer_pin}"
+                  }}
+                }}
+                """
+            ).strip()
+            + "\n",
+            encoding="utf-8",
+        )
 
     # packages/ui-irealb-editor/package.json — private workspace package
     # that peer-depends on @chordsketch/wasm.
@@ -533,6 +558,26 @@ class CheckRunTests(unittest.TestCase):
             _build_repo(root, smoke_npm_pin="0.1.1", smoke_caret="0.1")
             rc = check_version_consistency.run(root, root / "nonexistent.toml")
             self.assertEqual(rc, 1)
+
+    def test_framework_binding_pin_drift_detected(self) -> None:
+        # Regression guard: the vue and svelte bindings pin
+        # @chordsketch/wasm / @chordsketch/wasm-export the same way react
+        # does, but were missing from _CONSUMER_PINS, so a release cut
+        # left their caret on the previous minor without tripping CI.
+        for framework in ("vue", "svelte"):
+            for block, dep in (
+                ("dependencies", "@chordsketch/wasm"),
+                ("peerDependencies", "@chordsketch/wasm-export"),
+            ):
+                with self.subTest(framework=framework, block=block), TemporaryDirectory() as td:
+                    root = Path(td)
+                    _build_repo(root)
+                    manifest = root / "packages" / framework / "package.json"
+                    data = json.loads(manifest.read_text(encoding="utf-8"))
+                    data[block][dep] = "^0.0.1"
+                    manifest.write_text(json.dumps(data), encoding="utf-8")
+                    rc = check_version_consistency.run(root, root / "nonexistent.toml")
+                    self.assertEqual(rc, 1)
 
     # -- packaging/<channel>/ drift detection (#1864) --------------------
 

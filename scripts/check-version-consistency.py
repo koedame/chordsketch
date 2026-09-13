@@ -31,8 +31,8 @@ Sources checked:
      the matching `.claude-plugin/marketplace.json` plugin entry
  10. Consumer caret-pin constraints — `^<major>.<minor>.0` for
      `@chordsketch/wasm` / `@chordsketch/wasm-export` referenced by
-     `packages/vscode-extension`, `packages/react`, and
-     `packages/ui-irealb-editor`. The constraint MUST cover the
+     `packages/vscode-extension`, `packages/react`, `packages/vue`,
+     `packages/svelte`, and `packages/ui-irealb-editor`. The constraint MUST cover the
      canonical workspace version; comparison runs at major.minor
      granularity (`_expected_for` strips the patch when the field
      label ends with `(^major.minor)`).
@@ -383,6 +383,10 @@ _CONSUMER_PINS: list[tuple[str, str, str]] = [
     ("packages/vscode-extension/package.json", "dependencies", "@chordsketch/wasm"),
     ("packages/react/package.json", "dependencies", "@chordsketch/wasm"),
     ("packages/react/package.json", "peerDependencies", "@chordsketch/wasm-export"),
+    ("packages/vue/package.json", "dependencies", "@chordsketch/wasm"),
+    ("packages/vue/package.json", "peerDependencies", "@chordsketch/wasm-export"),
+    ("packages/svelte/package.json", "dependencies", "@chordsketch/wasm"),
+    ("packages/svelte/package.json", "peerDependencies", "@chordsketch/wasm-export"),
     ("packages/ui-irealb-editor/package.json", "peerDependencies", "@chordsketch/wasm"),
 ]
 
