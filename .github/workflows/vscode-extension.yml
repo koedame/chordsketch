@@ -443,6 +443,17 @@ jobs:
           cache: "npm"
           cache-dependency-path: packages/vscode-extension/package-lock.json
 
+      - name: Install @chordsketch/react dependencies
+        # `npm ci` below installs the `file:../react` dep, which runs the
+        # React package's `prepare` build (npm runs it for `file:` deps
+        # even under --ignore-scripts). Without React's own devDeps that
+        # build dies with `tsup: not found`. Same step as the `build` job
+        # (#2527).
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+        working-directory: packages/react
+
       - name: Install dependencies (for vsce)
         run: npm ci
         working-directory: packages/vscode-extension
@@ -537,6 +548,17 @@ jobs:
           node-version: "22"
           cache: "npm"
           cache-dependency-path: packages/vscode-extension/package-lock.json
+
+      - name: Install @chordsketch/react dependencies
+        # `npm ci` below installs the `file:../react` dep, which runs the
+        # React package's `prepare` build (npm runs it for `file:` deps
+        # even under --ignore-scripts). Without React's own devDeps that
+        # build dies with `tsup: not found`. Same step as the `build` job
+        # (#2527).
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+        working-directory: packages/react
 
       - name: Install dependencies (for ovsx)
         run: npm ci
