@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-14
+
 ### Added
 
 - **`@chordsketch/chordpro-lite@0.1.0` — dependency-free ChordPro
@@ -109,6 +111,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built on it) that have no Svelte counterpart. `.svelte` fences are
   syntax-highlighted at build time like every other language in the
   corpus.
+
+- **`@chordsketch/react-ui@0.1.0`** — wasm-free React design-system
+  primitives: `Button`, `Card`, `Badge`/`Pill`, and form controls
+  (`Input`/`Textarea`/`Select`/`Checkbox`/`Radio`/`Switch`/`Segmented`/
+  `Field`), each a thin composition over the canonical class vocabulary
+  in `design-system/DESIGN.md` §6. The package carries no
+  `@chordsketch/wasm*` dependency (enforced by
+  `tests/no-wasm-dep.test.ts`), so an app shell that only needs the
+  visual language does not pull in the WebAssembly engine. It later
+  gained the chrome and layout vocabulary too — `.topnav`, `.sidenav`,
+  the `.pane`/`.pane-head`/`.pane-body` frame, and `.stack` with its
+  gap modifiers — generated from the same design-system reference
+  pages instead of being hand-copied by each consumer. (#2590, #2852)
+- **Claude Code plugin** — install `chordsketch@chordsketch` from the
+  repository's own marketplace (`/plugin marketplace add
+  koedame/chordsketch`) to drive the CLI from natural language
+  ("render this as a PDF", "put it a whole step up", "is this chart
+  broken?"). Ships a `SKILL.md` with the command for each task plus an
+  on-demand CLI flag reference and wasm AST reference. (#2847)
+- Tree-sitter ChordPro grammar: added `queries/folds.scm` /
+  `queries/indents.scm` (fold the `{start_of_X}`…`{end_of_X}` delegate
+  blocks; pin flat line constructs to column 0), satisfying
+  nvim-treesitter's highlight/indent/fold submission trio, and a
+  `queries/helix/highlights.scm` translating the existing highlight
+  queries into Helix's own capture vocabulary — `docs/editors.md` §
+  Helix now points at it instead of the nvim-flavoured file.
+  (#2791, #2811)
+- Windows Explorer preview handler for ChordPro files
+  (`.cho`/`.chopro`/`.crd`/`.chordpro`): an in-process COM server
+  (`chordsketch-preview-handler`) that Explorer loads into
+  `prevhost.exe`, rendering through `chordsketch-render-html` and
+  displaying it via a WebView2 (`wry`) control — the same preview as
+  the desktop app, `chordsketch --format html`, and the browser
+  playground. Ships inside the Windows desktop installer; both the
+  per-user `.exe` and the per-machine MSI register it declaratively,
+  with no administrator rights needed for the per-user install. (#2827)
+- Chord editor: explicit, unambiguous chord-extension notation
+  (ADR-0037). The flat suffix palette is replaced by orthogonal
+  triad-quality / seventh / tension controls that compose only
+  explicit suffixes (`G7(13)`, `G7(9,11,13)`, `Cadd9`, `C7(9)`) —
+  never bare stacks or seventh-less parens. Ambiguous notation already
+  in a chart is still parsed and rendered unchanged for ChordPro/Perl
+  compatibility, but every render surface (text/HTML/PDF/React) now
+  emits a validation warning pointing at the explicit spelling, via
+  the new tone-preserving `suggest_canonical_chord` API. (#2708)
+- ChordPro chord-editor footer: a five-line treble staff beneath the
+  "Editing chord" header shows the selected chord's constituent notes,
+  spelled diatonically from the chord's structure (e.g. `Ebm7` → `Eb
+  Gb Bb Db`; `Cdim7`'s seventh as a double-flat `B`) and drawn with
+  real Bravura SMuFL glyph outlines (clef, accidentals, noteheads)
+  rather than hand-rolled shapes. It reflects the song key in effect
+  at the selected chord's position — honouring mid-song modulation —
+  drawing that key's signature and rendering each notehead relative to
+  it (in-key tones drop their inline accidental, out-of-key tones gain
+  one). The staff paints in the primary ink rather than the muted
+  secondary tone it inherited by accident. Backed by the new
+  `chord_staff_notes` core export (wasm/napi/ffi) and the
+  `useChordStaff` hook / `<ChordStaff>` component.
+  (#2696, #2700, #2704, #2709)
+- Chord diagrams are now clickable when chord-audio is enabled:
+  clicking a diagram (standalone, inline, hover, or in the
+  end-of-song grid) sounds the chord, sharing the click/keyboard
+  activation and pulse affordance with the chord-name click-to-play.
+  It auditions the diagram's own voicing — the actual fretted pitches
+  for guitar/ukulele or the highlighted keys for the keyboard diagram
+  — rather than the generic name-derived voicing, via a new
+  `chord_diagram::diagram_pitches` core export (wasm/napi/ffi
+  bindings) and `useChordDiagramPitches`, falling back gracefully on
+  older wasm bundles. (#2687, #2737)
+- Every chord type in the ChordPro editor's chord-type palette now
+  renders a valid, playable diagram on every supported instrument
+  (guitar/ukulele/charango/keyboard). A new `voicing_synth` module
+  derives a fretboard or keyboard voicing from a chord's tones as the
+  final fallback after `{define}` directives and the curated voicing
+  tables, bounded to a hand a player can actually fret (guitar/
+  ukulele/charango voicings cap at four fingers, with an index-barre
+  credit, inside a four-fret window — dense extended/altered chords
+  drop droppable tones rather than synthesising an unfrettable shape).
+  LSP hover now shares the same coverage via the same lookup path.
+  (#2656, #2672)
+- Audible metronome for the `{tempo}` chip: clicking the whole chip
+  (not just an icon) toggles a Web Audio metronome at the directive's
+  BPM, with the animated glyph's pendulum swing, a BPM-synced
+  blinking beat dot, and the chip's frame colour all pulsing in sync
+  via a shared `metronomePeriodSeconds`/CSS helper so the animations
+  cannot drift apart; the beat dot later moved from an eased fade to
+  a crisp on/off snap. Degrades to a static glyph under SSR or
+  without Web Audio, and respects `prefers-reduced-motion`.
+  (#2612, #2613, #2623, #2643)
+- Chord diagrams now label the fret-number axis across their full
+  visible window — the absolute fret number pressed at each cell
+  (e.g. open position reads `1 2 3 4 5`, not `0 1 2 3…`), on both the
+  regular SVG/PDF diagrams and the compact inline/hover diagrams
+  (using a smaller dedicated font and wider gutter), replacing the
+  legacy single base-fret label. (#2605, #2617, #2619)
+- Structured slash-bass note picker — a `None` chip plus the seven
+  note letters and natural/sharp/flat accidentals — added to the
+  ChordPro chord-editor footer's Bass control and, matching it, to
+  the iReal Pro bar popover (both the React and vanilla
+  `@chordsketch/ui-irealb-editor` editors). The free-form `/ Bass`
+  field stays available as an escape hatch for a bass note outside
+  A–G. (#2717, #2826)
+- `@chordsketch/react`: a selected chord in the preview can now be
+  repositioned one lyric character at a time without a precise drag.
+  Clicking a chord reveals left/right nudge buttons; ArrowLeft/
+  ArrowRight move the focused chord, Enter/Space select it, and
+  Escape or an outside click clears the selection — the
+  touch-friendly complement to the existing drag-and-drop reposition.
+  (#2615)
+- Docs site code fences (`/chordsketch/docs/*`) are now
+  syntax-highlighted at build time via Shiki instead of shipping as
+  plain white-on-dark text, covering bash/json/kotlin/python/ruby/
+  rust/shell/swift/tsx/typescript plus ChordPro fences (via the
+  in-repo TextMate grammar also used by the VS Code, Zed and
+  JetBrains editor integrations). Adds zero runtime JS; an unknown
+  fence language degrades to plain escaped text. (#2571)
+- README now documents the MacPorts install path (`sudo port install
+  chordsketch`, accepted into `macports-ports` as
+  `textproc/chordsketch`) alongside Homebrew. (#2809)
 
 ### Fixed
 
@@ -244,6 +365,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Fedora-only: the RHEL family packages webkit2gtk 4.0 exclusively. See
   [ADR-0056](docs/adr/0056-desktop-bundles-target-ubuntu-2204.md).
 
+- Further WCAG 1.4.3 contrast fixes following the accessibility sweep
+  above, for sites Lighthouse could not measure (routes it doesn't
+  render) or that the sweep deliberately deferred: the toast
+  description text (now inherits the toast's foreground colour
+  instead of a fixed translucent white), the ChordPro source editor's
+  punctuation and comment syntax-highlighting tokens (moved from
+  `--cs-text-tertiary` to `--cs-text-secondary`, collapsing the source
+  pane's three-tone ramp to two), and the remaining small-text
+  tertiary sites that never render on a route Lighthouse crawls
+  (`@chordsketch/react`'s capo hint / attribution / meta labels /
+  comments / grid glyphs, the CLI's self-contained HTML document, and
+  the design-system card/form reference markup).
+  (#2838, #2841, #2843)
+- Fixed `docker build .` (the from-source Dockerfile) failing to
+  compile: its builder stage was pinned to `rust:1.85-bookworm`, below
+  the workspace's declared MSRV of 1.88. No workflow built this
+  Dockerfile — the published release images come from
+  `Dockerfile.release`, which copies a prebuilt binary — so the break
+  went undetected. (#2853)
+- **Fixed the README's Homebrew install commands failing on Homebrew
+  6.x** (`Error: Refusing to load formula koedame/tap/chordsketch from
+  untrusted tap koedame/tap`). `HOMEBREW_REQUIRE_TAP_TRUST` defaults to
+  true as of Homebrew 6.0.0, so a non-official tap must be explicitly
+  trusted before use; installing by fully-qualified name (`brew
+  install koedame/tap/chordsketch`) has Homebrew trust only that
+  formula/cask automatically, matching Homebrew's own recommendation
+  for a one-off install. (#2800)
+- Chord-diagram titles now typeset accidentals (`Bb` → `B♭`, `C#` →
+  `C♯`) like every other chord-name surface, instead of drawing the
+  raw ASCII source text. (#2727)
+- **Chord-editor footer polish.** Several small UX fixes to the
+  ChordPro chord-editor footer (`<ChordInspector>`, added earlier this
+  cycle): dropping editor focus when a chord selection is cleared from
+  the preview so the caret stops blinking after deselect; suppressing
+  the redundant focus ring on a keyboard-nudged selected chord (the
+  crimson "selected" badge already carries the cue); top-aligning the
+  footer's control clusters instead of bottom-aligning them; a clear
+  disabled style (muted fill/border/text, `title` tooltip) for the
+  7th/tension chips that cannot apply to the current chord; and
+  relabeling the move control from "lyric position" to "Move chord" /
+  "one step" so the visible copy matches its accessible name.
+  (#2663, #2664, #2711, #2713, #2716)
+- Removed a chord-audio hover background tint that outranked the
+  "just played" ringing-chord highlight on specificity, making a
+  just-clicked chord look like it had vanished (white text on a light
+  background) in chord-audio preview mode. (#2684)
+- `@chordsketch/react`'s chord editor now records each chord
+  bracket's real UTF-16 source column through the parser → AST → JSON
+  pipeline, fixing mis-computed chord columns (and therefore caret/
+  selection targeting) across lines containing escaped ChordPro
+  specials. (#2682)
+- Fixed a transposed multi-`{key}` song in the React preview pairing
+  only the song-primary key's "Original → Playing" chip — the wasm
+  parse surface serialized its per-directive key map as an ES `Map`,
+  which the JSX walker's plain bracket access reads as `undefined`.
+  Every JS-object-returning wasm entry point now serializes maps as
+  plain objects. (#2629)
+- Fixed the `{key}`/`{tempo}`/`{time}` inline metadata chips rendering
+  at slightly different heights — the `{tempo}` chip is a `<button>`
+  (border-box) while the others are `<span>` (content-box);
+  `box-sizing: border-box` is now pinned on the shared chip rule in
+  both the React and Rust HTML renderers. (#2625)
+- **Playground preview-only view fixes.** The preview pane is now
+  genuinely read-only when the editor is unmounted: chord
+  drag-and-drop repositioning is disabled (`onChordReposition` is
+  gated on split view), and the stale active-line highlight / caret
+  marker relayed from the (unmounted) editor no longer leaks into the
+  rendered sheet. (#2577, #2604)
+- **Fixed a browser-freezing infinite loop** when editing a
+  `{start_of_grid}` body line into certain bare-`:` states (e.g. `...
+  :|: G7 . | % . :`). The grid-row tokeniser's cell-text fallback
+  could advance zero characters and pin its cursor in place; both the
+  React JSX walker and the Rust `tokenize_grid_line` now detect a
+  no-progress scan and drop the orphan terminator instead of looping
+  forever. (#2557)
+- Fixed `{key: Dbm}` / `{key: Gbm}` / `{key: Cbm}` (reachable via
+  transpose, e.g. `{key: Am}` transposed +4) rendering an empty
+  key-signature staff with no accidentals and an `aria-label` that
+  still claimed a key — the flat-side enharmonic minor entries were
+  missing from the key-signature lookup table on both the Rust HTML
+  renderer and the React glyph sister. Backfilled using the
+  conventional borrowed-signature mapping (`Dbm` ↔ `C♯m`, `Gbm` ↔
+  `F♯m`, `Cbm` ↔ `Bm`). (#2543)
+- Fixed TypeScript resolution failures when consuming
+  `@chordsketch/react` from a workspace install (pnpm workspace / git
+  submodule / `workspace:` protocol): a fresh checkout no longer hits
+  `TS7016`/`TS2307` for the not-yet-built `@chordsketch/wasm` type
+  declarations, and the optional-peer `@chordsketch/wasm-export`
+  import in `use-pdf-export.ts` tolerates the peer resolving or not
+  resolving without a stale `@ts-expect-error` breaking the package's
+  DTS build. (#2541, #2542)
+
+### Security
+
+- Cleared two RUSTSEC advisories in the desktop dependency graph,
+  reached only through `tauri`'s `plist`/`cookie` dependencies
+  (`chordsketch-desktop` is the only affected published artefact):
+  `time` bumped to 0.3.55, clearing RUSTSEC-2026-0009 (stack-
+  exhaustion denial of service); `plist` bumped to 1.10.0, pulling in
+  `quick-xml` 0.41 and clearing RUSTSEC-2026-0194/0195 (quadratic
+  attribute scanning / unbounded namespace-declaration allocation).
+  Both are lockfile-only updates within existing semver ranges.
+  (#2822, #2849)
+
 ### Changed
 
 - Inline chord diagrams (`{diagrams: inline}`) are now centred on the lyric
@@ -302,6 +527,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retired — it existed only to make the removed event fire. See
   [ADR-0039](docs/adr/0039-release-fan-out-is-an-explicit-call-graph.md),
   which supersedes ADR-0009.
+
+- Modernized the elevation system (`--e-2`/`--e-3`/`--e-overlay` are
+  now two-layer key+ambient shadows with a negative spread, softening
+  their edges without changing prominence) and added a near-flat,
+  border-led `--e-panel` token for large floating panels, so the
+  app-shell sidebar no longer borrows the popover-weight `--e-2`
+  shadow. Applies across `@chordsketch/react-ui`, `@chordsketch/react`,
+  and `@chordsketch/ui-irealb-editor`'s stylesheets; `--e-1` is
+  unchanged. (#2745)
+- Further tightened the compact (inline/hover) chord-diagram grid
+  spacing (string pitch 9→7px, fret pitch 11→9px, shrinking the
+  bounding box to match) and the horizontal diagram's title margin (no
+  longer reusing the vertical layout's budget for an above-nut glyph
+  row it doesn't draw), removing the dead band between the chord name
+  and the fretboard in compact horizontal diagrams. (#2722, #2739)
+- **Breaking**: `{key}` notation is now lenient on input and canonical
+  (spelled-out) on output. `chordsketch_chordpro::parse_key` accepts
+  common human key spellings — `G minor` / `G m` / `Gminor` / `G min`,
+  `G major` / `Gmajor`, `Cmin`, the church modes — and normalises
+  them; every render surface (text/HTML/PDF/React) now prints the
+  canonical spelled-out form (`G major` / `G minor`, modal `C dorian`,
+  slash-bass `G major/B`) in place of the previous compact `G` / `Gm`.
+  A value that isn't a key (or a malformed one) renders verbatim with
+  a validation warning on every surface. Supersedes ADR-0033 via
+  ADR-0034 (lenient input) and ADR-0035 (spelled-out canonical form).
+  (#2667, #2675, #2679)
+- Reworked `{start_of_grid}` rendering (`chordpro-jsx`) so bar
+  boundaries, label/comment gutters, and barline glyphs line up
+  consistently across every row of a section regardless of how the
+  source mixes bar counts and barline kinds — sections now lay out as
+  a shared 5-column subgrid instead of each row computing its own
+  column widths independently. (#2547)
 
 ### Added
 
