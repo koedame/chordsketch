@@ -442,11 +442,12 @@ package = "ChordSketch"
 expected_version = "tag"
 required_secrets = ["COCOAPODS_TRUNK_TOKEN"]
 notes = """
-Published by post-release.yml update-cocoapods job. First publish was
-done manually on 2026-04-15. _check_cocoapods reads the trunk API's
-versions array, whose last entry is the most recent push. `pod trunk
-push` registers a version synchronously, so — as everywhere except
-Chocolatey — the verdict is binary (ADR-0049).
+Published by swift.yml update-cocoapods job, after that workflow's
+publish job uploads the XCFramework the podspec points at (ADR-0067).
+First publish was done manually on 2026-04-15. _check_cocoapods reads
+the trunk API's versions array, whose last entry is the most recent
+push. `pod trunk push` registers a version synchronously, so — as
+everywhere except Chocolatey — the verdict is binary (ADR-0049).
 """
 
 # ---------------------------------------------------------------- language bindings
