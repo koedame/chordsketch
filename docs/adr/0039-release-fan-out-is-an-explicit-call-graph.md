@@ -2,6 +2,16 @@
 
 - **Status**: Accepted
 - **Date**: 2026-08-30
+- **Amended by**: [ADR-0067](0067-swift-package-joins-the-release-call-graph.md)
+
+> Amended on 2026-09-14 by
+> [ADR-0067](0067-swift-package-joins-the-release-call-graph.md). The
+> known limitation below understated its cost: `update-cocoapods` also
+> consumes the XCFramework and did not wait for it at all, which is why
+> CocoaPods failed on v0.4.0, v0.5.0 and v0.6.0. `swift.yml` is now a
+> seventh callee of `release.yml`, and both XCFramework consumers moved
+> into it behind `needs: [publish]`. The limitation now covers
+> `python.yml`, `ruby.yml` and `kotlin.yml` only.
 
 ## Context
 

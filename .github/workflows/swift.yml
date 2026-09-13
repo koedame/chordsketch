@@ -3,7 +3,6 @@ name: Swift Package
 on:
   push:
     branches: [main]
-    tags: ["v*"]
     paths:
       - "crates/ffi/**"
       - "crates/chordpro/**"
@@ -21,6 +20,18 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/swift.yml"
+  # Reusable: called by release.yml's fan-out after the GitHub Release
+  # exists, so `publish` has a release to upload the xcframework to and
+  # the two package updates below can depend on that upload with
+  # `needs:` instead of polling for it (ADR-0039, ADR-0067). A non-empty
+  # `tag` is what puts this workflow in release mode; on `push` /
+  # `pull_request` it is empty and only build + test run.
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g., v0.1.0). Format-validated by the caller."
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -30,9 +41,9 @@ on:
 
 # Cancel stale PR runs when a new commit is pushed to the same PR so
 # that rebase / force-push does not leave two parallel Swift builds
-# competing for the macOS 5-job concurrency cap. `main` pushes, tag
-# pushes, and `workflow_dispatch` / `release` events are not grouped
-# with PRs and run to completion.
+# competing for the macOS 5-job concurrency cap. `main` pushes and
+# `workflow_dispatch` / `workflow_call` runs are not grouped with PRs
+# and run to completion.
 concurrency:
   group: swift-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -304,9 +315,9 @@ jobs:
     name: Publish XCFramework
     needs: [assemble-xcframework]
     runs-on: ubuntu-latest
-    if: |
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    # `inputs.tag`, not the event: under `workflow_call` the event is the
+    # caller's `push`, indistinguishable from a push to main (ADR-0039).
+    if: inputs.tag != ''
     permissions:
       contents: write
     steps:
@@ -324,20 +335,246 @@ jobs:
         # Format-validate the tag before `gh release upload` sees it. See #1797.
         uses: ./.github/actions/validate-release-tag
         with:
-          tag: ${{ inputs.tag || github.ref_name }}
+          tag: ${{ inputs.tag }}
 
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INPUT_TAG: ${{ inputs.tag }}
-          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
           gh release upload "$TAG" chordsketch-xcframework.zip \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
+
+  update-cocoapods:
+    name: Update CocoaPods podspec
+    # `pod trunk push` validates the podspec by downloading its
+    # `:http` source — the xcframework zip on the release — so it can
+    # only run once `publish` has uploaded it. When this job lived in
+    # post-release.yml it raced the upload and failed on the 404
+    # (v0.6.0; ADR-0067).
+    needs: [publish]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Determine version
+        id: version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate release tag
+        # Format-validate the resolved tag before downstream `gh` /
+        # shell / checksum-download steps interpolate it. See #1797.
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+
+      - name: Generate podspec
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sed -e "s/{{VERSION}}/${VERSION}/g" \
+            packaging/cocoapods/ChordSketch.podspec.template > ChordSketch.podspec
+          cat ChordSketch.podspec
+
+      - name: Push to CocoaPods trunk
+        env:
+          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+        run: |
+          if [ -z "$COCOAPODS_TRUNK_TOKEN" ]; then
+            echo "COCOAPODS_TRUNK_TOKEN secret is not set; skipping CocoaPods push."
+            echo "To enable automatic CocoaPods updates, add the trunk token"
+            echo "as a repository secret named COCOAPODS_TRUNK_TOKEN."
+            exit 0
+          fi
+
+          pod trunk push ChordSketch.podspec --allow-warnings
+
+  update-swift-package:
+    name: Update Swift Package.swift
+    # Downloads the asset `publish` uploads, so it follows `publish`
+    # rather than polling the release for it.
+    needs: [publish]
+    runs-on: ubuntu-latest
+    # Note: this job pushes a branch and opens a PR. The default
+    # GITHUB_TOKEN cannot trigger downstream workflows on pushes / PR
+    # creation, which would leave the auto-generated PR with no CI runs
+    # and block the human merger from getting a green check. Use
+    # CLAUDE_PAT (the same token that auto-rebase.yml and claude.yml use
+    # for the "git pushes by Claude trigger CI" path) so that the
+    # generated PR fires CI normally. The job-level GITHUB_TOKEN is
+    # therefore left at its read default — it is not used for the push.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          token: ${{ secrets.CLAUDE_PAT }}
+
+      - name: Determine version
+        id: version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate release tag
+        # Format-validate the resolved tag before downstream `gh` /
+        # shell / checksum-download steps interpolate it. See #1797.
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+
+      - name: Download xcframework
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern chordsketch-xcframework.zip
+
+      - name: Compute checksum
+        id: checksum
+        run: |
+          # Swift Package Manager uses SHA256 of the zip file (same as
+          # `swift package compute-checksum chordsketch-xcframework.zip`,
+          # which is just sha256sum of the zip).
+          SHA=$(sha256sum chordsketch-xcframework.zip | awk '{print $1}')
+          if [[ ! "$SHA" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "ERROR: invalid SHA256 computed: '${SHA}'" >&2
+            exit 1
+          fi
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Computed SHA256: ${SHA}"
+
+      - name: Update Package.swift
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          SHA256: ${{ steps.checksum.outputs.sha256 }}
+        run: |
+          # Rewrite the .binaryTarget block's url and checksum fields
+          # using paren-counting (matching the approach in the
+          # assemble-xcframework job above) so URLs/checksums containing literal `)` are
+          # handled correctly.
+          python3 << 'PYTHON'
+          import os
+          import re
+
+          tag = os.environ["TAG"]
+          sha256 = os.environ["SHA256"]
+          path = "packages/swift/Package.swift"
+
+          with open(path) as f:
+              content = f.read()
+
+          header_re = re.compile(
+              r'\.binaryTarget\(\s*name:\s*"chordsketchFFI"',
+              re.DOTALL,
+          )
+          match = header_re.search(content)
+          if not match:
+              raise SystemExit("Could not find .binaryTarget for chordsketchFFI")
+
+          start = match.start()
+          paren_pos = content.index('(', start)
+          depth = 1
+          i = paren_pos + 1
+          in_string = False
+          while i < len(content) and depth > 0:
+              ch = content[i]
+              if in_string:
+                  if ch == '\\' and i + 1 < len(content):
+                      i += 2
+                      continue
+                  if ch == '"':
+                      in_string = False
+              else:
+                  if ch == '"':
+                      in_string = True
+                  elif ch == '(':
+                      depth += 1
+                  elif ch == ')':
+                      depth -= 1
+              i += 1
+          if depth != 0:
+              raise SystemExit("Unbalanced parentheses in .binaryTarget block")
+          end = i
+
+          if header_re.search(content, end):
+              raise SystemExit("Found more than one .binaryTarget for chordsketchFFI")
+
+          replacement = (
+              '.binaryTarget(\n'
+              '            name: "chordsketchFFI",\n'
+              f'            url: "https://github.com/koedame/chordsketch/releases/download/{tag}/chordsketch-xcframework.zip",\n'
+              f'            checksum: "{sha256}"\n'
+              '        )'
+          )
+          new_content = content[:start] + replacement + content[end:]
+          with open(path, "w") as f:
+              f.write(new_content)
+          PYTHON
+          cat packages/swift/Package.swift
+
+      - name: Open PR
+        env:
+          GH_TOKEN: ${{ secrets.CLAUDE_PAT }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA256: ${{ steps.checksum.outputs.sha256 }}
+        run: |
+          BRANCH="swift-package-update-${VERSION}"
+
+          # Configure committer identity for github-actions[bot].
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # If the file is unchanged (e.g., re-run on same release), do nothing.
+          if git diff --quiet packages/swift/Package.swift; then
+            echo "Package.swift already up-to-date for ${TAG}; nothing to do."
+            exit 0
+          fi
+
+          # If the branch already exists on the remote (e.g., re-run),
+          # delete it so we can recreate it cleanly.
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git push origin --delete "$BRANCH"
+          fi
+
+          git checkout -b "$BRANCH"
+          git add packages/swift/Package.swift
+          git commit -m "Update Swift Package.swift to ${TAG}"
+          git push -u origin "$BRANCH"
+
+          BODY=$(cat <<BODY_EOF
+          ## What
+
+          Updates \`packages/swift/Package.swift\`'s \`.binaryTarget\` to point to
+          the \`${TAG}\` xcframework asset and pin its SHA256.
+
+          - **Tag**: \`${TAG}\`
+          - **Asset**: \`chordsketch-xcframework.zip\`
+          - **SHA256**: \`${SHA256}\`
+
+          ## Why
+
+          Auto-generated by \`swift.yml\`'s \`update-swift-package\` job
+          after its \`publish\` job uploaded the xcframework to the release.
+          Without this update, \`swift package add https://github.com/koedame/chordsketch.git\`
+          against the new tag would fail with an invalid checksum error.
+
+          See #1062.
+          BODY_EOF
+          )
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Update Swift Package.swift to ${TAG}" \
+            --body "$BODY"

@@ -277,7 +277,8 @@ at post-release verification rather than before the tag is cut.
 
 8. **Run the channel rollup.** Every CI-published channel has already
    run inside the release workflow (step 5) — Docker, VS Code / Open
-   VSX, napi tarballs, and the whole `post-release.yml` fan-out are
+   VSX, napi tarballs, the Swift Package (with its CocoaPods and
+   `Package.swift` updates), and the whole `post-release.yml` fan-out are
    `needs: [release]` jobs in that single run, per
    [ADR-0039](adr/0039-release-fan-out-is-an-explicit-call-graph.md).
    Nothing needs dispatching to make the release happen.
@@ -300,12 +301,17 @@ at post-release verification rather than before the tag is cut.
    gh workflow run vscode-extension.yml -f tag=v$V -R koedame/chordsketch
    gh workflow run post-release.yml     -f tag=v$V -R koedame/chordsketch
    gh workflow run napi.yml             -f tag=v$V -R koedame/chordsketch
+   gh workflow run swift.yml            -f tag=v$V -R koedame/chordsketch
    ```
    A `docker.yml` dispatch deliberately does **not** move the `:latest`
    tag unless you tick `promote-latest`, so re-running an older tag
    cannot regress it (#1064). The `napi.yml` dispatch only re-runs the
    build matrix and re-uploads platform tarballs to the Release; it does
-   not publish to npm (Step 7c does that).
+   not publish to npm (Step 7c does that). A `swift.yml` dispatch rebuilds
+   the XCFramework and **replaces** the release asset, which changes its
+   SHA256; to retry only a failed CocoaPods or `Package.swift` update, re-run
+   that job inside the release run instead
+   (`gh run rerun <run-id> --failed -R koedame/chordsketch`).
 
 9. **Verify each channel.** The release run from step 5 covers every
    CI-published channel, so check that first:
@@ -313,7 +319,8 @@ at post-release verification rather than before the tag is cut.
    gh run list -R koedame/chordsketch --workflow release.yml --limit 5
    ```
    Check that post-release.yml updates Homebrew, Scoop, AUR, Snap,
-   Chocolatey, CocoaPods, Swift, and Flathub. Docker pushes to both
+   Chocolatey, and Flathub, and that the Swift Package jobs push to
+   CocoaPods and open the `Package.swift` PR. Docker pushes to both
    GHCR and Docker Hub. VS Code publishes **8 VSIXes per release**
    (1 universal + 7 platform-specific: `linux-x64`, `linux-arm64`,
    `darwin-x64`, `darwin-arm64`, `win32-x64`, `alpine-x64`,
@@ -394,7 +401,7 @@ When adding a new channel, update both.
 | PyPI | `chordsketch` | `python.yml` on tag push | none (OIDC trusted publisher) | `pypi` rollup entry |
 | RubyGems | `chordsketch` | `ruby.yml` on tag push | none (OIDC trusted publisher) | `rubygems` rollup entry |
 | Maven Central | `me.koeda:chordsketch` | `kotlin.yml` on tag push | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, `SIGNING_PASSWORD` | `maven-central` rollup entry |
-| CocoaPods | `ChordSketch` | `post-release.yml`, called by `release.yml` on tag push | `COCOAPODS_TRUNK_TOKEN` | `cocoapods` rollup entry |
+| CocoaPods | `ChordSketch` | `swift.yml` (after its XCFramework `publish`), called by `release.yml` on tag push | `COCOAPODS_TRUNK_TOKEN` | `cocoapods` rollup entry |
 | JetBrains Marketplace | `me.koeda.chordsketch` | manual `./gradlew publishPlugin` | `JETBRAINS_MARKETPLACE_TOKEN` | not yet automated |
 | from source | `git clone` + `cargo install --path crates/cli` | always available | none | `source-build` job |
 | Library Usage (Rust) | crates.io snippet from README | implicit via crates.io | none | `library-smoke` job |
@@ -403,13 +410,13 @@ When adding a new channel, update both.
 
 After the release workflow completes and the GitHub Release is published:
 
-1. **Automatic updates** — the `post-release.yml` workflow triggers on
-   release publication and automatically:
+1. **Automatic updates** — the `post-release.yml` workflow is called by
+   `release.yml` once the Release exists and automatically:
    - Updates the Homebrew formula in `koedame/homebrew-tap`
    - Updates the Scoop manifest in `koedame/scoop-bucket`
 
-2. **Docker images** — the `docker.yml` workflow triggers on release
-   publication and builds a multi-arch Docker image (linux/amd64,
+2. **Docker images** — the `docker.yml` workflow is called by
+   `release.yml` once the Release exists and builds a multi-arch Docker image (linux/amd64,
    linux/arm64) pushed to **both** `ghcr.io/koedame/chordsketch` AND
    `docker.io/koedame/chordsketch`. The Docker Hub push depends on the
    `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` secrets being present.
@@ -1174,8 +1181,8 @@ its failure detail ([ADR-0049](adr/0049-chocolatey-rollup-reports-pending-as-its
 | `❌ FAIL` | the repository does not have it | run the dispatch above once the queue drains |
 
 This re-runs only the pack-and-push steps and does not re-trigger the
-other 7 post-release jobs (AUR, Flathub, Snap, CocoaPods, Homebrew,
-Scoop, Swift), avoiding duplicate side effects.
+other 5 post-release jobs (AUR, Flathub, Snap, Homebrew, Scoop), avoiding
+duplicate side effects.
 
 The workflow is safe to dispatch repeatedly. It checks the Chocolatey
 v2 feed before pushing and exits successfully when the version is
@@ -1243,7 +1250,9 @@ needed for a file-processing CLI).
 
 ### CocoaPods
 
-Set up on 2026-04-15. Automated via `post-release.yml` `update-cocoapods`.
+Set up on 2026-04-15. Automated via `swift.yml` `update-cocoapods`, which
+runs after that workflow's `publish` job has uploaded the XCFramework the
+podspec downloads during `pod trunk push` validation.
 
 The pod ships a prebuilt XCFramework (same artifact as the Swift package).
 
