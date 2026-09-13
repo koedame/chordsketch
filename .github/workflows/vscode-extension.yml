@@ -443,7 +443,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: packages/vscode-extension/package-lock.json
 
-      - name: Install @chordsketch/react dependencies
+      - name: Install and build @chordsketch/react
         # `npm ci` below installs the `file:../react` dep, which runs the
         # React package's `prepare` build (npm runs it for `file:` deps
         # even under --ignore-scripts). Without React's own devDeps that
@@ -549,7 +549,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: packages/vscode-extension/package-lock.json
 
-      - name: Install @chordsketch/react dependencies
+      - name: Install and build @chordsketch/react
         # `npm ci` below installs the `file:../react` dep, which runs the
         # React package's `prepare` build (npm runs it for `file:` deps
         # even under --ignore-scripts). Without React's own devDeps that
