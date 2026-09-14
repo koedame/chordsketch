@@ -20,7 +20,7 @@ node_modules/**
 # Git and editor files
 .gitignore
 .editorconfig
-*.map
+**/*.map
 
 # Development artifacts
 *.vsix

@@ -29,6 +29,6 @@ for platform in linux-x86-64 linux-aarch64 darwin-aarch64 darwin-x86-64 win32-x8
     exit 1
   fi
   mkdir -p "$RESOURCES/$platform"
-  mkdir -p "$RESOURCES/jni-$platform"; cp "$src"/* "$RESOURCES/jni-$platform/"
+  cp "$src"/* "$RESOURCES/$platform/"
 done
 find "$RESOURCES" -type f | sort
