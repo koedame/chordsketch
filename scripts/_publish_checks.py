@@ -159,9 +159,14 @@ def _matches(path: str, pattern: str) -> bool:
     return any(fnmatch.fnmatch("/".join(parts[i:]), pattern) for i in range(len(parts)))
 
 
+# Terminal colour codes. CI sets `CARGO_TERM_COLOR=always`, which wraps
+# cargo's `warning` in them; left in, no warning line would match.
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
 def tool_warnings(label: str, output: str, *, prefix: re.Pattern[str], expected: tuple[re.Pattern[str], ...] = ()) -> list[str]:
     """Every warning line a publish tool printed, except the expected ones."""
-    lines = [line.rstrip() for line in output.splitlines()]
+    lines = [ANSI_ESCAPE.sub("", line).rstrip() for line in output.splitlines()]
     unexpected = [line for line in lines if prefix.match(line) and not any(p.match(line) for p in expected)]
     return [f"{label} warned: {line}" for line in unexpected]
 

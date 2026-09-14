@@ -176,6 +176,13 @@ class ToolWarningTest(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("is yanked", problems[0])
 
+    def test_when_cargo_colours_its_output_a_yanked_lock_entry_is_still_a_problem(self) -> None:
+        # CI sets CARGO_TERM_COLOR=always; the first run of this check let the
+        # yanked warning through because the colour codes hid the prefix.
+        output = "\x1b[1m\x1b[33mwarning\x1b[0m: package `fastrand v2.4.0` in Cargo.lock is yanked in registry `crates-io`\n"
+        problems = checks.tool_warnings("cargo", output, prefix=checks.CARGO_WARNING, expected=checks.EXPECTED_CARGO_WARNINGS)
+        self.assertEqual(problems, ["cargo warned: warning: package `fastrand v2.4.0` in Cargo.lock is yanked in registry `crates-io`"])
+
     def test_when_cargo_dry_runs_an_already_published_version_its_two_notices_are_not_problems(self) -> None:
         output = (
             "warning: crate chordsketch-chordpro@0.6.0 already exists on crates.io index\n"
