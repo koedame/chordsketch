@@ -587,33 +587,77 @@ class VerifyChannelTests(unittest.TestCase):
         """Regression test for #2418: Docker Hub tags are bare semver
         (`0.2.0`, `0.2`, `latest`) — `docker.yml` uses metadata-action
         with `pattern={{version}}` which strips the `v` prefix from the
-        git tag. The probe URL must therefore target `tags/0.2.0/`,
-        and the API's `name` field comes back as `0.2.0` (without `v`).
+        git tag. The probe must therefore target `manifests/0.2.0`.
         Earlier the probe targeted `tags/v0.2.0/` and 404'd on every
         release."""
         channel = _fake_channel(kind="docker-hub", package="koedame/chordsketch")
         with patch(
-            "check_release_channels._http_get_json",
-            return_value={"name": "0.2.0"},
-        ) as mock_http:
+            "check_release_channels._docker_hub_pull_token",
+            return_value="fake-bearer-token",
+        ) as mock_token, patch(
+            "check_release_channels._http_head_ok",
+            return_value=True,
+        ) as mock_head:
             result = check_release_channels.verify_channel(channel, "v0.2.0", force_stale=False)
         self.assertTrue(result.ok, f"expected OK, got {result}")
         self.assertEqual(result.observed, "0.2.0")
         self.assertEqual(result.expected, "0.2.0")
+        mock_token.assert_called_once_with("koedame/chordsketch")
+        called = mock_head.call_args
         self.assertEqual(
-            mock_http.call_args.args[0],
-            "https://hub.docker.com/v2/repositories/koedame/chordsketch/tags/0.2.0/",
+            called.args[0],
+            "https://registry-1.docker.io/v2/koedame/chordsketch/manifests/0.2.0",
+        )
+        self.assertEqual(called.kwargs.get("bearer_token"), "fake-bearer-token")
+        self.assertIn(
+            "application/vnd.oci.image.index.v1+json",
+            called.kwargs.get("accept", ""),
         )
 
-    def test_docker_hub_mismatch(self) -> None:
+    def test_docker_hub_reads_the_registry_not_the_hub_web_api(self) -> None:
+        """After the v0.6.0 copy the registry served `0.6.0` while the
+        hub.docker.com web API still answered 404 for it over an hour
+        later. The check must not consult the web API at all, or it
+        holds back the local publishes for an image users can pull."""
         channel = _fake_channel(kind="docker-hub", package="koedame/chordsketch")
         with patch(
+            "check_release_channels._docker_hub_pull_token",
+            return_value="fake-bearer-token",
+        ), patch(
+            "check_release_channels._http_head_ok",
+            return_value=True,
+        ), patch(
             "check_release_channels._http_get_json",
-            return_value={"name": "0.1.9"},
+            side_effect=AssertionError("the Hub web API must not be queried"),
+        ):
+            result = check_release_channels.verify_channel(channel, "v0.6.0", force_stale=False)
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+
+    def test_docker_hub_missing_tag(self) -> None:
+        channel = _fake_channel(kind="docker-hub", package="koedame/chordsketch")
+        with patch(
+            "check_release_channels._docker_hub_pull_token",
+            return_value="fake-bearer-token",
+        ), patch(
+            "check_release_channels._http_head_ok",
+            return_value=False,
         ):
             result = check_release_channels.verify_channel(channel, "v0.2.0", force_stale=False)
         self.assertFalse(result.ok)
-        self.assertIn("tag mismatch", result.detail)
+        self.assertIn("does not serve the tag", result.detail)
+
+    def test_docker_hub_token_unavailable_reports_distinct_error(self) -> None:
+        channel = _fake_channel(kind="docker-hub", package="koedame/chordsketch")
+        with patch(
+            "check_release_channels._docker_hub_pull_token",
+            return_value=None,
+        ), patch(
+            "check_release_channels._http_head_ok",
+        ) as mock_head:
+            result = check_release_channels.verify_channel(channel, "v0.2.0", force_stale=False)
+        self.assertFalse(result.ok)
+        self.assertIn("pull token unavailable", result.detail)
+        mock_head.assert_not_called()
 
     def test_vscode_marketplace_match(self) -> None:
         channel = _fake_channel(

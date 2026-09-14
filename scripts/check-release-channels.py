@@ -156,6 +156,16 @@ def _http_head_ok(
         return False
 
 
+# Every manifest media type `docker.yml` can produce. Both registries
+# answer 404 to a manifest request that negotiates none of them.
+MANIFEST_ACCEPT = ",".join([
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+])
+
+
 def _ghcr_pull_token(repo: str) -> str | None:
     """Fetch an anonymous GHCR pull token for `<repo>` (e.g. `koedame/chordsketch`).
 
@@ -169,10 +179,25 @@ def _ghcr_pull_token(repo: str) -> str | None:
     package is private or the registry is misbehaving — both surface as
     `_check_ghcr` failures, which is the right outcome).
     """
-    url = (
-        "https://ghcr.io/token?service=ghcr.io"
+    return _registry_pull_token(
+        f"https://ghcr.io/token?service=ghcr.io&scope=repository:{repo}:pull"
+    )
+
+
+def _docker_hub_pull_token(repo: str) -> str | None:
+    """Fetch an anonymous Docker Hub registry pull token for `<repo>`.
+
+    Same handshake as GHCR, served by `auth.docker.io` for the
+    `registry.docker.io` service. `None` means the repository is private
+    or the token endpoint is unreachable.
+    """
+    return _registry_pull_token(
+        "https://auth.docker.io/token?service=registry.docker.io"
         f"&scope=repository:{repo}:pull"
     )
+
+
+def _registry_pull_token(url: str) -> str | None:
     try:
         payload = _http_get_json(url)
     except Exception:  # noqa: BLE001
@@ -326,13 +351,7 @@ def _check_ghcr(channel: Channel, version: str) -> CheckResult:
     # are listed because `docker.yml` builds multi-arch images that
     # surface as either an OCI image-index or a Docker manifest-list,
     # depending on the registry's content negotiation.
-    manifest_accept = ",".join([
-        "application/vnd.oci.image.index.v1+json",
-        "application/vnd.oci.image.manifest.v1+json",
-        "application/vnd.docker.distribution.manifest.list.v2+json",
-        "application/vnd.docker.distribution.manifest.v2+json",
-    ])
-    if _http_head_ok(url, bearer_token=token, accept=manifest_accept):
+    if _http_head_ok(url, bearer_token=token, accept=MANIFEST_ACCEPT):
         return CheckResult(
             channel_id=channel.id,
             ok=True,
@@ -349,22 +368,30 @@ def _check_docker_hub(channel: Channel, version: str) -> CheckResult:
     # `docker/metadata-action` with `pattern={{version}}` which
     # strips the `v` from the git tag. The previous probe targeted
     # `tags/v<version>/` and 404'd on every release (#2418).
-    url = f"https://hub.docker.com/v2/repositories/{channel.package}/tags/{version}/"
-    try:
-        payload = _http_get_json(url)
-    except Exception as exc:  # noqa: BLE001
-        return _error(channel, version, f"Docker Hub API error: {exc}")
-    name = str(payload.get("name") or "<missing>")
-    observed = name
-    if name == version:
+    #
+    # The probe asks the registry — what `docker pull` reads — rather
+    # than the hub.docker.com web API. The web API is an index the Hub
+    # rebuilds after a push, and it can lag: after the v0.6.0 copy the
+    # registry served `0.6.0` and a new `latest` while the web API still
+    # answered 404 for `0.6.0` and the v0.5.0 digest for `latest` over an
+    # hour later. A check that reads the index would hold back the
+    # crates.io and npm publishes for an image users can already pull.
+    token = _docker_hub_pull_token(channel.package)
+    if token is None:
+        return _error(
+            channel, version,
+            "Docker Hub pull token unavailable (repository private or token endpoint unreachable)",
+        )
+    url = f"https://registry-1.docker.io/v2/{channel.package}/manifests/{version}"
+    if _http_head_ok(url, bearer_token=token, accept=MANIFEST_ACCEPT):
         return CheckResult(
             channel_id=channel.id,
             ok=True,
-            observed=observed,
+            observed=version,
             expected=version,
-            detail="Docker Hub tag present",
+            detail="Docker Hub registry serves the tag",
         )
-    return _error(channel, version, f"Docker Hub tag mismatch: got {observed}")
+    return _error(channel, version, "Docker Hub registry does not serve the tag")
 
 
 def _check_vscode_marketplace(channel: Channel, version: str) -> CheckResult:
