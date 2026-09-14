@@ -337,85 +337,20 @@ jobs:
           pattern: napi-*
           merge-multiple: false
 
-      - name: Stage each platform package with its prebuilt binary
-        # Each `crates/napi/npm/<triple>/package.json` declares a `main` and
-        # `files` entry referencing a specific `.node` filename. Copy the
-        # downloaded artifact into the staging directory under that name so
-        # the local `npm publish` picks it up via the `files` allowlist.
-        # Fail loud if a target's artifact is missing, rather than uploading
-        # an empty package.
-        working-directory: crates/napi
-        run: |
-          set -euo pipefail
-          declare -A TARGET_TO_TRIPLE=(
-            [x86_64-unknown-linux-gnu]=linux-x64-gnu
-            [aarch64-unknown-linux-gnu]=linux-arm64-gnu
-            [x86_64-apple-darwin]=darwin-x64
-            [aarch64-apple-darwin]=darwin-arm64
-            [x86_64-pc-windows-msvc]=win32-x64-msvc
-          )
-          for target in "${!TARGET_TO_TRIPLE[@]}"; do
-            triple="${TARGET_TO_TRIPLE[$target]}"
-            src_dir="../../napi-artifacts/napi-${target}"
-            dst_dir="npm/${triple}"
-            if [ ! -d "$src_dir" ]; then
-              echo "::error::artifact directory $src_dir is missing; build matrix failed for $target"
-              exit 1
-            fi
-            node_file=$(ls "$src_dir"/*.node 2>/dev/null | head -n1 || true)
-            if [ -z "$node_file" ]; then
-              echo "::error::no .node file found in $src_dir"
-              exit 1
-            fi
-            cp "$node_file" "$dst_dir/chordsketch-napi.${triple}.node"
-            # Verify the file is non-empty — a zero-byte .node uploads
-            # without error but fails at require() time on the user.
-            if [ ! -s "$dst_dir/chordsketch-napi.${triple}.node" ]; then
-              echo "::error::$dst_dir/chordsketch-napi.${triple}.node is empty"
-              exit 1
-            fi
-            ls -la "$dst_dir/"
-          done
-
-      - name: Assert committed version matches the release tag
-        # crates/napi/package.json and each crates/napi/npm/<triple>/package.json
-        # all have a committed `version` field that must match the release tag
-        # exactly. The version-consistency check enforces this on every PR, but
-        # re-verify here to catch any out-of-band edit that slipped through
-        # (e.g., a hotfix tag cut from an older commit).
-        env:
-          EXPECTED: ${{ steps.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          check() {
-            local path="$1"
-            local actual
-            actual=$(node -p "require('./$path/package.json').version")
-            if [ "$actual" != "$EXPECTED" ]; then
-              echo "::error::$path/package.json version=$actual but release tag is $EXPECTED"
-              exit 1
-            fi
-          }
-          check crates/napi
-          for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
-            check "crates/napi/npm/$triple"
-          done
-
-      - name: Pack each platform tarball with npm pack
-        # `npm pack` produces a tarball with the exact filename and
-        # contents `npm publish` would upload, so the maintainer's local
-        # publish step is byte-equivalent to a CI publish would be.
+      - name: Stage and pack every package with its prebuilt binary
+        # The staging lives in a script so `publishable.yml` runs exactly
+        # these steps on every pull request and checks the tarballs they
+        # produce; a regression in the staging is caught there, not here
+        # on release day. The script fails on a missing or empty `.node`
+        # and on a committed version that is not the release version.
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          mkdir -p release-staging
-          for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
-            pkg_dir="crates/napi/npm/${triple}"
-            (cd "$pkg_dir" && npm pack --pack-destination=../../../../release-staging)
-          done
-          (cd crates/napi && npm pack --pack-destination=../../release-staging)
-          ls -la release-staging
+        run: crates/napi/scripts/stage-release-tarballs.sh napi-artifacts "$VERSION" release-staging
+
+      - name: Check the tarballs are publishable
+        # The same check `publishable.yml` runs on every pull request, now
+        # against the real release binaries.
+        run: python3 scripts/check-publishable.py napi --tarballs release-staging
 
       - name: Upload tarballs to GitHub Release
         env:
