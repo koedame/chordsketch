@@ -8,7 +8,8 @@ part a refactor could quietly break without any registry noticing:
      is not out, refuses a release with nothing left to do, and otherwise
      lists exactly what is pending.
   2. The crates.io token probe separates a dead token from a live scoped
-     one, since both answer 403.
+     one, since both answer 403, and the token lookup reports where the
+     token came from so a rejection says which one to replace.
   3. Every npm channel in the real manifest has a publish recipe, so adding
      a package to `ci/release-channels.toml` cannot leave it out of a
      release unnoticed.
@@ -27,6 +28,7 @@ import importlib.util
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -152,6 +154,7 @@ class CratesTokenProbeTest(unittest.TestCase):
         ok, message = release.interpret_crates_token_probe(403, _errors("authentication failed"))
         self.assertFalse(ok)
         self.assertIn("authentication failed", message)
+        self.assertIn("https://crates.io/settings/tokens", message)
 
     def test_token_of_an_account_that_is_not_an_owner_fails(self) -> None:
         ok, message = release.interpret_crates_token_probe(400, _errors("You are not an owner of this crate"))
@@ -162,6 +165,35 @@ class CratesTokenProbeTest(unittest.TestCase):
         ok, message = release.interpret_crates_token_probe(503, "Service Unavailable")
         self.assertFalse(ok)
         self.assertIn("HTTP 503: Service Unavailable", message)
+
+
+class CratesTokenSourceTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.home = tempfile.TemporaryDirectory()
+        self.addCleanup(self.home.cleanup)
+        patcher = mock.patch.dict(os.environ, {"CARGO_HOME": self.home.name})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("CARGO_REGISTRY_TOKEN", None)
+
+    def write_credentials(self, token: str) -> Path:
+        path = Path(self.home.name) / "credentials.toml"
+        path.write_text(f'[registry]\ntoken = "{token}"\n')
+        return path
+
+    def test_environment_variable_wins_over_the_credentials_file_and_is_named_as_the_source(self) -> None:
+        self.write_credentials("from-file")
+        os.environ["CARGO_REGISTRY_TOKEN"] = "from-env"
+        token, source = release.crates_token()
+        self.assertEqual(token, "from-env")
+        self.assertIn("CARGO_REGISTRY_TOKEN", source)
+
+    def test_credentials_file_is_named_by_its_path(self) -> None:
+        path = self.write_credentials("from-file")
+        self.assertEqual(release.crates_token(), ("from-file", str(path)))
+
+    def test_no_token_anywhere_returns_none(self) -> None:
+        self.assertIsNone(release.crates_token())
 
 
 class ManifestCoverageTest(unittest.TestCase):
