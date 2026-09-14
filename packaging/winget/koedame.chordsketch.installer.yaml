@@ -3,7 +3,7 @@ PackageVersion: 0.6.0
 InstallerType: zip
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/koedame/chordsketch/releases/download/v0.6.0/chordsketch-v0.6.0-x86_64-pc-windows-msvc.zip
+    InstallerUrl: https://github.com/koedame/chordsketch/releases/download/v0.5.0/chordsketch-v0.5.0-x86_64-pc-windows-msvc.zip
     # SHA256 of the published v0.6.0 zip. Recompute on each release:
     # Run: curl -L <InstallerUrl> | sha256sum  (uppercase the hex output)
     InstallerSha256: 33D2F37EEC97C2BA0C3F87F0DBDA9CB8B467596614E35DCD9B217EFF7067CFF1

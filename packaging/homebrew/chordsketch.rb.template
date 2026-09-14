@@ -4,6 +4,7 @@
 class Chordsketch < Formula
   desc "ChordPro file format parser and renderer"
   homepage "https://github.com/koedame/chordsketch"
+  version "{{VERSION}}"
   license "MIT"
 
   on_macos do
