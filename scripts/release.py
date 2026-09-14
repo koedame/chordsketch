@@ -409,6 +409,16 @@ class Findings:
         return ok
 
 
+def has_dry_runs_to_skip(plan: Plan) -> bool:
+    """Whether the "dry runs were skipped" note is worth printing.
+
+    With no crate or npm package pending, there was never going to be a
+    dry run to skip; saying otherwise would be a false note next to a
+    failure that has nothing to do with crates.io or npm.
+    """
+    return bool(plan.pending_crates or plan.pending_npm)
+
+
 def preflight(state: Survey, plan: Plan, login: str) -> Findings:
     findings = Findings()
     version = state.version
@@ -479,7 +489,8 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
     # other check is cheap, so a run that is going to fail anyway reports
     # that first instead of after the builds.
     if findings.problems:
-        findings.notes.append("the crates.io and npm dry runs were skipped; they run once the preflight problems are fixed")
+        if has_dry_runs_to_skip(plan):
+            findings.notes.append("the crates.io and npm dry runs were skipped; they run once the preflight problems are fixed")
     else:
         if plan.pending_crates:
             dry_run_crates(plan, findings)

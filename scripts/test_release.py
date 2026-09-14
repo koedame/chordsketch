@@ -177,6 +177,20 @@ class NpmPublishOrderTest(unittest.TestCase):
         self.assertFalse(release.is_napi("@chordsketch/nodejs-helpers"))
 
 
+class HasDryRunsToSkipTest(unittest.TestCase):
+    def test_pending_crate_is_worth_a_skip_note(self) -> None:
+        plan = release.decide("1.2.0", BOTH_TAGS, {"docker-hub": True}, {"chordsketch": False}, {})
+        self.assertTrue(release.has_dry_runs_to_skip(plan))
+
+    def test_pending_npm_package_is_worth_a_skip_note(self) -> None:
+        plan = release.decide("1.2.0", BOTH_TAGS, {"docker-hub": True}, {}, {"@chordsketch/wasm": False})
+        self.assertTrue(release.has_dry_runs_to_skip(plan))
+
+    def test_only_a_pending_ci_channel_is_not_worth_a_skip_note(self) -> None:
+        plan = release.decide("1.2.0", BOTH_TAGS, {"docker-hub": False}, {"chordsketch": True}, {"@chordsketch/wasm": True})
+        self.assertFalse(release.has_dry_runs_to_skip(plan))
+
+
 class ConfirmReleaseTest(unittest.TestCase):
     def test_matching_answer_confirms(self) -> None:
         with mock.patch("builtins.input", return_value="1.2.0"):
