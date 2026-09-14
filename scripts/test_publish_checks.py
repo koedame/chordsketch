@@ -153,10 +153,13 @@ class ContentTest(unittest.TestCase):
         files = [packed("assets/font.otf", size=6 * MIB)]
         self.assertEqual(checks.content_problems("pkg", files, ("assets/font.otf",)), [])
 
-    def test_when_a_declared_large_file_is_no_longer_large_the_declaration_is_reported_as_stale(self) -> None:
-        problems = checks.content_problems("pkg", [packed("assets/font.otf", size=10)], ("assets/font.otf",))
+    def test_when_a_declared_large_file_is_no_longer_packed_the_declaration_is_reported_as_stale(self) -> None:
+        problems = checks.content_problems("pkg", [packed("assets/other.otf", size=10)], ("assets/font.otf",))
         self.assertEqual(len(problems), 1)
         self.assertIn("stale", problems[0])
+
+    def test_when_a_declared_file_shrinks_below_one_mib_it_still_passes(self) -> None:
+        self.assertEqual(checks.content_problems("pkg", [packed("dist/index.js.map", size=MIB - 1)], ("dist/index.js.map",)), [])
 
     def test_when_a_file_only_mentions_a_forbidden_name_it_passes(self) -> None:
         files = [packed("src/env.rs", b"// reads .env files"), packed("src/key.rs", b"fn key() {}")]

@@ -142,11 +142,13 @@ def content_problems(label: str, files: list[PackedFile], large_files: tuple[str
                 f"{LARGE_FILE_BYTES // MIB} MiB that is not declared as one of the package's large files in "
                 f"scripts/_publish_checks.py; exclude it from the package or declare it"
             )
+    # A declaration only has to match a packed file, not stay over the
+    # threshold: a source map hovering around 1 MiB must not flip the check.
     for glob in large_files:
-        if not any(fnmatch.fnmatch(packed.path, glob) and packed.size > LARGE_FILE_BYTES for packed in files):
+        if not any(fnmatch.fnmatch(packed.path, glob) for packed in files):
             problems.append(
                 f"{label} declares `{glob}` as a large file in scripts/_publish_checks.py, but the package has no "
-                f"file over {LARGE_FILE_BYTES // MIB} MiB matching it; remove the stale declaration"
+                f"file matching it; remove the stale declaration"
             )
     return problems
 
@@ -394,7 +396,8 @@ NPM_PACKAGES: dict[str, NpmPackage] = {
         # no Node entry point to load.
         NpmPackage("tree-sitter-chordpro", "packages/tree-sitter-chordpro"),
         NpmPackage("@chordsketch/react-ui", "packages/react-ui", build=TSUP_BUILD),
-        NpmPackage("@chordsketch/react", "packages/react", build=TSUP_BUILD),
+        # The source maps of the editor bundle, which inlines CodeMirror.
+        NpmPackage("@chordsketch/react", "packages/react", build=TSUP_BUILD, large_files=("dist/index.js.map", "dist/index.cjs.map")),
         NpmPackage("@chordsketch/vue", "packages/vue", build=TSUP_BUILD),
         NpmPackage("@chordsketch/svelte", "packages/svelte", build=TSUP_BUILD),
         NpmPackage(

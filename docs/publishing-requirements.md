@@ -51,7 +51,7 @@ These apply to every artifact any channel receives.
 |---|---|---|
 | No file matching `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `.npmrc`, `.pypirc`, `.git/`, `node_modules/`, `target/` | Credentials and build debris must never be published; nothing can be taken back from a registry | `content_problems` |
 | No file containing a private key or a GitHub, npm, crates.io, PyPI, RubyGems, AWS or Slack token | Same | `content_problems` |
-| No file over 1 MiB unless it is declared in the package's `large_files` | The 0.6.0 render-pdf crate carried test PDFs; an undeclared large file fails on the pull request that adds it, before any registry limit is reached. A declaration that no longer matches a large file also fails. | `content_problems` |
+| No file over 1 MiB unless it is declared in the package's `large_files` | The 0.6.0 render-pdf crate carried test PDFs; an undeclared large file fails on the pull request that adds it, before any registry limit is reached. A declaration that matches no packed file also fails. | `content_problems` |
 | The publish dry run prints no unexpected warning | See above | `tool_warnings` |
 
 ## crates.io
