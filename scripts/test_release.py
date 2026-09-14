@@ -215,7 +215,6 @@ class NpmPublishOrderTest(unittest.TestCase):
         self.assertEqual(release.npm_publish_order(("@chordsketch/wasm-export",)), ["@chordsketch/wasm-export"])
 
 
-
 class HasDryRunsToSkipTest(unittest.TestCase):
     def test_pending_crate_is_worth_a_skip_note(self) -> None:
         plan = release.decide("1.2.0", BOTH_TAGS, {"docker-hub": True}, {"chordsketch": False}, {})
