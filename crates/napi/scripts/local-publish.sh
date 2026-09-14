@@ -79,14 +79,42 @@ fi
 
 echo
 echo "==> Verification"
-for pkg in \
-  @chordsketch/node \
-  @chordsketch/node-linux-x64-gnu \
-  @chordsketch/node-linux-arm64-gnu \
-  @chordsketch/node-darwin-x64 \
-  @chordsketch/node-darwin-arm64 \
-  @chordsketch/node-win32-x64-msvc; do
-  printf "%-45s %s\n" "$pkg" "$(npm view "$pkg@$VERSION" version)"
+# npm accepts a publish before the registry serves it ("Your package is
+# being processed and may take a few minutes to become available"), so a
+# lookup straight after publishing 404s for a package that did publish.
+# Poll until every package resolves, and fail if one never does — a
+# lookup that only prints its result would report "Done." either way.
+VERIFY_ATTEMPTS="${VERIFY_ATTEMPTS:-30}"
+VERIFY_INTERVAL="${VERIFY_INTERVAL:-10}"
+pending=(
+  @chordsketch/node
+  @chordsketch/node-linux-x64-gnu
+  @chordsketch/node-linux-arm64-gnu
+  @chordsketch/node-darwin-x64
+  @chordsketch/node-darwin-arm64
+  @chordsketch/node-win32-x64-msvc
+)
+attempt=1
+while :; do
+  unserved=()
+  for pkg in "${pending[@]}"; do
+    if [ "$(npm view "$pkg@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+      printf "%-45s %s\n" "$pkg" "$VERSION"
+    else
+      unserved+=("$pkg")
+    fi
+  done
+  # `${arr[@]+...}` keeps an empty array from tripping `set -u` on bash 3.2.
+  pending=(${unserved[@]+"${unserved[@]}"})
+  [ "${#pending[@]}" -eq 0 ] && break
+  if [ "$attempt" -ge "$VERIFY_ATTEMPTS" ]; then
+    echo "ERROR: the npm registry still does not serve $VERSION of: ${pending[*]}" >&2
+    echo "Waited $(((VERIFY_ATTEMPTS - 1) * VERIFY_INTERVAL))s. Re-run this script; published packages are skipped." >&2
+    exit 1
+  fi
+  echo "  waiting for the registry to serve: ${pending[*]}"
+  attempt=$((attempt + 1))
+  sleep "$VERIFY_INTERVAL"
 done
 
 echo

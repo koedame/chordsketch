@@ -19,6 +19,9 @@ part a refactor could quietly break without any registry noticing:
      size limit the dry run cannot see.
   6. The script is executable, since the documented invocation is
      `scripts/release.py X.Y.Z` rather than `python3 scripts/release.py`.
+  7. The napi publish script waits for the registry to serve what it
+     published and fails when a package never appears, run against stub
+     `npm` and `gh` commands.
 
 Stdlib `unittest` only. Nothing here touches the network, git or gh.
 """
@@ -28,6 +31,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -301,6 +305,93 @@ class CrateSizeTest(unittest.TestCase):
         problems = release.crate_size_problems({"chordsketch-mcp": None})
         self.assertEqual(len(problems), 1)
         self.assertIn("chordsketch-mcp", problems[0])
+
+
+NAPI_PACKAGES = (
+    "@chordsketch/node",
+    "@chordsketch/node-linux-x64-gnu",
+    "@chordsketch/node-linux-arm64-gnu",
+    "@chordsketch/node-darwin-x64",
+    "@chordsketch/node-darwin-arm64",
+    "@chordsketch/node-win32-x64-msvc",
+)
+
+# `gh release download` drops every tarball the script asks for into the cwd.
+STUB_GH = """#!/usr/bin/env bash
+for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
+  touch "chordsketch-node-$triple-$STUB_VERSION.tgz"
+done
+touch "chordsketch-node-$STUB_VERSION.tgz"
+"""
+
+# The registry is a directory: `publish` records a package, and `view` serves
+# it only after `$STUB_LAG` lookups of that package, or never when the package
+# is listed in `$STUB_NEVER_SERVED`.
+STUB_NPM = """#!/usr/bin/env bash
+set -eu
+case "$1" in
+  whoami) echo unchidev ;;
+  publish)
+    name=$(basename "${!#}" .tgz); name=${name%-$STUB_VERSION}
+    touch "$STUB_REGISTRY/published-${name#chordsketch-}" ;;
+  view)
+    spec=${2%@*}; key=${spec#@chordsketch/}
+    [ -e "$STUB_REGISTRY/published-$key" ] || { echo "npm error 404" >&2; exit 1; }
+    case " ${STUB_NEVER_SERVED:-} " in *" $spec "*) echo "npm error 404" >&2; exit 1 ;; esac
+    count=$(( $(cat "$STUB_REGISTRY/views-$key" 2>/dev/null || echo 0) + 1 ))
+    echo "$count" > "$STUB_REGISTRY/views-$key"
+    [ "$count" -gt "$STUB_LAG" ] || { echo "npm error 404" >&2; exit 1; }
+    echo "$STUB_VERSION" ;;
+esac
+"""
+
+
+class NapiPublishVerificationTest(unittest.TestCase):
+    """`crates/napi/scripts/local-publish.sh` against stub `npm` and `gh`.
+
+    0.6.0 published all six packages, then the verification looked them up
+    straight away, got four 404s while npm was still processing them, printed
+    blanks and ended with "Done." either way.
+    """
+
+    def run_script(self, lag: int, never_served: str = "") -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            registry = Path(tmp) / "registry"
+            bin_dir.mkdir()
+            registry.mkdir()
+            for name, body in (("gh", STUB_GH), ("npm", STUB_NPM)):
+                stub = bin_dir / name
+                stub.write_text(body)
+                stub.chmod(0o755)
+            env = {
+                **os.environ,
+                "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+                "STUB_VERSION": "1.2.0",
+                "STUB_REGISTRY": str(registry),
+                "STUB_LAG": str(lag),
+                "STUB_NEVER_SERVED": never_served,
+                "VERIFY_ATTEMPTS": "3",
+                "VERIFY_INTERVAL": "0",
+            }
+            return subprocess.run(
+                ["bash", str(release.REPO_ROOT / release.NAPI_PUBLISH_SCRIPT), "v1.2.0"],
+                env=env, capture_output=True, text=True, timeout=60,
+            )
+
+    def test_registry_that_serves_the_packages_after_a_lag_passes(self) -> None:
+        result = self.run_script(lag=2)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("waiting for the registry to serve", result.stdout)
+        for package in NAPI_PACKAGES:
+            self.assertRegex(result.stdout, rf"{package}\s+1\.2\.0")
+        self.assertTrue(result.stdout.rstrip().endswith("Done."))
+
+    def test_package_the_registry_never_serves_fails_and_is_named(self) -> None:
+        result = self.run_script(lag=0, never_served="@chordsketch/node-darwin-arm64")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("still does not serve 1.2.0 of: @chordsketch/node-darwin-arm64", result.stderr)
+        self.assertNotIn("Done.", result.stdout)
 
 
 if __name__ == "__main__":
