@@ -10,13 +10,12 @@ part a refactor could quietly break without any registry noticing:
   2. The crates.io token probe separates a dead token from a live scoped
      one, since both answer 403, and the token lookup reports where the
      token came from so a rejection says which one to replace.
-  3. Every npm channel in the real manifest has a publish recipe, so adding
-     a package to `ci/release-channels.toml` cannot leave it out of a
-     release unnoticed.
+  3. The napi packages are published as one step, by a script that exists.
   4. The release is built from the tagged commit once a tag exists, and
      from `origin/main` before that.
-  5. The small parsers the preflight relies on, and the crates.io upload
-     size limit the dry run cannot see.
+  5. The small parsers the preflight relies on. (The publish checks the
+     preflight shares with pull requests are tested in
+     `test_publish_checks.py`.)
   6. The script is executable, since the documented invocation is
      `scripts/release.py X.Y.Z` rather than `python3 scripts/release.py`.
 
@@ -198,21 +197,6 @@ class CratesTokenSourceTest(unittest.TestCase):
 
 
 class ManifestCoverageTest(unittest.TestCase):
-    def test_every_npm_release_channel_has_a_publish_recipe(self) -> None:
-        npm = [c.package for c in load_channels() if c.kind == "npm" and c.expected_version == "tag"]
-        self.assertTrue(npm)
-        unknown = [p for p in npm if p not in release.NPM_RECIPES and not release.is_napi(p)]
-        self.assertEqual(unknown, [])
-
-    def test_every_npm_recipe_is_a_release_channel(self) -> None:
-        npm = {c.package for c in load_channels() if c.kind == "npm" and c.expected_version == "tag"}
-        self.assertEqual(set(release.NPM_RECIPES) - npm, set())
-
-    def test_every_npm_recipe_directory_holds_the_package_it_names(self) -> None:
-        for package, recipe in release.NPM_RECIPES.items():
-            manifest = json.loads((release.REPO_ROOT / recipe.directory / "package.json").read_text())
-            self.assertEqual(manifest["name"], package)
-
     def test_napi_publish_script_exists(self) -> None:
         self.assertTrue((release.REPO_ROOT / release.NAPI_PUBLISH_SCRIPT).is_file())
 
@@ -230,9 +214,6 @@ class NpmPublishOrderTest(unittest.TestCase):
     def test_published_packages_are_left_out(self) -> None:
         self.assertEqual(release.npm_publish_order(("@chordsketch/wasm-export",)), ["@chordsketch/wasm-export"])
 
-    def test_napi_prefix_does_not_match_unrelated_packages(self) -> None:
-        self.assertTrue(release.is_napi("@chordsketch/node-win32-x64-msvc"))
-        self.assertFalse(release.is_napi("@chordsketch/nodejs-helpers"))
 
 
 class HasDryRunsToSkipTest(unittest.TestCase):
@@ -285,22 +266,6 @@ class ParserTest(unittest.TestCase):
     def test_cargo_version_is_read_from_cargo_dash_dash_version(self) -> None:
         self.assertEqual(release.parse_cargo_version("cargo 1.98.1 (797e8a9bc 2026-08-05)\n"), (1, 98))
         self.assertIsNone(release.parse_cargo_version("error: no such command"))
-
-
-class CrateSizeTest(unittest.TestCase):
-    def test_crate_at_the_limit_passes(self) -> None:
-        self.assertEqual(release.crate_size_problems({"chordsketch": release.CRATES_IO_MAX_UPLOAD}), [])
-
-    def test_crate_over_the_limit_is_named_with_its_size(self) -> None:
-        # chordsketch-render-pdf 0.6.0 packaged to 15.6 MiB and crates.io answered 413.
-        problems = release.crate_size_problems({"chordsketch-chordpro": 316_000, "chordsketch-render-pdf": 16_382_393})
-        self.assertEqual(len(problems), 1)
-        self.assertIn("chordsketch-render-pdf packages to 15.6 MiB", problems[0])
-
-    def test_crate_the_dry_run_did_not_package_is_not_assumed_to_fit(self) -> None:
-        problems = release.crate_size_problems({"chordsketch-mcp": None})
-        self.assertEqual(len(problems), 1)
-        self.assertIn("chordsketch-mcp", problems[0])
 
 
 if __name__ == "__main__":

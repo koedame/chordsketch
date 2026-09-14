@@ -74,17 +74,23 @@ publishing holds, and reports every failing one at once:
 
 - the release commit is at version `X.Y.Z`, with a dated CHANGELOG heading
   and a passing `check-version-consistency.py`;
-- `ci.yml` passed on the commit;
+- `ci.yml` and `publishable.yml` passed on the commit;
 - no registry already serves `X.Y.Z`;
 - every CI publish credential is accepted by its service —
   `.github/workflows/release-credentials.yml`, which the script dispatches,
   asks Docker Hub, the Marketplace, Open VSX, the Central Portal, CocoaPods
   trunk, GitHub, AUR and the Snap Store with read-only calls;
 - the local crates.io token and npm login are live and own the packages;
-- `cargo publish --dry-run` passes for every pending crate together, every
-  `.crate` it packaged is within crates.io's 10 MiB upload limit (the dry
-  run itself never uploads, so it cannot see the limit), and every pending
-  npm package builds and passes `npm publish --dry-run`.
+- every pending crate and npm package passes the checks every pull
+  request's required `Publishable` check runs
+  ([`docs/publishing-requirements.md`](publishing-requirements.md),
+  [ADR-0070](adr/0070-publishability-is-checked-on-every-pull-request.md)):
+  `cargo publish --dry-run` for every pending crate together, every
+  `.crate` within crates.io's 10 MiB upload limit, every pending npm
+  package built, packed and passing `npm publish --dry-run` with no
+  warning, and nothing in any package that must not be published. When
+  the tag is already out, the napi tarballs on the Release are checked the
+  same way.
 
 It then pushes `vX.Y.Z` and `desktop-vX.Y.Z`, waits for the tag runs,
 publishes to crates.io and npm only if every CI-published channel serves
@@ -437,7 +443,9 @@ release time: most channels are not updated until the manual publishes in
 steps 6-7 are done.
 
 This table is the **human-readable view** of `ci/release-channels.toml`.
-When adding a new channel, update both.
+When adding a new channel, update both, and add what the channel requires
+of an upload to [`docs/publishing-requirements.md`](publishing-requirements.md)
+together with the check in `scripts/_publish_checks.py`.
 
 | Channel | Identifier | Trigger | Required secret(s) | Verified by |
 |---|---|---|---|---|
@@ -1099,6 +1107,14 @@ package.
    expected_version = "tag"
    required_secrets = ["NPM_TOKEN"]
    ```
+
+   Then add the package to `NPM_PACKAGES` in
+   `scripts/_publish_checks.py` — how it is built, any file over 1 MiB it
+   ships on purpose, and a smoke snippet if Node can load it. The
+   `Publishable` check (`publishable.yml`) picks it up from there, and its
+   self-test fails until the manifest and the definition agree. Give the
+   `package.json` a `description`, `license`, a README and
+   `repository.url` in the `git+https://…` form, or the check fails.
 
 3. **Add the package to the version bump list** in `docs/releasing.md`
    under "Non-Rust manifests" in the Release Checklist.

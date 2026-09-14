@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`tree-sitter-chordpro` no longer declares a Node entry point it does
+  not ship.** Its `main` and `types` pointed at `bindings/node`, which
+  was never in the package, so `require('tree-sitter-chordpro')` threw
+  for every published version. The package is grammar source — `src/`
+  and `queries/` for editors and the tree-sitter CLI — and now says so.
+- **npm no longer rewrites the `package.json` of the published packages.**
+  `repository.url` is in npm's canonical `git+https://…` form in every
+  published package; npm had been normalising it at publish time.
+- **The `@chordsketch/node` platform packages ship a README** pointing at
+  the package to install instead.
+
+### Changed
+
+- **Every pull request now proves every published crate and npm package
+  can still be published** — the required `Publishable` check builds,
+  packs and dry-runs each one, fails on any publish-tool warning, and
+  checks size limits, metadata, entry points and contents; the release
+  preflight runs the same checks
+  ([ADR-0070](docs/adr/0070-publishability-is-checked-on-every-pull-request.md),
+  [`docs/publishing-requirements.md`](docs/publishing-requirements.md)).
+  `Cargo.lock` no longer pins the yanked `fastrand` 2.4.0.
+
 ## [0.6.0] - 2026-09-14
 
 ### Added

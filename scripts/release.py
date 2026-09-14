@@ -23,15 +23,17 @@ and only if every answer is yes does it push the tag (ADR-0068):
 
   * the release commit is at the requested version, with a dated CHANGELOG
     heading and consistent manifests;
-  * `ci.yml` passed on that commit;
+  * `ci.yml` and `publishable.yml` passed on that commit;
   * no registry has this version yet — or, when the tags are already out,
     what is still missing, so a re-run resumes instead of re-publishing;
   * every CI publish credential is still accepted by its service
     (`.github/workflows/release-credentials.yml`);
   * the local crates.io token and npm login are accepted, and the account
     owns the packages;
-  * every pending crate and npm package builds and packages (dry runs), and
-    every packaged crate is within crates.io's 10 MiB upload limit.
+  * every pending crate and npm package passes the checks every pull
+    request runs (`scripts/_publish_checks.py`): it builds and packs, the
+    publish dry run prints no warning, and the package is within the
+    registry's limits and carries nothing it must not.
 
 Then, in order: push `vX.Y.Z` and `desktop-vX.Y.Z`; wait for the tag runs;
 refuse to publish locally unless every CI-published channel has converged
@@ -71,6 +73,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+import _publish_checks as checks  # noqa: E402
 from _release_channels import Channel, load_channels  # noqa: E402
 
 REPO = "koedame/chordsketch"
@@ -87,29 +90,16 @@ LOCAL_KINDS = frozenset({"crates-io", "npm"})
 # order. Stabilised in Cargo 1.90.
 MIN_CARGO = (1, 90)
 
-# crates.io refuses a larger .crate with HTTP 413. The dry run never uploads,
-# so it passes regardless; preflight packages the crates and measures them.
-CRATES_IO_MAX_UPLOAD = 10 * 1024 * 1024
-
-
-@dataclass(frozen=True)
-class NpmRecipe:
-    directory: str
-    build: bool
-
-
-# How each npm channel in ci/release-channels.toml is published, in the order
-# docs/releasing.md step 7 publishes them. A new npm channel with no recipe
-# fails preflight rather than being silently left out of the release.
-NPM_RECIPES: dict[str, NpmRecipe] = {
-    "@chordsketch/wasm": NpmRecipe("packages/npm", build=True),
-    "tree-sitter-chordpro": NpmRecipe("packages/tree-sitter-chordpro", build=False),
-    "@chordsketch/wasm-export": NpmRecipe("packages/npm-export", build=True),
-}
+# How each npm package is built and checked is defined once, in
+# scripts/_publish_checks.py, for this script and publishable.yml alike. A new
+# npm channel with no definition there fails preflight rather than being
+# silently left out of the release.
+NAPI_PACKAGE = checks.NAPI_PACKAGE
 # The napi resolver and its platform packages are prebuilt by CI and
 # published from the Release assets by crates/napi/scripts/local-publish.sh.
-NAPI_PACKAGE = "@chordsketch/node"
 NAPI_PUBLISH_SCRIPT = "crates/napi/scripts/local-publish.sh"
+# Workflows that must have passed on the release commit before it is tagged.
+REQUIRED_WORKFLOWS = ("ci.yml", "publishable.yml")
 
 
 def tags_for(version: str) -> tuple[str, str]:
@@ -238,26 +228,6 @@ def parse_cargo_version(output: str) -> tuple[int, int] | None:
     return (int(match.group(1)), int(match.group(2))) if match else None
 
 
-def crate_size_problems(sizes: dict[str, int | None]) -> list[str]:
-    """Crates that crates.io would refuse for their size.
-
-    `sizes` maps each pending crate to the byte size of its packaged
-    `.crate`, or None when that file is missing. A missing file is a
-    problem too: an unmeasured crate is not known to fit.
-    """
-    problems = []
-    for crate, size in sizes.items():
-        if size is None:
-            problems.append(f"`cargo package` left no .crate for {crate}, so its size against crates.io's upload limit is unknown")
-        elif size > CRATES_IO_MAX_UPLOAD:
-            problems.append(
-                f"{crate} packages to {size / 1024 / 1024:.1f} MiB, over crates.io's "
-                f"{CRATES_IO_MAX_UPLOAD // 1024 // 1024} MiB upload limit; `exclude` what the published crate "
-                f"does not need in its Cargo.toml (check with `cargo package -p {crate} --list`)"
-            )
-    return problems
-
-
 def npm_publish_order(pending: tuple[str, ...]) -> list[str]:
     """Recipe packages in docs order, with the napi set after tree-sitter.
 
@@ -265,12 +235,8 @@ def npm_publish_order(pending: tuple[str, ...]) -> list[str]:
     packages and the resolver together, platform packages first.
     """
     order = ["@chordsketch/wasm", "tree-sitter-chordpro", NAPI_PACKAGE, "@chordsketch/wasm-export"]
-    napi_pending = any(is_napi(name) for name in pending)
+    napi_pending = any(checks.is_napi(name) for name in pending)
     return [name for name in order if name in pending or (name == NAPI_PACKAGE and napi_pending)]
-
-
-def is_napi(package: str) -> bool:
-    return package == NAPI_PACKAGE or package.startswith(NAPI_PACKAGE + "-")
 
 
 # ---------------------------------------------------------------- process / HTTP helpers
@@ -414,6 +380,13 @@ class Survey:
     crates_published: dict[str, bool] = field(default_factory=dict)
     npm_published: dict[str, bool] = field(default_factory=dict)
 
+    @property
+    def npm_tarballs_dir(self) -> Path:
+        """Where the preflight packs npm packages and the publish step reads them."""
+        directory = self.tree.parent / "npm-tarballs"
+        directory.mkdir(exist_ok=True)
+        return directory
+
 
 def read_remote_tags(version: str) -> dict[str, str | None]:
     remote_tags: dict[str, str | None] = {}
@@ -506,15 +479,16 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
 
     if fresh:
         section(f"CI on {state.commit[:12]}")
-        runs = gh_api(f"repos/{REPO}/actions/workflows/ci.yml/runs?head_sha={state.commit}&event=push&per_page=5")
-        latest = next(iter(runs["workflow_runs"]), None)  # type: ignore[index]
-        if latest is None:
-            findings.problems.append("ci.yml has not run on the release commit")
-        else:
-            findings.check(
-                latest["status"] == "completed" and latest["conclusion"] == "success",
-                f"ci.yml on the release commit is {latest['status']}/{latest['conclusion']}: {latest['html_url']}",
-            )
+        for workflow in REQUIRED_WORKFLOWS:
+            runs = gh_api(f"repos/{REPO}/actions/workflows/{workflow}/runs?head_sha={state.commit}&event=push&per_page=5")
+            latest = next(iter(runs["workflow_runs"]), None)  # type: ignore[index]
+            if latest is None:
+                findings.problems.append(f"{workflow} has not run on the release commit")
+            else:
+                findings.check(
+                    latest["status"] == "completed" and latest["conclusion"] == "success",
+                    f"{workflow} on the release commit is {latest['status']}/{latest['conclusion']}: {latest['html_url']}",
+                )
 
     section("GitHub")
     push = run(["gh", "api", f"repos/{REPO}", "--jq", ".permissions.push"], check=False).stdout.strip()
@@ -602,23 +576,10 @@ def preflight_crates(plan: Plan, findings: Findings) -> None:
 
 
 def dry_run_crates(state: Survey, plan: Plan, findings: Findings) -> None:
-    section("cargo publish --dry-run (verifies every pending crate together)")
-    dry = run(["cargo", "publish", "--dry-run", "--locked", *flag_each("-p", plan.pending_crates)],
-              cwd=state.tree, check=False, capture=False)
-    if not findings.check(dry.returncode == 0, "`cargo publish --dry-run` failed for the pending crates (output above)"):
-        return
-    # `cargo publish --dry-run` keeps its .crate files in an undocumented
-    # scratch directory; `cargo package` writes them to target/package.
-    package = run(["cargo", "package", "--no-verify", "--locked", *flag_each("-p", plan.pending_crates)],
-                  cwd=state.tree, check=False)
-    if not findings.check(package.returncode == 0, "`cargo package` failed for the pending crates:\n" + package.stderr):
-        return
-    packaged = Path(os.environ["CARGO_TARGET_DIR"]) / "package"
-    sizes: dict[str, int | None] = {}
-    for crate in plan.pending_crates:
-        path = packaged / f"{crate}-{state.version}.crate"
-        sizes[crate] = path.stat().st_size if path.is_file() else None
-    findings.problems.extend(crate_size_problems(sizes))
+    section("crates.io publish checks (verifies every pending crate together)")
+    findings.problems.extend(
+        checks.crates_problems(state.tree, plan.pending_crates, Path(os.environ["CARGO_TARGET_DIR"]))
+    )
 
 
 def crates_token() -> tuple[str, str] | None:
@@ -651,8 +612,8 @@ def flag_each(flag: str, values: tuple[str, ...] | list[str]) -> list[str]:
 
 def preflight_npm(state: Survey, plan: Plan, findings: Findings) -> None:
     section(f"npm ({len(plan.pending_npm)} pending)")
-    unknown = [p for p in state.npm if p not in NPM_RECIPES and not is_napi(p)]
-    findings.check(not unknown, f"no publish recipe in scripts/release.py for npm channel(s): {', '.join(unknown)}")
+    unknown = [p for p in state.npm if p not in checks.NPM_PACKAGES]
+    findings.check(not unknown, f"no publish definition in scripts/_publish_checks.py for npm channel(s): {', '.join(unknown)}")
     if not findings.check(shutil.which("npm") is not None, "npm is not on PATH"):
         return
 
@@ -674,35 +635,33 @@ def preflight_npm(state: Survey, plan: Plan, findings: Findings) -> None:
             "npm asks for a one-time password on each publish if the account uses 2FA"
         )
 
-    needs_wasm = any(NPM_RECIPES.get(p, NpmRecipe("", False)).build for p in plan.pending_npm)
-    if needs_wasm:
-        findings.check(shutil.which("wasm-pack") is not None, "wasm-pack is not on PATH (needed to build the wasm packages)")
+    tools = sorted({tool for p in plan.pending_npm if p in checks.NPM_PACKAGES for tool in checks.NPM_PACKAGES[p].tools})
+    for tool in tools:
+        findings.check(shutil.which(tool) is not None, f"{tool} is not on PATH (needed to build the pending npm packages)")
 
 
 def dry_run_npm(state: Survey, plan: Plan, findings: Findings) -> None:
-    section("npm build and publish --dry-run")
+    section("npm publish checks")
+    released_together = checks.repo_npm_versions(state.tree)
     for package in plan.pending_npm:
-        recipe = NPM_RECIPES.get(package)
-        if recipe is None:
+        if checks.is_napi(package) or package not in checks.NPM_PACKAGES:
             continue
-        directory = state.tree / recipe.directory
-        if recipe.build:
-            print(f"    building {package}", flush=True)
-            build = run(["npm", "run", "build"], cwd=directory, check=False, capture=False)
-            if not findings.check(build.returncode == 0, f"`npm run build` failed for {package} (output above)"):
-                continue
-        dry = run(["npm", "publish", "--dry-run", "--access", "public"], cwd=directory, check=False)
-        findings.check(dry.returncode == 0, f"`npm publish --dry-run` failed for {package}:\n{dry.stderr.strip()}")
+        section(package)
+        findings.problems.extend(
+            checks.npm_problems(checks.NPM_PACKAGES[package], state.tree, state.npm_tarballs_dir, released_together)
+        )
 
 
 def preflight_release_assets(state: Survey, plan: Plan, findings: Findings) -> None:
     """With the tag already out, the napi tarballs must be on the Release."""
-    if not any(is_napi(p) for p in plan.pending_npm):
+    if not any(checks.is_napi(p) for p in plan.pending_npm):
         return
     tag = tags_for(state.version)[0]
     missing = missing_napi_assets(state, tag)
-    if missing is not None:
-        findings.check(not missing, f"the {tag} Release lacks napi tarballs: {', '.join(missing)}")
+    if missing is None:
+        return
+    if findings.check(not missing, f"the {tag} Release lacks napi tarballs: {', '.join(missing)}"):
+        findings.problems.extend(napi_release_problems(state, tag))
 
 
 def missing_napi_assets(state: Survey, tag: str) -> list[str] | None:
@@ -711,12 +670,18 @@ def missing_napi_assets(state: Survey, tag: str) -> list[str] | None:
     if view.returncode != 0:
         return None
     assets = {asset["name"] for asset in json.loads(view.stdout)["assets"]}
-    wanted = [f"chordsketch-node-{state.version}.tgz"] + [
-        f"chordsketch-{p.removeprefix('@chordsketch/')}-{state.version}.tgz"
-        for p in state.npm
-        if is_napi(p) and p != NAPI_PACKAGE
-    ]
+    wanted = [checks.npm_tarball_name(p, state.version) for p in state.npm if checks.is_napi(p)]
     return [name for name in wanted if name not in assets]
+
+
+def napi_release_problems(state: Survey, tag: str) -> list[str]:
+    """Run the pull-request checks against the napi tarballs on the Release."""
+    section(f"npm publish checks for the napi tarballs on {tag}")
+    directory = state.tree.parent / "napi-release-assets"
+    directory.mkdir(exist_ok=True)
+    patterns = flag_each("-p", [checks.npm_tarball_name(p, state.version) for p in state.npm if checks.is_napi(p)])
+    run(["gh", "release", "download", tag, "-R", REPO, "-D", str(directory), "--clobber", *patterns])
+    return checks.napi_problems(directory, state.version, checks.repo_npm_versions(state.tree))
 
 
 # ---------------------------------------------------------------- release steps
@@ -764,10 +729,12 @@ def gate_local_publish(state: Survey, plan: Plan) -> None:
     desktop = [r for r in tag_runs(desktop_tag) if r["path"] == ".github/workflows/desktop-release.yml"]
     if not desktop or desktop[0]["conclusion"] != "success":
         problems.append(f"Desktop Release for {desktop_tag} did not succeed")
-    if any(is_napi(p) for p in plan.pending_npm):
+    if any(checks.is_napi(p) for p in plan.pending_npm):
         missing = missing_napi_assets(state, tag)
         if missing:
             problems.append(f"the {tag} Release lacks napi tarballs: {', '.join(missing)}")
+        elif missing is not None:
+            problems.extend(napi_release_problems(state, tag))
 
     for r in tag_runs(tag) + tag_runs(desktop_tag):
         if r["conclusion"] not in ("success", "skipped"):
@@ -816,8 +783,11 @@ def publish_npm(state: Survey, plan: Plan) -> None:
         if package == NAPI_PACKAGE:
             run(["bash", NAPI_PUBLISH_SCRIPT, tag], cwd=state.tree, capture=False)
             continue
-        recipe = NPM_RECIPES[package]
-        run(["npm", "publish", "--access", "public"], cwd=state.tree / recipe.directory, capture=False)
+        # The tarball the preflight checked, so what is uploaded is exactly
+        # what passed.
+        version = json.loads((state.tree / checks.NPM_PACKAGES[package].directory / "package.json").read_text())["version"]
+        tarball = state.npm_tarballs_dir / checks.npm_tarball_name(package, version)
+        run(["npm", "publish", "--access", "public", str(tarball)], cwd=state.tree, capture=False)
 
 
 def verify_release(state: Survey, login: str) -> None:
