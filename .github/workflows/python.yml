@@ -358,6 +358,12 @@ jobs:
           merge-multiple: true
           path: dist
 
+      - name: Check the distributions before uploading
+        # The check publishable.yml runs on every pull request, now against
+        # every wheel the release built.
+        if: steps.oidc.outputs.available == 'true'
+        run: python3 scripts/check-publishable.py python --dist dist
+
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
         if: steps.oidc.outputs.available == 'true'
         with:

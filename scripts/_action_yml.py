@@ -112,3 +112,26 @@ def iter_step_runs(yaml_text: str) -> list[tuple[str, str]]:
         if text:
             found.append((name, text))
     return found
+
+
+def extract_job_step_run(workflow_yml: str, job_id: str, step_name: str) -> str:
+    """Return the dedented `run:` body of the named step inside one job.
+
+    A workflow repeats step names across jobs (`post-release.yml` has a
+    `Generate manifest` step in two of them), so a caller that runs one
+    specific step addresses it by job id as well. The job block is the lines
+    from `  <job_id>:` to the next job header at the same indentation; the
+    step is then found with `extract_step_run`'s single-match discipline.
+    """
+    lines = workflow_yml.splitlines()
+    header = f"  {job_id}:"
+    starts = [i for i, line in enumerate(lines) if line == header]
+    if len(starts) != 1:
+        raise AssertionError(f"expected exactly one job {job_id!r}, found {len(starts)}")
+    end = len(lines)
+    for i in range(starts[0] + 1, len(lines)):
+        line = lines[i]
+        if line.startswith("  ") and not line.startswith("   ") and line.rstrip().endswith(":") and not line.lstrip().startswith("#"):
+            end = i
+            break
+    return extract_step_run("\n".join(lines[starts[0] : end]), step_name)

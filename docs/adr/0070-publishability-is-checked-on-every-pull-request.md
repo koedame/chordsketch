@@ -84,11 +84,21 @@ is made to read is not read.
 - Every pull request pays for a `cargo publish --dry-run` of the published
   crates, two release wasm builds, a debug napi build and the npm installs
   — Linux runners only, cached per job.
-- On a pull request only the host's native addon can be built, so the
-  Linux x86_64 napi addon stands in for the other four targets: their
-  packages are staged, packed and dry-run exactly as at release, but only
-  the Linux x86_64 one is loaded. The release job runs the same check
-  against the five real addons before it uploads them.
+- On a pull request only the host's native code can be built, so a Linux
+  x86_64 build stands in for the other targets of every multi-platform
+  artifact — the napi platform packages, the platform VSIXes' language
+  server, the gem's and the jar's native libraries, the arm64 container
+  image. Those artifacts are staged, packed and checked exactly as at
+  release, but only the Linux x86_64 build is loaded. Each release job runs
+  the same check against the real per-target builds before it uploads.
+- The container image check pulls its pinned Alpine base from Docker Hub on
+  every pull request — the registry dependency ADR-0062 declined for the
+  from-source `Dockerfile`. The difference is that the release image is a
+  published artifact: a registry hiccup failing a pull request is the
+  lesser cost next to an image that cannot be built on release day.
+- Publish-tool dependencies (the npm registry, crates.io's index, PyPI,
+  RubyGems, Maven Central) are in the path of every pull request for the
+  same reason.
 - The version being published is not checked for uniqueness on a pull
   request: between releases every pull request is at a version that is
   already published. The release preflight still refuses a version a

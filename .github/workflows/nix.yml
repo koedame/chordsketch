@@ -1,7 +1,9 @@
 name: Nix
 
 # Verify that the Nix flake builds the chordsketch CLI correctly.
-# Runs on every PR and push to main; no paths: filter (guarantee-style check).
+# Called by publishable.yml on every PR, push to main and nightly; no paths:
+# filter (guarantee-style check). It is part of the required `Publishable`
+# check because a derivation that builds is what nixpkgs accepts (ADR-0070).
 #
 # Cache note: nix downloads pre-built packages from cache.nixos.org (the
 # public binary cache). The chordsketch crates themselves are not in the
@@ -13,9 +15,8 @@ name: Nix
 # invoke cargo directly — not to nix-wrapped builds.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
