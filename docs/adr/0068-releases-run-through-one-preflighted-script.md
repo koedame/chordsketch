@@ -46,11 +46,12 @@ packaged and a wasm package built without publishing either.
 2. **Nothing is published until every question answerable without
    publishing has been answered yes.** Before pushing a tag the script
    checks the release commit (at the version, dated CHANGELOG heading,
-   version consistency), that `ci.yml` passed on the commit, that no registry serves the version yet, that the local
-   crates.io token and npm login are live and own the packages, that
-   every pending crate packages (`cargo publish --dry-run` over all of
-   them together) and every pending npm package builds and packs, and
-   that every CI credential is accepted. All failures are reported
+   version consistency), that `ci.yml` passed on the commit, that no
+   registry serves the version yet, that the local crates.io token and
+   npm login are live and own the packages, that every pending crate
+   packages (`cargo publish --dry-run` over all of them together) and
+   every pending npm package builds and packs, and that every CI
+   credential is accepted. All failures are reported
    together, and the run exits without side effects.
 3. **CI credentials are checked against the services, not for presence.**
    `.github/workflows/release-credentials.yml` resolves each secret the
