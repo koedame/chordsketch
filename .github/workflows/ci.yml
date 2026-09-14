@@ -131,7 +131,7 @@ jobs:
 
       - name: Unit tests
         run: |
-          python3 -m unittest scripts/test_check_version_consistency.py scripts/test_check_release_channels.py
+          python3 -m unittest scripts/test_check_version_consistency.py scripts/test_check_release_channels.py scripts/test_release.py
 
   msrv-consistency:
     name: MSRV consistency
