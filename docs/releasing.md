@@ -49,7 +49,59 @@ re-syncs at the next workspace-wide release.
 
 ## Release Checklist
 
+### Running the release
+
+Steps 1-3 (the `Release vX.Y.Z` commit) land on `main` through a PR as
+before. Everything after that — tagging, waiting for the CI publishes,
+crates.io, npm and the channel rollup — is one command, run from the
+maintainer's machine
+([ADR-0068](adr/0068-releases-run-through-one-preflighted-script.md)):
+
+```bash
+git switch main && git pull --ff-only   # HEAD must be the release commit
+scripts/release.py X.Y.Z --check        # preflight only; changes nothing
+scripts/release.py X.Y.Z                # preflight, confirm, then release
+```
+
+The script pushes no tag until every precondition it can check without
+publishing holds, and reports every failing one at once:
+
+- the checkout is clean, at `origin/main`, at version `X.Y.Z`, with a dated
+  CHANGELOG heading and a passing `check-version-consistency.py`;
+- `ci.yml` passed on the commit;
+- no registry already serves `X.Y.Z`;
+- every CI publish credential is accepted by its service —
+  `.github/workflows/release-credentials.yml`, which the script dispatches,
+  asks Docker Hub, the Marketplace, Open VSX, the Central Portal, CocoaPods
+  trunk, GitHub, AUR and the Snap Store with read-only calls;
+- the local crates.io token and npm login are live and own the packages;
+- `cargo publish --dry-run` passes for every pending crate together, and
+  every pending npm package builds and passes `npm publish --dry-run`.
+
+It then pushes `vX.Y.Z` and `desktop-vX.Y.Z`, waits for the tag runs,
+publishes to crates.io and npm only if every CI-published channel serves
+the version, and dispatches `release-verify.yml`.
+
+What the maintainer's machine needs: `gh` logged in with push access;
+Cargo 1.90+ and a crates.io token in `CARGO_REGISTRY_TOKEN` or
+`~/.cargo/credentials.toml` (`cargo login`) — a token kept in a credential
+provider is not visible to the script, so export it; `npm login` as an
+owner of the packages; `wasm-pack` with the `wasm32-unknown-unknown`
+target. npm asks for a one-time password on each publish.
+
+Re-running the script with the same version is always safe. It asks the
+registries what is already published, so an interrupted release resumes
+from what is missing, and a finished one is refused. It does not re-run a
+CI channel that failed after the tag: it names the channel and stops
+before crates.io and npm; re-run that channel (step 8), then re-run the
+script. winget and MacPorts remain manual (Post-Release).
+
 ### Pre-release sanity
+
+`scripts/release.py` runs checks 1-4 below as part of its preflight, and
+checks each credential against its service rather than for presence. Check
+5 is a documentation review and stays manual: do it before the bump in
+Step 1. The commands below are the manual equivalents.
 
 Before starting the bump in Step 1, verify the release-time infrastructure
 is healthy. Any gap here would silently break a channel and be discovered
@@ -158,6 +210,10 @@ at post-release verification rather than before the tag is cut.
    `## [X.Y.Z] - YYYY-MM-DD` and add a new `## [Unreleased]` section above.
 
 3. **Commit** with message: `Release vX.Y.Z`
+
+   Steps 4-8 below are what `scripts/release.py` runs. They stay here as
+   the reference for what it does, and for re-running a single step by
+   hand.
 
 4. **Create and push tag**:
    ```bash
