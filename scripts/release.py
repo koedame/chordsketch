@@ -4,9 +4,13 @@
     scripts/release.py 0.7.0           # preflight, confirm, then release
     scripts/release.py 0.7.0 --check   # preflight only; changes nothing
 
-Run it from a clean checkout of the release commit on the maintainer's
-machine, after the `Release vX.Y.Z` commit (docs/releasing.md steps 1-3)
-is on `main`. It replaces the hand-run steps 4-8.
+Run it on the maintainer's machine from an up-to-date checkout of `main`,
+after the `Release vX.Y.Z` commit (docs/releasing.md steps 1-3) is on
+`main`. It replaces the hand-run steps 4-8. Everything it builds and
+publishes comes from a temporary worktree of the release commit — the
+tagged commit once the tags exist, `origin/main` before — so the local
+checkout's branch and uncommitted changes never reach a registry, and a
+release tagged before this script existed can still be finished with it.
 
 The failure it exists to prevent is a half-published release. A release
 touches ~30 registries; some are published by CI after the tag push, and
@@ -17,7 +21,8 @@ the tag is out there is no undoing the channels that already accepted it.
 So the script asks every question it can answer without publishing first,
 and only if every answer is yes does it push the tag (ADR-0068):
 
-  * the checkout is clean, on the release commit, at the requested version;
+  * the release commit is at the requested version, with a dated CHANGELOG
+    heading and consistent manifests;
   * `ci.yml` passed on that commit;
   * no registry has this version yet — or, when the tags are already out,
     what is still missing, so a re-run resumes instead of re-publishing;
@@ -49,14 +54,17 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Iterator
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPTS_DIR.parent
@@ -101,6 +109,23 @@ NAPI_PUBLISH_SCRIPT = "crates/napi/scripts/local-publish.sh"
 
 def tags_for(version: str) -> tuple[str, str]:
     return f"v{version}", f"desktop-v{version}"
+
+
+def choose_release_commit(remote_tags: dict[str, str | None], main_sha: str) -> tuple[str, str]:
+    """Return `(commit, refusal)`: the commit the release is built from.
+
+    Once either tag exists, that tag's commit is the release — the CI
+    channels were built from it, so crates.io and npm must be too. Before
+    that, it is the tip of `origin/main`. Tags on two different commits
+    are refused: there is no single release to finish.
+    """
+    tagged = {sha for sha in remote_tags.values() if sha}
+    if len(tagged) > 1:
+        described = ", ".join(f"{tag} -> {sha[:12]}" for tag, sha in remote_tags.items() if sha)
+        return "", f"the release tags point at different commits ({described}); fix the tags before releasing"
+    if tagged:
+        return tagged.pop(), ""
+    return main_sha, ""
 
 
 # ---------------------------------------------------------------- decisions
@@ -348,7 +373,8 @@ def tag_runs(tag: str) -> list[dict]:
 @dataclass
 class Survey:
     version: str
-    head: str
+    commit: str
+    tree: Path
     remote_tags: dict[str, str | None]
     ci_channels: list[Channel]
     crates: list[str]
@@ -359,20 +385,35 @@ class Survey:
     npm_published: dict[str, bool] = field(default_factory=dict)
 
 
-def survey(version: str) -> Survey:
-    run(["git", "fetch", "--quiet", "origin", "main"])
-    head = run(["git", "rev-parse", "HEAD"]).stdout.strip()
-
+def read_remote_tags(version: str) -> dict[str, str | None]:
     remote_tags: dict[str, str | None] = {}
     for tag in tags_for(version):
         out = run(["git", "ls-remote", "origin", f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}"]).stdout
         refs = dict(line.split("\t")[::-1] for line in out.splitlines() if line)
         remote_tags[tag] = refs.get(f"refs/tags/{tag}^{{}}") or refs.get(f"refs/tags/{tag}")
+    return remote_tags
 
-    tag_channels = [c for c in load_channels() if c.expected_version == "tag"]
+
+@contextmanager
+def release_tree(commit: str) -> Iterator[Path]:
+    """A detached worktree of the release commit, removed on exit."""
+    run(["git", "fetch", "--quiet", "origin", commit])
+    tree = Path(tempfile.mkdtemp(prefix="chordsketch-release-")) / "tree"
+    run(["git", "worktree", "add", "--quiet", "--detach", str(tree), commit])
+    try:
+        yield tree
+    finally:
+        run(["git", "worktree", "remove", "--force", str(tree)], check=False)
+        shutil.rmtree(tree.parent, ignore_errors=True)
+
+
+def survey(version: str, commit: str, tree: Path, remote_tags: dict[str, str | None]) -> Survey:
+    # The release's own manifest decides which channels it publishes to.
+    tag_channels = [c for c in load_channels(tree / "ci" / "release-channels.toml") if c.expected_version == "tag"]
     state = Survey(
         version=version,
-        head=head,
+        commit=commit,
+        tree=tree,
         remote_tags=remote_tags,
         ci_channels=[c for c in tag_channels if c.kind not in LOCAL_KINDS],
         crates=[c.package for c in tag_channels if c.kind == "crates-io"],
@@ -424,29 +465,18 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
     version = state.version
     fresh = len(plan.tags_to_push) == 2
 
-    section("Checkout")
-    dirty = run(["git", "status", "--porcelain"]).stdout.strip()
-    findings.check(not dirty, "the working tree has uncommitted or untracked files; release from a clean checkout")
-    if fresh:
-        main = run(["git", "rev-parse", "origin/main"]).stdout.strip()
-        findings.check(state.head == main, f"HEAD is {state.head[:12]}, not origin/main ({main[:12]}); check out the release commit")
-    else:
-        tagged = {sha for sha in state.remote_tags.values() if sha}
-        findings.check(
-            tagged == {state.head},
-            f"HEAD is {state.head[:12]}, but the release tags point at {', '.join(s[:12] for s in sorted(tagged))}; "
-            f"check out the tagged commit",
-        )
-    cli_version = tomllib.loads((REPO_ROOT / "crates/cli/Cargo.toml").read_text())["package"]["version"]
-    findings.check(cli_version == version, f"the workspace is at {cli_version}, not {version}")
-    consistency = run([sys.executable, "scripts/check-version-consistency.py"], check=False)
+    section(f"Release commit {state.commit[:12]}")
+    tree = state.tree
+    cli_version = tomllib.loads((tree / "crates/cli/Cargo.toml").read_text())["package"]["version"]
+    findings.check(cli_version == version, f"the release commit's workspace is at {cli_version}, not {version}")
+    consistency = run([sys.executable, "scripts/check-version-consistency.py"], cwd=tree, check=False)
     findings.check(consistency.returncode == 0, "scripts/check-version-consistency.py fails:\n" + consistency.stdout + consistency.stderr)
-    changelog = (REPO_ROOT / "CHANGELOG.md").read_text()
+    changelog = (tree / "CHANGELOG.md").read_text()
     findings.check(dated_changelog_heading(changelog, version), f"CHANGELOG.md has no dated `## [{version}] - YYYY-MM-DD` heading")
 
     if fresh:
-        section(f"CI on {state.head[:12]}")
-        runs = gh_api(f"repos/{REPO}/actions/workflows/ci.yml/runs?head_sha={state.head}&event=push&per_page=5")
+        section(f"CI on {state.commit[:12]}")
+        runs = gh_api(f"repos/{REPO}/actions/workflows/ci.yml/runs?head_sha={state.commit}&event=push&per_page=5")
         latest = next(iter(runs["workflow_runs"]), None)  # type: ignore[index]
         if latest is None:
             findings.problems.append("ci.yml has not run on the release commit")
@@ -493,9 +523,9 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
             findings.notes.append("the crates.io and npm dry runs were skipped; they run once the preflight problems are fixed")
     else:
         if plan.pending_crates:
-            dry_run_crates(plan, findings)
+            dry_run_crates(state, plan, findings)
         if plan.pending_npm:
-            dry_run_npm(plan, findings)
+            dry_run_npm(state, plan, findings)
 
     return findings
 
@@ -540,9 +570,10 @@ def preflight_crates(plan: Plan, findings: Findings) -> None:
             findings.problems.append(message)
 
 
-def dry_run_crates(plan: Plan, findings: Findings) -> None:
+def dry_run_crates(state: Survey, plan: Plan, findings: Findings) -> None:
     section("cargo publish --dry-run (verifies every pending crate together)")
-    dry = run(["cargo", "publish", "--dry-run", "--locked", *flag_each("-p", plan.pending_crates)], check=False, capture=False)
+    dry = run(["cargo", "publish", "--dry-run", "--locked", *flag_each("-p", plan.pending_crates)],
+              cwd=state.tree, check=False, capture=False)
     findings.check(dry.returncode == 0, "`cargo publish --dry-run` failed for the pending crates (output above)")
 
 
@@ -598,13 +629,13 @@ def preflight_npm(state: Survey, plan: Plan, findings: Findings) -> None:
         findings.check(shutil.which("wasm-pack") is not None, "wasm-pack is not on PATH (needed to build the wasm packages)")
 
 
-def dry_run_npm(plan: Plan, findings: Findings) -> None:
+def dry_run_npm(state: Survey, plan: Plan, findings: Findings) -> None:
     section("npm build and publish --dry-run")
     for package in plan.pending_npm:
         recipe = NPM_RECIPES.get(package)
         if recipe is None:
             continue
-        directory = REPO_ROOT / recipe.directory
+        directory = state.tree / recipe.directory
         if recipe.build:
             print(f"    building {package}", flush=True)
             build = run(["npm", "run", "build"], cwd=directory, check=False, capture=False)
@@ -643,9 +674,7 @@ def missing_napi_assets(state: Survey, tag: str) -> list[str] | None:
 
 def push_tags(state: Survey, tags: tuple[str, ...]) -> None:
     section(f"Pushing {', '.join(tags)}")
-    for tag in tags:
-        run(["git", "tag", "--force", tag, state.head])
-    run(["git", "push", "origin", *[f"refs/tags/{tag}" for tag in tags]], capture=False)
+    run(["git", "push", "origin", *[f"{state.commit}:refs/tags/{tag}" for tag in tags]], capture=False)
 
 
 def wait_for_tag_runs(state: Survey) -> None:
@@ -724,9 +753,9 @@ def ensure_local_logins(plan: Plan) -> None:
             raise ReleaseError(message)
 
 
-def publish_crates(plan: Plan) -> None:
+def publish_crates(state: Survey, plan: Plan) -> None:
     section(f"Publishing {len(plan.pending_crates)} crates")
-    run(["cargo", "publish", "--locked", *flag_each("-p", plan.pending_crates)], capture=False)
+    run(["cargo", "publish", "--locked", *flag_each("-p", plan.pending_crates)], cwd=state.tree, capture=False)
 
 
 def publish_npm(state: Survey, plan: Plan) -> None:
@@ -734,10 +763,10 @@ def publish_npm(state: Survey, plan: Plan) -> None:
     for package in npm_publish_order(plan.pending_npm):
         section(f"Publishing {package}")
         if package == NAPI_PACKAGE:
-            run(["bash", NAPI_PUBLISH_SCRIPT, tag], capture=False)
+            run(["bash", NAPI_PUBLISH_SCRIPT, tag], cwd=state.tree, capture=False)
             continue
         recipe = NPM_RECIPES[package]
-        run(["npm", "publish", "--access", "public"], cwd=REPO_ROOT / recipe.directory, capture=False)
+        run(["npm", "publish", "--access", "public"], cwd=state.tree / recipe.directory, capture=False)
 
 
 def verify_release(state: Survey, login: str) -> None:
@@ -773,7 +802,7 @@ def confirm_release(version: str) -> bool:
 def print_plan(state: Survey, plan: Plan) -> None:
     section("Plan")
     if plan.tags_to_push:
-        print(f"    push tags: {', '.join(plan.tags_to_push)} at {state.head[:12]}")
+        print(f"    push tags: {', '.join(plan.tags_to_push)} at {state.commit[:12]}")
         print("    wait for the tag runs (the CI-published channels)")
     if plan.pending_ci:
         print(f"    CI channels not yet on {state.version}: {', '.join(plan.pending_ci)}")
@@ -799,44 +828,59 @@ def main() -> int:
 
     try:
         login = run(["gh", "api", "user", "--jq", ".login"]).stdout.strip()
-        section(f"Surveying every channel for {args.version}")
-        state = survey(args.version)
-        plan = decide(args.version, state.remote_tags, state.ci_published, state.crates_published, state.npm_published)
-        if plan.refusal:
-            print(f"\nerror: {plan.refusal}", file=sys.stderr)
-            return 1
-        print_plan(state, plan)
-
-        findings = preflight(state, plan, login)
-        for note in findings.notes:
-            print(f"\nnote: {note}", flush=True)
-        if findings.problems:
-            print("\nPreflight failed. Nothing was published. Fix these and re-run:", file=sys.stderr)
-            for problem in findings.problems:
-                print(f"  - {problem}", file=sys.stderr)
-            return 1
-        print("\nPreflight passed.")
-        if args.check:
-            return 0
-
-        if not args.yes and not confirm_release(args.version):
-            print("Aborted. Nothing was published.")
+        run(["git", "fetch", "--quiet", "origin", "main"])
+        main_sha = run(["git", "rev-parse", "origin/main"]).stdout.strip()
+        remote_tags = read_remote_tags(args.version)
+        commit, refusal = choose_release_commit(remote_tags, main_sha)
+        if refusal:
+            print(f"\nerror: {refusal}", file=sys.stderr)
             return 1
 
-        if plan.tags_to_push:
-            push_tags(state, plan.tags_to_push)
-        wait_for_tag_runs(state)
-        gate_local_publish(state, plan)
-        ensure_local_logins(plan)
-        if plan.pending_crates:
-            publish_crates(plan)
-        if plan.pending_npm:
-            publish_npm(state, plan)
-        verify_release(state, login)
+        # The cargo build cache of this checkout is reused by the worktree.
+        os.environ.setdefault("CARGO_TARGET_DIR", str(REPO_ROOT / "target"))
+        with release_tree(commit) as tree:
+            return release(args, login, commit, tree, remote_tags)
     except ReleaseError as exc:
         print(f"\nerror: {exc}", file=sys.stderr)
         print(f"Re-running `scripts/release.py {args.version}` resumes from what is still missing.", file=sys.stderr)
         return 1
+
+
+def release(args: argparse.Namespace, login: str, commit: str, tree: Path, remote_tags: dict[str, str | None]) -> int:
+    section(f"Surveying every channel for {args.version}")
+    state = survey(args.version, commit, tree, remote_tags)
+    plan = decide(args.version, state.remote_tags, state.ci_published, state.crates_published, state.npm_published)
+    if plan.refusal:
+        print(f"\nerror: {plan.refusal}", file=sys.stderr)
+        return 1
+    print_plan(state, plan)
+
+    findings = preflight(state, plan, login)
+    for note in findings.notes:
+        print(f"\nnote: {note}", flush=True)
+    if findings.problems:
+        print("\nPreflight failed. Nothing was published. Fix these and re-run:", file=sys.stderr)
+        for problem in findings.problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+    print("\nPreflight passed.")
+    if args.check:
+        return 0
+
+    if not args.yes and not confirm_release(args.version):
+        print("Aborted. Nothing was published.")
+        return 1
+
+    if plan.tags_to_push:
+        push_tags(state, plan.tags_to_push)
+    wait_for_tag_runs(state)
+    gate_local_publish(state, plan)
+    ensure_local_logins(plan)
+    if plan.pending_crates:
+        publish_crates(state, plan)
+    if plan.pending_npm:
+        publish_npm(state, plan)
+    verify_release(state, login)
 
     print(f"\nv{args.version} is released. winget and MacPorts are still manual (docs/releasing.md, Post-Release).")
     return 0
