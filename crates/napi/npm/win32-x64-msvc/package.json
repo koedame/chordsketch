@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/koedame/chordsketch.git",
+    "url": "git+https://github.com/koedame/chordsketch.git",
     "directory": "crates/napi/npm/win32-x64-msvc"
   },
   "homepage": "https://github.com/koedame/chordsketch",

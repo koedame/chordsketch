@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/koedame/chordsketch.git",
+    "url": "git+https://github.com/koedame/chordsketch.git",
     "directory": "packages/tree-sitter-chordpro"
   },
   "keywords": [
@@ -16,16 +16,10 @@
     "parser",
     "syntax-highlighting"
   ],
-  "main": "bindings/node",
-  "types": "bindings/node",
   "files": [
     "grammar.js",
-    "binding.gyp",
-    "prebuilds/**",
-    "bindings/node/*",
     "queries/*",
-    "src/**",
-    "*.wasm"
+    "src/**"
   ],
   "tree-sitter": [
     {

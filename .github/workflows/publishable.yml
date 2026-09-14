@@ -1,0 +1,222 @@
+name: Publishable
+
+# Fails when something this repository publishes could no longer be
+# published: a package a registry would refuse, a publish dry run that
+# warns, a file that must not ship, a package that installs but does not
+# load. ADR-0070 records why this exists; `docs/publishing-requirements.md`
+# lists every condition per registry and the job that checks it.
+#
+# The checks are defined once, in `scripts/_publish_checks.py`, and
+# `scripts/release.py` runs the same definitions in its preflight, so a
+# release is held to exactly what every pull request was held to.
+#
+# The `Publishable` job at the bottom is the required status check. It
+# has no `paths:` filter on purpose: a required check must report on every
+# pull request, and "this change cannot affect packaging" is the guess
+# that let v0.6.0 reach release day with a crate crates.io refused.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+  schedule:
+    # Nightly, because a package can stop being publishable without a
+    # commit: a dependency in Cargo.lock gets yanked, a published npm
+    # range stops matching, a publish tool starts warning.
+    - cron: "23 19 * * *"
+  workflow_dispatch:
+
+# Linux-only, so this guards against stale runs piling up on Linux
+# capacity rather than the macOS ceiling (`.claude/rules/ci-parallelization.md` §5).
+concurrency:
+  group: publishable-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  self-test:
+    name: Publish checks self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+
+      # The suite skips its real `npm publish --dry-run` cases when npm is
+      # absent so it still runs on a machine without Node. Fail loudly here
+      # instead of letting that fallback hollow out this job.
+      - name: Verify npm is available
+        run: npm --version
+
+      - name: Unit tests
+        run: python3 -m unittest scripts/test_publish_checks.py scripts/test_release.py
+
+  crates-io:
+    name: crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: publishable-crates-io
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Check every published crate
+        run: python3 scripts/check-publishable.py crates-io
+
+  npm-matrix:
+    name: npm package list
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.matrix.outputs.packages }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Read from the definition rather than listed here, so a package
+      # added to `scripts/_publish_checks.py` is checked without anyone
+      # remembering this file.
+      - name: Read the npm packages from the publish definition
+        id: matrix
+        run: echo "packages=$(python3 scripts/check-publishable.py npm-matrix)" >> "$GITHUB_OUTPUT"
+
+  npm:
+    name: npm (${{ matrix.package }})
+    needs: [npm-matrix]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.npm-matrix.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Install Rust toolchain
+        if: contains(matrix.tools, 'wasm-pack')
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        if: contains(matrix.tools, 'wasm-pack')
+        uses: ./.github/actions/install-wasm-pack
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        if: contains(matrix.tools, 'wasm-pack')
+        with:
+          shared-key: publishable-wasm
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build, pack, dry-run and smoke-install
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: python3 scripts/check-publishable.py npm --package "$PACKAGE"
+
+  napi:
+    name: npm (@chordsketch/node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: publishable-napi
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+
+      # The same CLI napi.yml builds the release addons with.
+      - name: Install @napi-rs/cli
+        run: npm install -g @napi-rs/cli
+
+      # A debug build is enough: what this job checks is the staging, the
+      # packages and that the resolver loads the addon. napi.yml builds and
+      # smoke-tests the release addon for every target.
+      - name: Build the linux-x64-gnu addon
+        working-directory: crates/napi
+        env:
+          # Without debug info the debug addon is a fraction of its size,
+          # and it is packed five times below.
+          CARGO_PROFILE_DEV_DEBUG: "0"
+        run: napi build --manifest-path Cargo.toml --target x86_64-unknown-linux-gnu
+
+      # `napi build` rewrites the committed `index.d.ts`. The release job
+      # packs a fresh checkout, so restore the committed file before packing
+      # to check the package the release would publish.
+      - name: Restore the committed resolver files
+        run: git checkout -- crates/napi/index.js crates/napi/index.d.ts
+
+      # Lay the build out the way napi.yml's release job downloads its
+      # artifacts. Only the host addon can be built here, so it stands in
+      # for the four other targets: the platform packages are staged,
+      # packed and dry-run exactly as at release, and only the Linux
+      # x86_64 one is loaded.
+      - name: Lay out the addon as release artifacts
+        run: |
+          for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-msvc; do
+            mkdir -p "napi-artifacts/napi-${target}"
+            cp crates/napi/*.node "napi-artifacts/napi-${target}/"
+          done
+
+      - name: Stage and pack with the release staging script
+        run: |
+          version=$(node -p "require('./crates/napi/package.json').version")
+          crates/napi/scripts/stage-release-tarballs.sh napi-artifacts "$version" release-staging
+
+      - name: Check the staged tarballs
+        run: python3 scripts/check-publishable.py napi --tarballs release-staging
+
+  publishable:
+    name: Publishable
+    # The one required status check. It stands for every job above, so a
+    # job added later is covered by adding it to `needs` — branch
+    # protection does not have to change.
+    needs: [self-test, crates-io, npm-matrix, npm, napi]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every publish check to have passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, sys
+          results = {job: need["result"] for job, need in json.loads(os.environ["NEEDS"]).items()}
+          for job, result in sorted(results.items()):
+              print(f"{job}: {result}")
+          failed = [job for job, result in results.items() if result != "success"]
+          if failed:
+              print(f"::error::not publishable: {', '.join(failed)}")
+              sys.exit(1)
+          EOF
