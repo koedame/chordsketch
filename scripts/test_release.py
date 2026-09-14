@@ -15,6 +15,8 @@ part a refactor could quietly break without any registry noticing:
   4. The release is built from the tagged commit once a tag exists, and
      from `origin/main` before that.
   5. The small parsers the preflight relies on.
+  6. The script is executable, since the documented invocation is
+     `scripts/release.py X.Y.Z` rather than `python3 scripts/release.py`.
 
 Stdlib `unittest` only. Nothing here touches the network, git or gh.
 """
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -225,6 +228,16 @@ class ConfirmReleaseTest(unittest.TestCase):
     def test_closed_stdin_refuses_instead_of_raising(self) -> None:
         with mock.patch("builtins.input", side_effect=EOFError):
             self.assertFalse(release.confirm_release("1.2.0"))
+
+
+class InvocationTest(unittest.TestCase):
+    def test_script_runs_as_documented_without_python3_prefix(self) -> None:
+        # docs/releasing.md runs `scripts/release.py X.Y.Z`. Without the
+        # executable bit, bash answers "Permission denied" and zsh answers
+        # "command not found", neither of which points at the file mode.
+        script = SCRIPTS_DIR / "release.py"
+        self.assertTrue(script.read_text().startswith("#!/usr/bin/env python3\n"))
+        self.assertTrue(os.access(script, os.X_OK), f"{script} is not executable")
 
 
 class ParserTest(unittest.TestCase):
