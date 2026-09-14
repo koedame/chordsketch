@@ -24,6 +24,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -174,6 +175,20 @@ class NpmPublishOrderTest(unittest.TestCase):
     def test_napi_prefix_does_not_match_unrelated_packages(self) -> None:
         self.assertTrue(release.is_napi("@chordsketch/node-win32-x64-msvc"))
         self.assertFalse(release.is_napi("@chordsketch/nodejs-helpers"))
+
+
+class ConfirmReleaseTest(unittest.TestCase):
+    def test_matching_answer_confirms(self) -> None:
+        with mock.patch("builtins.input", return_value="1.2.0"):
+            self.assertTrue(release.confirm_release("1.2.0"))
+
+    def test_non_matching_answer_refuses(self) -> None:
+        with mock.patch("builtins.input", return_value="nope"):
+            self.assertFalse(release.confirm_release("1.2.0"))
+
+    def test_closed_stdin_refuses_instead_of_raising(self) -> None:
+        with mock.patch("builtins.input", side_effect=EOFError):
+            self.assertFalse(release.confirm_release("1.2.0"))
 
 
 class ParserTest(unittest.TestCase):

@@ -730,6 +730,21 @@ def verify_release(state: Survey, login: str) -> None:
 # ---------------------------------------------------------------- main
 
 
+def confirm_release(version: str) -> bool:
+    """Ask the operator to type the version back to confirm the release.
+
+    A closed stdin (no TTY, no `--yes`, e.g. an unattended invocation) raises
+    `EOFError` from `input()`; treat that the same as a non-matching answer
+    so the caller aborts cleanly instead of letting the exception propagate
+    as a raw traceback.
+    """
+    try:
+        answer = input(f"\nType {version} to start the release: ")
+    except EOFError:
+        answer = ""
+    return answer.strip() == version
+
+
 def print_plan(state: Survey, plan: Plan) -> None:
     section("Plan")
     if plan.tags_to_push:
@@ -779,14 +794,9 @@ def main() -> int:
         if args.check:
             return 0
 
-        if not args.yes:
-            try:
-                answer = input(f"\nType {args.version} to start the release: ")
-            except EOFError:
-                answer = ""
-            if answer.strip() != args.version:
-                print("Aborted. Nothing was published.")
-                return 1
+        if not args.yes and not confirm_release(args.version):
+            print("Aborted. Nothing was published.")
+            return 1
 
         if plan.tags_to_push:
             push_tags(state, plan.tags_to_push)
