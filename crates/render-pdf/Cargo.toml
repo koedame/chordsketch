@@ -11,6 +11,11 @@ keywords.workspace = true
 categories.workspace = true
 description = "PDF renderer for ChordPro documents"
 readme = "README.md"
+# The golden PDFs under tests/fixtures embed the CJK font subset and are
+# several MiB each; shipping them pushed the .crate past crates.io's 10 MiB
+# upload limit (0.6.0 was rejected with HTTP 413). The golden tests need the
+# repository checkout anyway, so the published crate leaves the fixtures out.
+exclude = ["/tests/fixtures/"]
 
 [dependencies]
 chordsketch-chordpro = { version = "0.6.0", path = "../chordpro" }

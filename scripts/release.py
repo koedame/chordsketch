@@ -30,7 +30,8 @@ and only if every answer is yes does it push the tag (ADR-0068):
     (`.github/workflows/release-credentials.yml`);
   * the local crates.io token and npm login are accepted, and the account
     owns the packages;
-  * every pending crate and npm package builds and packages (dry runs).
+  * every pending crate and npm package builds and packages (dry runs), and
+    every packaged crate is within crates.io's 10 MiB upload limit.
 
 Then, in order: push `vX.Y.Z` and `desktop-vX.Y.Z`; wait for the tag runs;
 refuse to publish locally unless every CI-published channel has converged
@@ -85,6 +86,10 @@ LOCAL_KINDS = frozenset({"crates-io", "npm"})
 # local overlay registry before uploading any, then uploads in dependency
 # order. Stabilised in Cargo 1.90.
 MIN_CARGO = (1, 90)
+
+# crates.io refuses a larger .crate with HTTP 413. The dry run never uploads,
+# so it passes regardless; preflight packages the crates and measures them.
+CRATES_IO_MAX_UPLOAD = 10 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -231,6 +236,26 @@ def dated_changelog_heading(changelog: str, version: str) -> bool:
 def parse_cargo_version(output: str) -> tuple[int, int] | None:
     match = re.match(r"cargo (\d+)\.(\d+)", output)
     return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def crate_size_problems(sizes: dict[str, int | None]) -> list[str]:
+    """Crates that crates.io would refuse for their size.
+
+    `sizes` maps each pending crate to the byte size of its packaged
+    `.crate`, or None when that file is missing. A missing file is a
+    problem too: an unmeasured crate is not known to fit.
+    """
+    problems = []
+    for crate, size in sizes.items():
+        if size is None:
+            problems.append(f"`cargo package` left no .crate for {crate}, so its size against crates.io's upload limit is unknown")
+        elif size > CRATES_IO_MAX_UPLOAD:
+            problems.append(
+                f"{crate} packages to {size / 1024 / 1024:.1f} MiB, over crates.io's "
+                f"{CRATES_IO_MAX_UPLOAD // 1024 // 1024} MiB upload limit; `exclude` what the published crate "
+                f"does not need in its Cargo.toml (check with `cargo package -p {crate} --list`)"
+            )
+    return problems
 
 
 def npm_publish_order(pending: tuple[str, ...]) -> list[str]:
@@ -580,7 +605,20 @@ def dry_run_crates(state: Survey, plan: Plan, findings: Findings) -> None:
     section("cargo publish --dry-run (verifies every pending crate together)")
     dry = run(["cargo", "publish", "--dry-run", "--locked", *flag_each("-p", plan.pending_crates)],
               cwd=state.tree, check=False, capture=False)
-    findings.check(dry.returncode == 0, "`cargo publish --dry-run` failed for the pending crates (output above)")
+    if not findings.check(dry.returncode == 0, "`cargo publish --dry-run` failed for the pending crates (output above)"):
+        return
+    # `cargo publish --dry-run` keeps its .crate files in an undocumented
+    # scratch directory; `cargo package` writes them to target/package.
+    package = run(["cargo", "package", "--no-verify", "--locked", *flag_each("-p", plan.pending_crates)],
+                  cwd=state.tree, check=False)
+    if not findings.check(package.returncode == 0, "`cargo package` failed for the pending crates:\n" + package.stderr):
+        return
+    packaged = Path(os.environ["CARGO_TARGET_DIR"]) / "package"
+    sizes: dict[str, int | None] = {}
+    for crate in plan.pending_crates:
+        path = packaged / f"{crate}-{state.version}.crate"
+        sizes[crate] = path.stat().st_size if path.is_file() else None
+    findings.problems.extend(crate_size_problems(sizes))
 
 
 def crates_token() -> tuple[str, str] | None:

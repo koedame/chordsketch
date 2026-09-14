@@ -81,8 +81,10 @@ publishing holds, and reports every failing one at once:
   asks Docker Hub, the Marketplace, Open VSX, the Central Portal, CocoaPods
   trunk, GitHub, AUR and the Snap Store with read-only calls;
 - the local crates.io token and npm login are live and own the packages;
-- `cargo publish --dry-run` passes for every pending crate together, and
-  every pending npm package builds and passes `npm publish --dry-run`.
+- `cargo publish --dry-run` passes for every pending crate together, every
+  `.crate` it packaged is within crates.io's 10 MiB upload limit (the dry
+  run itself never uploads, so it cannot see the limit), and every pending
+  npm package builds and passes `npm publish --dry-run`.
 
 It then pushes `vX.Y.Z` and `desktop-vX.Y.Z`, waits for the tag runs,
 publishes to crates.io and npm only if every CI-published channel serves
