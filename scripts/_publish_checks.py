@@ -1241,9 +1241,17 @@ def fabricated_release(directory: Path, version: str) -> None:
         (directory / "packaging").symlink_to(REPO_ROOT / "packaging")
 
 
-def run_release_step(workflow: str, job: str, step: str, directory: Path, env: dict[str, str], runner: Runner = run) -> subprocess.CompletedProcess[str]:
-    """Run one `run:` step of a release workflow, the way the runner does."""
+def run_release_step(workflow: str, job: str, step: str, directory: Path, env: dict[str, str], runner: Runner = run, shell: str = "bash") -> subprocess.CompletedProcess[str]:
+    """Run one `run:` step of a release workflow, the way the runner does.
+
+    `shell` is the step's `shell:` — `bash` (the runner's `bash -eo pipefail`)
+    or `pwsh`.
+    """
     body = extract_job_step_run((REPO_ROOT / ".github/workflows" / workflow).read_text(), job, step)
+    if shell == "pwsh":
+        script = directory / f"{job}.ps1"
+        script.write_text(body + "\n")
+        return runner(["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(script)], directory, env)
     script = directory / f"{job}.sh"
     script.write_text(body + "\n")
     return runner(["bash", "--noprofile", "--norc", "-eo", "pipefail", str(script)], directory, env)
@@ -1614,31 +1622,54 @@ CLI_ARCHIVE_LARGE_FILES = ("*/chordsketch", "*/chordsketch-lsp")
 
 
 def cli_archive_problems(version: str, target: str, binaries: Path, runner: Runner = run) -> list[str]:
-    """Package release.yml's Unix archive from `binaries` and check its layout and checksum line."""
+    """Package release.yml's archive for `target` from `binaries` and check its layout and checksum line.
+
+    Windows targets go through the `Package (Windows)` step (`pwsh`,
+    `Compress-Archive`), which puts the files at the zip's root; the others
+    through `Package (Unix)`, which wraps them in a top directory.
+    """
+    windows = "windows" in target
+    exe = ".exe" if windows else ""
     directory = Path(tempfile.mkdtemp(prefix="cli-archive-"))
     try:
         (directory / f"target/{target}/release").mkdir(parents=True)
         for name in ("chordsketch", "chordsketch-lsp"):
-            shutil.copyfile(binaries / name, directory / f"target/{target}/release/{name}")
+            shutil.copyfile(binaries / f"{name}{exe}", directory / f"target/{target}/release/{name}{exe}")
         for name in ("LICENSE", "README.md"):
             shutil.copyfile(REPO_ROOT / name, directory / name)
         tag = f"v{version}"
         github_env = directory / "github-env"
         github_env.touch()
-        packaged = run_release_step("release.yml", "build", "Package (Unix)", directory, {"VERSION": tag, "TARGET": target, "GITHUB_ENV": str(github_env)}, runner)
+        step = "Package (Windows)" if windows else "Package (Unix)"
+        env = {"VERSION": tag, "TARGET": target, "GITHUB_ENV": str(github_env)}
+        packaged = run_release_step("release.yml", "build", step, directory, env, runner, shell="pwsh" if windows else "bash")
         if packaged.returncode != 0:
-            return [f"release.yml `Package (Unix)` failed:\n{tail(packaged.stdout)}"]
-        archive = directory / f"chordsketch-{tag}-{target}.tar.gz"
+            return [f"release.yml `{step}` failed:\n{tail(packaged.stdout)}"]
+        archive = directory / f"chordsketch-{tag}-{target}.{'zip' if windows else 'tar.gz'}"
         if not archive.is_file():
-            return [f"release.yml `Package (Unix)` did not write {archive.name}"]
+            return [f"release.yml `{step}` did not write {archive.name}"]
         problems = []
         if f"{RELEASE_REPOSITORY_URL}{tag}/{archive.name}" not in release_assets(version):
             problems.append(f"{archive.name} is not an asset the package managers download")
-        files = read_tarball(archive, strip_top_level=False)
-        expected = {f"chordsketch-{tag}-{target}/{name}" for name in CLI_ARCHIVE_FILES}
-        if missing := sorted(expected - {f.path for f in files}):
+        if windows:
+            # Scoop's `bin`, Chocolatey's unzip and winget's
+            # `RelativeFilePath` all expect the executables at the root.
+            files = read_zip(archive)
+            expected = {f"{name}.exe" if name.startswith("chordsketch") else name for name in CLI_ARCHIVE_FILES}
+            large = tuple(f"{name}.exe" for name in ("chordsketch", "chordsketch-lsp"))
+        else:
+            files = read_tarball(archive, strip_top_level=False)
+            expected = {f"chordsketch-{tag}-{target}/{name}" for name in CLI_ARCHIVE_FILES}
+            large = CLI_ARCHIVE_LARGE_FILES
+        present = {f.path for f in files}
+        if missing := sorted(expected - present):
             problems.append(f"{archive.name} lacks {', '.join(missing)}")
-        problems += content_problems(archive.name, files, CLI_ARCHIVE_LARGE_FILES)
+        # Declared only where they are, so a wrong layout is reported once, as missing files.
+        problems += content_problems(archive.name, files, tuple(glob for glob in large if any(fnmatch.fnmatch(path, glob) for path in present)))
+        if windows:
+            # The checksum step runs once, in the `release` job on Linux,
+            # over every archive; the Linux archive check exercises it.
+            return problems
 
         # The `release` job's checksum step, over the artifact layout
         # `download-artifact` gives it (one directory per target).

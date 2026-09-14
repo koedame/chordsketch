@@ -536,6 +536,35 @@ class ReleaseAssetTest(unittest.TestCase):
         self.assertIn("unfilled", checks.checksum_problems("m", "sha256 '{{SHA256_X}}'", "1.2.0")[0])
 
 
+class CliArchiveTest(unittest.TestCase):
+    def package_with(self, entries: dict[str, bytes]):
+        """A runner standing in for pwsh: writes the zip `Package (Windows)` would."""
+
+        def runner(cmd, cwd, env=None):
+            if cmd[0] == "pwsh":
+                write_zip(Path(cwd) / f"chordsketch-{env['VERSION']}-{env['TARGET']}.zip", entries)
+            return checks.subprocess.CompletedProcess(cmd, 0, "")
+
+        return runner
+
+    def check(self, entries: dict[str, bytes]) -> list[str]:
+        with tempfile.TemporaryDirectory() as scratch:
+            binaries = Path(scratch)
+            for name in ("chordsketch.exe", "chordsketch-lsp.exe"):
+                (binaries / name).write_bytes(b"MZ")
+            return checks.cli_archive_problems("1.2.0", "x86_64-pc-windows-msvc", binaries, self.package_with(entries))
+
+    def test_when_the_windows_zip_has_the_executables_at_its_root_it_passes(self) -> None:
+        entries = {"chordsketch.exe": b"MZ", "chordsketch-lsp.exe": b"MZ", "LICENSE": b"MIT", "README.md": b"#"}
+        self.assertEqual(self.check(entries), [])
+
+    def test_when_the_windows_zip_wraps_the_executables_in_a_directory_scoop_cannot_find_them(self) -> None:
+        top = "chordsketch-v1.2.0-x86_64-pc-windows-msvc"
+        entries = {f"{top}/chordsketch.exe": b"MZ", f"{top}/chordsketch-lsp.exe": b"MZ", f"{top}/LICENSE": b"MIT", f"{top}/README.md": b"#"}
+        problems = self.check(entries)
+        self.assertEqual(problems, ["chordsketch-v1.2.0-x86_64-pc-windows-msvc.zip lacks LICENSE, README.md, chordsketch-lsp.exe, chordsketch.exe"])
+
+
 class ShippedManifestTest(unittest.TestCase):
     """The hand-maintained manifests in `packaging/`, as they are committed."""
 

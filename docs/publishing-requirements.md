@@ -208,12 +208,13 @@ Built and uploaded by [`release.yml`](../.github/workflows/release.yml) on
 a release tag. Every package manager below downloads these archives by
 name, so their names, layout and checksum lines are part of every
 channel's contract. The pull-request check runs `release.yml`'s own
-`Package (Unix)` and `Generate checksums` steps on a debug Linux build.
+`Package (Unix)` and `Generate checksums` steps on a debug Linux build, and
+`Package (Windows)` in PowerShell on a debug Windows build.
 
 | Condition | Source | Checked by |
 |---|---|---|
 | The archive is named `chordsketch-vX.Y.Z-<target>.tar.gz` (`.zip` on Windows), one per `release.yml` target | — (Homebrew, Scoop, Chocolatey, AUR, Snap, docker.yml and the VS Code build all download by this name) | `cli_archive_problems`; `release_assets` reads the targets from `release.yml` |
-| It holds `chordsketch-vX.Y.Z-<target>/` with `chordsketch`, `chordsketch-lsp`, `LICENSE`, `README.md` | — | `cli_archive_problems` |
+| A tarball holds `chordsketch-vX.Y.Z-<target>/` with `chordsketch`, `chordsketch-lsp`, `LICENSE`, `README.md`; the Windows zip holds `chordsketch.exe`, `chordsketch-lsp.exe`, `LICENSE`, `README.md` at its root | — (Scoop's `bin`, Chocolatey's unzip and winget's `RelativeFilePath` read the zip's root) | `cli_archive_problems` |
 | `checksums.txt` has a `<sha256>  <archive name>` line, with no directory | — (the package managers `awk` for the name) | `cli_archive_problems` |
 
 ## Homebrew formula and cask

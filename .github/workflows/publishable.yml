@@ -498,7 +498,7 @@ jobs:
     uses: ./.github/workflows/nix.yml
 
   chocolatey:
-    name: Chocolatey
+    name: Chocolatey and the Windows release archive
     # The release packs on Windows with the runner's choco.
     runs-on: windows-latest
     defaults:
@@ -523,6 +523,19 @@ jobs:
 
       - name: Pack with the release's Pack step and check the package
         run: python scripts/check-publishable.py chocolatey --dir .
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: publishable-cli-x86_64-pc-windows-msvc
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # The zip Scoop, Chocolatey and winget download is packaged by
+      # release.yml's `Package (Windows)` step, in PowerShell.
+      - name: Build the CLI and language server
+        run: cargo build -p chordsketch -p chordsketch-lsp
+
+      - name: Package and check the Windows release archive
+        run: python scripts/check-publishable.py cli-archive --binaries target/debug --target x86_64-pc-windows-msvc
 
   aur:
     name: AUR
