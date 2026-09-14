@@ -1,19 +1,16 @@
 name: MacPorts smoke
 
 on:
-  pull_request:
-    paths:
-      - "packaging/macports/**"
-      - ".github/workflows/macports-smoke.yml"
-      - ".github/actions/install-macports/action.yml"
-      - "scripts/macports-regen-cargo-crates.py"
+  # Called by publishable.yml on every pull request, push to `main` and
+  # nightly: `port lint --nitpick` is what MacPorts requires of a Portfile
+  # before it accepts a submission (ADR-0070). Before that it ran only on
+  # pull requests touching the paths below, so a Portfile could fall out of
+  # lint through a change elsewhere (a new dependency in Cargo.lock) unseen.
+  workflow_call:
   workflow_dispatch:
-  # No `push:` trigger: the heavy steps (`port install` + verify)
-  # only fire on `workflow_dispatch` anyway, so a `push: branches:
-  # [main]` would just re-run the cheap PR-time path on every merge.
   #
   # Two-tier triggering by design:
-  # - PR runs: install MacPorts, register the local Portfile,
+  # - Called runs: install MacPorts, register the local Portfile,
   #   `port lint --nitpick`. Catches Tcl-syntax / required-field /
   #   field-ordering bugs in <5 min.
   # - `workflow_dispatch`: everything above, plus `port install

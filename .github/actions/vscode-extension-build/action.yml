@@ -1,0 +1,72 @@
+name: "Build the VS Code extension"
+description: >
+  Build `packages/vscode-extension` from source: the lean and heavy
+  `@chordsketch/wasm` bundles it copies its wasm out of, the
+  `@chordsketch/react` dist it aliases, its own dependencies and its
+  esbuild bundle. Shared by `vscode-extension.yml`'s `build` and
+  `build-platform` jobs and by `publishable.yml`, so the extension the
+  pull-request check packages is built exactly as the release builds it
+  (ADR-0070).
+inputs:
+  cache-key:
+    description: "`Swatinem/rust-cache` shared-key for the wasm-pack builds."
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: "22"
+        cache: "npm"
+        cache-dependency-path: packages/vscode-extension/package-lock.json
+
+    # Build @chordsketch/wasm from source rather than fetching @latest
+    # from the npm registry so the extension sees the same
+    # wasm-bindgen-generated JS surface that the in-tree `crates/wasm`
+    # defines on this commit. Fetching `@latest` left a publish-lag
+    # window where preview.ts could import a wasm export that existed in
+    # `crates/wasm/src/lib.rs` but had not yet been published to npm —
+    # esbuild then bundles a missing-export reference whose runtime
+    # failure is invisible to CI (#2279).
+    - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+      with:
+        toolchain: stable
+    - uses: ./.github/actions/install-wasm-pack
+    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      with:
+        shared-key: ${{ inputs.cache-key }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Build @chordsketch/wasm (lean) from source
+      shell: bash
+      run: node packages/npm/scripts/build.mjs
+
+    # The extension's esbuild script copies the wasm binary out of
+    # `packages/npm-export/` (#2466) because `convertToPdf` calls
+    # `render_pdf` from the heavy bundle.
+    - name: Build @chordsketch/wasm-export (heavy) from source
+      shell: bash
+      run: node packages/npm-export/scripts/build.mjs
+
+    # The extension declares `@chordsketch/react` as a `file:` workspace
+    # dep; its `prepare` script auto-builds on install, but only if the
+    # React package's own devDeps are populated. Run the install + build
+    # explicitly so esbuild's `@chordsketch/react` alias has an in-tree
+    # dist and type definitions are present for `tsc --noEmit` (#2527).
+    - name: Install and build @chordsketch/react
+      shell: bash
+      working-directory: packages/react
+      run: |
+        npm install --no-audit --no-fund
+        npm run build
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: packages/vscode-extension
+      run: npm ci
+
+    - name: Build
+      shell: bash
+      working-directory: packages/vscode-extension
+      run: npm run build

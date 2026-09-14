@@ -1,0 +1,32 @@
+name: "Set up the VS Code extension publish tools"
+description: >
+  Install what the Marketplace and Open VSX publish jobs run `vsce` and
+  `ovsx` from. Shared by those two jobs and by `publishable.yml`, which
+  runs it on every pull request: v0.6.0's publish jobs both died here
+  with `tsup: not found`, on a path no pull request had exercised
+  (ADR-0070).
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: "22"
+        cache: "npm"
+        cache-dependency-path: packages/vscode-extension/package-lock.json
+
+    # `npm ci` below installs the `file:../react` dep, which runs the
+    # React package's `prepare` build (npm runs it for `file:` deps even
+    # under --ignore-scripts). Without React's own devDeps that build
+    # dies with `tsup: not found` (#2527, #2886).
+    - name: Install and build @chordsketch/react
+      shell: bash
+      working-directory: packages/react
+      run: |
+        npm install --no-audit --no-fund
+        npm run build
+
+    - name: Install dependencies (for vsce and ovsx)
+      shell: bash
+      working-directory: packages/vscode-extension
+      run: npm ci

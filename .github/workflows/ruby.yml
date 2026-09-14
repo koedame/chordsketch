@@ -192,62 +192,8 @@ jobs:
         run: cargo build -p chordsketch-ffi
 
       - name: Generate Ruby bindings
-        # Generating directly into `packages/ruby/lib/` overwrites the
-        # committed platform-aware loader at `packages/ruby/lib/chordsketch.rb`
-        # because UniFFI names the file after the .udl namespace
-        # (also `chordsketch`). Generate into a temporary directory and
-        # move only the binding file out as `chordsketch_uniffi.rb`.
-        #
-        # Then rewrite the `ffi_lib 'chordsketch_ffi'` line to use the
-        # absolute path exposed by the loader as `Chordsketch::NATIVE_LIB_PATH`.
-        # ffi gem 1.17+ ignores RTLD_GLOBAL pre-loaded handles when looking
-        # up libraries by bare name, so the previous loader's
-        # `FFI::DynamicLibrary.open(..., RTLD_GLOBAL)` approach didn't work.
-        # See #1082 for the full root-cause analysis.
-        run: |
-          mkdir -p .uniffi-tmp
-          cargo run -p chordsketch-ffi --bin uniffi-bindgen generate \
-            --library target/debug/libchordsketch_ffi.so \
-            --language ruby \
-            --out-dir .uniffi-tmp/
-          # Use Python to do the rewrite (more robust than sed across
-          # subtle UniFFI output-format changes — handles whitespace and
-          # quote-style variation, and prints the matched line for clarity).
-          python3 - <<'PYTHON'
-          import re, sys
-          path = ".uniffi-tmp/chordsketch.rb"
-          with open(path) as f:
-              content = f.read()
-          # Match a line whose first non-whitespace token is `ffi_lib`
-          # followed by something containing `chordsketch_ffi`. Tolerant
-          # of single/double quotes, optional `.so`/etc suffix, and any
-          # indentation.
-          pat = re.compile(
-              r'^([ \t]*)ffi_lib[ \t]+[\'"][^\'"]*chordsketch_ffi[^\'"]*[\'"][ \t]*$',
-              re.MULTILINE,
-          )
-          m = pat.search(content)
-          if not m:
-              # Print the surrounding lines so we can update the regex
-              # if UniFFI's output format ever changes.
-              sys.stderr.write(
-                  "ERROR: could not find ffi_lib line for chordsketch_ffi.\n"
-                  "Lines mentioning ffi_lib in the generated file:\n"
-              )
-              for i, line in enumerate(content.splitlines(), 1):
-                  if "ffi_lib" in line:
-                      sys.stderr.write(f"  {i}: {line!r}\n")
-              sys.exit(1)
-          new_content, n = pat.subn(r"\1ffi_lib Chordsketch::NATIVE_LIB_PATH", content)
-          if n != 1:
-              sys.stderr.write(f"ERROR: expected exactly 1 ffi_lib substitution, got {n}\n")
-              sys.exit(1)
-          with open(path, "w") as f:
-              f.write(new_content)
-          print(f"OK: rewrote 1 ffi_lib line in {path} (matched line was: {m.group(0)!r})")
-          PYTHON
-          mv .uniffi-tmp/chordsketch.rb packages/ruby/lib/chordsketch_uniffi.rb
-          rm -rf .uniffi-tmp/
+        # The same script publishable.yml generates the bindings with.
+        run: packages/ruby/scripts/generate-bindings.sh target/debug/libchordsketch_ffi.so
 
       - name: Download native library (linux-x86-64)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -369,19 +315,11 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: native-*
-          path: packages/ruby/lib/
+          path: native-artifacts/
 
       - name: Organize native libraries by platform
         if: steps.oidc.outputs.available == 'true'
-        run: |
-          cd packages/ruby/lib
-          mkdir -p x86_64-linux aarch64-linux aarch64-darwin x86_64-darwin x86_64-windows
-          mv native-x86_64-unknown-linux-gnu/* x86_64-linux/
-          mv native-aarch64-unknown-linux-gnu/* aarch64-linux/
-          mv native-aarch64-apple-darwin/* aarch64-darwin/
-          mv native-x86_64-apple-darwin/* x86_64-darwin/
-          mv native-x86_64-pc-windows-msvc/* x86_64-windows/
-          rmdir native-*
+        run: packages/ruby/scripts/stage-native-libs.sh native-artifacts
 
       - name: Set up Ruby
         if: steps.oidc.outputs.available == 'true'
@@ -403,5 +341,7 @@ jobs:
         if: steps.oidc.outputs.available == 'true'
         working-directory: packages/ruby
         run: |
-          gem build chordsketch.gemspec
+          # Builds the gem and runs the checks publishable.yml runs on every
+          # pull request against it — now with every platform's real library.
+          python3 ../../scripts/check-publishable.py gem
           gem push chordsketch-*.gem
