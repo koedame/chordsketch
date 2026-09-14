@@ -1,6 +1,6 @@
 {
   "name": "@chordsketch/svelte",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Svelte 5 components for embedding ChordPro previews, editors and chord diagrams, powered by @chordsketch/wasm",
   "license": "MIT",
   "type": "module",
@@ -48,7 +48,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@chordsketch/wasm-export": "^0.5.0",
+    "@chordsketch/wasm-export": "^0.6.0",
     "svelte": "^5.0.0"
   },
   "peerDependenciesMeta": {
@@ -57,7 +57,7 @@
     }
   },
   "dependencies": {
-    "@chordsketch/wasm": "^0.5.0",
+    "@chordsketch/wasm": "^0.6.0",
     "esm-env": "^1.2.2"
   },
   "devDependencies": {
