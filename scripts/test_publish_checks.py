@@ -35,6 +35,7 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -476,12 +477,23 @@ class ChannelCoverageTest(unittest.TestCase):
     WORKFLOW = (checks.REPO_ROOT / ".github/workflows/publishable.yml").read_text()
 
     def test_when_the_manifest_lists_a_channel_the_required_check_covers_it(self) -> None:
+        # A plain substring test would let "check-publishable.py npm" match
+        # inside the unrelated "check-publishable.py npm-matrix" invocation,
+        # so a dropped `npm` job would go unnoticed. Require the match not
+        # be immediately followed by a word character or hyphen.
         uncovered = []
         for channel in load_channels():
             check = checks.channel_check(channel.id, channel.kind, channel.package)
-            if check is None or check not in self.WORKFLOW:
+            if check is None or not re.search(re.escape(check) + r"(?![\w-])", self.WORKFLOW):
                 uncovered.append(f"{channel.id} ({check})")
         self.assertEqual(uncovered, [])
+
+    def test_when_a_workflow_only_has_a_look_alike_invocation_the_channel_is_still_uncovered(self) -> None:
+        # `npm-matrix` is a real, unrelated subcommand that starts with the
+        # `npm` channel's check string; a workflow that dropped the real
+        # `npm` job but kept `npm-matrix` must not read as covered.
+        look_alike = 'run: echo "packages=$(python3 scripts/check-publishable.py npm-matrix)"'
+        self.assertIsNone(re.search(re.escape("check-publishable.py npm") + r"(?![\w-])", look_alike))
 
     def test_when_a_job_exists_in_publishable_the_aggregate_job_needs_it(self) -> None:
         jobs = re.findall(r"^  ([a-z0-9-]+):\n", self.WORKFLOW[self.WORKFLOW.index("\njobs:\n") :], flags=re.MULTILINE)
@@ -541,6 +553,85 @@ class ShippedManifestTest(unittest.TestCase):
             cmd, cwd=cwd, env={**checks.os.environ, **(env or {})}, text=True, stdout=checks.subprocess.PIPE, stderr=checks.subprocess.STDOUT
         )
         self.assertEqual(checks.scoop_problems(self.VERSION, quiet), [])
+
+
+def overlay_repo_root(scratch: Path, override_subpath: str) -> Path:
+    """A `REPO_ROOT` look-alike: every top-level entry symlinked from the
+    real repository except the one holding `override_subpath`, so a test
+    can feed `winget_problems` / `nixpkgs_problems` a broken manifest
+    without losing the real `.github/workflows/release.yml` those
+    functions also read (for `release_assets`)."""
+    top = override_subpath.split("/", 1)[0]
+    for entry in checks.REPO_ROOT.iterdir():
+        if entry.name != top:
+            (scratch / entry.name).symlink_to(entry)
+    real_top = checks.REPO_ROOT / top
+    fake_top = scratch / top
+    if real_top.is_dir():
+        fake_top.mkdir()
+        rest = override_subpath[len(top) + 1 :]
+        second = rest.split("/", 1)[0]
+        for entry in real_top.iterdir():
+            if entry.name != second:
+                (fake_top / entry.name).symlink_to(entry)
+    return scratch
+
+
+class WingetAndNixpkgsAdversarialTest(unittest.TestCase):
+    """`winget_problems` / `nixpkgs_problems` are only exercised by
+    `ShippedManifestTest` against the real, currently-correct manifests
+    above; these feed each a broken one to prove the field checks fire."""
+
+    WINGET_FILES = {
+        "koedame.chordsketch.yaml": "PackageIdentifier: koedame.chordsketch\nPackageVersion: 1.2.0\nDefaultLocale: en-US\nManifestType: version\nManifestVersion: 1.6.0\n",
+        "koedame.chordsketch.locale.en-US.yaml": "PackageIdentifier: koedame.chordsketch\nPackageVersion: 1.2.0\nPackageLocale: en-US\nPublisher: koedame\nPackageName: ChordSketch\nLicense: MIT\nShortDescription: s\nManifestType: defaultLocale\nManifestVersion: 1.6.0\n",
+        "koedame.chordsketch.installer.yaml": "PackageIdentifier: koedame.chordsketch\nPackageVersion: 1.2.0\nInstallerType: zip\nManifestType: installer\nManifestVersion: 1.6.0\n",
+    }
+
+    def write_winget(self, scratch: Path, files: dict[str, str]) -> None:
+        directory = scratch / "packaging/winget"
+        directory.mkdir(parents=True)
+        for name, text in files.items():
+            (directory / name).write_text(text)
+
+    def test_when_a_winget_manifest_is_at_a_different_version_it_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root = overlay_repo_root(Path(scratch), "packaging/winget")
+            self.write_winget(root, self.WINGET_FILES)
+            with mock.patch.object(checks, "REPO_ROOT", root):
+                problems = checks.winget_problems("1.3.0")
+        self.assertTrue(any("PackageVersion" in p for p in problems), problems)
+
+    def test_when_a_winget_locale_manifest_has_no_publisher_it_is_reported(self) -> None:
+        files = dict(self.WINGET_FILES)
+        files["koedame.chordsketch.locale.en-US.yaml"] = "\n".join(line for line in files["koedame.chordsketch.locale.en-US.yaml"].splitlines() if not line.startswith("Publisher:")) + "\n"
+        with tempfile.TemporaryDirectory() as scratch:
+            root = overlay_repo_root(Path(scratch), "packaging/winget")
+            self.write_winget(root, files)
+            with mock.patch.object(checks, "REPO_ROOT", root):
+                problems = checks.winget_problems("1.2.0")
+        self.assertTrue(any("Publisher" in p for p in problems), problems)
+
+    def write_nix(self, scratch: Path, text: str) -> None:
+        (scratch / "packaging/nix").mkdir(parents=True)
+        (scratch / checks.NIX_PACKAGE).write_text(text)
+
+    def test_when_the_nixpkgs_template_version_does_not_match_it_is_reported(self) -> None:
+        text = 'version = "1.2.0";\nmeta = {\n  description = "d";\n  homepage = "h";\n  license = "l";\n  mainProgram = "m";\n  platforms = "p";\n  maintainers = [ ];\n  hash = "x";\n  cargoHash = "y";\n};\n'
+        with tempfile.TemporaryDirectory() as scratch:
+            root = overlay_repo_root(Path(scratch), "packaging/nix")
+            self.write_nix(root, text)
+            with mock.patch.object(checks, "REPO_ROOT", root):
+                problems = checks.nixpkgs_problems("9.9.9")
+        self.assertTrue(any("version" in p for p in problems), problems)
+
+    def test_when_the_nixpkgs_template_has_no_meta_block_it_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root = overlay_repo_root(Path(scratch), "packaging/nix")
+            self.write_nix(root, 'version = "1.2.0";\n')
+            with mock.patch.object(checks, "REPO_ROOT", root):
+                problems = checks.nixpkgs_problems("1.2.0")
+        self.assertIn(f"{checks.NIX_PACKAGE} has no `meta = {{` block", problems)
 
 
 class PackageRuleTest(unittest.TestCase):

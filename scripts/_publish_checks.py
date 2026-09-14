@@ -1015,6 +1015,7 @@ def gem_problems(directory: Path, runner: Runner = run) -> list[str]:
 KOTLIN_DIR = "packages/kotlin"
 MAVEN_GROUP, MAVEN_ARTIFACT = "me.koeda", "chordsketch"
 MAVEN_CENTRAL = "https://repo1.maven.org/maven2"
+MAVEN_DEPENDENCY_MAX = 50 * MIB
 # JNA loads bundled libraries from `<os>-<arch>/` on the classpath
 # (https://java-native-access.github.io/jna/5.17.0/javadoc/com/sun/jna/NativeLibrary.html).
 JAR_NATIVE_LIBRARIES = (
@@ -1107,7 +1108,13 @@ def maven_repository_problems(repository: Path, version: str, runner: Runner = r
             url = f"{MAVEN_CENTRAL}/{group.replace('.', '/')}/{artifact}/{dependency_version}/{artifact}-{dependency_version}.jar"
             try:
                 with urllib.request.urlopen(url, timeout=60) as response:
-                    target.write_bytes(response.read())
+                    # A runtime dependency jar is a few hundred KiB; cap the
+                    # read well above that instead of buffering an
+                    # unbounded response in memory.
+                    data = response.read(MAVEN_DEPENDENCY_MAX + 1)
+                    if len(data) > MAVEN_DEPENDENCY_MAX:
+                        return problems + [f"{group}:{artifact}:{dependency_version} is over {MAVEN_DEPENDENCY_MAX // MIB} MiB, more than a runtime dependency should be"]
+                    target.write_bytes(data)
             except OSError as exc:
                 return problems + [f"{base}.pom depends on {group}:{artifact}:{dependency_version}, which Maven Central does not serve ({exc})"]
             classpath.append(str(target))
@@ -1308,31 +1315,35 @@ def homebrew_problems(version: str, runner: Runner = run) -> list[str]:
     Both are audited and style-checked from a scratch tap, since `brew style`
     outside a tap applies Homebrew's own repository rules rather than a tap's.
     """
-    formula, problems, _ = generated("post-release.yml", "update-homebrew", "Generate formula", ("chordsketch.rb",), version, runner)
-    cask, cask_problems, _ = generated("desktop-release.yml", "update-cask", "Generate cask", ("chordsketch.rb",), version, runner)
-    problems += cask_problems
-    repository = runner(["brew", "--repository"], REPO_ROOT)
-    if repository.returncode != 0:
-        return problems + [f"`brew` is not available:\n{tail(repository.stdout)}"]
-    tap = Path(repository.stdout.strip().splitlines()[-1]) / "Library/Taps/publish-check/homebrew-local"
-    env = {"HOMEBREW_NO_AUTO_UPDATE": "1"}
-    # https://docs.brew.sh/Formula-Cookbook and https://docs.brew.sh/Cask-Cookbook
-    for kind, label, generated_files, required, folder in (
-        ("formula", "Homebrew formula", formula, ("desc", "homepage", "license"), "Formula"),
-        ("cask", "Homebrew cask", cask, ("name", "desc", "homepage"), "Casks"),
-    ):
-        if not generated_files:
-            continue
-        text = generated_files["chordsketch.rb"]
-        problems += download_url_problems(label, text, version) + checksum_problems(label, text, version)
-        problems += [f"{label} has no `{field}`" for field in required if not re.search(rf"^\s+{field} \"", text, flags=re.MULTILINE)]
-        (tap / folder).mkdir(parents=True, exist_ok=True)
-        (tap / folder / "chordsketch.rb").write_text(text)
-        for command in (["brew", "audit", "--strict", f"--{kind}"], ["brew", "style", f"--{kind}"]):
-            checked = runner([*command, "publish-check/local/chordsketch"], REPO_ROOT, env)
-            if checked.returncode != 0:
-                problems.append(f"`{' '.join(command)}` refuses the {kind}:\n{tail(checked.stdout)}")
-    return problems
+    formula, problems, formula_dir = generated("post-release.yml", "update-homebrew", "Generate formula", ("chordsketch.rb",), version, runner)
+    cask, cask_problems, cask_dir = generated("desktop-release.yml", "update-cask", "Generate cask", ("chordsketch.rb",), version, runner)
+    try:
+        problems += cask_problems
+        repository = runner(["brew", "--repository"], REPO_ROOT)
+        if repository.returncode != 0:
+            return problems + [f"`brew` is not available:\n{tail(repository.stdout)}"]
+        tap = Path(repository.stdout.strip().splitlines()[-1]) / "Library/Taps/publish-check/homebrew-local"
+        env = {"HOMEBREW_NO_AUTO_UPDATE": "1"}
+        # https://docs.brew.sh/Formula-Cookbook and https://docs.brew.sh/Cask-Cookbook
+        for kind, label, generated_files, required, folder in (
+            ("formula", "Homebrew formula", formula, ("desc", "homepage", "license"), "Formula"),
+            ("cask", "Homebrew cask", cask, ("name", "desc", "homepage"), "Casks"),
+        ):
+            if not generated_files:
+                continue
+            text = generated_files["chordsketch.rb"]
+            problems += download_url_problems(label, text, version) + checksum_problems(label, text, version)
+            problems += [f"{label} has no `{field}`" for field in required if not re.search(rf"^\s+{field} \"", text, flags=re.MULTILINE)]
+            (tap / folder).mkdir(parents=True, exist_ok=True)
+            (tap / folder / "chordsketch.rb").write_text(text)
+            for command in (["brew", "audit", "--strict", f"--{kind}"], ["brew", "style", f"--{kind}"]):
+                checked = runner([*command, "publish-check/local/chordsketch"], REPO_ROOT, env)
+                if checked.returncode != 0:
+                    problems.append(f"`{' '.join(command)}` refuses the {kind}:\n{tail(checked.stdout)}")
+        return problems
+    finally:
+        shutil.rmtree(formula_dir, ignore_errors=True)
+        shutil.rmtree(cask_dir, ignore_errors=True)
 
 
 # https://github.com/ScoopInstaller/Scoop/wiki/App-Manifests
@@ -1340,25 +1351,28 @@ REQUIRED_SCOOP_FIELDS = ("version", "description", "homepage", "license")
 
 
 def scoop_problems(version: str, runner: Runner = run) -> list[str]:
-    outputs, problems, _ = generated("post-release.yml", "update-scoop", "Generate manifest", ("chordsketch.json",), version, runner)
-    if not outputs:
-        return problems
+    outputs, problems, directory = generated("post-release.yml", "update-scoop", "Generate manifest", ("chordsketch.json",), version, runner)
     try:
-        manifest = json.loads(outputs["chordsketch.json"])
-    except ValueError as exc:
-        return [f"the Scoop manifest is not valid JSON: {exc}"]
-    problems += [f"the Scoop manifest has no `{field}`" for field in REQUIRED_SCOOP_FIELDS if not manifest.get(field)]
-    if manifest.get("version") != version:
-        problems.append(f"the Scoop manifest's version is {manifest.get('version')!r}, not {version}")
-    for arch, entry in (manifest.get("architecture") or {}).items():
-        label = f"Scoop manifest ({arch})"
-        pinned = json.dumps({"url": entry.get("url"), "hash": entry.get("hash")}, indent=1)
-        problems += download_url_problems(label, pinned, version) + checksum_problems(label, pinned, version)
-    autoupdate = json.dumps((manifest.get("autoupdate") or {}))
-    problems += download_url_problems("Scoop manifest (autoupdate)", autoupdate, version)
-    if not manifest.get("bin"):
-        problems.append("the Scoop manifest has no `bin`, so nothing is put on PATH")
-    return problems
+        if not outputs:
+            return problems
+        try:
+            manifest = json.loads(outputs["chordsketch.json"])
+        except ValueError as exc:
+            return [f"the Scoop manifest is not valid JSON: {exc}"]
+        problems += [f"the Scoop manifest has no `{field}`" for field in REQUIRED_SCOOP_FIELDS if not manifest.get(field)]
+        if manifest.get("version") != version:
+            problems.append(f"the Scoop manifest's version is {manifest.get('version')!r}, not {version}")
+        for arch, entry in (manifest.get("architecture") or {}).items():
+            label = f"Scoop manifest ({arch})"
+            pinned = json.dumps({"url": entry.get("url"), "hash": entry.get("hash")}, indent=1)
+            problems += download_url_problems(label, pinned, version) + checksum_problems(label, pinned, version)
+        autoupdate = json.dumps((manifest.get("autoupdate") or {}))
+        problems += download_url_problems("Scoop manifest (autoupdate)", autoupdate, version)
+        if not manifest.get("bin"):
+            problems.append("the Scoop manifest has no `bin`, so nothing is put on PATH")
+        return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 # https://wiki.archlinux.org/title/PKGBUILD
@@ -1368,35 +1382,38 @@ AUR_PKGVER = re.compile(r"^[A-Za-z0-9._]+$")
 
 def aur_problems(version: str, runner: Runner = run) -> list[str]:
     outputs, problems, directory = generated("post-release.yml", "update-aur", "Generate PKGBUILD and .SRCINFO", ("PKGBUILD", ".SRCINFO"), version, runner)
-    if not outputs:
-        return problems
-    pkgbuild = outputs["PKGBUILD"]
-    fields = dict(re.findall(r"^(pkgname|pkgver|pkgrel)=(\S+)$", pkgbuild, flags=re.MULTILINE))
-    if not AUR_PKGNAME.match(fields.get("pkgname", "")) or fields.get("pkgname", "").startswith(("-", ".")):
-        problems.append(f"PKGBUILD pkgname {fields.get('pkgname')!r} breaks the AUR naming rules")
-    if not AUR_PKGVER.match(fields.get("pkgver", "")):
-        problems.append(f"PKGBUILD pkgver {fields.get('pkgver')!r} is not a valid pkgver")
-    expanded = expand_shell_variables(pkgbuild, {"pkgver": version, "pkgname": fields.get("pkgname", ""), "CARCH": "x86_64"})
-    problems += download_url_problems("PKGBUILD", expanded, version) + checksum_problems("PKGBUILD", expanded, version)
+    try:
+        if not outputs:
+            return problems
+        pkgbuild = outputs["PKGBUILD"]
+        fields = dict(re.findall(r"^(pkgname|pkgver|pkgrel)=(\S+)$", pkgbuild, flags=re.MULTILINE))
+        if not AUR_PKGNAME.match(fields.get("pkgname", "")) or fields.get("pkgname", "").startswith(("-", ".")):
+            problems.append(f"PKGBUILD pkgname {fields.get('pkgname')!r} breaks the AUR naming rules")
+        if not AUR_PKGVER.match(fields.get("pkgver", "")):
+            problems.append(f"PKGBUILD pkgver {fields.get('pkgver')!r} is not a valid pkgver")
+        expanded = expand_shell_variables(pkgbuild, {"pkgver": version, "pkgname": fields.get("pkgname", ""), "CARCH": "x86_64"})
+        problems += download_url_problems("PKGBUILD", expanded, version) + checksum_problems("PKGBUILD", expanded, version)
 
-    # `.SRCINFO` is written by hand in the release step; the AUR reads it,
-    # and `makepkg --printsrcinfo` is what it must equal
-    # (https://wiki.archlinux.org/title/AUR_submission_guidelines).
-    script = (
-        "set -euo pipefail; pacman -Sy --noconfirm --needed namcap >/dev/null; "
-        "useradd -m builder; cp /work/PKGBUILD /home/builder/; chown builder /home/builder/PKGBUILD; "
-        "cd /home/builder; su builder -c 'makepkg --printsrcinfo' > /work/.SRCINFO.makepkg; "
-        "namcap PKGBUILD > /work/namcap.txt"
-    )
-    container = runner(["docker", "run", "--rm", "-v", f"{directory}:/work", "archlinux:base-devel", "bash", "-c", script], directory)
-    if container.returncode != 0:
-        return problems + [f"makepkg / namcap could not run on the PKGBUILD:\n{tail(container.stdout)}"]
-    if (directory / ".SRCINFO.makepkg").read_text().strip() != outputs[".SRCINFO"].strip():
-        problems.append("the .SRCINFO the release writes differs from `makepkg --printsrcinfo`")
-    namcap = (directory / "namcap.txt").read_text().strip()
-    if namcap:
-        problems += [f"namcap: {line}" for line in namcap.splitlines()]
-    return problems
+        # `.SRCINFO` is written by hand in the release step; the AUR reads it,
+        # and `makepkg --printsrcinfo` is what it must equal
+        # (https://wiki.archlinux.org/title/AUR_submission_guidelines).
+        script = (
+            "set -euo pipefail; pacman -Sy --noconfirm --needed namcap >/dev/null; "
+            "useradd -m builder; cp /work/PKGBUILD /home/builder/; chown builder /home/builder/PKGBUILD; "
+            "cd /home/builder; su builder -c 'makepkg --printsrcinfo' > /work/.SRCINFO.makepkg; "
+            "namcap PKGBUILD > /work/namcap.txt"
+        )
+        container = runner(["docker", "run", "--rm", "-v", f"{directory}:/work", "archlinux:base-devel", "bash", "-c", script], directory)
+        if container.returncode != 0:
+            return problems + [f"makepkg / namcap could not run on the PKGBUILD:\n{tail(container.stdout)}"]
+        if (directory / ".SRCINFO.makepkg").read_text().strip() != outputs[".SRCINFO"].strip():
+            problems.append("the .SRCINFO the release writes differs from `makepkg --printsrcinfo`")
+        namcap = (directory / "namcap.txt").read_text().strip()
+        if namcap:
+            problems += [f"namcap: {line}" for line in namcap.splitlines()]
+        return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 # https://snapcraft.io/docs/snapcraft-top-level-metadata
@@ -1406,50 +1423,56 @@ SNAP_NAME = re.compile(r"^(?=.*[a-z])[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,39}$")
 def snap_problems(version: str, binary: Path, runner: Runner = run) -> list[str]:
     """Generate snapcraft.yaml as the release does and pack it with `binary` staged."""
     outputs, problems, directory = generated("post-release.yml", "update-snap", "Generate snapcraft.yaml", ("snap/snapcraft.yaml",), version, runner)
-    if not outputs:
+    try:
+        if not outputs:
+            return problems
+        text = outputs["snap/snapcraft.yaml"]
+        top = dict(re.findall(r"^([a-z-]+):[ \t]*(.*)$", text, flags=re.MULTILINE))
+        if not SNAP_NAME.match(top.get("name", "")):
+            problems.append(f"snap name {top.get('name')!r} breaks the Snap Store's naming rules")
+        if len(top.get("summary", "")) > 78:
+            problems.append("the snap summary is over 78 characters")
+        for key in ("version", "summary", "description", "license", "base", "confinement", "grade"):
+            if key not in top:
+                problems.append(f"snapcraft.yaml has no `{key}`")
+        if top.get("version", "").strip("'\"") != version:
+            problems.append(f"snapcraft.yaml version is {top.get('version')!r}, not {version}")
+        stage = directory / "stage"
+        stage.mkdir()
+        shutil.copyfile(binary, stage / "chordsketch")
+        (stage / "chordsketch").chmod(0o755)
+        # The release job's own build command.
+        packed = runner(["snapcraft", "--destructive-mode"], directory)
+        if packed.returncode != 0:
+            return problems + [f"`snapcraft --destructive-mode` failed:\n{tail(packed.stdout, 30)}"]
+        if not list(directory.glob("chordsketch_*.snap")):
+            problems.append("`snapcraft --destructive-mode` wrote no chordsketch_*.snap")
         return problems
-    text = outputs["snap/snapcraft.yaml"]
-    top = dict(re.findall(r"^([a-z-]+):[ \t]*(.*)$", text, flags=re.MULTILINE))
-    if not SNAP_NAME.match(top.get("name", "")):
-        problems.append(f"snap name {top.get('name')!r} breaks the Snap Store's naming rules")
-    if len(top.get("summary", "")) > 78:
-        problems.append("the snap summary is over 78 characters")
-    for key in ("version", "summary", "description", "license", "base", "confinement", "grade"):
-        if key not in top:
-            problems.append(f"snapcraft.yaml has no `{key}`")
-    if top.get("version", "").strip("'\"") != version:
-        problems.append(f"snapcraft.yaml version is {top.get('version')!r}, not {version}")
-    stage = directory / "stage"
-    stage.mkdir()
-    shutil.copyfile(binary, stage / "chordsketch")
-    (stage / "chordsketch").chmod(0o755)
-    # The release job's own build command.
-    packed = runner(["snapcraft", "--destructive-mode"], directory)
-    if packed.returncode != 0:
-        return problems + [f"`snapcraft --destructive-mode` failed:\n{tail(packed.stdout, 30)}"]
-    if not list(directory.glob("chordsketch_*.snap")):
-        problems.append("`snapcraft --destructive-mode` wrote no chordsketch_*.snap")
-    return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def flathub_problems(version: str, runner: Runner = run) -> list[str]:
     outputs, problems, directory = generated("post-release.yml", "update-flatpak", "Generate manifest", ("me.koeda.chordsketch.yml",), version, runner)
-    if not outputs:
-        return problems
-    text = outputs["me.koeda.chordsketch.yml"]
-    problems += download_url_problems("Flathub manifest", text, version) + checksum_problems("Flathub manifest", text, version)
-    # https://docs.flathub.org/docs/for-app-authors/linter
-    lint = runner(["docker", "run", "--rm", "-v", f"{directory}:/work", "-w", "/work", "ghcr.io/flathub/flatpak-builder-lint:latest", "manifest", "me.koeda.chordsketch.yml"], directory)
-    document = lint.stdout[lint.stdout.find("{") :] if "{" in lint.stdout else ""
     try:
-        report = json.loads(document) if document else {}
-    except ValueError:
-        report = {}
-    if lint.returncode != 0 and not report:
-        return problems + [f"flatpak-builder-lint could not run:\n{tail(lint.stdout)}"]
-    problems += [f"flatpak-builder-lint error: {e}" for e in report.get("errors", [])]
-    problems += [f"flatpak-builder-lint warning: {w}" for w in report.get("warnings", [])]
-    return problems
+        if not outputs:
+            return problems
+        text = outputs["me.koeda.chordsketch.yml"]
+        problems += download_url_problems("Flathub manifest", text, version) + checksum_problems("Flathub manifest", text, version)
+        # https://docs.flathub.org/docs/for-app-authors/linter
+        lint = runner(["docker", "run", "--rm", "-v", f"{directory}:/work", "-w", "/work", "ghcr.io/flathub/flatpak-builder-lint:latest", "manifest", "me.koeda.chordsketch.yml"], directory)
+        document = lint.stdout[lint.stdout.find("{") :] if "{" in lint.stdout else ""
+        try:
+            report = json.loads(document) if document else {}
+        except ValueError:
+            report = {}
+        if lint.returncode != 0 and not report:
+            return problems + [f"flatpak-builder-lint could not run:\n{tail(lint.stdout)}"]
+        problems += [f"flatpak-builder-lint error: {e}" for e in report.get("errors", [])]
+        problems += [f"flatpak-builder-lint warning: {w}" for w in report.get("warnings", [])]
+        return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 # https://guides.cocoapods.org/syntax/podspec.html
@@ -1458,48 +1481,54 @@ REQUIRED_PODSPEC_ATTRIBUTES = ("name", "version", "summary", "license", "homepag
 
 def cocoapods_problems(version: str, runner: Runner = run) -> list[str]:
     outputs, problems, directory = generated("swift.yml", "update-cocoapods", "Generate podspec", ("ChordSketch.podspec",), version, runner)
-    if not outputs:
+    try:
+        if not outputs:
+            return problems
+        spec_json = runner(["pod", "ipc", "spec", "ChordSketch.podspec"], directory)
+        if spec_json.returncode != 0:
+            return problems + [f"`pod ipc spec` cannot read the podspec:\n{tail(spec_json.stdout)}"]
+        spec = json.loads(spec_json.stdout[spec_json.stdout.find("{") :])
+        problems += [f"the podspec has no `{key}`" for key in REQUIRED_PODSPEC_ATTRIBUTES if not spec.get(key)]
+        if len(spec.get("summary", "")) > 140:
+            problems.append("the podspec summary is over 140 characters")
+        if spec.get("version") != version:
+            problems.append(f"the podspec version is {spec.get('version')!r}, not {version}")
+        source = (spec.get("source") or {}).get("http", "")
+        problems += download_url_problems("podspec source", source, version)
+        license_entry = spec.get("license") or {}
+        # The source is the XCFramework zip, which carries no LICENSE file, so a
+        # `:file` license cannot be found by `pod spec lint` — a warning, which
+        # trunk refuses for an open-source pod.
+        if isinstance(license_entry, dict) and license_entry.get("file") and not license_entry.get("text"):
+            problems.append(f"the podspec names license file `{license_entry['file']}`, which the XCFramework zip does not contain; inline the license `:text`")
         return problems
-    spec_json = runner(["pod", "ipc", "spec", "ChordSketch.podspec"], directory)
-    if spec_json.returncode != 0:
-        return problems + [f"`pod ipc spec` cannot read the podspec:\n{tail(spec_json.stdout)}"]
-    spec = json.loads(spec_json.stdout[spec_json.stdout.find("{") :])
-    problems += [f"the podspec has no `{key}`" for key in REQUIRED_PODSPEC_ATTRIBUTES if not spec.get(key)]
-    if len(spec.get("summary", "")) > 140:
-        problems.append("the podspec summary is over 140 characters")
-    if spec.get("version") != version:
-        problems.append(f"the podspec version is {spec.get('version')!r}, not {version}")
-    source = (spec.get("source") or {}).get("http", "")
-    problems += download_url_problems("podspec source", source, version)
-    license_entry = spec.get("license") or {}
-    # The source is the XCFramework zip, which carries no LICENSE file, so a
-    # `:file` license cannot be found by `pod spec lint` — a warning, which
-    # trunk refuses for an open-source pod.
-    if isinstance(license_entry, dict) and license_entry.get("file") and not license_entry.get("text"):
-        problems.append(f"the podspec names license file `{license_entry['file']}`, which the XCFramework zip does not contain; inline the license `:text`")
-    return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def swift_package_problems(version: str, runner: Runner = run) -> list[str]:
     """Rewrite Package.swift as the release does and check the manifest still parses."""
     directory = Path(tempfile.mkdtemp(prefix="swift-package-"))
-    package = directory / "packages/swift"
-    shutil.copytree(REPO_ROOT / "packages/swift", package)
-    tag = f"v{version}"
-    sha = fake_sha256("chordsketch-xcframework.zip")
-    done = run_release_step("swift.yml", "update-swift-package", "Update Package.swift", directory, {"TAG": tag, "SHA256": sha}, runner)
-    if done.returncode != 0:
-        return [f"swift.yml `update-swift-package` / `Update Package.swift` failed:\n{tail(done.stdout)}"]
-    text = (package / "Package.swift").read_text()
-    problems = download_url_problems("Package.swift", text, version) + checksum_problems("Package.swift", text, version)
-    dumped = runner(["swift", "package", "dump-package"], package)
-    if dumped.returncode != 0:
-        return problems + [f"`swift package dump-package` cannot read the rewritten Package.swift:\n{tail(dumped.stdout)}"]
-    manifest = json.loads(dumped.stdout[dumped.stdout.find("{") :])
-    binaries = [t for t in manifest.get("targets", []) if t.get("type") == "binary"]
-    if len(binaries) != 1 or binaries[0].get("checksum") != sha:
-        problems.append("the rewritten Package.swift does not declare one binary target with the release checksum")
-    return problems
+    try:
+        package = directory / "packages/swift"
+        shutil.copytree(REPO_ROOT / "packages/swift", package)
+        tag = f"v{version}"
+        sha = fake_sha256("chordsketch-xcframework.zip")
+        done = run_release_step("swift.yml", "update-swift-package", "Update Package.swift", directory, {"TAG": tag, "SHA256": sha}, runner)
+        if done.returncode != 0:
+            return [f"swift.yml `update-swift-package` / `Update Package.swift` failed:\n{tail(done.stdout)}"]
+        text = (package / "Package.swift").read_text()
+        problems = download_url_problems("Package.swift", text, version) + checksum_problems("Package.swift", text, version)
+        dumped = runner(["swift", "package", "dump-package"], package)
+        if dumped.returncode != 0:
+            return problems + [f"`swift package dump-package` cannot read the rewritten Package.swift:\n{tail(dumped.stdout)}"]
+        manifest = json.loads(dumped.stdout[dumped.stdout.find("{") :])
+        binaries = [t for t in manifest.get("targets", []) if t.get("type") == "binary"]
+        if len(binaries) != 1 or binaries[0].get("checksum") != sha:
+            problems.append("the rewritten Package.swift does not declare one binary target with the release checksum")
+        return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 # https://learn.microsoft.com/en-us/windows/package-manager/package/manifest
@@ -1587,42 +1616,45 @@ CLI_ARCHIVE_LARGE_FILES = ("*/chordsketch", "*/chordsketch-lsp")
 def cli_archive_problems(version: str, target: str, binaries: Path, runner: Runner = run) -> list[str]:
     """Package release.yml's Unix archive from `binaries` and check its layout and checksum line."""
     directory = Path(tempfile.mkdtemp(prefix="cli-archive-"))
-    (directory / f"target/{target}/release").mkdir(parents=True)
-    for name in ("chordsketch", "chordsketch-lsp"):
-        shutil.copyfile(binaries / name, directory / f"target/{target}/release/{name}")
-    for name in ("LICENSE", "README.md"):
-        shutil.copyfile(REPO_ROOT / name, directory / name)
-    tag = f"v{version}"
-    github_env = directory / "github-env"
-    github_env.touch()
-    packaged = run_release_step("release.yml", "build", "Package (Unix)", directory, {"VERSION": tag, "TARGET": target, "GITHUB_ENV": str(github_env)}, runner)
-    if packaged.returncode != 0:
-        return [f"release.yml `Package (Unix)` failed:\n{tail(packaged.stdout)}"]
-    archive = directory / f"chordsketch-{tag}-{target}.tar.gz"
-    if not archive.is_file():
-        return [f"release.yml `Package (Unix)` did not write {archive.name}"]
-    problems = []
-    if f"{RELEASE_REPOSITORY_URL}{tag}/{archive.name}" not in release_assets(version):
-        problems.append(f"{archive.name} is not an asset the package managers download")
-    files = read_tarball(archive, strip_top_level=False)
-    expected = {f"chordsketch-{tag}-{target}/{name}" for name in CLI_ARCHIVE_FILES}
-    if missing := sorted(expected - {f.path for f in files}):
-        problems.append(f"{archive.name} lacks {', '.join(missing)}")
-    problems += content_problems(archive.name, files, CLI_ARCHIVE_LARGE_FILES)
+    try:
+        (directory / f"target/{target}/release").mkdir(parents=True)
+        for name in ("chordsketch", "chordsketch-lsp"):
+            shutil.copyfile(binaries / name, directory / f"target/{target}/release/{name}")
+        for name in ("LICENSE", "README.md"):
+            shutil.copyfile(REPO_ROOT / name, directory / name)
+        tag = f"v{version}"
+        github_env = directory / "github-env"
+        github_env.touch()
+        packaged = run_release_step("release.yml", "build", "Package (Unix)", directory, {"VERSION": tag, "TARGET": target, "GITHUB_ENV": str(github_env)}, runner)
+        if packaged.returncode != 0:
+            return [f"release.yml `Package (Unix)` failed:\n{tail(packaged.stdout)}"]
+        archive = directory / f"chordsketch-{tag}-{target}.tar.gz"
+        if not archive.is_file():
+            return [f"release.yml `Package (Unix)` did not write {archive.name}"]
+        problems = []
+        if f"{RELEASE_REPOSITORY_URL}{tag}/{archive.name}" not in release_assets(version):
+            problems.append(f"{archive.name} is not an asset the package managers download")
+        files = read_tarball(archive, strip_top_level=False)
+        expected = {f"chordsketch-{tag}-{target}/{name}" for name in CLI_ARCHIVE_FILES}
+        if missing := sorted(expected - {f.path for f in files}):
+            problems.append(f"{archive.name} lacks {', '.join(missing)}")
+        problems += content_problems(archive.name, files, CLI_ARCHIVE_LARGE_FILES)
 
-    # The `release` job's checksum step, over the artifact layout
-    # `download-artifact` gives it (one directory per target).
-    artifacts = directory / "release" / "artifacts" / target
-    artifacts.mkdir(parents=True)
-    shutil.copyfile(archive, artifacts / archive.name)
-    summed = run_release_step("release.yml", "release", "Generate checksums", directory / "release", {}, runner)
-    if summed.returncode != 0:
-        return problems + [f"release.yml `Generate checksums` failed:\n{tail(summed.stdout)}"]
-    lines = (directory / "release/checksums.txt").read_text().splitlines()
-    wanted = f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  {archive.name}"
-    if lines != [wanted]:
-        problems.append(f"checksums.txt reads {lines}, not the `<sha256>  <asset name>` line the package managers look up")
-    return problems
+        # The `release` job's checksum step, over the artifact layout
+        # `download-artifact` gives it (one directory per target).
+        artifacts = directory / "release" / "artifacts" / target
+        artifacts.mkdir(parents=True)
+        shutil.copyfile(archive, artifacts / archive.name)
+        summed = run_release_step("release.yml", "release", "Generate checksums", directory / "release", {}, runner)
+        if summed.returncode != 0:
+            return problems + [f"release.yml `Generate checksums` failed:\n{tail(summed.stdout)}"]
+        lines = (directory / "release/checksums.txt").read_text().splitlines()
+        wanted = f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  {archive.name}"
+        if lines != [wanted]:
+            problems.append(f"checksums.txt reads {lines}, not the `<sha256>  <asset name>` line the package managers look up")
+        return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 # ---------------------------------------------------------------- desktop updater
@@ -1640,40 +1672,43 @@ DESKTOP_UPDATER_ENDPOINT = "https://raw.githubusercontent.com/koedame/chordsketc
 def desktop_updater_problems(version: str, runner: Runner = run) -> list[str]:
     """Build latest.json with desktop-release.yml's step and check what the Tauri updater reads."""
     directory = Path(tempfile.mkdtemp(prefix="desktop-updater-"))
-    sigs = directory / "sigs"
-    sigs.mkdir()
-    signature = "untrusted comment: signature from tauri secret key\nRUQ=\ntrusted comment: timestamp:0\tfile:x\nZmFrZQ==\n"
-    for suffix in DESKTOP_UPDATER_PLATFORMS.values():
-        (sigs / f"ChordSketch_{version}_{suffix}.sig").write_text(signature)
-    shim = directory / "bin"
-    shim.mkdir()
-    # The step reads the release notes with `gh release view`; nothing else.
-    (shim / "gh").write_text("#!/bin/sh\necho 'Release notes'\n")
-    (shim / "gh").chmod(0o755)
-    tag = f"desktop-v{version}"
-    env = {"VERSION": version, "TAG": tag, "REPO": "koedame/chordsketch", "PATH": f"{shim}{os.pathsep}{os.environ['PATH']}"}
-    built = run_release_step("desktop-release.yml", "publish-updater-manifest", "Build latest.json", directory, env, runner)
-    if built.returncode != 0:
-        return [f"desktop-release.yml `Build latest.json` failed:\n{tail(built.stdout)}"]
-    manifest = json.loads((sigs / "latest.json").read_text())
-    problems = []
-    if manifest.get("version") != version:
-        problems.append(f"latest.json version is {manifest.get('version')!r}, not {version}")
-    platforms = manifest.get("platforms") or {}
-    if set(platforms) != set(DESKTOP_UPDATER_PLATFORMS):
-        problems.append(f"latest.json covers {sorted(platforms)}, not {sorted(DESKTOP_UPDATER_PLATFORMS)}")
-    for key, suffix in DESKTOP_UPDATER_PLATFORMS.items():
-        entry = platforms.get(key) or {}
-        expected_url = f"{RELEASE_REPOSITORY_URL}{tag}/ChordSketch_{version}_{suffix}"
-        if entry.get("url") != expected_url:
-            problems.append(f"latest.json {key} url is {entry.get('url')!r}, not {expected_url}")
-        if entry.get("signature") != signature:
-            problems.append(f"latest.json {key} signature is not the signature file's full minisign text")
-    tauri = json.loads((REPO_ROOT / "apps/desktop/src-tauri/tauri.conf.json").read_text())
-    endpoints = ((tauri.get("plugins") or {}).get("updater") or {}).get("endpoints") or []
-    if DESKTOP_UPDATER_ENDPOINT not in endpoints:
-        problems.append(f"tauri.conf.json's updater does not read {DESKTOP_UPDATER_ENDPOINT}, where the release publishes latest.json")
-    return problems
+    try:
+        sigs = directory / "sigs"
+        sigs.mkdir()
+        signature = "untrusted comment: signature from tauri secret key\nRUQ=\ntrusted comment: timestamp:0\tfile:x\nZmFrZQ==\n"
+        for suffix in DESKTOP_UPDATER_PLATFORMS.values():
+            (sigs / f"ChordSketch_{version}_{suffix}.sig").write_text(signature)
+        shim = directory / "bin"
+        shim.mkdir()
+        # The step reads the release notes with `gh release view`; nothing else.
+        (shim / "gh").write_text("#!/bin/sh\necho 'Release notes'\n")
+        (shim / "gh").chmod(0o755)
+        tag = f"desktop-v{version}"
+        env = {"VERSION": version, "TAG": tag, "REPO": "koedame/chordsketch", "PATH": f"{shim}{os.pathsep}{os.environ['PATH']}"}
+        built = run_release_step("desktop-release.yml", "publish-updater-manifest", "Build latest.json", directory, env, runner)
+        if built.returncode != 0:
+            return [f"desktop-release.yml `Build latest.json` failed:\n{tail(built.stdout)}"]
+        manifest = json.loads((sigs / "latest.json").read_text())
+        problems = []
+        if manifest.get("version") != version:
+            problems.append(f"latest.json version is {manifest.get('version')!r}, not {version}")
+        platforms = manifest.get("platforms") or {}
+        if set(platforms) != set(DESKTOP_UPDATER_PLATFORMS):
+            problems.append(f"latest.json covers {sorted(platforms)}, not {sorted(DESKTOP_UPDATER_PLATFORMS)}")
+        for key, suffix in DESKTOP_UPDATER_PLATFORMS.items():
+            entry = platforms.get(key) or {}
+            expected_url = f"{RELEASE_REPOSITORY_URL}{tag}/ChordSketch_{version}_{suffix}"
+            if entry.get("url") != expected_url:
+                problems.append(f"latest.json {key} url is {entry.get('url')!r}, not {expected_url}")
+            if entry.get("signature") != signature:
+                problems.append(f"latest.json {key} signature is not the signature file's full minisign text")
+        tauri = json.loads((REPO_ROOT / "apps/desktop/src-tauri/tauri.conf.json").read_text())
+        endpoints = ((tauri.get("plugins") or {}).get("updater") or {}).get("endpoints") or []
+        if DESKTOP_UPDATER_ENDPOINT not in endpoints:
+            problems.append(f"tauri.conf.json's updater does not read {DESKTOP_UPDATER_ENDPOINT}, where the release publishes latest.json")
+        return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 # ---------------------------------------------------------------- JetBrains Marketplace
@@ -1739,7 +1774,10 @@ def nixpkgs_problems(version: str) -> list[str]:
     found = re.search(r'^\s*version = "([^"]+)";', text, flags=re.MULTILINE)
     if not found or found.group(1) != version:
         problems.append(f"{NIX_PACKAGE} version is {found.group(1) if found else None!r}, not {version}")
-    meta = text[text.find("meta = {") :]
+    meta_start = text.find("meta = {")
+    if meta_start < 0:
+        return problems + [f"{NIX_PACKAGE} has no `meta = {{` block"]
+    meta = text[meta_start:]
     for attribute in ("description", "homepage", "license", "mainProgram", "platforms"):
         if not re.search(rf"^\s*{attribute} =", meta, flags=re.MULTILINE):
             problems.append(f"{NIX_PACKAGE} meta has no `{attribute}`")
