@@ -141,8 +141,18 @@ The repository already publishes this way elsewhere: `python.yml`
 3. **Two environments, `crates-io` and `npm`, gate the publish jobs.**
    Their deployment policy admits only `v*` tags and `main`. The trusted
    publishers name these environments, so a dispatch from any other ref
-   cannot mint a token. The `npm` environment already exists (napi uses
-   it). Its policy is tightened, not replaced.
+   cannot mint a token. The `npm` environment already exists
+   (`gh api repos/koedame/chordsketch/environments`) with no deployment
+   branch policy set, but no workflow references it today: its
+   `environment:` block was removed from `npm-publish.yml` and
+   `npm-publish-tree-sitter.yml` in #1791, because a failed publish left
+   a permanent "failure" deployment entry on the Deployments page and
+   `NPM_TOKEN` was a repo-level secret the block did not gate. This
+   workflow re-attaches it for a different reason — the environment name
+   is what a trusted-publisher configuration matches, not a secret
+   scope — so the old cosmetic issue applies again: a failed `mode:
+   publish` run leaves a "failure" deployment entry. Its policy is set,
+   not created.
 4. **`mode: check` answers, before any tag is pushed, everything that
    `mode: publish` will need.** `scripts/release.py`'s preflight
    dispatches it in parallel with `release-credentials.yml` and requires
