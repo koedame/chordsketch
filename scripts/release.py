@@ -780,7 +780,10 @@ def main() -> int:
             return 0
 
         if not args.yes:
-            answer = input(f"\nType {args.version} to start the release: ")
+            try:
+                answer = input(f"\nType {args.version} to start the release: ")
+            except EOFError:
+                answer = ""
             if answer.strip() != args.version:
                 print("Aborted. Nothing was published.")
                 return 1
