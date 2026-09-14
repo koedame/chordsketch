@@ -40,7 +40,6 @@ from unittest import mock
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from _release_channels import load_channels  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("release", SCRIPTS_DIR / "release.py")
 assert _spec is not None and _spec.loader is not None
