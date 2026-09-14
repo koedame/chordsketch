@@ -58,16 +58,22 @@ maintainer's machine
 ([ADR-0068](adr/0068-releases-run-through-one-preflighted-script.md)):
 
 ```bash
-git switch main && git pull --ff-only   # HEAD must be the release commit
+git switch main && git pull --ff-only   # any up-to-date checkout of main
 scripts/release.py X.Y.Z --check        # preflight only; changes nothing
 scripts/release.py X.Y.Z                # preflight, confirm, then release
 ```
 
+It builds and publishes from a temporary worktree of the release commit —
+the commit the tags point at once they exist, the tip of `origin/main`
+before — so the local branch and any uncommitted changes never reach a
+registry, and a release that was tagged before the script existed can be
+finished with it.
+
 The script pushes no tag until every precondition it can check without
 publishing holds, and reports every failing one at once:
 
-- the checkout is clean, at `origin/main`, at version `X.Y.Z`, with a dated
-  CHANGELOG heading and a passing `check-version-consistency.py`;
+- the release commit is at version `X.Y.Z`, with a dated CHANGELOG heading
+  and a passing `check-version-consistency.py`;
 - `ci.yml` passed on the commit;
 - no registry already serves `X.Y.Z`;
 - every CI publish credential is accepted by its service —

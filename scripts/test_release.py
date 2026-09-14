@@ -12,7 +12,9 @@ part a refactor could quietly break without any registry noticing:
   3. Every npm channel in the real manifest has a publish recipe, so adding
      a package to `ci/release-channels.toml` cannot leave it out of a
      release unnoticed.
-  4. The small parsers the preflight relies on.
+  4. The release is built from the tagged commit once a tag exists, and
+     from `origin/main` before that.
+  5. The small parsers the preflight relies on.
 
 Stdlib `unittest` only. Nothing here touches the network, git or gh.
 """
@@ -110,6 +112,26 @@ class DecideTest(unittest.TestCase):
         )
         self.assertEqual(plan.refusal, "")
         self.assertEqual(plan.tags_to_push, ("desktop-v1.2.0",))
+
+
+class ChooseReleaseCommitTest(unittest.TestCase):
+    MAIN = "5e23481527a9591d631cb8a1938561950b3a72e0"
+
+    def test_untagged_release_is_built_from_origin_main(self) -> None:
+        self.assertEqual(release.choose_release_commit(NO_TAGS, self.MAIN), (self.MAIN, ""))
+
+    def test_tagged_release_is_built_from_the_tag_even_after_main_moved(self) -> None:
+        self.assertEqual(release.choose_release_commit(BOTH_TAGS, self.MAIN), (SHA, ""))
+
+    def test_a_single_existing_tag_decides_the_commit(self) -> None:
+        tags = {"v1.2.0": None, "desktop-v1.2.0": SHA}
+        self.assertEqual(release.choose_release_commit(tags, self.MAIN), (SHA, ""))
+
+    def test_tags_on_different_commits_are_refused(self) -> None:
+        tags = {"v1.2.0": SHA, "desktop-v1.2.0": self.MAIN}
+        commit, refusal = release.choose_release_commit(tags, self.MAIN)
+        self.assertEqual(commit, "")
+        self.assertIn("different commits", refusal)
 
 
 class CratesTokenProbeTest(unittest.TestCase):
