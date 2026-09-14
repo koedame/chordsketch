@@ -197,12 +197,419 @@ jobs:
       - name: Check the staged tarballs
         run: python3 scripts/check-publishable.py napi --tarballs release-staging
 
+  vscode-extension:
+    name: VS Code Marketplace and Open VSX
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The build vscode-extension.yml's build jobs use.
+      - uses: ./.github/actions/vscode-extension-build
+        with:
+          cache-key: vscode-extension-wasm-pack
+
+      # Each platform VSIX bundles its target's `chordsketch-lsp` from the
+      # release archives. Only the host's can be built here, so it stands in
+      # for every target: the packaging and checks are the release's, the
+      # binary inside is not.
+      - name: Build a chordsketch-lsp to stand in for every target
+        run: cargo build -p chordsketch-lsp
+
+      - name: Package and check the universal and every platform VSIX
+        run: |
+          python3 scripts/check-publishable.py vsce-package
+          for target in $(python3 scripts/check-publishable.py vscode-matrix | jq -r '.[].vs_target'); do
+            python3 scripts/check-publishable.py vsce-package --target "$target" --lsp target/debug/chordsketch-lsp
+          done
+
+      # The publish jobs' own setup — where v0.6.0's publish failed.
+      - uses: ./.github/actions/vscode-extension-publish-setup
+
+      - name: Check the set the publish jobs would upload
+        run: python3 scripts/check-publishable.py vsix --dir packages/vscode-extension
+
+  pypi:
+    name: PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The sdist and Linux x86_64 wheel builds of python.yml, with its
+      # arguments. The wheel is a release build because PyPI's file size
+      # limit is part of what is checked.
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
+        with:
+          command: sdist
+          args: --manifest-path crates/ffi/Cargo.toml --out dist
+
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
+        with:
+          command: build
+          args: --release --manifest-path crates/ffi/Cargo.toml --out dist
+          target: x86_64
+          manylinux: manylinux2014
+          # See python.yml for why sccache is off inside the manylinux container.
+          sccache: "false"
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Check the distributions
+        run: python3 scripts/check-publishable.py python --dist dist
+
+  ffi-library:
+    name: chordsketch-ffi library for the binding packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: publishable-ffi
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # Without debug info the library is small enough to pack five times
+      # into one gem and one jar. The symbols UniFFI reads stay.
+      - name: Build chordsketch-ffi
+        env:
+          CARGO_PROFILE_DEV_DEBUG: "0"
+        run: cargo build -p chordsketch-ffi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: publishable-ffi
+          path: target/debug/libchordsketch_ffi.so
+          retention-days: 1
+
+  rubygems:
+    name: RubyGems
+    needs: [ffi-library]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: publishable-ffi
+          path: ffi
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: publishable-ffi
+          save-if: false
+
+      - name: Generate the Ruby bindings with ruby.yml's script
+        run: packages/ruby/scripts/generate-bindings.sh ffi/libchordsketch_ffi.so
+
+      # The release gem carries one library per platform, built by ruby.yml.
+      # The Linux x86_64 one stands in for the others here, under each
+      # platform's file name, so the gem is staged and checked as released
+      # and only that one is loaded.
+      - name: Lay out the library as ruby.yml's build artifacts
+        run: |
+          for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+            mkdir -p "native-artifacts/native-${target}"
+            cp ffi/libchordsketch_ffi.so "native-artifacts/native-${target}/"
+          done
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            mkdir -p "native-artifacts/native-${target}"
+            cp ffi/libchordsketch_ffi.so "native-artifacts/native-${target}/libchordsketch_ffi.dylib"
+          done
+          mkdir -p native-artifacts/native-x86_64-pc-windows-msvc
+          cp ffi/libchordsketch_ffi.so native-artifacts/native-x86_64-pc-windows-msvc/chordsketch_ffi.dll
+
+      - name: Stage with the release staging script
+        run: packages/ruby/scripts/stage-native-libs.sh native-artifacts
+
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Build, check, install and load the gem
+        run: python3 scripts/check-publishable.py gem
+
+  maven-central:
+    name: Maven Central
+    needs: [ffi-library]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: publishable-ffi
+          path: ffi
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: publishable-ffi
+          save-if: false
+
+      - name: Generate the Kotlin bindings as kotlin.yml does
+        run: |
+          cargo run -p chordsketch-ffi --bin uniffi-bindgen generate \
+            --library ffi/libchordsketch_ffi.so \
+            --language kotlin \
+            --out-dir packages/kotlin/lib/src/main/kotlin/
+
+      # As in the rubygems job: the Linux x86_64 library stands in for the
+      # other platforms under their file names.
+      - name: Lay out the library as kotlin.yml's build artifacts
+        run: |
+          for platform in linux-x86-64 linux-aarch64; do
+            mkdir -p "jni-artifacts/jni-${platform}"
+            cp ffi/libchordsketch_ffi.so "jni-artifacts/jni-${platform}/"
+          done
+          for platform in darwin-aarch64 darwin-x86-64; do
+            mkdir -p "jni-artifacts/jni-${platform}"
+            cp ffi/libchordsketch_ffi.so "jni-artifacts/jni-${platform}/libchordsketch_ffi.dylib"
+          done
+          mkdir -p jni-artifacts/jni-win32-x86-64
+          cp ffi/libchordsketch_ffi.so jni-artifacts/jni-win32-x86-64/chordsketch_ffi.dll
+
+      - name: Stage with the release staging script
+        run: packages/kotlin/scripts/stage-jni-libs.sh jni-artifacts
+
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      # Maven Central refuses unsigned artifacts, so the check requires a
+      # signature on every file. The release signs with its own key; a pull
+      # request has none, so it signs with one made for this run.
+      - name: Make a throwaway signing key
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          gpg --batch --pinentry-mode loopback --passphrase '' --quick-gen-key 'Publish check <publish-check@invalid>' ed25519 sign never
+          {
+            echo "ORG_GRADLE_PROJECT_signingInMemoryKey<<KEY"
+            gpg --batch --armor --export-secret-keys
+            echo "KEY"
+            echo "ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="
+          } >> "$GITHUB_ENV"
+
+      - name: Publish to a scratch repository and check it
+        run: python3 scripts/check-publishable.py maven
+
+  container-image:
+    name: GHCR and Docker Hub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - name: Install cross
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        with:
+          tool: cross
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: publishable-cli-x86_64-unknown-linux-musl-cross
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # The image copies the musl CLI release.yml builds with `cross`. The
+      # x86_64 build stands in for arm64 as well: both architectures are
+      # built and tagged as released, and the amd64 one is run.
+      - name: Build the CLI for x86_64 musl
+        run: cross build --target x86_64-unknown-linux-musl -p chordsketch
+
+      - name: Stage the binary where Dockerfile.release copies it from
+        run: |
+          cp target/x86_64-unknown-linux-musl/debug/chordsketch chordsketch-amd64
+          cp target/x86_64-unknown-linux-musl/debug/chordsketch chordsketch-arm64
+          echo "TAG=v$(python3 -c 'import tomllib; print(tomllib.load(open("crates/cli/Cargo.toml", "rb"))["package"]["version"])')" >> "$GITHUB_ENV"
+
+      - name: Tag and build as docker.yml does, without pushing
+        id: image
+        uses: ./.github/actions/docker-release-image
+        with:
+          tag: ${{ env.TAG }}
+          promote-latest: "true"
+          push: "false"
+
+      - name: Load the amd64 image
+        run: docker buildx build --platform linux/amd64 --load --tag publish-check:amd64 --file Dockerfile.release .
+
+      - name: Check the tags and run the image
+        env:
+          TAGS: ${{ steps.image.outputs.tags }}
+        run: python3 scripts/check-publishable.py container-image --tag "$TAG" --tags "$TAGS" --image publish-check:amd64
+
+  # The package-manager jobs run the release workflows' own generating steps
+  # (lifted out of the workflow file, not copied) against a fabricated
+  # release, then lint the result with each channel's tool.
+  homebrew:
+    name: Homebrew formula and cask
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: Homebrew/actions/setup-homebrew@3cdb78d0f62ad29dd32de765782654f4eedea607 # master
+
+      - name: Generate, audit and style-check
+        run: python3 scripts/check-publishable.py homebrew
+
+  manifests:
+    name: Scoop, winget, nixpkgs and the desktop updater
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Generate and check the Scoop manifest
+        run: python3 scripts/check-publishable.py scoop
+
+      - name: Check the winget manifests
+        run: python3 scripts/check-publishable.py winget
+
+      - name: Check the nixpkgs derivation template
+        run: python3 scripts/check-publishable.py nixpkgs
+
+      - name: Build and check the desktop updater manifest
+        run: python3 scripts/check-publishable.py desktop-updater
+
+  jetbrains:
+    name: JetBrains Marketplace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Build and check the plugin distribution
+        run: python3 scripts/check-publishable.py jetbrains
+
+  macports:
+    name: MacPorts
+    uses: ./.github/workflows/macports-smoke.yml
+
+  nixpkgs-build:
+    name: nixpkgs
+    uses: ./.github/workflows/nix.yml
+
+  chocolatey:
+    name: Chocolatey
+    # The release packs on Windows with the runner's choco.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Lay out a fabricated release
+        run: |
+          python scripts/check-publishable.py fabricate-release --dir .
+          echo "VERSION=$(python -c 'import tomllib; print(tomllib.load(open("crates/cli/Cargo.toml", "rb"))["package"]["version"])')" >> "$GITHUB_ENV"
+
+      - name: Generate the package as the release does
+        uses: ./.github/actions/chocolatey-generate-package
+        with:
+          version: ${{ env.VERSION }}
+
+      - name: Pack with the release's Pack step and check the package
+        run: python scripts/check-publishable.py chocolatey --dir .
+
+  aur:
+    name: AUR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Generate, run makepkg --printsrcinfo and namcap
+        run: python3 scripts/check-publishable.py aur
+
+  snap:
+    name: GitHub Release archives and Snap Store
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: publishable-cli
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # The snap stages the x86_64 glibc CLI from the release archives; a
+      # debug build of the same target stands in for it.
+      - name: Build the CLI and language server
+        run: cargo build -p chordsketch -p chordsketch-lsp
+
+      # release.yml's archive step and checksum step, which every package
+      # manager's download depends on.
+      - name: Package and check the release archive
+        run: python3 scripts/check-publishable.py cli-archive --binaries target/debug
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
+
+      - name: Generate and pack the snap
+        run: python3 scripts/check-publishable.py snap --binary target/debug/chordsketch
+
+  cocoapods-and-swift:
+    name: CocoaPods and Swift Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Install CocoaPods
+        run: gem install cocoapods --no-document
+
+      - name: Generate and read the podspec
+        run: python3 scripts/check-publishable.py cocoapods
+
+      - name: Rewrite and parse Package.swift
+        run: python3 scripts/check-publishable.py swift-package
+
   publishable:
     name: Publishable
     # The one required status check. It stands for every job above, so a
     # job added later is covered by adding it to `needs` — branch
     # protection does not have to change.
-    needs: [self-test, crates-io, npm-matrix, npm, napi]
+    needs:
+      - self-test
+      - crates-io
+      - npm-matrix
+      - npm
+      - napi
+      - vscode-extension
+      - pypi
+      - ffi-library
+      - rubygems
+      - maven-central
+      - container-image
+      - homebrew
+      - manifests
+      - jetbrains
+      - macports
+      - nixpkgs-build
+      - chocolatey
+      - aur
+      - snap
+      - cocoapods-and-swift
     if: always()
     runs-on: ubuntu-latest
     steps:

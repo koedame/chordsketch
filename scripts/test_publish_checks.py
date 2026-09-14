@@ -13,7 +13,11 @@ that would otherwise only be exercised by a registry refusing an upload:
   4. A publish tool's warnings are problems, except the two cargo prints on
      every dry run of an already-published version.
   5. npm entry points, README and dependencies a user could not resolve.
-  6. With npm on PATH, `npm publish --dry-run` really does warn about the
+  6. What the VS Code Marketplace / Open VSX, PyPI, RubyGems, Maven
+     Central and the container registries require of their artifacts,
+     including the VSIX set the publish jobs upload and the JNA layout the
+     published jars lacked up to 0.6.0.
+  7. With npm on PATH, `npm publish --dry-run` really does warn about the
      `repository.url` form that npm rewrote on four packages in 0.6.0, and
      the check turns that warning into a failure.
 
@@ -24,6 +28,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import shutil
 import sys
 import tarfile
@@ -276,6 +281,282 @@ class NamingTest(unittest.TestCase):
             path = Path(scratch) / "x-1.0.0.crate"
             write_tarball(path, "x-1.0.0", {"Cargo.toml": b"[package]", "src/lib.rs": b""})
             self.assertEqual(sorted(f.path for f in checks.read_tarball(path)), ["Cargo.toml", "src/lib.rs"])
+
+
+def write_zip(path: Path, files: dict[str, bytes]) -> None:
+    import zipfile
+
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, data in files.items():
+            archive.writestr(name, data)
+
+
+def png(width: int, height: int) -> bytes:
+    return checks.PNG_SIGNATURE + b"\x00\x00\x00\rIHDR" + width.to_bytes(4, "big") + height.to_bytes(4, "big") + b"\x08\x06\x00\x00\x00"
+
+
+class VsixTest(unittest.TestCase):
+    MANIFEST = {
+        "name": "chordsketch",
+        "publisher": "koedame",
+        "version": "1.2.0",
+        "license": "MIT",
+        "repository": {"type": "git", "url": "https://github.com/koedame/chordsketch.git"},
+        "engines": {"vscode": "^1.85.0"},
+        "icon": "icon.png",
+    }
+    LINUX = checks.VSCODE_TARGETS[0]
+
+    def vsix(self, scratch: Path, name: str, manifest: dict, extra: dict[str, bytes], target: str = "") -> Path:
+        path = scratch / name
+        vsixmanifest = f'<Identity Id="chordsketch" TargetPlatform="{target}" />'.encode() if target else b"<Identity />"
+        engine = {glob: b"\0asm" for glob in checks.VSIX_LARGE_FILES}
+        write_zip(path, {"extension.vsixmanifest": vsixmanifest, "extension/package.json": json.dumps(manifest).encode(), "extension/icon.png": png(256, 256), **engine, **extra})
+        return path
+
+    def test_when_the_manifest_is_complete_and_the_icon_is_a_large_png_the_universal_vsix_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            self.assertEqual(checks.vsix_problems(self.vsix(Path(scratch), "chordsketch-1.2.0.vsix", self.MANIFEST, {}), None), [])
+
+    def test_when_the_version_carries_a_prerelease_suffix_the_marketplace_would_refuse_it(self) -> None:
+        problems = checks.vsix_manifest_problems("x", {**self.MANIFEST, "version": "1.2.0-beta.1"}, [packed("extension/icon.png", png(256, 256))])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("major.minor.patch", problems[0])
+
+    def test_when_the_icon_is_an_svg_it_is_reported(self) -> None:
+        problems = checks.vsix_manifest_problems("x", {**self.MANIFEST, "icon": "icon.svg"}, [packed("extension/icon.svg", b"<svg/>")])
+        self.assertIn("not a PNG", problems[0])
+
+    def test_when_the_icon_is_smaller_than_128_pixels_it_is_reported(self) -> None:
+        problems = checks.vsix_manifest_problems("x", self.MANIFEST, [packed("extension/icon.png", png(64, 64))])
+        self.assertIn("64x64", problems[0])
+
+    def test_when_the_manifest_has_no_license_open_vsx_would_refuse_it(self) -> None:
+        manifest = {k: v for k, v in self.MANIFEST.items() if k != "license"}
+        self.assertIn("x has no `license` in its package.json", checks.vsix_manifest_problems("x", manifest, [packed("extension/icon.png", png(256, 256))]))
+
+    def test_when_a_platform_vsix_lacks_its_language_server_it_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            path = self.vsix(Path(scratch), "chordsketch-linux-x64-1.2.0.vsix", self.MANIFEST, {}, target="linux-x64")
+            problems = checks.vsix_problems(path, self.LINUX)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("extension/server/linux-x64/chordsketch-lsp", problems[0])
+
+    def test_when_a_platform_vsix_also_bundles_another_targets_server_it_is_reported(self) -> None:
+        servers = {"extension/server/linux-x64/chordsketch-lsp": b"elf", "extension/server/win32-x64/chordsketch-lsp.exe": b"pe"}
+        with tempfile.TemporaryDirectory() as scratch:
+            path = self.vsix(Path(scratch), "chordsketch-linux-x64-1.2.0.vsix", self.MANIFEST, servers, target="linux-x64")
+            problems = checks.vsix_problems(path, self.LINUX)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("win32-x64", problems[0])
+
+    def test_when_a_platform_vsix_is_not_marked_for_its_target_it_is_reported(self) -> None:
+        servers = {"extension/server/linux-x64/chordsketch-lsp": b"elf"}
+        with tempfile.TemporaryDirectory() as scratch:
+            path = self.vsix(Path(scratch), "chordsketch-linux-x64-1.2.0.vsix", self.MANIFEST, servers, target="darwin-x64")
+            problems = checks.vsix_problems(path, self.LINUX)
+        self.assertEqual(problems, ["chordsketch-linux-x64-1.2.0.vsix is not marked as the linux-x64 build in extension.vsixmanifest"])
+
+    def test_when_a_target_vsix_is_missing_from_the_set_the_publish_jobs_would_ship_an_incomplete_release(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            (directory / "package.json").write_text(json.dumps(self.MANIFEST))
+            self.vsix(directory, "chordsketch-1.2.0.vsix", self.MANIFEST, {})
+            problems = checks.vsix_set_problems(directory)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("missing VSIX(es)", problems[0])
+        self.assertIn("chordsketch-alpine-arm64-1.2.0.vsix", problems[0])
+
+
+class PythonDistributionTest(unittest.TestCase):
+    METADATA = "Metadata-Version: 2.4\nName: chordsketch\nVersion: 1.2.0\nSummary: s\nLicense: MIT\nRequires-Python: >=3.8\nProject-URL: Homepage, https://github.com/koedame/chordsketch\n\n# chordsketch\n"
+
+    def test_when_the_core_metadata_is_complete_it_passes(self) -> None:
+        self.assertEqual(checks.python_metadata_problems("w", checks.core_metadata(self.METADATA), True), [])
+
+    def test_when_the_version_is_not_pep_440_pypi_would_refuse_it(self) -> None:
+        metadata = checks.core_metadata(self.METADATA.replace("Version: 1.2.0", "Version: 1.2.0-beta"))
+        self.assertEqual(checks.python_metadata_problems("w", metadata, True), ["w version `1.2.0-beta` is not a PEP 440 version PyPI accepts"])
+
+    def test_when_there_is_no_long_description_it_is_reported(self) -> None:
+        self.assertIn("long description", checks.python_metadata_problems("w", checks.core_metadata(self.METADATA), False)[0])
+
+    def test_when_a_wheel_carries_a_bare_linux_tag_pypi_would_refuse_it(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            dist = Path(scratch)
+            wheel = dist / "chordsketch-1.2.0-py3-none-linux_x86_64.whl"
+            write_zip(wheel, {"chordsketch-1.2.0.dist-info/METADATA": self.METADATA.encode(), "chordsketch/_native/libchordsketch_ffi.so": b"elf"})
+            problems = checks.python_dist_problems(dist, runner=lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
+        self.assertIn("chordsketch-1.2.0-py3-none-linux_x86_64.whl has a bare linux platform tag, which PyPI refuses; build it manylinux-compliant", problems)
+        self.assertIn(f"no sdist in {dist}", problems)
+
+
+class GemTest(unittest.TestCase):
+    SPEC = {
+        "name": "chordsketch",
+        "version": "1.2.0",
+        "summary": "s",
+        "authors": ["koedame"],
+        "licenses": ["MIT"],
+        "homepage": "https://github.com/koedame/chordsketch",
+        "files": ["lib/chordsketch.rb", *checks.GEM_PLATFORM_LIBRARIES],
+    }
+
+    def test_when_every_attribute_and_platform_library_is_present_it_passes(self) -> None:
+        self.assertEqual(checks.gem_spec_problems("g", self.SPEC), [])
+
+    def test_when_a_platform_library_is_not_in_the_gem_that_platform_is_named(self) -> None:
+        spec = {**self.SPEC, "files": [f for f in self.SPEC["files"] if "windows" not in f]}
+        problems = checks.gem_spec_problems("g", spec)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("lib/x86_64-windows/chordsketch_ffi.dll", problems[0])
+
+    def test_when_the_gemspec_has_no_license_it_is_reported(self) -> None:
+        self.assertEqual(checks.gem_spec_problems("g", {**self.SPEC, "licenses": []}), ["g has no `licenses` in its gemspec"])
+
+
+class MavenTest(unittest.TestCase):
+    POM = b"""<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <groupId>me.koeda</groupId><artifactId>chordsketch</artifactId><version>1.2.0</version>
+  <name>ChordSketch</name><description>d</description><url>https://github.com/koedame/chordsketch</url>
+  <licenses><license><name>MIT</name></license></licenses>
+  <developers><developer><name>koedame</name></developer></developers>
+  <scm><url>u</url><connection>c</connection><developerConnection>d</developerConnection></scm>
+  <dependencies>
+    <dependency><groupId>net.java.dev.jna</groupId><artifactId>jna</artifactId><version>5.17.0</version><scope>runtime</scope></dependency>
+    <dependency><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-test</artifactId><version>1.9.25</version><scope>test</scope></dependency>
+  </dependencies>
+</project>"""
+
+    def test_when_the_pom_has_everything_maven_central_requires_it_passes(self) -> None:
+        self.assertEqual(checks.pom_problems("p", self.POM), [])
+
+    def test_when_the_pom_has_no_scm_connection_it_is_reported(self) -> None:
+        pom = self.POM.replace(b"<connection>c</connection>", b"")
+        self.assertEqual(checks.pom_problems("p", pom), ["p has no <scm/connection>"])
+
+    def test_when_the_version_is_a_snapshot_maven_central_would_refuse_it(self) -> None:
+        pom = self.POM.replace(b"<artifactId>chordsketch</artifactId><version>1.2.0</version>", b"<artifactId>chordsketch</artifactId><version>1.2.0-SNAPSHOT</version>")
+        self.assertIn("p is a SNAPSHOT, which Maven Central refuses", checks.pom_problems("p", pom))
+
+    def test_when_a_dependency_is_test_scoped_it_is_left_off_the_smoke_classpath(self) -> None:
+        self.assertEqual(checks.pom_runtime_dependencies(self.POM), [("net.java.dev.jna", "jna", "5.17.0")])
+
+    def test_when_the_jar_keeps_the_download_artifacts_prefix_jna_cannot_find_the_library(self) -> None:
+        # Every published jar up to 0.6.0 carried jni-linux-x86-64/... instead of linux-x86-64/...
+        with tempfile.TemporaryDirectory() as scratch:
+            repository = Path(scratch)
+            directory = repository / "me/koeda/chordsketch/1.2.0"
+            directory.mkdir(parents=True)
+            for name in ("chordsketch-1.2.0.pom", "chordsketch-1.2.0-sources.jar", "chordsketch-1.2.0-javadoc.jar", "chordsketch-1.2.0.jar"):
+                (directory / f"{name}.asc").write_text("sig")
+            (directory / "chordsketch-1.2.0.pom").write_bytes(self.POM)
+            for name in ("chordsketch-1.2.0-sources.jar", "chordsketch-1.2.0-javadoc.jar"):
+                write_zip(directory / name, {"README": b""})
+            write_zip(directory / "chordsketch-1.2.0.jar", {f"jni-{path}": b"lib" for path in checks.JAR_NATIVE_LIBRARIES})
+            problems = checks.maven_repository_problems(repository, "1.2.0", runner=lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
+        missing = [p for p in problems if "where JNA looks" in p]
+        self.assertEqual(len(missing), len(checks.JAR_NATIVE_LIBRARIES))
+
+
+class ContainerImageTest(unittest.TestCase):
+    def test_when_the_image_gets_the_version_the_minor_and_latest_the_docker_hub_copy_finds_them(self) -> None:
+        tags = ["ghcr.io/koedame/chordsketch:1.2.0", "ghcr.io/koedame/chordsketch:1.2", "ghcr.io/koedame/chordsketch:latest"]
+        self.assertEqual(checks.container_tag_problems("v1.2.0", tags), [])
+
+    def test_when_the_minor_tag_is_not_produced_the_docker_hub_copy_would_fail(self) -> None:
+        tags = ["ghcr.io/koedame/chordsketch:1.2.0", "ghcr.io/koedame/chordsketch:latest"]
+        problems = checks.container_tag_problems("v1.2.0", tags)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("ghcr.io/koedame/chordsketch:1.2", problems[0])
+
+
+class ChannelCoverageTest(unittest.TestCase):
+    WORKFLOW = (checks.REPO_ROOT / ".github/workflows/publishable.yml").read_text()
+
+    def test_when_the_manifest_lists_a_channel_the_required_check_covers_it(self) -> None:
+        uncovered = []
+        for channel in load_channels():
+            check = checks.channel_check(channel.id, channel.kind, channel.package)
+            if check is None or check not in self.WORKFLOW:
+                uncovered.append(f"{channel.id} ({check})")
+        self.assertEqual(uncovered, [])
+
+    def test_when_a_job_exists_in_publishable_the_aggregate_job_needs_it(self) -> None:
+        jobs = re.findall(r"^  ([a-z0-9-]+):\n", self.WORKFLOW[self.WORKFLOW.index("\njobs:\n") :], flags=re.MULTILINE)
+        needs = self.WORKFLOW[self.WORKFLOW.index("\n  publishable:\n") :]
+        missing = [job for job in jobs if job != "publishable" and f"- {job}\n" not in needs]
+        self.assertEqual(missing, [])
+
+
+class ReleaseAssetTest(unittest.TestCase):
+    def test_when_release_yml_builds_its_matrix_every_cli_archive_is_an_asset(self) -> None:
+        targets = checks.release_targets()
+        self.assertIn("x86_64-pc-windows-msvc", targets)
+        assets = checks.release_assets("1.2.0")
+        self.assertIn(f"{checks.RELEASE_REPOSITORY_URL}v1.2.0/chordsketch-v1.2.0-x86_64-pc-windows-msvc.zip", assets)
+        self.assertIn(f"{checks.RELEASE_REPOSITORY_URL}v1.2.0/chordsketch-v1.2.0-aarch64-unknown-linux-musl.tar.gz", assets)
+
+    def test_when_a_manifest_downloads_an_archive_the_release_does_not_build_it_is_reported(self) -> None:
+        text = "url https://github.com/koedame/chordsketch/releases/download/v1.2.0/chordsketch-v1.2.0-riscv64gc-unknown-linux-gnu.tar.gz"
+        self.assertEqual(len(checks.download_url_problems("m", text, "1.2.0")), 1)
+
+    def test_when_a_manifest_uses_ruby_interpolation_the_version_is_expanded_before_matching(self) -> None:
+        text = 'url "https://github.com/koedame/chordsketch/releases/download/desktop-v#{version}/ChordSketch_#{version}_x64.dmg"'
+        self.assertEqual(checks.download_url_problems("cask", text, "1.2.0"), [])
+
+    def test_when_a_manifest_pairs_each_download_with_its_own_checksum_it_passes(self) -> None:
+        arm = "chordsketch-v1.2.0-aarch64-apple-darwin.tar.gz"
+        text = f'url "{checks.RELEASE_REPOSITORY_URL}v1.2.0/{arm}"\nsha256 "{checks.fake_sha256(arm)}"\n'
+        self.assertEqual(checks.checksum_problems("formula", text, "1.2.0"), [])
+
+    def test_when_a_manifest_swaps_two_targets_checksums_it_is_reported(self) -> None:
+        arm = "chordsketch-v1.2.0-aarch64-apple-darwin.tar.gz"
+        intel = "chordsketch-v1.2.0-x86_64-apple-darwin.tar.gz"
+        text = (
+            f'url "{checks.RELEASE_REPOSITORY_URL}v1.2.0/{arm}"\nsha256 "{checks.fake_sha256(intel)}"\n\n\n\n\n'
+            f'url "{checks.RELEASE_REPOSITORY_URL}v1.2.0/{intel}"\nsha256 "{checks.fake_sha256(arm)}"\n'
+        )
+        self.assertEqual(len(checks.checksum_problems("formula", text, "1.2.0")), 2)
+
+    def test_when_a_placeholder_is_left_unfilled_it_is_reported(self) -> None:
+        self.assertIn("unfilled", checks.checksum_problems("m", "sha256 '{{SHA256_X}}'", "1.2.0")[0])
+
+
+class ShippedManifestTest(unittest.TestCase):
+    """The hand-maintained manifests in `packaging/`, as they are committed."""
+
+    VERSION = checks.cargo_package_version(checks.REPO_ROOT / "crates/cli/Cargo.toml")
+
+    def test_when_the_winget_manifests_are_submitted_they_point_at_this_versions_release(self) -> None:
+        self.assertEqual(checks.winget_problems(self.VERSION), [])
+
+    def test_when_the_nixpkgs_template_is_submitted_its_metadata_is_complete(self) -> None:
+        self.assertEqual(checks.nixpkgs_problems(self.VERSION), [])
+
+    @unittest.skipUnless(shutil.which("bash"), "bash is not on PATH")
+    def test_when_the_release_generates_the_scoop_manifest_it_is_complete(self) -> None:
+        quiet = lambda cmd, cwd, env=None: checks.subprocess.run(  # noqa: E731
+            cmd, cwd=cwd, env={**checks.os.environ, **(env or {})}, text=True, stdout=checks.subprocess.PIPE, stderr=checks.subprocess.STDOUT
+        )
+        self.assertEqual(checks.scoop_problems(self.VERSION, quiet), [])
+
+
+class PackageRuleTest(unittest.TestCase):
+    def test_when_a_snap_name_has_a_double_hyphen_or_is_too_long_it_is_refused(self) -> None:
+        self.assertTrue(checks.SNAP_NAME.match("chordsketch"))
+        self.assertFalse(checks.SNAP_NAME.match("chord--sketch"))
+        self.assertFalse(checks.SNAP_NAME.match("a" * 41))
+        self.assertFalse(checks.SNAP_NAME.match("1234"))
+
+    def test_when_an_aur_pkgver_has_a_hyphen_it_is_refused(self) -> None:
+        self.assertTrue(checks.AUR_PKGVER.match("1.2.0"))
+        self.assertFalse(checks.AUR_PKGVER.match("1.2.0-rc1"))
+
+    def test_when_a_pkgbuild_uses_shell_variables_they_are_expanded_for_the_url_check(self) -> None:
+        text = 'source=("https://example/v${pkgver}/x-${CARCH}.tar.gz")'
+        self.assertEqual(checks.expand_shell_variables(text, {"pkgver": "1.2.0", "CARCH": "x86_64"}), 'source=("https://example/v1.2.0/x-x86_64.tar.gz")')
 
 
 @unittest.skipUnless(shutil.which("npm"), "npm is not on PATH")

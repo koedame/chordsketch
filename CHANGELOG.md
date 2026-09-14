@@ -19,11 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published package; npm had been normalising it at publish time.
 - **The `@chordsketch/node` platform packages ship a README** pointing at
   the package to install instead.
+- **`me.koeda:chordsketch` loads its native library.** Every published jar
+  carried the libraries under `jni-linux-x86-64/` and the like, where JNA
+  does not look, so the bindings could not find `chordsketch_ffi` without
+  a manual `jna.library.path`. They are now at `linux-x86-64/`,
+  `darwin-aarch64/`, … .
+- **The VS Code extension no longer ships its source maps**; the
+  `.vscodeignore` rule only matched the top level.
+- **The winget manifests download the 0.6.0 zip.** They were bumped to
+  0.6.0 but still pointed at the 0.5.0 archive and its checksum.
+- **The CocoaPods podspec inlines its MIT licence text.** It named a
+  `LICENSE` file the XCFramework zip does not contain.
 
 ### Changed
 
-- **Every pull request now proves every published crate and npm package
-  can still be published** — the required `Publishable` check builds,
+- **Every pull request now proves every published package can still be
+  published** — crates, npm packages, the VS Code extension, the Python
+  wheel, the gem, the Maven artifact, the container image, the release
+  archives and the Homebrew, Scoop, Chocolatey, AUR, Snap, CocoaPods,
+  Swift, winget, MacPorts, nixpkgs, JetBrains and desktop-updater
+  manifests — the required `Publishable` check builds,
   packs and dry-runs each one, fails on any publish-tool warning, and
   checks size limits, metadata, entry points and contents; the release
   preflight runs the same checks
