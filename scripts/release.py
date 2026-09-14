@@ -213,6 +213,11 @@ def interpret_crates_token_probe(status: int, body: str) -> tuple[bool, str]:
             "scopes: it must allow publish-update for every chordsketch crate and "
             "publish-new for any crate that has never been published"
         )
+    if status == 403 and detail == "authentication failed":
+        return False, (
+            "crates.io does not recognise the token (HTTP 403: authentication failed): it has "
+            "expired, been revoked or been mistyped; create one at https://crates.io/settings/tokens"
+        )
     if status == 400 and "not an owner" in detail:
         return False, "the crates.io token belongs to an account that does not own `chordsketch`"
     return False, f"crates.io rejected the token (HTTP {status}: {detail or 'no detail'})"
@@ -556,18 +561,19 @@ def preflight_crates(plan: Plan, findings: Findings) -> None:
     ):
         return
 
-    token = crates_token()
-    if findings.check(token is not None, "no crates.io token: set CARGO_REGISTRY_TOKEN or run `cargo login`"):
+    found = crates_token()
+    if findings.check(found is not None, "no crates.io token: set CARGO_REGISTRY_TOKEN or run `cargo login`"):
+        token, source = found
         status, body = http_status(
             "https://crates.io/api/v1/trusted_publishing/github_configs?crate=chordsketch",
-            {"Authorization": token or ""},
+            {"Authorization": token},
         )
         ok, message = interpret_crates_token_probe(status, body)
         if ok and message:
             new = [c for c in plan.pending_crates if not crate_exists(c)]
             findings.notes.append(message + (f" (never published: {', '.join(new)})" if new else ""))
         elif not ok:
-            findings.problems.append(message)
+            findings.problems.append(f"{message} — token read from {source}")
 
 
 def dry_run_crates(state: Survey, plan: Plan, findings: Findings) -> None:
@@ -577,16 +583,22 @@ def dry_run_crates(state: Survey, plan: Plan, findings: Findings) -> None:
     findings.check(dry.returncode == 0, "`cargo publish --dry-run` failed for the pending crates (output above)")
 
 
-def crates_token() -> str | None:
+def crates_token() -> tuple[str, str] | None:
+    """The token cargo would publish with, and where it came from.
+
+    The source goes into every rejection message: a stale
+    `CARGO_REGISTRY_TOKEN` exported by a shell profile shadows a fresh
+    `cargo login`, and the rejection alone does not say which one to replace.
+    """
     if os.environ.get("CARGO_REGISTRY_TOKEN"):
-        return os.environ["CARGO_REGISTRY_TOKEN"]
+        return os.environ["CARGO_REGISTRY_TOKEN"], "the CARGO_REGISTRY_TOKEN environment variable"
     cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
     for name in ("credentials.toml", "credentials"):
         path = cargo_home / name
         if path.is_file():
             token = tomllib.loads(path.read_text()).get("registry", {}).get("token")
             if token:
-                return str(token)
+                return str(token), str(path)
     return None
 
 
@@ -742,15 +754,16 @@ def ensure_local_logins(plan: Plan) -> None:
         run(["npm", "login"], capture=False)
         run(["npm", "whoami"])
     if plan.pending_crates:
-        token = crates_token()
-        if token is None:
+        found = crates_token()
+        if found is None:
             raise ReleaseError("the crates.io token disappeared; set CARGO_REGISTRY_TOKEN and re-run the script")
+        token, source = found
         ok, message = interpret_crates_token_probe(*http_status(
             "https://crates.io/api/v1/trusted_publishing/github_configs?crate=chordsketch",
             {"Authorization": token},
         ))
         if not ok:
-            raise ReleaseError(message)
+            raise ReleaseError(f"{message} — token read from {source}")
 
 
 def publish_crates(state: Survey, plan: Plan) -> None:
