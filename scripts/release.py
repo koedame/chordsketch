@@ -452,8 +452,7 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
 
     credentials_run = None
     if fresh or plan.pending_ci:
-        # Dispatched now and collected at the end, so the local dry runs
-        # below use the time the workflow takes.
+        # Dispatched now so the local checks below use the time it takes.
         section("CI publish credentials (release-credentials.yml)")
         try:
             credentials_run = dispatch("release-credentials.yml", {}, login)
@@ -463,10 +462,11 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
     if plan.pending_crates:
         preflight_crates(plan, findings)
     if plan.pending_npm:
-        preflight_npm(state, plan, login, findings)
-
+        preflight_npm(state, plan, findings)
     if not fresh and plan.pending_ci:
         preflight_stalled_ci(state, plan, findings)
+    if not fresh:
+        preflight_release_assets(state, plan, findings)
 
     if credentials_run is not None:
         section("Waiting for release-credentials.yml")
@@ -475,8 +475,16 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
             for job in failed_jobs(credentials_run):
                 findings.problems.append(f"CI credential check failed: {job} — {credentials['html_url']}")
 
-    if not fresh:
-        preflight_release_assets(state, plan, findings)
+    # The dry runs build every pending package, which takes minutes. Every
+    # other check is cheap, so a run that is going to fail anyway reports
+    # that first instead of after the builds.
+    if findings.problems:
+        findings.notes.append("the crates.io and npm dry runs were skipped; they run once the preflight problems are fixed")
+    else:
+        if plan.pending_crates:
+            dry_run_crates(plan, findings)
+        if plan.pending_npm:
+            dry_run_npm(plan, findings)
 
     return findings
 
@@ -520,7 +528,9 @@ def preflight_crates(plan: Plan, findings: Findings) -> None:
         elif not ok:
             findings.problems.append(message)
 
-    print("    cargo publish --dry-run (verifies every pending crate together)", flush=True)
+
+def dry_run_crates(plan: Plan, findings: Findings) -> None:
+    section("cargo publish --dry-run (verifies every pending crate together)")
     dry = run(["cargo", "publish", "--dry-run", "--locked", *flag_each("-p", plan.pending_crates)], check=False, capture=False)
     findings.check(dry.returncode == 0, "`cargo publish --dry-run` failed for the pending crates (output above)")
 
@@ -547,7 +557,7 @@ def flag_each(flag: str, values: tuple[str, ...] | list[str]) -> list[str]:
     return [item for value in values for item in (flag, value)]
 
 
-def preflight_npm(state: Survey, plan: Plan, login: str, findings: Findings) -> None:
+def preflight_npm(state: Survey, plan: Plan, findings: Findings) -> None:
     section(f"npm ({len(plan.pending_npm)} pending)")
     unknown = [p for p in state.npm if p not in NPM_RECIPES and not is_napi(p)]
     findings.check(not unknown, f"no publish recipe in scripts/release.py for npm channel(s): {', '.join(unknown)}")
@@ -575,6 +585,10 @@ def preflight_npm(state: Survey, plan: Plan, login: str, findings: Findings) -> 
     needs_wasm = any(NPM_RECIPES.get(p, NpmRecipe("", False)).build for p in plan.pending_npm)
     if needs_wasm:
         findings.check(shutil.which("wasm-pack") is not None, "wasm-pack is not on PATH (needed to build the wasm packages)")
+
+
+def dry_run_npm(plan: Plan, findings: Findings) -> None:
+    section("npm build and publish --dry-run")
     for package in plan.pending_npm:
         recipe = NPM_RECIPES.get(package)
         if recipe is None:
@@ -784,7 +798,7 @@ def main() -> int:
 
         findings = preflight(state, plan, login)
         for note in findings.notes:
-            print(f"\nnote: {note}")
+            print(f"\nnote: {note}", flush=True)
         if findings.problems:
             print("\nPreflight failed. Nothing was published. Fix these and re-run:", file=sys.stderr)
             for problem in findings.problems:
