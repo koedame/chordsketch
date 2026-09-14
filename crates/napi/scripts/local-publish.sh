@@ -109,7 +109,7 @@ while :; do
   [ "${#pending[@]}" -eq 0 ] && break
   if [ "$attempt" -ge "$VERIFY_ATTEMPTS" ]; then
     echo "ERROR: the npm registry still does not serve $VERSION of: ${pending[*]}" >&2
-    echo "Waited $((VERIFY_ATTEMPTS * VERIFY_INTERVAL))s. Re-run this script; published packages are skipped." >&2
+    echo "Waited $(((VERIFY_ATTEMPTS - 1) * VERIFY_INTERVAL))s. Re-run this script; published packages are skipped." >&2
     exit 1
   fi
   echo "  waiting for the registry to serve: ${pending[*]}"
