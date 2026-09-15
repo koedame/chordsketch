@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 koedame -->
+<component type="desktop-application">
+  <id>me.koeda.ChordSketch</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only AND MIT AND OFL-1.1</project_license>
+
+  <name>ChordSketch</name>
+  <summary>Write chord sheets with a live preview</summary>
+  <developer id="me.koeda">
+    <name>koedame</name>
+  </developer>
+
+  <description>
+    <p>
+      ChordSketch is an editor for chord sheets: lyrics with the chords to play
+      above them. Type a song in the ChordPro format and the formatted sheet
+      appears next to it as you write.
+    </p>
+    <ul>
+      <li>Transpose a song, or set a capo, and every chord follows</li>
+      <li>Chord diagrams for guitar, ukulele and keyboard</li>
+      <li>Export to PDF or HTML</li>
+      <li>Open and edit iReal Pro charts as a bar grid</li>
+      <li>Listen to a chord, the key of the song, or a metronome at its tempo</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">me.koeda.ChordSketch.desktop</launchable>
+
+  <url type="homepage">https://github.com/koedame/chordsketch</url>
+  <url type="bugtracker">https://github.com/koedame/chordsketch/issues</url>
+  <url type="vcs-browser">https://github.com/koedame/chordsketch</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/koedame/chordsketch/17b28c8149eab71a55991f43c2e937f1d18f1f77/packaging/flatpak/screenshots/editor.png</image>
+      <caption>A ChordPro song and its formatted chord sheet</caption>
+    </screenshot>
+  </screenshots>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#fbe1e8</color>
+    <color type="primary" scheme_preference="dark">#87092c</color>
+  </branding>
+
+  <content_rating type="oars-1.1"/>
+
+  <requires>
+    <display_length compare="ge">640</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+
+  <releases>
+    <release version="0.6.0" date="2026-09-13">
+      <url type="details">https://github.com/koedame/chordsketch/releases/tag/desktop-v0.6.0</url>
+    </release>
+    <release version="0.5.0" date="2026-05-20">
+      <url type="details">https://github.com/koedame/chordsketch/releases/tag/desktop-v0.5.0</url>
+    </release>
+    <release version="0.4.0" date="2026-05-06">
+      <url type="details">https://github.com/koedame/chordsketch/releases/tag/desktop-v0.4.0</url>
+    </release>
+    <release version="0.3.0" date="2026-04-25">
+      <url type="details">https://github.com/koedame/chordsketch/releases/tag/desktop-v0.3.0</url>
+    </release>
+  </releases>
+</component>

@@ -55,6 +55,8 @@ Sources checked:
  19. `packages/{react-ui,react,vue,svelte,chordpro-lite}/package.json`
      `version` — the npm packages that used to version on their own
      cadence and now publish with every workspace release (ADR-0073)
+ 20. `packaging/flatpak/me.koeda.ChordSketch.metainfo.xml` — the newest
+     `<release version>` (the Flathub listing's release history, ADR-0074)
 
 Beyond versions, the lockfile of every consumer in (10) that installs
 `@chordsketch/wasm` must install it from the in-tree `packages/npm` rather
@@ -604,6 +606,15 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
                 value=version,
             )
         )
+
+    metainfo_rel = "packaging/flatpak/me.koeda.ChordSketch.metainfo.xml"
+    metainfo = repo_root / metainfo_rel
+    if metainfo.is_file():
+        # The first <release> is the newest; AppStream lists them newest first.
+        match = re.search(r'<release\b[^>]*\bversion="([^"]+)"', metainfo.read_text(encoding="utf-8"))
+        if match is None:
+            raise SystemExit(f"{metainfo}: no <release version=...> found")
+        sources.append(Source(file=metainfo_rel, field="releases/release[1]/@version", value=match.group(1)))
 
     return sources
 

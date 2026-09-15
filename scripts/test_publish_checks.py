@@ -744,6 +744,38 @@ class PackageRuleTest(unittest.TestCase):
         self.assertEqual(checks.expand_shell_variables(text, {"pkgver": "1.2.0", "CARCH": "x86_64"}), 'source=("https://example/v1.2.0/x-x86_64.tar.gz")')
 
 
+class FlathubTest(unittest.TestCase):
+    def test_when_flatpak_builder_lint_prints_no_report_there_is_no_problem(self) -> None:
+        self.assertEqual(checks.flatpak_lint_problems("manifest", "", 0), [])
+
+    def test_when_flatpak_builder_lint_reports_errors_and_warnings_each_is_a_problem(self) -> None:
+        report = 'fatal: not a git repository\n{\n  "errors": ["finish-args-home-filesystem-access"],\n  "warnings": ["runtime-is-eol-org.gnome.Platform-48"]\n}\n'
+        self.assertEqual(
+            checks.flatpak_lint_problems("repo", report, 1),
+            [
+                "flatpak-builder-lint repo error: finish-args-home-filesystem-access",
+                "flatpak-builder-lint repo warning: runtime-is-eol-org.gnome.Platform-48",
+            ],
+        )
+
+    def test_when_flatpak_builder_lint_fails_without_a_report_its_output_is_the_problem(self) -> None:
+        problems = checks.flatpak_lint_problems("manifest", "Traceback (most recent call last):\nOSError", 1)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("OSError", problems[0])
+
+    def test_when_the_app_sets_its_title_after_startup_the_launch_has_no_problem(self) -> None:
+        self.assertEqual(checks.flatpak_launch_problems(["chordsketch-desktop", "Untitled — ChordSketch"]), [])
+
+    def test_when_the_app_shows_the_startup_failure_dialog_the_launch_fails(self) -> None:
+        problems = checks.flatpak_launch_problems(["ChordSketch", "ChordSketch failed to start"])
+        self.assertEqual(problems, ['the Flatpak shows "ChordSketch failed to start" on launch'])
+
+    def test_when_the_app_never_finishes_startup_the_launch_fails_naming_its_windows(self) -> None:
+        problems = checks.flatpak_launch_problems(["chordsketch-desktop", "ChordSketch"])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("'ChordSketch'", problems[0])
+
+
 @unittest.skipUnless(shutil.which("npm"), "npm is not on PATH")
 class NpmDryRunTest(unittest.TestCase):
     """Runs the real `npm publish --dry-run`; publishable.yml guarantees npm."""

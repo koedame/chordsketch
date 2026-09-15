@@ -220,6 +220,9 @@ at post-release verification rather than before the tag is cut.
    - `apps/desktop/package.json` — `version`
    - `apps/desktop/preview-handler/Cargo.toml` — `package.version`
      (the Windows preview handler DLL ships inside the same installer)
+   - `packaging/flatpak/me.koeda.ChordSketch.metainfo.xml` — a new
+     `<release version="X.Y.Z" date="YYYY-MM-DD">` at the top of
+     `<releases>` (the Flathub listing's release history)
 
    Pins on the wasm packages, all `^X.Y.Z` of the version being released:
    - `@chordsketch/wasm` in `dependencies` of
@@ -651,6 +654,7 @@ After the release workflow completes and the GitHub Release is published:
 | `SNAP_STORE_TOKEN` | Snapcraft exported credentials (`snapcraft export-login`) | Authenticate `snapcraft upload` + `snapcraft release` from `post-release.yml` |
 | `COCOAPODS_TRUNK_TOKEN` | CocoaPods trunk session token (from `~/.netrc` after `pod trunk register`) | Authenticate `pod trunk push` from `swift.yml` |
 | `OPEN_VSX_TOKEN` | Open VSX personal access token (**environment secret** in `open-vsx`, not repo-level) | Authenticate `ovsx publish` from `vscode-extension.yml` |
+| `FLATHUB_TOKEN` | Classic token with `public_repo`, from an account with write access to `flathub/me.koeda.ChordSketch` | Open the update pull request from `desktop-release.yml`'s `update-flathub` job. Not set until the first submission is accepted ([Flathub](#flathub-desktop-app)) |
 | `GITHUB_TOKEN` | provided automatically | Used by `docker.yml` to push to GHCR, by `release.yml` to upload assets, by `npm-publish.yml` checkout |
 
 crates.io, npm, PyPI and RubyGems need no secret: they publish through
@@ -675,6 +679,7 @@ following as the rotation policy:
 | `AUR_SSH_KEY` | Only if the key is compromised or the AUR account changes | <https://aur.archlinux.org/account/koedame> (replace SSH public key, then `gh secret set AUR_SSH_KEY < new_key`) |
 | `SNAP_STORE_TOKEN` | Before expiry date (check current expiry with `snapcraft whoami`) | `snapcraft export-login ~/snap-token.txt && gh secret set SNAP_STORE_TOKEN < ~/snap-token.txt && rm -f ~/snap-token.txt` |
 | `COCOAPODS_TRUNK_TOKEN` | Sessions last ~4 months; re-register if expired | `pod trunk register <email> <name>`, confirm email, then pipe token directly: `grep -A2 trunk.cocoapods.org ~/.netrc \| awk '/password/{print $2}' \| gh secret set COCOAPODS_TRUNK_TOKEN` |
+| `FLATHUB_TOKEN` | Every 90 days, like `TAP_GITHUB_TOKEN` | <https://github.com/settings/tokens>, then `gh secret set FLATHUB_TOKEN` |
 | `OPEN_VSX_TOKEN` | Only if revoked or compromised | <https://open-vsx.org/user-settings/tokens> → generate new token, then `gh secret set OPEN_VSX_TOKEN --env open-vsx` |
 | `DOCKERHUB_USERNAME` | Only if the Docker Hub namespace owner changes | n/a (string, not a credential) |
 | `GITHUB_TOKEN` | Provided automatically per workflow run; no rotation needed | n/a |
@@ -1339,3 +1344,47 @@ the Open VSX Registry. Open VSX requires a separate account and token.
    <https://github.com/koedame/chordsketch/settings/environments>.
 5. The `vscode-extension.yml` `Publish to Open VSX Registry` job
    handles publishing on each release. No manual `ovsx publish` needed.
+
+### Flathub (desktop app)
+
+Not submitted yet. The manifest, metainfo and checks are in
+`packaging/flatpak/`
+([ADR-0074](adr/0074-the-desktop-app-is-built-for-flathub-from-source.md)).
+The submission has to be made by a maintainer: Flathub's
+[generative AI policy](https://docs.flathub.org/docs/for-app-authors/requirements#generative-ai-policy)
+does not allow AI tools to open or write submission pull requests, and
+requires disclosing AI-generated code and packaging in the submission.
+
+1. Release a desktop version that contains `packaging/flatpak/`. Flathub
+   builds a tag, and the metainfo and desktop file are installed from it.
+2. Write the submission files for that tag:
+   ```bash
+   python3 -m pip install -r packaging/flatpak/requirements.txt
+   TAG=desktop-vX.Y.Z
+   packaging/flatpak/prepare.py --out flathub-submission \
+     --git-tag "$TAG" --git-commit "$(git rev-parse "$TAG^{commit}")"
+   ```
+3. Build, run and lint them as `packaging/flatpak/README.md` describes,
+   using `flathub-submission/me.koeda.ChordSketch.yml`.
+4. Fork <https://github.com/flathub/flathub> with *Copy the master branch
+   only* unchecked, then:
+   ```bash
+   git clone --branch=new-pr git@github.com:<you>/flathub.git && cd flathub
+   git checkout -b me.koeda.ChordSketch new-pr
+   cp ../flathub-submission/* .
+   git add . && git commit && git push -u origin me.koeda.ChordSketch
+   ```
+5. Open the pull request against the **`new-pr`** branch in the GitHub web
+   interface, titled `Add me.koeda.ChordSketch`, and fill in its template,
+   including the AI disclosure. Reviewers start a test build with
+   `bot, build`.
+6. Once it is merged, Flathub creates `flathub/me.koeda.ChordSketch` and
+   invites you. Create a classic token with the `public_repo` scope from
+   the account Flathub invited, and store it:
+   `gh secret set FLATHUB_TOKEN -R koedame/chordsketch`. From the next
+   release, `desktop-release.yml`'s `update-flathub` job opens the update
+   pull request; install the test build Flathub links from it, then merge.
+7. Verify the app on the Flathub developer portal, which asks for a token at
+   `https://koeda.me/.well-known/org.flathub.VerifiedApps.txt`.
+8. Add the channel to `ci/release-channels.toml` and the
+   [Distribution Channels](#distribution-channels) table.

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=ChordSketch
+GenericName=Chord Sheet Editor
+Comment=Write chord sheets in ChordPro and iReal Pro formats
+Exec=chordsketch-desktop
+Icon=me.koeda.ChordSketch
+Terminal=false
+Categories=AudioVideo;Music;
+Keywords=ChordPro;chords;lyrics;song;guitar;iReal;
+StartupWMClass=chordsketch-desktop

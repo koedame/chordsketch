@@ -358,9 +358,35 @@ Submitted by hand as a pull request to `microsoft/winget-pkgs` from
 | Each manifest has its required fields and the current `PackageVersion` | [Manifest schema](https://learn.microsoft.com/en-us/windows/package-manager/package/manifest) | `winget_problems` |
 | `InstallerUrl` is this version's release asset; `InstallerSha256` is 64 uppercase hex digits | [Manifest schema](https://learn.microsoft.com/en-us/windows/package-manager/package/manifest) | `winget_problems`. Until this check, the manifests were at 0.6.0 but downloaded the 0.5.0 zip. |
 
-## Flathub
+## Flathub (desktop app)
 
-Not a channel. Flathub does not accept console software ("Console softwares
-will not be accepted", [requirements](https://docs.flathub.org/docs/for-app-authors/requirements)),
-so the CLI is not submitted there
+The desktop app's channel. Not submitted yet; the first submission is made by
+hand ([releasing.md](releasing.md#flathub-desktop-app)), and from then on
+`desktop-release.yml`'s `update-flathub` job opens a pull request on
+`flathub/me.koeda.ChordSketch` with the files `packaging/flatpak/prepare.py`
+writes for the tag
+([ADR-0074](adr/0074-the-desktop-app-is-built-for-flathub-from-source.md)).
+The CLI is not a Flathub channel: "Console softwares will not be accepted"
 ([ADR-0072](adr/0072-the-cli-is-not-published-to-flathub.md)).
+
+Every condition below is from the
+[requirements](https://docs.flathub.org/docs/for-app-authors/requirements)
+unless another source is named. All automated ones run in the `flathub` job of
+`publishable.yml` (`flathub_problems`).
+
+| Condition | Source | Checked by |
+|---|---|---|
+| A graphical application; console software is not accepted | Requirements: Console software | — (the desktop app) |
+| Built entirely from source, including the dependencies the manifest builds | Requirements: Building from source | the manifest builds Rust, the wasm-bindgen CLI, the wasm bundle, the tree-sitter grammar, the frontend and the binary; the check builds it |
+| No network access during the build: every dependency is a source with a public URL and a checksum | Requirements: No network access during build | `flatpak-builder` offline build of the manifest `prepare.py` writes for the checkout; the tag form Flathub builds differs only in the application source and is linted |
+| The manifest passes `flatpak-builder-lint manifest`, and the built repository `flatpak-builder-lint repo`, with no error or warning | [Linter](https://docs.flathub.org/docs/for-app-authors/linter) | `flatpak_lint_problems` |
+| The application ID has 3 to 5 components, does not end in `.desktop` / `.app` / `.linux`, and its domain (`koeda.me`) is controlled by the project | Requirements: Application ID | `flatpak-builder-lint manifest`; the domain by hand at verification |
+| The runtime is hosted on Flathub, is its newest version at submission, and is not end-of-life | Requirements: Manifest; End-of-life dependency policy | `flatpak-builder-lint` (`runtime-is-eol-*`); the newest version by hand at submission |
+| The metainfo is `me.koeda.ChordSketch.metainfo.xml`, its `id` is the application ID, and it passes `flatpak-builder-lint appstream` (which fails on warnings), with a license, developer, description, launchable, screenshots linked from a commit, OARS rating and releases | [MetaInfo guidelines](https://docs.flathub.org/docs/for-app-authors/metainfo-guidelines/) | `flatpak-builder-lint appstream` |
+| Screenshots are reachable and mirrored to `dl.flathub.org/media` | Linter: `appstream-external-screenshot-url` | the build uses Flathub's `--mirror-screenshots-url` and `--compose-url-policy=full`; `flatpak-builder-lint repo` |
+| The newest metainfo release is the desktop version | — | `scripts/check-version-consistency.py` |
+| A desktop file named after the ID, and an icon, SVG or at least 256×256 | Requirements: Desktop file; Icons | `desktop-file-validate`; `flatpak-builder-lint repo` |
+| License files installed to `share/licenses/me.koeda.ChordSketch` | Requirements: Installing license files | the manifest installs the AGPL, MIT and OFL texts and `NOTICE` |
+| Static permissions kept to a minimum, portals used where one covers the use case | Requirements: Permissions | the manifest (`ipc`, `wayland`, `fallback-x11`, `dri`, `pulseaudio`; files through the FileChooser portal); `flatpak-builder-lint` flags broad filesystem and session-bus access |
+| The application is fully functional, with no easily visible issues | Requirements: Non-functional submissions | the check launches the build under Xvfb and waits for the window title the app sets at the end of its startup; the rest by hand |
+| AI-generated code, documentation and packaging are disclosed; AI tools do not open or write the submission pull request | Requirements: Generative AI policy | by hand at submission |
