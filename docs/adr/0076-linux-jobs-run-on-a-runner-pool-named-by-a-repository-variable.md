@@ -112,6 +112,34 @@ the macOS cap.
   asks for are the table in *Context* and the table in *Measured after*
   below.
 
+## Measured after
+
+The pull request that introduced this ADR
+([#2915](https://github.com/koedame/chordsketch/pull/2915)) ran 123 jobs on
+its own head, all green (its workflow edits trip every `paths:` filter, and
+`readme-smoke.yml` was dispatched by hand):
+
+| Runner | Jobs | Queue wait, median / max | Run time, median / total |
+|---|---|---|---|
+| pool (`LINUX_RUNNER`) | 70 | 1.9 min / 25.7 min | 1.2 min / 259 min |
+| `ubuntu-latest` (jobs that stay hosted) | 25 | 48 min / 56 min | 1.9 min / 68 min |
+| `macos-latest` | 15 | 66 min / 89 min | 4.2 min / 60 min |
+| `windows-latest` | 12 | 37 min / 42 min | 2.4 min / 41 min |
+
+- The Linux wait went from a median of 43 minutes to under 2. The 25-minute
+  maximum is the first burst: 70 jobs arrived at once on 8 runners that were,
+  for this run, allowed 4 CPUs each on a 16-core host. The cap has since been
+  lowered so the pool no longer oversubscribes its host.
+- Total Linux run time is not directly comparable to the baseline (70 jobs
+  including the `readme-smoke.yml` installs against 65) and is higher: the
+  pool has less CPU per job than a hosted runner and started with cold caches.
+  The wait it removes is an order of magnitude larger.
+- The hosted-side numbers are not yet the after-state. Five Dependabot pull
+  requests on the previous workflow files were filling the 20 hosted slots
+  with their own Linux jobs during this run. Those move to the pool once this
+  change is on `main` and they rebase; the macOS floor (about 15 minutes of
+  work at five at a time) is the expected pull-request duration after that.
+
 ## Alternatives considered
 
 - **A larger GitHub plan.** Rejected: raises the total to 40 or 60 but
