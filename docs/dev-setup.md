@@ -37,7 +37,7 @@ npm run build              # produces packages/npm/{web,node}/* (gitignored)
 npm pack --dry-run
 ```
 
-See `docs/releasing.md` "npm publish via CI" for the publish-side quirks.
+See `docs/releasing.md` "Trusted publishing" for how the packages are published.
 
 ## External Tools (Optional)
 

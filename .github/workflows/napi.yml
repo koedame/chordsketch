@@ -283,12 +283,10 @@ jobs:
 
   upload-release-tarballs:
     name: Upload napi tarballs to GitHub Release
-    # Per ADR-0008, npm publishing is a maintainer-local manual operation.
-    # This job no longer publishes — it stages the platform packages with
-    # their prebuilt .node files and uploads them as compressed tarballs to
-    # the GitHub Release for the maintainer to fetch via `gh release
-    # download <tag>` and publish locally with the script in
-    # `crates/napi/scripts/local-publish.sh`.
+    # This job does not publish — it stages the platform packages with
+    # their prebuilt .node files and uploads them as compressed tarballs
+    # to the GitHub Release for `publish-registries.yml` to download and
+    # publish through trusted publishing (ADR-0069).
     #
     # `build` must succeed so every target triple has an artifact to stage;
     # we download them all, assemble each platform package, and tar the
@@ -328,7 +326,7 @@ jobs:
           set -euo pipefail
           version="${TAG#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Staging @chordsketch/node@$version for local publish"
+          echo "Staging @chordsketch/node@$version for publish-registries.yml"
 
       - name: Download all platform artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

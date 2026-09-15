@@ -7,8 +7,9 @@ publishing, and it is imported by both places that check them:
 
   - `scripts/check-publishable.py`, which `.github/workflows/publishable.yml`
     runs on every pull request, every push to `main` and nightly;
-  - `scripts/release.py`, whose preflight runs the same checks against the
-    release commit on the maintainer's machine (ADR-0068).
+  - `scripts/publish-registries.py`, which `publish-registries.yml` runs
+    before it publishes crates.io and npm — for the release commit in the
+    release preflight, and again for the upload itself (ADR-0069).
 
 Keeping one definition is the point. The v0.6.0 release was refused by
 crates.io for a crate over its upload limit that no pull request had ever

@@ -1,6 +1,6 @@
 # 0008. npm publishing is a maintainer-local manual operation
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-0069](0069-crates-io-and-npm-publish-from-ci-with-trusted-publishing.md) (Decision 6, the package names, stands)
 - **Date**: 2026-04-26
 
 ## Context

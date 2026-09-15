@@ -3,10 +3,9 @@ name: "@chordsketch/react"
 # Lint, typecheck, build, and smoke-test the @chordsketch/react
 # package on every PR that touches it, plus pushes to main for
 # post-merge verification. Publish-on-tag is intentionally NOT
-# handled here — per ADR-0008, every npm publish for every
-# ChordSketch-distributed package is a maintainer-local manual
-# operation. The maintainer runs `cd packages/react && npm run build
-# && npm publish --access public` on the release machine.
+# handled here — publishing is done by dispatching
+# `publish-registries.yml` from main with `set: @chordsketch/react`
+# (ADR-0069).
 
 on:
   push:

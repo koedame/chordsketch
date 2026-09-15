@@ -1,17 +1,17 @@
 # 0069. crates.io and npm publish from CI with trusted publishing
 
-- **Status**: Proposed (supersedes ADR-0008 once accepted)
-- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Date**: 2026-09-15
 
 ## Context
 
 ADR-0068 made the release one script, `scripts/release.py X.Y.Z`. It
 pushes the tags, waits for every CI-published channel to converge, and
 then publishes crates.io and npm **from the maintainer's machine**, as
-ADR-0008 requires. Those two registries are the only part of a release
-that still needs the maintainer at a terminal: a crates.io token in
+ADR-0008 requires. Those two registries were the only part of a release
+that still needed the maintainer at a terminal: a crates.io token in
 `~/.cargo/credentials.toml`, an `npm login` session, and a one-time
-password for each npm package. For 0.6.0 that is 10 crates and 9 npm
+password for each npm package. For 0.6.0 that was 10 crates and 9 npm
 packages in one sitting, plus the framework packages
 (`@chordsketch/react`, `react-ui`, `vue`, `svelte`, `chordpro-lite`) on
 their own cadence.
@@ -38,19 +38,25 @@ the model ADR-0008 was written against.
   publishing for CI.
   ([changelog](https://github.blog/changelog/2025-12-09-npm-classic-tokens-revoked-session-based-auth-and-cli-token-management-now-available/))
 - Trusted publishing needs npm CLI ≥ 11.5.1 and Node ≥ 22.14.0, and runs
-  on GitHub-hosted runners only. A package accepts up to 10 trusted
-  publishers, each naming a repository, a workflow **filename** and an
-  optional environment. ([docs](https://docs.npmjs.com/trusted-publishers))
+  on GitHub-hosted runners only. A trusted publisher names a repository,
+  a workflow **filename** and an optional environment, and the registry
+  currently accepts one per package. ([docs](https://docs.npmjs.com/trusted-publishers),
+  [`npm trust`](https://docs.npmjs.com/cli/v11/commands/npm-trust/))
+- `npm publish` asks GitHub for an OIDC token with the audience
+  `npm:registry.npmjs.org` and exchanges it at
+  `/-/npm/v1/oidc/token/exchange/package/<name>` before uploading
+  (`lib/utils/oidc.js` in `npm/cli`). The exchange succeeds only when the
+  package's trusted publisher matches the job.
 - When the workflow is reusable, npm matches the **calling** workflow's
   filename, and both workflows need `id-token: write`.
 - Publishing through it from a public repository emits a provenance
   attestation automatically. Every published package's `repository.url`
-  is already `https://github.com/koedame/chordsketch.git`, which
+  is already `git+https://github.com/koedame/chordsketch.git`, which
   provenance requires.
 - The package must already exist. Neither the web settings nor
   `npm trust github` (npm ≥ 11.15.0, which configures trusted publishers
-  in bulk from the CLI) accepts a name that has never been published, and
-  first publish over OIDC is an open request
+  from the CLI and requires `--allow-publish`) accepts a name that has
+  never been published, and first publish over OIDC is an open request
   ([npm/cli#8544](https://github.com/npm/cli/issues/8544)).
 - The package setting "Require two-factor authentication and disallow
   tokens" leaves trusted publishing working, and still lets a logged-in
@@ -85,39 +91,40 @@ well as its [documentation](https://crates.io/docs/trusted-publishing):
 
 ### Where each package stands
 
-Registry state checked anonymously on 2026-09-14. Every crate is owned
-by the `unchidev` user and every npm package is maintained by
-`unchidev`.
+Registry state checked anonymously on 2026-09-15, after 0.6.0. Every
+crate is owned by the `unchidev` user and every npm package is
+maintained by `unchidev`.
 
-| Registry | Package | Published? | Can move | First publish by hand |
-|---|---|---|---|---|
-| crates.io | `chordsketch-chordpro` | 0.5.0 | yes | no |
-| crates.io | `chordsketch-render-text` | 0.5.0 | yes | no |
-| crates.io | `chordsketch-render-html` | 0.5.0 | yes | no |
-| crates.io | `chordsketch-render-pdf` | 0.5.0 | yes | no |
-| crates.io | `chordsketch-ireal` | 0.5.0 | yes | no |
-| crates.io | `chordsketch-render-ireal` | 0.5.0 | yes | no |
-| crates.io | `chordsketch-convert` | 0.5.0 | yes | no |
-| crates.io | `chordsketch-convert-musicxml` | 0.5.0 | yes | no |
-| crates.io | `chordsketch-mcp` | **never** | after its first publish | **yes** (the 0.6.0 release) |
-| crates.io | `chordsketch` | 0.5.0 | yes | no |
-| npm | `@chordsketch/wasm` | 0.5.0 | yes | no |
-| npm | `@chordsketch/wasm-export` | 0.5.0 | yes | no |
-| npm | `tree-sitter-chordpro` | 0.5.0 | yes | no |
-| npm | `@chordsketch/node` | 0.5.0 | yes | no |
-| npm | `@chordsketch/node-linux-x64-gnu` | 0.5.0 | yes | no |
-| npm | `@chordsketch/node-linux-arm64-gnu` | 0.5.0 | yes | no |
-| npm | `@chordsketch/node-darwin-x64` | 0.5.0 | yes | no |
-| npm | `@chordsketch/node-darwin-arm64` | 0.5.0 | yes | no |
-| npm | `@chordsketch/node-win32-x64-msvc` | 0.5.0 | yes | no |
-| npm | `@chordsketch/react` | 0.4.0 | yes | no |
-| npm | `@chordsketch/react-ui` | 0.1.0 | yes | no |
-| npm | `@chordsketch/vue` | 0.1.0 | yes | no |
-| npm | `@chordsketch/svelte` | 0.1.0 | yes | no |
-| npm | `@chordsketch/chordpro-lite` | 0.1.0 | yes | no |
+| Registry | Package | Newest published | Can move |
+|---|---|---|---|
+| crates.io | `chordsketch-chordpro` | 0.6.0 | yes |
+| crates.io | `chordsketch-render-text` | 0.6.0 | yes |
+| crates.io | `chordsketch-render-html` | 0.6.0 | yes |
+| crates.io | `chordsketch-render-pdf` | 0.6.0 | yes |
+| crates.io | `chordsketch-ireal` | 0.6.0 | yes |
+| crates.io | `chordsketch-render-ireal` | 0.6.0 | yes |
+| crates.io | `chordsketch-convert` | 0.6.0 | yes |
+| crates.io | `chordsketch-convert-musicxml` | 0.6.0 | yes |
+| crates.io | `chordsketch-mcp` | 0.6.0 (first published by hand in the 0.6.0 release) | yes |
+| crates.io | `chordsketch` | 0.6.0 | yes |
+| npm | `@chordsketch/wasm` | 0.6.0 | yes |
+| npm | `@chordsketch/wasm-export` | 0.6.0 | yes |
+| npm | `tree-sitter-chordpro` | 0.6.0 | yes |
+| npm | `@chordsketch/node` | 0.6.0 | yes |
+| npm | `@chordsketch/node-linux-x64-gnu` | 0.6.0 | yes |
+| npm | `@chordsketch/node-linux-arm64-gnu` | 0.6.0 | yes |
+| npm | `@chordsketch/node-darwin-x64` | 0.6.0 | yes |
+| npm | `@chordsketch/node-darwin-arm64` | 0.6.0 | yes |
+| npm | `@chordsketch/node-win32-x64-msvc` | 0.6.0 | yes |
+| npm | `@chordsketch/react` | 0.4.0 | yes |
+| npm | `@chordsketch/react-ui` | 0.1.0 | yes |
+| npm | `@chordsketch/vue` | 0.1.0 | yes |
+| npm | `@chordsketch/svelte` | 0.1.0 | yes |
+| npm | `@chordsketch/chordpro-lite` | 0.1.0 | yes |
 
-Once 0.6.0 has put `chordsketch-mcp` on crates.io, all 24 packages can
-publish from CI. Only packages added later need one publish by hand.
+All 24 packages exist, so all of them can publish from CI once their
+trusted publishers are registered. Only packages added later need one
+publish by hand.
 
 The repository already publishes this way elsewhere: `python.yml`
 (PyPI) and `ruby.yml` (RubyGems) authenticate with OIDC.
@@ -127,81 +134,93 @@ The repository already publishes this way elsewhere: `python.yml`
 1. **crates.io and npm publish from one workflow,
    `.github/workflows/publish-registries.yml`.** Its only trigger is
    `workflow_dispatch`, with these inputs:
-   - `tag` — the release tag to publish, or empty for `main`
-   - `set` — `workspace` (the tag-versioned crates and npm packages) or
-     one framework package name
+   - `ref` — the tag or commit to publish from, or empty for `main`
+   - `set` — `workspace` (the crates and npm packages whose channel in
+     `ci/release-channels.toml` carries the tag's version) or one
+     framework package name
    - `mode` — `check` or `publish`
 
-   Every trusted publisher on both registries names this filename.
+   Every trusted publisher on both registries names this filename. The
+   logic lives in `scripts/publish-registries.py`, which reuses the
+   pull-request publish checks of `scripts/_publish_checks.py`
+   (ADR-0070).
 2. **The workflow is never called from another workflow.** Both
    registries match the calling workflow's filename. Calling it from
-   `release.yml` would mean registering `release.yml`, which runs on
-   every `v*` tag push, before the release script has seen CI converge
+   `release.yml` would mean registering `release.yml`, which runs on every
+   `v*` tag push, before the release script has seen CI converge
    (ADR-0068 Decision 4).
-3. **Two environments, `crates-io` and `npm`, gate the publish jobs.**
-   Their deployment policy admits only `v*` tags and `main`. The trusted
-   publishers name these environments, so a dispatch from any other ref
-   cannot mint a token. The `npm` environment already exists
-   (`gh api repos/koedame/chordsketch/environments`) with no deployment
-   branch policy set, but no workflow references it today: its
+3. **Two environments, `crates-io` and `npm`, gate the publish jobs, and
+   both admit only `main`.** The trusted publishers name these
+   environments, so a run of the workflow as it exists on any other ref
+   cannot mint a token. The workflow is always dispatched from `main`;
+   `ref` only selects what it checks out, and the workflow refuses a
+   dispatch from anywhere else before building. The `npm` environment
+   already exists, but no workflow references it today: its
    `environment:` block was removed from `npm-publish.yml` and
    `npm-publish-tree-sitter.yml` in #1791, because a failed publish left
    a permanent "failure" deployment entry on the Deployments page and
    `NPM_TOKEN` was a repo-level secret the block did not gate. This
    workflow re-attaches it for a different reason — the environment name
    is what a trusted-publisher configuration matches, not a secret
-   scope — so the old cosmetic issue applies again: a failed `mode:
-   publish` run leaves a "failure" deployment entry. Its policy is set,
-   not created.
-4. **`mode: check` answers, before any tag is pushed, everything that
-   `mode: publish` will need.** `scripts/release.py`'s preflight
-   dispatches it in parallel with `release-credentials.yml` and requires
-   it to succeed:
-   - For each pending npm package, exchange the job's OIDC token at
-     `/-/npm/v1/oidc/token/exchange/package/<name>`, the call
-     `npm publish` makes. A package without a matching trusted publisher
-     fails here, by name.
-   - Exchange a crates.io token once, so a missing or mismatched
-     configuration fails here.
-   - Report every pending package that has never been published: it
-     cannot publish from CI.
-   - Run the dry runs that `release.py` runs locally today: one
-     `cargo publish --dry-run` over the pending crates, and
-     `npm run build` plus `npm publish --dry-run` for each pending npm
-     package.
+   scope — so the old cosmetic issue applies again: a failed run leaves a
+   "failure" deployment entry.
+4. **`mode: check` answers everything `mode: publish` will need, for
+   every package of the set, without uploading.** `scripts/release.py`'s
+   preflight dispatches it for the release commit (the tag, once pushed)
+   in parallel with `release-credentials.yml` and requires it to succeed:
+   - A package of the set that has never been published fails the run by
+     name: it cannot publish from CI (Decision 8).
+   - Every crate passes the pull-request checks, including one
+     `cargo publish --dry-run` over all of them, and the job exchanges a
+     crates.io token once, so a missing or mismatched configuration fails
+     here.
+   - Every npm package is built, packed and checked as a pull request
+     does; the napi tarballs are downloaded from the Release and checked
+     when the tag is already out. Then the job's OIDC token is exchanged
+     at `/-/npm/v1/oidc/token/exchange/package/<name>` for each package,
+     the call `npm publish` makes, so a package without a matching
+     trusted publisher fails here, by name.
 
-   The exchanged tokens are never used and expire on their own.
-5. **`mode: publish` replaces `publish_crates` and `publish_npm` in
+   The exchanged tokens are never used and expire or are revoked on their
+   own. Covering the whole set, not only the unpublished versions, lets a
+   check prove the setup between releases. Each problem is written as a
+   workflow annotation, which `release.py` reads back so the maintainer
+   sees the reason in the terminal.
+5. **`mode: publish` replaces the local crates.io and npm publish in
    `release.py`.** The script still waits for every CI channel to
    converge, then dispatches the workflow for the release tag and waits
-   for it. The workflow asks the registries what they already serve and
-   publishes only what is missing, so a re-dispatch resumes, and the
-   registries stay the only state (ADR-0068 Decision 5).
-   - **crates.io job:** `cargo publish --dry-run` over the pending
-     crates first, so the build happens outside the token's 30 minutes.
-     Then `crates-io-auth-action`, then one `cargo publish` with every
-     pending `-p`.
-   - **npm job:** npm ≥ 11.15.0 on Node 22, `id-token: write`, no
-     `NODE_AUTH_TOKEN`. The napi platform packages come from the
-     GitHub Release assets that `napi.yml` already uploads, which
-     removes the `gh release download` step from the maintainer's
-     machine. Publish order stays platforms first, resolver last.
+   for it. The workflow covers only what the registries do not serve yet,
+   so a re-dispatch resumes, and the registries stay the only state
+   (ADR-0068 Decision 5).
+   - **crates.io job:** the pull-request checks and
+     `cargo publish --dry-run` over the pending crates first, so the
+     build happens outside the token's 30 minutes. Then
+     `crates-io-auth-action`, then one `cargo publish` with every pending
+     `-p`. No build cache is restored into the job.
+   - **npm job:** npm 11 on Node 22, `id-token: write`, no `registry-url`
+     and no `NODE_AUTH_TOKEN`. Every pending tarball passes the checks
+     before any is uploaded, and the uploaded tarball is the one checked.
+     The napi platform packages come from the GitHub Release assets that
+     `napi.yml` already uploads, published before the resolver. The job
+     waits until npm serves every package it published, since npm accepts
+     an upload before it serves it.
 6. **The framework packages use the same workflow.** A dispatch from
    `main` with `set: @chordsketch/react` (or another framework package)
-   replaces `docs/releasing.md` Steps 7e-7i.
+   replaces the local publish steps in `docs/releasing.md`.
 7. **After the first CI release publishes cleanly, token publishing is
    closed.** Every crate is set to "Trusted Publishing only" and every
    npm package to "Require two-factor authentication and disallow
-   tokens". The maintainer's local path stays open only where it is
-   still needed: publishing a new package for the first time, with a
-   crates.io token scoped to `publish-new`, or an `npm login` session and
-   a one-time password.
+   tokens", and the unused `NPM_TOKEN` secret is deleted. The maintainer's
+   local path stays open only where it is still needed: publishing a new
+   package for the first time, with a crates.io token scoped to
+   `publish-new`, or an `npm login` session and a one-time password.
 8. **Adding a package is: publish once by hand, then register its
-   trusted publisher.** For npm, run `npm trust github <name> --file
-   publish-registries.yml --repo koedame/chordsketch --env npm`. For
-   crates.io, add the configuration in the crate's settings or through
-   the API. `docs/releasing.md` "Adding a New npm Package" gains this
-   step, and `mode: check` names any package that skipped it.
+   trusted publisher.** For npm, run `npm trust github <name> --repo
+   koedame/chordsketch --file publish-registries.yml --env npm
+   --allow-publish`. For crates.io, add the configuration in the crate's
+   settings or through the API. `docs/releasing.md` "Adding a package"
+   carries both, and `mode: check` names any package that skipped the
+   first step.
 
 ## Rationale
 
@@ -215,19 +234,24 @@ ADR-0008's second reason was 2FA. What 2FA protected was "a leaked
 credential cannot publish". Trusted publishing keeps that property, and
 more strongly, because there is no long-lived credential at all. What
 changes is who can publish: anyone who can dispatch
-`publish-registries.yml` on `main` or a `v*` tag, with its environment.
-Decisions 2, 3 and 7 keep that set to the repository's maintainers.
-Provenance attestations make every publish traceable to a commit and a
-workflow run, which the local path never did.
+`publish-registries.yml` on `main`, with its environment. Decisions 2, 3
+and 7 keep that set to the repository's maintainers. Provenance
+attestations make every npm publish traceable to a commit and a workflow
+run, which the local path never did.
 
 Keeping the check and publish modes in one workflow is forced by the
 registries, not chosen for tidiness. A token exchange succeeds only from
 the registered filename and environment, so the only place that can
 prove the publish will authenticate is the publish workflow itself.
 
+Admitting only `main` to the environments, rather than `main` and `v*`
+tags, costs nothing: the workflow checks out the tag it is given. It
+removes a path where a tag cut from an old commit would run an old copy
+of the workflow with a token.
+
 The dry run ahead of the crates.io exchange exists because the token
 lasts 30 minutes and `cargo publish` verifies every pending crate before
-uploading the first. The dry run fills `target/package` for the real
+uploading the first. The dry run fills the target directory for the real
 run. If a cold verify of all ten crates ever approaches 30 minutes, the
 uploads near the end would fail with an expired token. A re-dispatch
 would resume from them, but the job should not rely on that.
@@ -237,13 +261,17 @@ would resume from them, but the job should not rely on that.
 - A release needs no crates.io token, no npm login and no one-time
   password. `release.py` only needs `gh` with permission to push tags and
   dispatch workflows, so it can run from any machine.
-- One-time setup after 0.6.0, by the maintainer:
-  - npm: upgrade to npm ≥ 11.15.0, then run `npm trust github` once per
-    package (14 packages, account 2FA required).
+  `crates/napi/scripts/local-publish.sh` is removed.
+- One-time setup, by the maintainer (`docs/releasing.md`, "Trusted
+  publishing"):
+  - GitHub: create the `crates-io` environment, and restrict both
+    environments to `main`.
+  - npm: with npm ≥ 11.15.0, run `npm trust github` once per package
+    (14 packages, account 2FA required).
   - crates.io: create a token with the `trusted-publishing` scope, and
-    create the 10 configurations with it (or in the web UI).
-  - GitHub: create the `crates-io` environment, and set both
-    environments' deployment policies.
+    create the 10 configurations with it.
+  Until that is done, the release preflight fails at the check and names
+  every package that is not registered, so no tag can be pushed.
 - `mode: check` adds one more dispatched workflow to the preflight, on
   top of `release-credentials.yml`. The crates.io check proves that a
   configuration exists for this workflow. It cannot show which crates
@@ -256,17 +284,19 @@ would resume from them, but the job should not rely on that.
   be attached. Watch for npm/cli#8544 and a crates.io equivalent: if
   either lands, Decision 8 reduces to "register before the first
   release".
-- `NPM_TOKEN`, if still provisioned, is deleted. Nothing references it.
-- ADR-0008 becomes "Superseded by ADR-0069" when this ADR is accepted.
-  Its Decision 6 (the scoped vs. unscoped package names) is unaffected
-  and stays in force.
+- ADR-0008 is superseded. Its Decision 6 (the scoped vs. unscoped package
+  names) is unaffected and stays in force.
+- ADR-0068 stands, except that the crates.io and npm publish it
+  describes as local now runs in this workflow, and its preflight checks
+  those registries through `mode: check` instead of a local token, login
+  and dry run.
 
 ## Alternatives considered
 
 - **Stay local (ADR-0008 as is).** Every release keeps needing the
   maintainer at a terminal for up to 24 publishes. npm's move to
   two-hour sessions makes a long CI wait more likely to outlast the
-  login, which `release.py` already has to work around.
+  login, which `release.py` already had to work around.
 - **CI with granular tokens.** npm write tokens now expire within 90
   days, and "bypass 2FA" must be enabled for CI. That combines the
   expiring-secret failure ADR-0068 was written about with the 2FA bypass
@@ -279,6 +309,10 @@ would resume from them, but the job should not rely on that.
   different filenames, but the check-and-publish contract is the same
   for both. Splitting doubles the dispatch and wait logic in `release.py`
   without narrowing who can publish.
+- **A `check` that covers only the unpublished versions.** It would build
+  less on a resumed release, but between releases it would have nothing
+  to exchange a token for, so a trusted-publisher setup could not be
+  proven until the next release's preflight.
 - **A placeholder `0.0.0` publish to bootstrap new packages from CI.**
   That still needs a token for the placeholder, and it leaves a
   meaningless version on the registry forever.
@@ -286,9 +320,12 @@ would resume from them, but the job should not rely on that.
 ## References
 
 - ADR-0008 — npm publishing is a maintainer-local manual operation
-  (superseded by this ADR once accepted)
+  (superseded by this ADR; Decision 6 stands)
 - ADR-0068 — releases run through one preflighted script
+- ADR-0070 — publishability is checked on every pull request
 - ADR-0039 — release fan-out is an explicit `workflow_call` graph
+- `.github/workflows/publish-registries.yml`,
+  `scripts/publish-registries.py`, `scripts/test_publish_registries.py`
 - npm trusted publishing: https://docs.npmjs.com/trusted-publishers
 - `npm trust`: https://docs.npmjs.com/cli/v11/commands/npm-trust/
 - npm classic token revocation (2025-12-09):
