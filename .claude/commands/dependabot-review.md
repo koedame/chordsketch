@@ -38,6 +38,19 @@ gh pr list \
   --json number,title,headRefName,baseRefName,createdAt
 ```
 
+A Dependabot PR has one of two shapes (ADR-0075):
+
+- **Single-dependency PR** — every major update and every security
+  update. Title `fix(deps): bump <DEP> from <OLD> to <NEW>`, head ref
+  `dependabot/<ecosystem>/<DEP>-<NEW>`.
+- **Grouped PR** — the week's patch and minor updates for one
+  ecosystem. Title `… bump the <GROUP> group with <N> updates`, head
+  ref `dependabot/<ecosystem>/<GROUP>-<hash>`, where `<GROUP>` is
+  `cargo-minor-patch` or `actions-minor-patch` (the group names in
+  `.github/dependabot.yml`). Its body opens with a
+  `| Package | From | To |` table listing every dependency it updates,
+  followed by one `Updates <DEP> from <OLD> to <NEW>` section per row.
+
 If `$ARGUMENTS` is set, narrow the list to the matching PR number and
 verify its author is `dependabot[bot]`. If the author is not Dependabot,
 abort — this command does not merge non-Dependabot PRs.
@@ -59,18 +72,29 @@ For each PR in the list, in order:
 
 Use the `Agent` tool with `subagent_type: general-purpose`. The subagent
 inherits no chat context, so the prompt must include every detail it
-needs. Use the following template, substituting `<PR>`, `<DEP>`,
-`<OLD>`, `<NEW>`, `<ECOSYSTEM>`, and `<HEAD_REF>` from the PR metadata
-(`gh pr view <PR> --json title,headRefName,labels,files`):
+needs. Use the following template, substituting `<PR>`, `<ECOSYSTEM>`,
+`<HEAD_REF>`, and `<UPDATES>` from the PR metadata
+(`gh pr view <PR> --json title,body,headRefName,labels,files`).
+`<UPDATES>` is one `<DEP> <OLD> → <NEW>` line per dependency: the
+single dependency named in the title of a single-dependency PR, or
+every row of the `| Package | From | To |` table of a grouped PR. Copy
+the table rows as they appear; do not drop rows for crates that look
+transitive.
 
-> You are auditing Dependabot PR #`<PR>` which bumps `<DEP>` from
-> `<OLD>` to `<NEW>` in the `<ECOSYSTEM>` ecosystem (head ref:
-> `<HEAD_REF>`).
+> You are auditing Dependabot PR #`<PR>` in the `<ECOSYSTEM>`
+> ecosystem (head ref: `<HEAD_REF>`). It updates these dependencies:
 >
-> **Goal.** Determine whether the upgrade is safe to merge. Report a
-> verdict of `SAFE`, `FIXED`, or `BLOCKED` plus a one-paragraph
-> rationale. If `FIXED`, push the fix commits to the PR's branch
-> before reporting.
+> ```
+> <UPDATES>
+> ```
+>
+> **Goal.** Determine whether every one of these upgrades is safe to
+> merge. Steps 3–5 run once per dependency in the list; steps 1, 2
+> and 6–8 run once for the PR. Report a verdict of `SAFE`, `FIXED`, or
+> `BLOCKED` for the PR plus a one-paragraph rationale. The PR is
+> `BLOCKED` if any one dependency is; it is `FIXED` if any fix commit
+> was pushed and nothing is blocked. If `FIXED`, push the fix commits
+> to the PR's branch before reporting.
 >
 > **Steps:**
 >
@@ -83,18 +107,21 @@ needs. Use the following template, substituting `<PR>`, `<DEP>`,
 >    All subsequent commands run inside this worktree.
 >
 > 2. **Diff inspection.** Run `gh pr diff <PR>` and confirm the diff
->    only touches `Cargo.toml` / `Cargo.lock` (cargo bumps) or a
->    single workflow file's `uses:` line (github-actions bumps).
->    Cargo bumps routinely update transitive sub-crates in
->    `Cargo.lock` (e.g. bumping `serde` also moves `serde_derive`;
->    bumping `tokio` also moves `tokio-macros`); those entries are
->    expected. A Dependabot PR is suspicious when it touches
->    anything else — source files, additional manifests, `Cargo.lock`
->    entries for packages whose names do not share a common prefix
->    with the named dependency and that are not reachable from its
->    entry in `Cargo.lock`, or CI configuration beyond the single
->    `uses:` line. Report `BLOCKED` with a description of the
->    unexpected change.
+>    only touches `Cargo.toml` / `Cargo.lock` (cargo bumps) or `uses:`
+>    lines in files under `.github/workflows/` and `.github/actions/`
+>    (github-actions bumps; one action is often pinned in several
+>    workflows, so one bump can touch several files). Cargo bumps
+>    routinely update transitive sub-crates in `Cargo.lock` (e.g.
+>    bumping `serde` also moves `serde_derive`; bumping `tokio` also
+>    moves `tokio-macros`); those entries are expected. A Dependabot
+>    PR is suspicious when it touches anything else — source files,
+>    additional manifests, `Cargo.lock` entries for packages whose
+>    names do not share a common prefix with a listed dependency and
+>    that are not reachable from a listed dependency's entry in
+>    `Cargo.lock`, `uses:` lines naming an action that is not in the
+>    list, or CI configuration other than `uses:` lines (including the
+>    version comment on the same line). Report `BLOCKED` with a
+>    description of the unexpected change.
 >
 > 3. **Advisory check.** For `<ECOSYSTEM>`:
 >    - **cargo**: install `cargo-audit` if not present (`cargo install
@@ -108,9 +135,9 @@ needs. Use the following template, substituting `<PR>`, `<DEP>`,
 >      If the new version's tag falls inside any advisory's affected
 >      range, report `BLOCKED`.
 >
-> 4. **CHANGELOG / release-notes read.** Fetch the dependency's release
->    notes for every version between `<OLD>` (exclusive) and `<NEW>`
->    (inclusive):
+> 4. **CHANGELOG / release-notes read.** For each dependency, fetch its
+>    release notes for every version between its `<OLD>` (exclusive)
+>    and `<NEW>` (inclusive):
 >    - **cargo**: `gh api /repos/<dep_owner>/<dep_repo>/releases` if
 >      the crate's repository is on GitHub (most are; check
 >      `cargo info <DEP>`). Otherwise read the published `CHANGELOG.md`
@@ -124,8 +151,8 @@ needs. Use the following template, substituting `<PR>`, `<DEP>`,
 >      typo'd advisory.
 >    - Anything labelled "unstable" / "experimental" / "preview".
 >
-> 5. **Repository-activity sniff test.** Pull the dependency's commit
->    list between the two version tags:
+> 5. **Repository-activity sniff test.** For each dependency, pull its
+>    commit list between the two version tags:
 >    ```bash
 >    gh api "/repos/<dep_owner>/<dep_repo>/compare/<OLD_TAG>...<NEW_TAG>"
 >    ```
@@ -157,7 +184,7 @@ needs. Use the following template, substituting `<PR>`, `<DEP>`,
 >      `apt list --installed 2>/dev/null | grep -q libwebkit2gtk`. If
 >      the desktop libs are not installed, note that desktop-side
 >      verification is deferred to CI and continue.
->    - **github-actions**: no local execution. Inspect the workflow
+>    - **github-actions**: no local execution. Inspect every workflow
 >      file the bump touches, read the action's release notes for any
 >      input default-value changes, and rely on CI to surface
 >      regressions.
@@ -190,7 +217,10 @@ needs. Use the following template, substituting `<PR>`, `<DEP>`,
 >    git branch -D dependabot-review-<PR>
 >    ```
 >
-> 9. **Verdict report.** Reply with EXACTLY one of:
+> 9. **Verdict report.** For a grouped PR, first list every dependency
+>    on its own line as `<DEP> <OLD> → <NEW>: SAFE | FIXED | BLOCKED —
+>    <one sentence>`, so a blocked row can be dropped from the group
+>    (step 2b). Then reply with EXACTLY one of:
 >    - `VERDICT: SAFE — <one-paragraph rationale citing the CHANGELOG
 >      entries reviewed and confirming build/test/clippy passed
 >      cleanly>`
@@ -209,7 +239,10 @@ Parse the subagent's reply for the leading `VERDICT:` token:
 - **`SAFE` or `FIXED`** — proceed to step 2c (merge).
 - **`BLOCKED`** — post a comment on the PR with the subagent's
   rationale (no approval, no merge), then advance the task list and
-  move on to the next PR. The comment template:
+  move on to the next PR. For a grouped PR whose other rows are all
+  `SAFE` / `FIXED`, drop the blocked rows from the group afterwards
+  (see "Dropping a dependency from a grouped PR" below) instead of
+  leaving the whole group waiting on a human. The comment template:
   ```bash
   gh pr comment <PR> --body "$(cat <<'EOF'
   /dependabot-review verdict: BLOCKED
@@ -220,6 +253,39 @@ Parse the subagent's reply for the leading `VERDICT:` token:
   EOF
   )"
   ```
+
+#### Dropping a dependency from a grouped PR
+
+A grouped PR cannot be merged with one row removed, and editing its
+branch by hand stops Dependabot from maintaining it. Dependabot's
+grouped-update comment command removes the dependency from the group:
+
+```
+@dependabot ignore <DEP>
+```
+
+Dependabot closes the grouped PR and stores an ignore condition that
+stops it updating `<DEP>`. The remaining rows come
+back as a new grouped PR on the ecosystem's next update run (weekly,
+or at once via Insights → Dependency graph → Dependabot → "Check for
+updates"); audit that PR from step 2a like any other.
+
+The ignore condition persists until it is removed, so record it: the
+BLOCKED comment names every ignored dependency and the command that
+lifts it, and the Step 4 summary lists them. Once the reason for the
+block is gone (a fixed release, or a code-side change merged to
+`main`), comment on any open Dependabot PR in the same ecosystem:
+
+```
+@dependabot unignore <DEP>
+```
+
+which closes that PR and opens a new one that includes `<DEP>` again.
+`@dependabot show <DEP> ignore conditions` lists what is stored for a
+dependency. Post every one of these commands the way Step 3 spells out
+(`--body-file`, then read the posted comment back) — a defanged
+`ignore` does nothing, and a defanged `unignore` leaves the dependency
+silently ignored.
 
 ### 2c. Merge gate (only on SAFE / FIXED)
 
@@ -330,6 +396,7 @@ summary to the chat (NOT as a GitHub comment). Format:
 Processed N Dependabot PRs:
   - Merged: <count> (#<PR>, #<PR>, ...)
   - Blocked (need human): <count> (#<PR>: <one-line reason>, ...)
+  - Dropped from a group (ignored until unignored): <count> (<DEP> in #<PR>: <one-line reason>, ...)
   - Skipped (CI failed even after fix): <count> (#<PR>: <one-line reason>, ...)
 ```
 
@@ -363,6 +430,12 @@ If any PR is in the BLOCKED bucket, end the summary with:
 
 ## Notes
 
+- An unmerged grouped PR is refreshed by the ecosystem's next update
+  run. If the same dependencies still move to the same versions,
+  Dependabot updates that PR; if a row was added, removed, or now moves
+  to a different version, it closes the PR and opens a replacement. A
+  grouped PR that closes mid-audit is abandoned — audit its replacement
+  from step 2a.
 - This skill processes PRs **sequentially** by design. Parallel
   processing would race against Dependabot's auto-rebase on
   intra-ecosystem peers and produce noisy CI runs that the
