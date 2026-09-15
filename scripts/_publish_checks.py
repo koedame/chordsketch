@@ -638,23 +638,36 @@ def host_napi_triple() -> str | None:
     return triple if triple in NODE_TRIPLES else None
 
 
-def napi_problems(tarball_dir: Path, version: str, released_together: dict[str, str], runner: Runner = run) -> list[str]:
-    """Check the resolver and platform tarballs staged for a release."""
+def napi_problems(
+    tarball_dir: Path,
+    version: str,
+    released_together: dict[str, str],
+    runner: Runner = run,
+    packages: Iterable[str] | None = None,
+) -> list[str]:
+    """Check the resolver and platform tarballs staged for a release.
+
+    `packages` narrows the check to some of the six, for a publish that
+    resumes after the others went out: npm 11's `publish --dry-run` refuses
+    a version that is already published. The smoke install then takes the
+    host's platform package from the registry when its tarball is not
+    among them.
+    """
+    selected = [name for name in NPM_PACKAGES if is_napi(name) and (packages is None or name in packages)]
     problems = []
     tarballs: dict[str, Path] = {}
-    for name, package in NPM_PACKAGES.items():
-        if not is_napi(name):
-            continue
+    for name in selected:
         tarball = tarball_dir / npm_tarball_name(name, version)
         if not tarball.is_file():
             problems.append(f"no staged tarball {tarball.name} in {tarball_dir}")
             continue
         tarballs[name] = tarball
-        problems += npm_tarball_problems(package, tarball, released_together, runner)
+        problems += npm_tarball_problems(NPM_PACKAGES[name], tarball, released_together, runner)
     host = host_napi_triple()
     host_package = f"{NAPI_PACKAGE}-{host}" if host else ""
-    if NAPI_PACKAGE in tarballs and host_package in tarballs:
-        problems += npm_smoke_problems(NPM_PACKAGES[NAPI_PACKAGE], [tarballs[host_package], tarballs[NAPI_PACKAGE]], runner)
+    if NAPI_PACKAGE in tarballs and (host_package in tarballs or packages is not None):
+        smoke = [tarballs[p] for p in (host_package, NAPI_PACKAGE) if p in tarballs]
+        problems += npm_smoke_problems(NPM_PACKAGES[NAPI_PACKAGE], smoke, runner)
     return problems
 
 

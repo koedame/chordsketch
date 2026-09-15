@@ -5,10 +5,11 @@ The script decides, inside `publish-registries.yml`, what reaches crates.io
 and npm. These tests pin the decisions a registry would otherwise be the
 first to notice:
 
-  1. `plan` publishes exactly what the registries do not serve yet, checks
-     every package of the set, reads the workspace set from the release
-     manifest, and refuses a package that has never been published, since
-     trusted publishing cannot create one.
+  1. `plan` lists every package of the set, for the token check, and as
+     pending exactly those the registries do not serve yet, for the builds
+     and the upload; reads the workspace set from the release manifest; and
+     refuses a package that has never been published, since trusted
+     publishing cannot create one.
   2. The workflow's `set` choices are the framework packages of the publish
      definition, so a package added there cannot be missing from the
      dispatch form.
@@ -17,6 +18,8 @@ first to notice:
      publisher must say.
   5. After publishing, the script waits for npm to serve every package and
      fails naming the ones it never serves.
+  6. A check with nothing pending builds nothing: npm 11 refuses a dry run
+     over a published version, which a check between releases hit.
 
 Stdlib `unittest` only. Nothing here touches the network.
 """
@@ -72,13 +75,10 @@ class PlanTest(unittest.TestCase):
         self.assertIn("@chordsketch/node-darwin-arm64", self.npm)
         self.assertNotIn("@chordsketch/react", self.npm)
 
-    def test_nothing_is_published_when_every_version_is_served(self) -> None:
-        crates, npm, problems = publish.plan(REPO_ROOT, "workspace", "publish", registry(self.everything_published()))
-        self.assertEqual((crates, npm, problems), ([], [], []))
-
-    def test_a_check_covers_every_package_of_the_set_even_when_all_are_served(self) -> None:
-        crates, npm, problems = publish.plan(REPO_ROOT, "workspace", "check", registry(self.everything_published()))
-        self.assertEqual((crates, npm, problems), (self.crates, self.npm, []))
+    def test_every_package_of_the_set_is_listed_even_when_all_are_published(self) -> None:
+        result = publish.plan(REPO_ROOT, "workspace", registry(self.everything_published()))
+        self.assertEqual((result.crates, result.npm), (self.crates, self.npm))
+        self.assertEqual((result.pending_crates, result.pending_npm, result.problems), ([], [], []))
 
     def test_only_the_unserved_versions_are_pending(self) -> None:
         serving = self.everything_published()
@@ -87,29 +87,29 @@ class PlanTest(unittest.TestCase):
         wasm = publish.npm_version(REPO_ROOT, "@chordsketch/wasm")
         serving.discard(("@chordsketch/wasm", wasm))
         serving.add(("@chordsketch/wasm", "0.0.1"))
-        crates, npm, problems = publish.plan(REPO_ROOT, "workspace", "publish", registry(serving))
-        self.assertEqual(crates, ["chordsketch"])
-        self.assertEqual(npm, ["@chordsketch/wasm"])
-        self.assertEqual(problems, [])
+        result = publish.plan(REPO_ROOT, "workspace", registry(serving))
+        self.assertEqual(result.pending_crates, ["chordsketch"])
+        self.assertEqual(result.pending_npm, ["@chordsketch/wasm"])
+        self.assertEqual(result.problems, [])
 
-    def test_a_pending_package_that_was_never_published_is_refused_by_name(self) -> None:
+    def test_a_package_that_was_never_published_is_refused_by_name(self) -> None:
         serving = {entry for entry in self.everything_published() if entry[0] not in ("chordsketch-mcp", "@chordsketch/wasm-export")}
-        crates, npm, problems = publish.plan(REPO_ROOT, "workspace", "publish", registry(serving))
-        self.assertEqual(crates, ["chordsketch-mcp"])
-        self.assertEqual(npm, ["@chordsketch/wasm-export"])
-        self.assertEqual(len(problems), 2)
-        self.assertIn("chordsketch-mcp has never been published", problems[0])
-        self.assertIn("publish-new", problems[0])
-        self.assertIn("@chordsketch/wasm-export has never been published", problems[1])
+        result = publish.plan(REPO_ROOT, "workspace", registry(serving))
+        self.assertEqual(result.pending_crates, ["chordsketch-mcp"])
+        self.assertEqual(result.pending_npm, ["@chordsketch/wasm-export"])
+        self.assertEqual(len(result.problems), 2)
+        self.assertIn("chordsketch-mcp has never been published", result.problems[0])
+        self.assertIn("publish-new", result.problems[0])
+        self.assertIn("@chordsketch/wasm-export has never been published", result.problems[1])
 
     def test_framework_set_is_that_one_package(self) -> None:
         serving = {e for e in self.everything_published() if e[0] != "@chordsketch/vue"} | {("@chordsketch/vue", "0.0.1")}
-        crates, npm, problems = publish.plan(REPO_ROOT, "@chordsketch/vue", "publish", registry(serving))
-        self.assertEqual((crates, npm, problems), ([], ["@chordsketch/vue"], []))
+        result = publish.plan(REPO_ROOT, "@chordsketch/vue", registry(serving))
+        self.assertEqual((result.crates, result.npm, result.pending_npm, result.problems), ([], ["@chordsketch/vue"], ["@chordsketch/vue"], []))
 
     def test_a_workspace_package_is_not_a_set_of_its_own(self) -> None:
-        _, _, problems = publish.plan(REPO_ROOT, "@chordsketch/wasm", "check", registry(self.everything_published()))
-        self.assertIn("neither `workspace` nor a framework package", problems[0])
+        result = publish.plan(REPO_ROOT, "@chordsketch/wasm", registry(self.everything_published()))
+        self.assertIn("neither `workspace` nor a framework package", result.problems[0])
 
 
 class WorkflowTest(unittest.TestCase):
@@ -203,6 +203,31 @@ class WaitUntilServedTest(unittest.TestCase):
         )
         self.assertEqual(len(problems), 1)
         self.assertIn("@chordsketch/node-darwin-arm64@1.0.0", problems[0])
+
+
+class NothingPendingTest(unittest.TestCase):
+    def test_a_check_with_no_pending_crate_runs_no_cargo(self) -> None:
+        with mock.patch.object(publish.subprocess, "run") as cargo, mock.patch.object(publish.checks, "crates_problems") as problems:
+            self.assertEqual(publish.main(["crates", "--crates", "[]"]), 0)
+        cargo.assert_not_called()
+        problems.assert_not_called()
+
+    def test_a_check_with_no_pending_npm_package_only_exchanges_tokens(self) -> None:
+        exchanged = []
+        with (
+            mock.patch.object(publish.checks, "npm_problems") as built,
+            mock.patch.object(publish, "github_id_token", return_value="id-token"),
+            mock.patch.object(publish, "npm_exchange_problem", side_effect=lambda p, t: exchanged.append(p) or ""),
+            mock.patch.object(publish, "run") as ran,
+        ):
+            code = publish.main([
+                "npm", "--packages", "[]", "--set-packages", json.dumps(["@chordsketch/wasm", "@chordsketch/node"]),
+                "--mode", "check", "--out", str(Path(os.environ.get("TMPDIR", "/tmp")) / "publish-registries-test"),
+            ])
+        self.assertEqual(code, 0)
+        built.assert_not_called()
+        ran.assert_not_called()
+        self.assertEqual(exchanged, ["@chordsketch/wasm", "@chordsketch/node"])
 
 
 class ParserTest(unittest.TestCase):

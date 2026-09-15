@@ -1020,9 +1020,9 @@ Done once, when moving from the maintainer-local publish (ADR-0008) to CI.
    Revoke the token afterwards; it is not needed again until a crate is
    added.
 4. **Prove it.** Dispatch the check for the workspace and for each
-   framework package. A check covers every package of its set, published
-   or not, so every run must pass; a package without a matching trusted
-   publisher fails by name:
+   framework package. A check exchanges a token for every package of its
+   set, published or not, so every run must pass; a package without a
+   matching trusted publisher fails by name:
    ```bash
    for set in workspace @chordsketch/react-ui @chordsketch/react @chordsketch/vue \
        @chordsketch/svelte @chordsketch/chordpro-lite; do

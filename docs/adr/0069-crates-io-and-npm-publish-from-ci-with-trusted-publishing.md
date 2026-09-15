@@ -164,28 +164,32 @@ The repository already publishes this way elsewhere: `python.yml`
    is what a trusted-publisher configuration matches, not a secret
    scope — so the old cosmetic issue applies again: a failed run leaves a
    "failure" deployment entry.
-4. **`mode: check` answers everything `mode: publish` will need, for
-   every package of the set, without uploading.** `scripts/release.py`'s
-   preflight dispatches it for the release commit (the tag, once pushed)
-   in parallel with `release-credentials.yml` and requires it to succeed:
+4. **`mode: check` answers everything `mode: publish` will need, without
+   uploading.** `scripts/release.py`'s preflight dispatches it for the
+   release commit (the tag, once pushed) in parallel with
+   `release-credentials.yml` and requires it to succeed:
    - A package of the set that has never been published fails the run by
      name: it cannot publish from CI (Decision 8).
-   - Every crate passes the pull-request checks, including one
-     `cargo publish --dry-run` over all of them, and the job exchanges a
-     crates.io token once, so a missing or mismatched configuration fails
-     here.
-   - Every npm package is built, packed and checked as a pull request
-     does; the napi tarballs are downloaded from the Release and checked
-     when the tag is already out. Then the job's OIDC token is exchanged
-     at `/-/npm/v1/oidc/token/exchange/package/<name>` for each package,
-     the call `npm publish` makes, so a package without a matching
-     trusted publisher fails here, by name.
+   - Every crate not published yet passes the pull-request checks,
+     including one `cargo publish --dry-run` over all of them, and the job
+     exchanges a crates.io token once, so a missing or mismatched
+     configuration fails here.
+   - Every npm package not published yet is built, packed and checked as a
+     pull request does; the napi tarballs are downloaded from the Release
+     and checked when the tag is already out. Then the job's OIDC token is
+     exchanged at `/-/npm/v1/oidc/token/exchange/package/<name>` for
+     **every package of the set**, the call `npm publish` makes, so a
+     package without a matching trusted publisher fails here, by name.
 
    The exchanged tokens are never used and expire or are revoked on their
-   own. Covering the whole set, not only the unpublished versions, lets a
-   check prove the setup between releases. Each problem is written as a
-   workflow annotation, which `release.py` reads back so the maintainer
-   sees the reason in the terminal.
+   own. The token exchange covers the whole set, published or not, so a
+   check proves the setup between releases. The builds and dry runs cover
+   only what is not published: npm 11's `publish --dry-run` refuses a
+   version that is already published ("You cannot publish over the
+   previously published versions"), which the first check dispatched from
+   `main` hit. Each problem is written as a workflow annotation, which
+   `release.py` reads back so the maintainer sees the reason in the
+   terminal.
 5. **`mode: publish` replaces the local crates.io and npm publish in
    `release.py`.** The script still waits for every CI channel to
    converge, then dispatches the workflow for the release tag and waits
@@ -309,10 +313,14 @@ would resume from them, but the job should not rely on that.
   different filenames, but the check-and-publish contract is the same
   for both. Splitting doubles the dispatch and wait logic in `release.py`
   without narrowing who can publish.
-- **A `check` that covers only the unpublished versions.** It would build
-  less on a resumed release, but between releases it would have nothing
-  to exchange a token for, so a trusted-publisher setup could not be
-  proven until the next release's preflight.
+- **A `check` that exchanges tokens only for the unpublished versions.**
+  Between releases it would have nothing to exchange a token for, so a
+  trusted-publisher setup could not be proven until the next release's
+  preflight.
+- **A `check` that also dry-runs the published versions.** npm 11 refuses
+  a dry run over a published version, so every check between releases
+  would fail; the pull-request `Publishable` check already covers those
+  versions.
 - **A placeholder `0.0.0` publish to bootstrap new packages from CI.**
   That still needs a token for the placeholder, and it leaves a
   meaningless version on the registry forever.

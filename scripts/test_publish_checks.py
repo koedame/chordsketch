@@ -20,6 +20,8 @@ that would otherwise only be exercised by a registry refusing an upload:
   7. With npm on PATH, `npm publish --dry-run` really does warn about the
      `repository.url` form that npm rewrote on four packages in 0.6.0, and
      the check turns that warning into a failure.
+  8. The napi check narrows to the packages a resumed publish still has
+     to upload, since npm 11 refuses a dry run over a published version.
 
 Stdlib `unittest` only. Only the last group runs a tool (npm, offline).
 """
@@ -266,6 +268,45 @@ class NpmDependencyTest(unittest.TestCase):
     def test_when_a_dependency_uses_github_shorthand_it_is_reported(self) -> None:
         manifest = {"name": "a", "dependencies": {"x": "someone/x"}}
         self.assertEqual(len(checks.npm_dependency_problems(manifest, {}, lambda n, s: True)), 1)
+
+
+class NapiSubsetTest(unittest.TestCase):
+    """A publish that resumes after some napi packages went out checks only the rest.
+
+    npm 11's `publish --dry-run` refuses a version that is already
+    published, so checking all six again would fail every resumed publish.
+    """
+
+    def run_check(self, packages: list[str] | None) -> tuple[list[str], list[list[str]]]:
+        checked: list[str] = []
+        smoked: list[list[str]] = []
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for name in checks.NPM_PACKAGES:
+                if checks.is_napi(name):
+                    (directory / checks.npm_tarball_name(name, "1.2.0")).write_bytes(b"")
+            with (
+                mock.patch.object(checks, "npm_tarball_problems", side_effect=lambda package, *a, **k: checked.append(package.name) or []),
+                mock.patch.object(checks, "npm_smoke_problems", side_effect=lambda package, tarballs, *a: smoked.append([t.name for t in tarballs]) or []),
+                mock.patch.object(checks, "host_napi_triple", return_value="linux-x64-gnu"),
+            ):
+                self.assertEqual(checks.napi_problems(directory, "1.2.0", {}, packages=packages), [])
+        return checked, smoked
+
+    def test_when_no_subset_is_given_all_six_are_checked_and_the_host_pair_is_smoked(self) -> None:
+        checked, smoked = self.run_check(None)
+        self.assertEqual(len(checked), 6)
+        self.assertEqual(smoked, [["chordsketch-node-linux-x64-gnu-1.2.0.tgz", "chordsketch-node-1.2.0.tgz"]])
+
+    def test_when_a_subset_is_given_only_those_are_checked(self) -> None:
+        checked, smoked = self.run_check(["@chordsketch/node-darwin-arm64"])
+        self.assertEqual(checked, ["@chordsketch/node-darwin-arm64"])
+        self.assertEqual(smoked, [])
+
+    def test_when_only_the_resolver_is_left_it_is_smoked_against_the_published_platform_package(self) -> None:
+        checked, smoked = self.run_check(["@chordsketch/node"])
+        self.assertEqual(checked, ["@chordsketch/node"])
+        self.assertEqual(smoked, [["chordsketch-node-1.2.0.tgz"]])
 
 
 class NamingTest(unittest.TestCase):

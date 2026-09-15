@@ -11,15 +11,16 @@ name: Publish to crates.io and npm
 # tag push before `scripts/release.py` has seen the CI channels converge
 # (ADR-0068 Decision 4).
 #
-#   mode: check    everything `publish` needs, without uploading, for every
-#                  package of the set: it builds, packs and passes the
-#                  pull-request publish checks, it is not new, and its
-#                  registry mints a token for this workflow.
+#   mode: check    everything `publish` needs, without uploading: every
+#                  package of the set exists and its registry mints a token
+#                  for this workflow, and every one not published yet
+#                  builds, packs and passes the pull-request publish checks.
 #                  `scripts/release.py` dispatches it in its preflight,
-#                  before any tag is pushed.
-#   mode: publish  the same, for the packages the registries do not serve
-#                  yet, then the upload. `scripts/release.py` dispatches it
-#                  once every CI channel serves the version.
+#                  before any tag is pushed. Published versions are not
+#                  dry-run: npm 11 refuses a dry run over one.
+#   mode: publish  the same checks for the packages the registries do not
+#                  serve yet, then the upload. `scripts/release.py`
+#                  dispatches it once every CI channel serves the version.
 #
 #   set: workspace            the crates and npm packages that carry the
 #                             release tag's version (`ci/release-channels.toml`)
@@ -84,6 +85,8 @@ jobs:
       tag: ${{ steps.ref.outputs.tag }}
       crates: ${{ steps.plan.outputs.crates }}
       npm: ${{ steps.plan.outputs.npm }}
+      pending_crates: ${{ steps.plan.outputs.pending_crates }}
+      pending_npm: ${{ steps.plan.outputs.pending_npm }}
       wasm: ${{ steps.plan.outputs.wasm }}
     steps:
       # The trusted publishers name environments whose deployment policy
@@ -131,17 +134,17 @@ jobs:
             echo "tag=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Decide which packages the run covers
+      - name: List the packages of the set and those not published yet
         id: plan
         env:
           SET: ${{ inputs.set }}
-          MODE: ${{ inputs.mode }}
-        run: python3 scripts/publish-registries.py plan --set "$SET" --mode "$MODE"
+        run: python3 scripts/publish-registries.py plan --set "$SET"
 
   crates-io:
     name: crates.io
     needs: [plan]
-    if: needs.plan.outputs.crates != '[]'
+    # A publish needs a crate to upload; a check proves the token for the set.
+    if: needs.plan.outputs.pending_crates != '[]' || (inputs.mode == 'check' && needs.plan.outputs.crates != '[]')
     runs-on: ubuntu-latest
     environment: crates-io
     permissions:
@@ -161,9 +164,9 @@ jobs:
           toolchain: stable
 
       # Before the token exists: it lives 30 minutes, and this is the build.
-      - name: Check the crates
+      - name: Check the crates not published yet
         env:
-          CRATES: ${{ needs.plan.outputs.crates }}
+          CRATES: ${{ needs.plan.outputs.pending_crates }}
         run: python3 scripts/publish-registries.py crates --crates "$CRATES"
 
       # Fails when no trusted publisher names this workflow and environment.
@@ -178,7 +181,7 @@ jobs:
         if: inputs.mode == 'publish'
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-          CRATES: ${{ needs.plan.outputs.crates }}
+          CRATES: ${{ needs.plan.outputs.pending_crates }}
         run: |
           mapfile -t flags < <(jq -r '.[] | ("-p", .)' <<< "$CRATES")
           cargo publish --locked "${flags[@]}"
@@ -186,7 +189,7 @@ jobs:
   npm:
     name: npm
     needs: [plan]
-    if: needs.plan.outputs.npm != '[]'
+    if: needs.plan.outputs.pending_npm != '[]' || (inputs.mode == 'check' && needs.plan.outputs.npm != '[]')
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -225,7 +228,10 @@ jobs:
       - name: ${{ inputs.mode == 'publish' && 'Check and publish' || 'Check, and exchange the OIDC token for each package' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          PACKAGES: ${{ needs.plan.outputs.npm }}
+          PACKAGES: ${{ needs.plan.outputs.pending_npm }}
+          SET_PACKAGES: ${{ needs.plan.outputs.npm }}
           MODE: ${{ inputs.mode }}
           TAG: ${{ needs.plan.outputs.tag }}
-        run: python3 scripts/publish-registries.py npm --packages "$PACKAGES" --mode "$MODE" --tag "$TAG" --out "$RUNNER_TEMP/npm-tarballs"
+        run: >-
+          python3 scripts/publish-registries.py npm --packages "$PACKAGES" --set-packages "$SET_PACKAGES"
+          --mode "$MODE" --tag "$TAG" --out "$RUNNER_TEMP/npm-tarballs"
