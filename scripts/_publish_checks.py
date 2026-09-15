@@ -1298,10 +1298,15 @@ def checksum_problems(label: str, text: str, version: str) -> list[str]:
     return problems
 
 
-def generated(workflow: str, job: str, step: str, outputs: tuple[str, ...], version: str, runner: Runner = run, extra_env: dict[str, str] | None = None) -> tuple[dict[str, str], list[str], Path]:
-    """Run a generating step in a fabricated release directory and read what it wrote."""
+def generated(workflow: str, job: str, step: str, outputs: tuple[str, ...], version: str, runner: Runner = run, extra_env: dict[str, str] | None = None, prepare: Callable[[Path], None] | None = None) -> tuple[dict[str, str], list[str], Path]:
+    """Run a generating step in a fabricated release directory and read what it wrote.
+
+    `prepare` adds what the job downloads besides the release's checksums.
+    """
     directory = Path(tempfile.mkdtemp(prefix=f"{job}-"))
     fabricated_release(directory, version)
+    if prepare:
+        prepare(directory)
     done = run_release_step(workflow, job, step, directory, {"VERSION": version, **(extra_env or {})}, runner)
     if done.returncode != 0:
         return {}, [f"{workflow} `{job}` / `{step}` failed:\n{tail(done.stdout)}"], directory
@@ -1386,36 +1391,85 @@ def scoop_problems(version: str, runner: Runner = run) -> list[str]:
 # https://wiki.archlinux.org/title/PKGBUILD
 AUR_PKGNAME = re.compile(r"^[a-z0-9@._+][a-z0-9@._+-]*$")
 AUR_PKGVER = re.compile(r"^[A-Za-z0-9._]+$")
+# The package bases `update-aur` pushes: the tagged source, and the release's
+# prebuilt archive under the `-bin` name the AUR submission guidelines ask
+# for when a source build exists (ADR-0071).
+AUR_SOURCE_PACKAGE = "chordsketch"
+AUR_BINARY_PACKAGE = "chordsketch-bin"
+AUR_PACKAGES = (AUR_SOURCE_PACKAGE, AUR_BINARY_PACKAGE)
+
+
+def aur_source_url(version: str) -> str:
+    return f"https://github.com/koedame/chordsketch/archive/refs/tags/v{version}.tar.gz"
+
+
+def aur_naming_problems(pkg: str, pkgbuild: str) -> list[str]:
+    """A PKGBUILD without `build()` repackages a prebuilt binary, which the AUR wants named `-bin`."""
+    builds = re.search(r"^build\(\)", pkgbuild, flags=re.MULTILINE) is not None
+    if builds and pkg.endswith("-bin"):
+        return [f"{pkg}/PKGBUILD builds from source, but its name ends in -bin"]
+    if not builds and not pkg.endswith("-bin"):
+        return [f"{pkg}/PKGBUILD repackages a prebuilt binary, which the AUR wants under a -bin name"]
+    return []
 
 
 def aur_problems(version: str, runner: Runner = run) -> list[str]:
-    outputs, problems, directory = generated("post-release.yml", "update-aur", "Generate PKGBUILD and .SRCINFO", ("PKGBUILD", ".SRCINFO"), version, runner)
+    """Both AUR packages as the release generates them, and the source package built with makepkg.
+
+    The tag archive the source package downloads does not exist before the
+    release, so `git archive` of this checkout stands in for it, under the
+    name and top directory GitHub gives it.
+    """
+    archive = f"chordsketch-{version}.tar.gz"
+
+    def source_archive(directory: Path) -> None:
+        runner(["git", "archive", f"--prefix=chordsketch-{version}/", "-o", str(directory / archive), "HEAD"], REPO_ROOT)
+
+    files = tuple(f"aur/{pkg}/{name}" for pkg in AUR_PACKAGES for name in ("PKGBUILD", ".SRCINFO"))
+    outputs, problems, directory = generated("post-release.yml", "update-aur", "Generate PKGBUILD and .SRCINFO", files, version, runner, prepare=source_archive)
     try:
         if not outputs:
             return problems
-        pkgbuild = outputs["PKGBUILD"]
-        fields = dict(re.findall(r"^(pkgname|pkgver|pkgrel)=(\S+)$", pkgbuild, flags=re.MULTILINE))
-        if not AUR_PKGNAME.match(fields.get("pkgname", "")) or fields.get("pkgname", "").startswith(("-", ".")):
-            problems.append(f"PKGBUILD pkgname {fields.get('pkgname')!r} breaks the AUR naming rules")
-        if not AUR_PKGVER.match(fields.get("pkgver", "")):
-            problems.append(f"PKGBUILD pkgver {fields.get('pkgver')!r} is not a valid pkgver")
-        expanded = expand_shell_variables(pkgbuild, {"pkgver": version, "pkgname": fields.get("pkgname", ""), "CARCH": "x86_64"})
-        problems += download_url_problems("PKGBUILD", expanded, version) + checksum_problems("PKGBUILD", expanded, version)
+        for pkg in AUR_PACKAGES:
+            pkgbuild = outputs[f"aur/{pkg}/PKGBUILD"]
+            fields = dict(re.findall(r"^(pkgname|pkgver|pkgrel)=(\S+)$", pkgbuild, flags=re.MULTILINE))
+            pkgname = fields.get("pkgname", "")
+            if pkgname != pkg:
+                problems.append(f"{pkg}/PKGBUILD names the package {pkgname!r}, but the release pushes it to the {pkg} package base")
+            if not AUR_PKGNAME.match(pkgname) or pkgname.startswith(("-", ".")):
+                problems.append(f"{pkg}/PKGBUILD pkgname {pkgname!r} breaks the AUR naming rules")
+            if not AUR_PKGVER.match(fields.get("pkgver", "")):
+                problems.append(f"{pkg}/PKGBUILD pkgver {fields.get('pkgver')!r} is not a valid pkgver")
+            if f"pkgbase = {pkg}" not in outputs[f"aur/{pkg}/.SRCINFO"]:
+                problems.append(f"{pkg}/.SRCINFO does not describe the {pkg} package base")
+            expanded = expand_shell_variables(pkgbuild, {"pkgver": version, "pkgname": pkgname, "CARCH": "x86_64"})
+            problems += aur_naming_problems(pkg, pkgbuild)
+            if pkg == AUR_BINARY_PACKAGE:
+                problems += download_url_problems(f"{pkg}/PKGBUILD", expanded, version) + checksum_problems(f"{pkg}/PKGBUILD", expanded, version)
+            else:
+                if f'"{archive}::{aur_source_url(version)}"' not in expanded:
+                    problems.append(f"{pkg}/PKGBUILD does not download the tag archive as {archive}::{aur_source_url(version)}")
+                if hashlib.sha256((directory / archive).read_bytes()).hexdigest() not in expanded:
+                    problems.append(f"{pkg}/PKGBUILD does not carry the tag archive's checksum")
+                if "/releases/download/" in expanded:
+                    problems.append(f"{pkg}/PKGBUILD downloads a release asset, but builds from source")
 
-        # `.SRCINFO` is written by hand in the release step; the AUR reads it,
-        # and `makepkg --printsrcinfo` is what it must equal
-        # (https://wiki.archlinux.org/title/AUR_submission_guidelines).
+        # makepkg refuses root; `-s` installs what the PKGBUILD declares, so
+        # an undeclared build dependency fails here. namcap reads both
+        # PKGBUILDs and the built package, which is where it finds the
+        # shared libraries missing from `depends`.
         script = (
             "set -euo pipefail; pacman -Sy --noconfirm --needed namcap >/dev/null; "
-            "useradd -m builder; cp /work/PKGBUILD /home/builder/; chown builder /home/builder/PKGBUILD; "
-            "cd /home/builder; su builder -c 'makepkg --printsrcinfo' > /work/.SRCINFO.makepkg; "
-            "namcap PKGBUILD > /work/namcap.txt"
+            "useradd -m builder; echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder; "
+            f"cp -r /work/aur/{AUR_SOURCE_PACKAGE} /work/aur/{AUR_BINARY_PACKAGE} /home/builder/; "
+            f"cp /work/{archive} /home/builder/{AUR_SOURCE_PACKAGE}/; chown -R builder /home/builder; "
+            f"for pkg in {' '.join(AUR_PACKAGES)}; do namcap /home/builder/$pkg/PKGBUILD >> /work/namcap.txt; done; "
+            f"su builder -c 'cd /home/builder/{AUR_SOURCE_PACKAGE} && makepkg -s --noconfirm'; "
+            f"namcap /home/builder/{AUR_SOURCE_PACKAGE}/*.pkg.tar.zst >> /work/namcap.txt"
         )
         container = runner(["docker", "run", "--rm", "-v", f"{directory}:/work", "archlinux:base-devel", "bash", "-c", script], directory)
         if container.returncode != 0:
-            return problems + [f"makepkg / namcap could not run on the PKGBUILD:\n{tail(container.stdout)}"]
-        if (directory / ".SRCINFO.makepkg").read_text().strip() != outputs[".SRCINFO"].strip():
-            problems.append("the .SRCINFO the release writes differs from `makepkg --printsrcinfo`")
+            return problems + [f"makepkg / namcap failed on the {AUR_SOURCE_PACKAGE} PKGBUILD:\n{tail(container.stdout)}"]
         namcap = (directory / "namcap.txt").read_text().strip()
         if namcap:
             problems += [f"namcap: {line}" for line in namcap.splitlines()]

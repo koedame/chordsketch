@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([ADR-0070](docs/adr/0070-publishability-is-checked-on-every-pull-request.md),
   [`docs/publishing-requirements.md`](docs/publishing-requirements.md)).
   `Cargo.lock` no longer pins the yanked `fastrand` 2.4.0.
+- **The AUR `chordsketch` package builds from source**, and the prebuilt
+  binary moves to a new `chordsketch-bin` package, as the AUR submission
+  guidelines ask
+  ([ADR-0071](docs/adr/0071-aur-ships-a-source-package-and-a-bin-package.md)).
 
 ## [0.6.0] - 2026-09-14
 
