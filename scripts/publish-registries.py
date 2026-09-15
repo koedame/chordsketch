@@ -75,6 +75,16 @@ MIN_CARGO = (1, 90)
 SERVE_ATTEMPTS = 30
 SERVE_INTERVAL_SECONDS = 10
 
+# The npm packages whose lockfile links `@chordsketch/wasm` from the in-tree
+# `packages/npm` instead of resolving it from the registry (ADR-0073,
+# `scripts/check-version-consistency.py` `_IN_TREE_PACKAGES`). `npm ci` in
+# their directory follows that link regardless of whether `@chordsketch/wasm`
+# itself is part of the same run's `packages` — which happens whenever a
+# release resumes after `@chordsketch/wasm` already published but one of
+# these has not — so their build needs `packages/npm` built on this runner
+# even when nothing else in the run asks for it.
+WASM_LINKED_CONSUMERS = frozenset({"@chordsketch/react", "@chordsketch/vue", "@chordsketch/svelte"})
+
 
 # ---------------------------------------------------------------- packages
 
@@ -297,13 +307,26 @@ def served_on_registry(kind: str, name: str, version: str | None) -> bool:
     return crate_served(name, version) if kind == "crates-io" else npm_served(name, version)
 
 
+def wasm_pack_needed(pending_npm: list[str]) -> bool:
+    """Whether the runner needs Rust + wasm-pack to build `pending_npm`.
+
+    True for a package that itself builds with wasm-pack, and for a
+    `WASM_LINKED_CONSUMERS` package: its lockfile link needs `@chordsketch/wasm`
+    built (`ensure_wasm_built`) even on a resumed run where `@chordsketch/wasm`
+    itself is no longer pending.
+    """
+    return any("wasm-pack" in checks.NPM_PACKAGES[p].tools for p in pending_npm) or any(
+        p in WASM_LINKED_CONSUMERS for p in pending_npm
+    )
+
+
 def cmd_plan(args: argparse.Namespace) -> int:
     result = plan(REPO_ROOT, served_on_registry)
     write_output("crates", json.dumps(result.crates))
     write_output("npm", json.dumps(result.npm))
     write_output("pending_crates", json.dumps(result.pending_crates))
     write_output("pending_npm", json.dumps(result.pending_npm))
-    write_output("wasm", json.dumps(any("wasm-pack" in checks.NPM_PACKAGES[p].tools for p in result.pending_npm)))
+    write_output("wasm", json.dumps(wasm_pack_needed(result.pending_npm)))
     if not result.pending_crates and not result.pending_npm and not result.problems:
         print("::notice::every package is already published at its manifest version", flush=True)
     return report(result.problems)
@@ -358,8 +381,32 @@ def napi_release_tarballs(packages: list[str], tag: str, out: Path, mode: str) -
     )
 
 
+def ensure_wasm_built(
+    tree: Path, packages: list[str], runner: Callable[..., subprocess.CompletedProcess[str]] = run
+) -> list[str]:
+    """Build `@chordsketch/wasm` for its in-tree consumers when it is not itself in `packages`.
+
+    Every fresh checkout starts with `packages/npm` unbuilt. `check_npm_packages`
+    builds it as a side effect of packing it, but skips it entirely when it is
+    not part of this job's `packages` (already published, or not pending).
+    Without this, a `WASM_LINKED_CONSUMERS` package's own `npm ci` would still
+    follow the lockfile link to an unbuilt directory and fail.
+    """
+    if "@chordsketch/wasm" in packages or not any(p in WASM_LINKED_CONSUMERS for p in packages):
+        return []
+    wasm = checks.NPM_PACKAGES["@chordsketch/wasm"]
+    directory = tree / wasm.directory
+    for command in wasm.build:
+        built = runner(list(command), directory)
+        if built.returncode != 0:
+            return [f"`{' '.join(command)}` failed building @chordsketch/wasm for its in-tree consumers:\n{checks.tail(built.stdout)}"]
+    return []
+
+
 def check_npm_packages(packages: list[str], tag: str, out: Path, mode: str) -> list[str]:
-    problems = []
+    problems = ensure_wasm_built(REPO_ROOT, packages)
+    if problems:
+        return problems
     released_together = checks.repo_npm_versions(REPO_ROOT)
     for package in packages:
         if checks.is_napi(package):
