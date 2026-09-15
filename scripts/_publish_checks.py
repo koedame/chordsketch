@@ -1815,8 +1815,17 @@ def flatpak_lint_problems(kind: str, output: str, returncode: int) -> list[str]:
         report = json.loads(document) if document else {}
     except ValueError:
         report = {}
-    problems = [f"flatpak-builder-lint {kind} error: {e}" for e in report.get("errors", [])]
-    problems += [f"flatpak-builder-lint {kind} warning: {w}" for w in report.get("warnings", [])]
+    # `info` holds the explanation of a finding, as "<finding>: <detail>".
+    details = {}
+    for line in report.get("info", []):
+        finding, _, detail = line.partition(": ")
+        details.setdefault(finding, []).append(detail)
+
+    def described(finding: str) -> str:
+        return " — ".join([finding, *details.get(finding, [])])
+
+    problems = [f"flatpak-builder-lint {kind} error: {described(e)}" for e in report.get("errors", [])]
+    problems += [f"flatpak-builder-lint {kind} warning: {described(w)}" for w in report.get("warnings", [])]
     if returncode != 0 and not problems:
         problems.append(f"flatpak-builder-lint {kind} failed:\n{tail(output)}")
     return problems

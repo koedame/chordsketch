@@ -758,6 +758,13 @@ class FlathubTest(unittest.TestCase):
             ],
         )
 
+    def test_when_flatpak_builder_lint_explains_a_finding_the_explanation_is_in_the_problem(self) -> None:
+        report = '{"errors": ["appid-url-not-reachable"], "info": ["appid-url-not-reachable: Tried https://example.org | Status: 403"]}'
+        self.assertEqual(
+            checks.flatpak_lint_problems("manifest", report, 1),
+            ["flatpak-builder-lint manifest error: appid-url-not-reachable — Tried https://example.org | Status: 403"],
+        )
+
     def test_when_flatpak_builder_lint_fails_without_a_report_its_output_is_the_problem(self) -> None:
         problems = checks.flatpak_lint_problems("manifest", "Traceback (most recent call last):\nOSError", 1)
         self.assertEqual(len(problems), 1)
