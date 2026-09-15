@@ -1,6 +1,6 @@
 # 0075. Dependabot groups patch and minor updates per ecosystem; majors stay one PR per dependency
 
-- **Status**: Accepted
+- **Status**: Accepted (decision 2 amended for github-actions by ADR-0077 on 2026-09-16: majors are grouped by dependency name so one PR covers every workflow and composite action)
 - **Date**: 2026-09-15
 
 ## Context

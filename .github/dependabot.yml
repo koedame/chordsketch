@@ -19,13 +19,25 @@ updates:
   # deltas, applies any required code changes, and squash-merges the safe
   # ones. See `.claude/commands/dependabot-review.md`, ADR-0016, ADR-0024 and
   # ADR-0075.
+
+  # `directory: "/"` reads only `.github/workflows/` and a root `action.yml`,
+  # so the composite actions under `.github/actions/` need their own entry in
+  # `directories`. Across several directories a group still opens one PR, but
+  # an ungrouped major opens one PR per directory that pins the action; the
+  # `actions-major` group with `group-by: dependency-name` keeps a major at one
+  # PR per dependency covering every directory (ADR-0077).
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
     groups:
       actions-minor-patch:
         update-types: ["minor", "patch"]
+      actions-major:
+        update-types: ["major"]
+        group-by: dependency-name
 
   - package-ecosystem: "cargo"
     directory: "/"
