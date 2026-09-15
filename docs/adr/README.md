@@ -93,7 +93,7 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0013](0013-conditional-bot-driven-merge.md) | Bot-driven merge is allowed under explicit session permission | Accepted (2026-04-29; condition 4 updated by ADR-0015; clause 1 extended for unattended Dependabot merge by ADR-0024; clause 1 generalized by ADR-0047) |
 | [0014](0014-bravura-glyphs-as-svg-paths.md) | Bravura SMuFL glyphs ship as inline SVG paths, not as a bundled font | Accepted (2026-05-01) |
 | [0015](0015-disable-github-merge-queue.md) | Disable GitHub Merge Queue (supersedes ADR-0003) | Accepted (2026-05-03) |
-| [0016](0016-dependabot-review-skill.md) | Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed | Accepted (2026-05-03; unattended scheduled run added by ADR-0024; patch and minor updates grouped by ADR-0076) |
+| [0016](0016-dependabot-review-skill.md) | Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed | Accepted (2026-05-03; unattended scheduled run added by ADR-0024; patch and minor updates grouped by ADR-0075) |
 | [0017](0017-react-renders-from-ast.md) | React surface renders from AST; Rust HTML renderer demoted to static-output | Accepted (2026-05-10; consumer classification partially updated by ADR-0022) |
 | [0018](0018-phase-based-shell-orchestrated-workflows.md) | Phase-based shell-orchestrated workflows (declines cc-wf-studio / n8n / Agent SDK as substitutes) | Accepted (2026-05-16) |
 | [0019](0019-batch-mode-autopilot-issue.md) | Batch-mode autopilot-issue workflow (one PR aggregates multiple eligible issues per round) | Accepted (2026-05-17) |
@@ -101,7 +101,7 @@ ADR's Status line to `Superseded by ADR-NNNN`.
 | [0021](0021-docs-site-co-located-with-playground.md) | Docs site is co-located with the playground (option (a), not Docusaurus / VitePress / subdomain) | Accepted (2026-05-19) |
 | [0022](0022-react-as-canonical-preview-surface.md) | React as the canonical preview surface; `@chordsketch/ui-web` retired | Accepted (2026-05-20) |
 | [0023](0023-capo-transposes-displayed-chords.md) | `{capo}` directive transposes displayed chords | Accepted (2026-05-24) |
-| [0024](0024-scheduled-dependabot-merge.md) | Scheduled unattended Dependabot review-and-merge, all bump types (extends ADR-0013 clause 1) | Accepted (2026-05-25; audit and diff-sanity gate applied per dependency of a grouped PR by ADR-0076) |
+| [0024](0024-scheduled-dependabot-merge.md) | Scheduled unattended Dependabot review-and-merge, all bump types (extends ADR-0013 clause 1) | Accepted (2026-05-25; audit and diff-sanity gate applied per dependency of a grouped PR by ADR-0075) |
 | [0025](0025-build-time-syntax-highlighting-shiki.md) | Build-time syntax highlighting for the docs site uses Shiki (preserves ADR-0021 zero-JS posture; reuses in-repo ChordPro TextMate grammar) | Accepted (2026-05-28) |
 | [0026](0026-horizontal-chord-diagram-default-string-order.md) | Horizontal chord diagrams render reader-view only (high pitch on top, matches tablature stave order); player-view is not supported | Accepted (2026-05-30) |
 | [0027](0027-inline-hover-compact-chord-diagrams.md) | Inline / hover chord diagrams use a dedicated compact layout (chordsketch `{diagrams: inline}` / `{diagrams: hover}` extension; not a CSS scale) | Accepted (2026-05-31) |
