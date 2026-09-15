@@ -7,6 +7,20 @@ installed, so that the test logic lives in a single place.
 """
 
 import chordsketch
+from chordsketch._native import chordsketch as generated
+
+# Every public name the UniFFI-generated module declares must be reachable
+# from the top-level package. The package used to re-export a
+# hand-maintained subset, so functions documented in the README raised
+# AttributeError.
+missing = sorted(
+    name for name in generated.__all__ if not hasattr(chordsketch, name)
+)
+assert not missing, f"not exported from chordsketch: {missing}"
+assert sorted(chordsketch.__all__) == sorted(generated.__all__), (
+    "chordsketch.__all__ must match the generated module's __all__"
+)
+print(f"Exports ({len(chordsketch.__all__)} names): OK")
 
 v = chordsketch.version()
 assert v, "version should not be empty"
@@ -19,6 +33,13 @@ print("Text render: OK")
 html = chordsketch.parse_and_render_html("{title: Test}\n[C]Hello", None, None)
 assert "Test" in html
 print("HTML render: OK")
+
+result = chordsketch.parse_and_render_html_with_warnings(
+    "{title: Test}\n[C]Hello", None, None
+)
+assert "Test" in result.output
+assert isinstance(result.warnings, list)
+print("HTML render with warnings: OK")
 
 pdf = chordsketch.parse_and_render_pdf("{title: Test}\n[C]Hello", None, None)
 assert pdf[:4] == b"%PDF"

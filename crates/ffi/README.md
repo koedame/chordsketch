@@ -136,8 +136,14 @@ for e in errors:
 | `chord_diagram_svg_with_defines_orientation(chord, instrument, defines, orientation=None)` | `str \| None` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
 | `chord_pitches(chord)` | `list[int] \| None` | Constituent pitches of a chord as MIDI note numbers, for driving an audio synth. Returns a block voicing (root, third, fifth, plus any extension / altered / added tones, with a slash bass an octave below); `None` when the chord is not parseable. |
 | `diagram_pitches(chord, instrument, defines)` | `list[int] \| None` | MIDI note numbers **sounded** by the chord diagram drawn for `(chord, instrument)` — for auditioning a diagram as exactly the shape it depicts, rather than the name-based block voicing `chord_pitches` returns. Fretted instruments return one pitch per non-muted string in string order; keyboard instruments return the highlighted keys. `defines` is the same `ChordDefine` list `chord_diagram_svg_with_defines` consults. `None` when no diagram is available. |
+| `chord_staff_notes(chord)` | `list[StaffNote] \| None` | Constituent tones of a chord spelled for staff notation, ascending by pitch (a slash bass sorts first). Each tone is spelled diatonically from the chord's structure so it lands on its conventional staff line (e.g. `Ebm7` → E♭ G♭ B♭ D♭, not D♯ F♯ A♯ C♯). `None` when the chord is not parseable. |
 | `key_scale_pitches(key)` | `list[int] \| None` | Ascending one-octave scale of a musical key as MIDI note numbers — the movable-do "do re mi fa sol la ti do". Major keys yield the major scale; minor keys the natural-minor scale. Eight notes; `None` when the key is not parseable. |
 | `key_tonic_triad(key)` | `list[int] \| None` | Tonic triad of a musical key as MIDI note numbers (the "do mi sol" chord). Major / minor per the key; extensions on the spelling are ignored. Three notes; `None` when the key is not parseable. |
+
+`StaffNote` exposes `letter: str` (`"A"`–`"G"`), `accidental: int`
+(signed semitone offset from the letter, `-3..=3`), `octave: int`
+(scientific-pitch-notation octave, middle C = C4), and `midi: int`
+(absolute MIDI note number).
 
 ### Utility
 
