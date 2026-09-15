@@ -336,12 +336,28 @@ package = "chordsketch"
 expected_version = "tag"
 required_secrets = ["AUR_SSH_KEY"]
 notes = """
-Published by post-release.yml update-aur job via SSH push, which aurweb
+Builds the tagged source (ADR-0071). Published by post-release.yml
+update-aur job via SSH push, which aurweb
 serves immediately — so the rollup's verdict is the usual binary, not
 Chocolatey's three (ADR-0049). _check_aur reads Version from the RPC v5
 info endpoint and strips the `[epoch:]`/`-pkgrel` decoration around
-pkgver before comparing, because PKGBUILD.template's pkgrel counts
+pkgver before comparing, because the PKGBUILD templates' pkgrel counts
 rebuilds of the same release rather than tracking the tag.
+"""
+
+[[channels]]
+id = "aur-bin"
+display = "AUR — chordsketch-bin"
+kind = "aur"
+package = "chordsketch-bin"
+expected_version = "tag"
+required_secrets = ["AUR_SSH_KEY"]
+notes = """
+The release's prebuilt Linux archive, pushed by the same update-aur job
+as `chordsketch`, which builds the tagged source. The AUR submission
+guidelines name a package of prebuilt binaries `-bin` when a source
+build exists (ADR-0071). The first release after ADR-0071 creates the
+package base with its push.
 """
 
 [[channels]]
