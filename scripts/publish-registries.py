@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Publish the crates.io and npm packages from CI, with trusted publishing.
 
-    python3 scripts/publish-registries.py plan --set workspace --mode check
+    python3 scripts/publish-registries.py plan --set workspace
     python3 scripts/publish-registries.py crates --crates '["chordsketch"]'
-    python3 scripts/publish-registries.py npm --packages '["@chordsketch/wasm"]' --mode check --tag v0.7.0 --out DIR
+    python3 scripts/publish-registries.py npm --packages '["@chordsketch/wasm"]' --set-packages '[...]' --mode check --tag v0.7.0 --out DIR
 
 Run only by `.github/workflows/publish-registries.yml` (ADR-0069). The jobs
 there authenticate with the registries through GitHub's OIDC token, so this
@@ -11,13 +11,11 @@ script never sees a stored credential.
 
 Subcommands:
 
-  plan    Decide what the run covers. `--mode publish`: every crate and npm
-          package of the dispatched set whose manifest version the registry
-          does not serve yet. `--mode check`: every package of the set, so a
-          check proves the whole set can publish even between releases.
-          Writes `crates` and `npm` (JSON lists) to `$GITHUB_OUTPUT`. Fails
-          when a covered package has never been published: neither registry
-          lets trusted publishing create a package.
+  plan    List the crates and npm packages of the dispatched set, and those
+          whose manifest version the registry does not serve yet (pending),
+          as JSON lists in `$GITHUB_OUTPUT`. Fails when a package of the set
+          has never been published: neither registry lets trusted publishing
+          create a package.
   crates  Run the pull-request publish checks (`scripts/_publish_checks.py`)
           over the pending crates, including one `cargo publish --dry-run`
           over all of them, so the real publish that follows is not the
@@ -25,10 +23,13 @@ Subcommands:
   npm     Build, pack and check every pending npm package — the napi
           resolver and platform packages from the tarballs on the tag's
           GitHub Release. Then, with `--mode check`, exchange the job's OIDC
-          token for each package, which fails for a package whose trusted
-          publisher does not name this workflow and environment; with
-          `--mode publish`, publish the checked tarballs and wait until the
-          registry serves them.
+          token for every package of the set (`--set-packages`), published
+          or not, which fails for a package whose trusted publisher does not
+          name this workflow and environment; with `--mode publish`, publish
+          the checked tarballs and wait until the registry serves them.
+
+Only pending packages are built and dry-run: npm 11's `publish --dry-run`
+refuses a version that is already published.
 
 Every problem is printed as a `::error::` annotation, so
 `scripts/release.py` can report why a dispatched run failed without the
@@ -48,6 +49,7 @@ import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, NoReturn
 
@@ -243,13 +245,25 @@ def run(cmd: list[str], cwd: Path = REPO_ROOT) -> subprocess.CompletedProcess[st
 # ---------------------------------------------------------------- plan
 
 
-def plan(
-    tree: Path,
-    chosen: str,
-    mode: str,
-    served: Callable[[str, str, str | None], bool],
-) -> tuple[list[str], list[str], list[str]]:
-    """`(crates, npm packages, problems)` a run of `mode` covers for a set.
+@dataclass(frozen=True)
+class Plan:
+    """The packages of a dispatched set, and those the registries do not serve yet.
+
+    A check exchanges a token for every package of the set, but builds and
+    dry-runs only the unpublished ones: npm 11's `publish --dry-run` refuses
+    a version that is already published. A publish covers the unpublished
+    ones alone.
+    """
+
+    crates: list[str] = field(default_factory=list)
+    npm: list[str] = field(default_factory=list)
+    pending_crates: list[str] = field(default_factory=list)
+    pending_npm: list[str] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
+
+
+def plan(tree: Path, chosen: str, served: Callable[[str, str, str | None], bool]) -> Plan:
+    """What a run for the set `chosen` covers.
 
     `served(kind, name, version)` answers whether the registry serves that
     version, or with `version=None` whether the package exists at all.
@@ -259,18 +273,13 @@ def plan(
     elif chosen in framework_packages(tree):
         crates, npm = [], [chosen]
     else:
-        return [], [], [f"`{chosen}` is neither `{WORKSPACE_SET}` nor a framework package in scripts/_publish_checks.py"]
+        return Plan(problems=[f"`{chosen}` is neither `{WORKSPACE_SET}` nor a framework package in scripts/_publish_checks.py"])
 
     problems = []
     unknown = [name for name in npm if name not in checks.NPM_PACKAGES]
     if unknown:
         problems.append(f"no publish definition in scripts/_publish_checks.py for npm package(s): {', '.join(unknown)}")
         npm = [name for name in npm if name in checks.NPM_PACKAGES]
-
-    if mode == "publish":
-        versions = crate_versions(tree)
-        crates = [c for c in crates if not served("crates-io", c, versions[c])]
-        npm = [p for p in npm if not served("npm", p, npm_version(tree, p))]
 
     for kind, names, how in (
         ("crates-io", crates, "`cargo publish -p {name}` with a token scoped to publish-new"),
@@ -283,7 +292,15 @@ def plan(
                     f"first version by hand ({how.format(name=name)}), register its trusted publisher, then dispatch "
                     f"this workflow again (docs/releasing.md, \"Adding a package\")"
                 )
-    return crates, npm, problems
+
+    versions = crate_versions(tree)
+    return Plan(
+        crates=crates,
+        npm=npm,
+        pending_crates=[c for c in crates if not served("crates-io", c, versions[c])],
+        pending_npm=[p for p in npm if not served("npm", p, npm_version(tree, p))],
+        problems=problems,
+    )
 
 
 def served_on_registry(kind: str, name: str, version: str | None) -> bool:
@@ -291,13 +308,15 @@ def served_on_registry(kind: str, name: str, version: str | None) -> bool:
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
-    crates, npm, problems = plan(REPO_ROOT, args.set, args.mode, served_on_registry)
-    write_output("crates", json.dumps(crates))
-    write_output("npm", json.dumps(npm))
-    write_output("wasm", json.dumps(any("wasm-pack" in checks.NPM_PACKAGES[p].tools for p in npm)))
-    if not crates and not npm and not problems:
+    result = plan(REPO_ROOT, args.set, served_on_registry)
+    write_output("crates", json.dumps(result.crates))
+    write_output("npm", json.dumps(result.npm))
+    write_output("pending_crates", json.dumps(result.pending_crates))
+    write_output("pending_npm", json.dumps(result.pending_npm))
+    write_output("wasm", json.dumps(any("wasm-pack" in checks.NPM_PACKAGES[p].tools for p in result.pending_npm)))
+    if not result.pending_crates and not result.pending_npm and not result.problems:
         print(f"::notice::every package in `{args.set}` is already published at its manifest version", flush=True)
-    return report(problems)
+    return report(result.problems)
 
 
 # ---------------------------------------------------------------- crates.io
@@ -310,6 +329,9 @@ def parse_cargo_version(output: str) -> tuple[int, int] | None:
 
 def cmd_crates(args: argparse.Namespace) -> int:
     crates = tuple(json.loads(args.crates))
+    if not crates:
+        print("every crate is already published at its manifest version; only the token is checked", flush=True)
+        return 0
     version = subprocess.run(["cargo", "--version"], text=True, capture_output=True).stdout
     cargo = parse_cargo_version(version)
     if cargo is None or cargo < MIN_CARGO:
@@ -321,17 +343,16 @@ def cmd_crates(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------- npm
 
 
-def napi_release_tarballs(tag: str, out: Path, mode: str) -> list[str]:
-    """Download the napi tarballs `napi.yml` put on the Release, and check them."""
+def napi_release_tarballs(packages: list[str], tag: str, out: Path, mode: str) -> list[str]:
+    """Download the pending napi tarballs `napi.yml` put on the Release, and check them."""
     if not tag:
         if mode == "publish":
             return ["publishing the napi packages needs `--tag`: their tarballs come from the tag's GitHub Release"]
         print("::notice::not tagged yet, so the napi tarballs are not on a Release to check; "
               "publishable.yml checks their staging on every pull request", flush=True)
         return []
-    # All six, not only the pending ones: the checks install the resolver
-    # with its platform package, which may be one that is already published.
-    names = [checks.npm_tarball_name(p, npm_version(REPO_ROOT, p)) for p in checks.NPM_PACKAGES if checks.is_napi(p)]
+    napi = [p for p in packages if checks.is_napi(p)]
+    names = [checks.npm_tarball_name(p, npm_version(REPO_ROOT, p)) for p in napi]
     patterns = [item for name in names for item in ("-p", name)]
     download = run(["gh", "release", "download", tag, "-R", REPO, "-D", str(out), "--clobber", *patterns])
     if download.returncode != 0:
@@ -342,7 +363,9 @@ def napi_release_tarballs(tag: str, out: Path, mode: str) -> list[str]:
     missing = [name for name in names if not (out / name).is_file()]
     if missing:
         return [f"the {tag} Release lacks napi tarballs: {', '.join(missing)}"]
-    return checks.napi_problems(out, npm_version(REPO_ROOT, checks.NAPI_PACKAGE), checks.repo_npm_versions(REPO_ROOT))
+    return checks.napi_problems(
+        out, npm_version(REPO_ROOT, checks.NAPI_PACKAGE), checks.repo_npm_versions(REPO_ROOT), packages=napi
+    )
 
 
 def check_npm_packages(packages: list[str], tag: str, out: Path, mode: str) -> list[str]:
@@ -355,7 +378,7 @@ def check_npm_packages(packages: list[str], tag: str, out: Path, mode: str) -> l
         problems += checks.npm_problems(checks.NPM_PACKAGES[package], REPO_ROOT, out, released_together)
     if any(checks.is_napi(p) for p in packages):
         print("\n==> the napi tarballs", flush=True)
-        problems += napi_release_tarballs(tag, out, mode)
+        problems += napi_release_tarballs(packages, tag, out, mode)
     return problems
 
 
@@ -406,9 +429,9 @@ def cmd_npm(args: argparse.Namespace) -> int:
         return report(problems)
 
     if args.mode == "check":
-        print("\n==> trusted publisher of each package", flush=True)
+        print("\n==> trusted publisher of every package of the set", flush=True)
         id_token = github_id_token("npm:registry.npmjs.org")
-        return report([problem for p in packages if (problem := npm_exchange_problem(p, id_token))])
+        return report([problem for p in json.loads(args.set_packages) if (problem := npm_exchange_problem(p, id_token))])
     return report(publish_npm_packages(packages, args.out))
 
 
@@ -420,11 +443,11 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     plan_parser = sub.add_parser("plan", help="decide what the dispatched set still needs")
     plan_parser.add_argument("--set", required=True, help=f"`{WORKSPACE_SET}` or one framework npm package")
-    plan_parser.add_argument("--mode", choices=("check", "publish"), required=True)
     crates_parser = sub.add_parser("crates", help="check the pending crates before publishing them")
     crates_parser.add_argument("--crates", required=True, help="JSON list, from `plan`")
     npm_parser = sub.add_parser("npm", help="check, then token-check or publish, the pending npm packages")
-    npm_parser.add_argument("--packages", required=True, help="JSON list, from `plan`")
+    npm_parser.add_argument("--packages", required=True, help="the pending packages, a JSON list from `plan`")
+    npm_parser.add_argument("--set-packages", default="[]", help="every package of the set, a JSON list from `plan`; `--mode check` exchanges a token for each")
     npm_parser.add_argument("--mode", choices=("check", "publish"), required=True)
     npm_parser.add_argument("--tag", default="", help="the release tag whose GitHub Release carries the napi tarballs")
     npm_parser.add_argument("--out", type=Path, required=True, help="directory to pack into")
