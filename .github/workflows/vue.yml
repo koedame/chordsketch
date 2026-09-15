@@ -1,17 +1,15 @@
 name: "@chordsketch/vue"
 
-# Typecheck, test, and build the @chordsketch/vue package on every PR
-# that touches it, plus pushes to main for post-merge verification.
-# Publish-on-tag is intentionally NOT handled here — publishing is
-# done by dispatching `publish-registries.yml` from main with
-# `set: @chordsketch/vue` (ADR-0069).
+# Typecheck, test, and build the @chordsketch/vue package on every
+# PR that touches it, plus pushes to main for post-merge verification.
+# Publishing is not handled here: the package publishes with every
+# release, from `publish-registries.yml` (ADR-0073).
 #
-# Unlike @chordsketch/react, this package does not type-check against
-# the in-tree wasm build: every wasm call site casts the dynamic
-# import to its own narrow structural interface, and the ambient
-# `declare module` shims cover resolution. There is therefore
-# deliberately no Rust toolchain / wasm-pack / in-tree wasm build
-# step — npm ci alone resolves everything it needs.
+# The package's lockfile installs @chordsketch/wasm from the in-tree
+# `packages/npm` rather than from npm (ADR-0073), so the tests run
+# against the wasm this commit would release. That directory holds only
+# the manifest until it is built, so the wasm bundle is built before the
+# tests, as `react.yml` does.
 
 on:
   push:
@@ -19,10 +17,16 @@ on:
     paths:
       - 'packages/vue/**'
       - '.github/workflows/vue.yml'
+      # The `wasm-pack` pin the in-tree wasm build below consumes
+      # through the composite action (#2225).
+      - '.github/actions/install-wasm-pack/action.yml'
   pull_request:
     paths:
       - 'packages/vue/**'
       - '.github/workflows/vue.yml'
+      # The `wasm-pack` pin the in-tree wasm build below consumes
+      # through the composite action (#2225).
+      - '.github/actions/install-wasm-pack/action.yml'
 
 # Cancel stale PR runs on force-push / rebase. Main / workflow_dispatch
 # runs always go to completion (gated on pull_request event).
@@ -45,11 +49,29 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: vue-wasm32-unknown-unknown
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install wasm-pack
+        uses: ./.github/actions/install-wasm-pack
+
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: packages/vue/package-lock.json
+
+      - name: Build in-tree wasm bundle
+        run: npm run build
+        working-directory: packages/npm
 
       - name: Install dependencies
         run: npm ci

@@ -6,7 +6,7 @@
 
 Run it from an up-to-date checkout of `main`, after the `Release vX.Y.Z`
 commit (docs/releasing.md steps 1-3) is on `main`. It replaces the hand-run
-steps 4-6 and 8. It reads the release from a temporary worktree of the
+steps 4-7. It reads the release from a temporary worktree of the
 release commit — the tagged commit once the tags exist, `origin/main`
 before — so the local checkout's branch and uncommitted changes play no
 part, and a release tagged before this script existed can still be
@@ -463,7 +463,7 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
         section(f"crates.io and npm ({PUBLISH_WORKFLOW}, mode: check)")
         try:
             runs["crates.io and npm check"] = dispatch(
-                PUBLISH_WORKFLOW, {"ref": registry_ref(state, plan), "set": "workspace", "mode": "check"}, login
+                PUBLISH_WORKFLOW, {"ref": registry_ref(state, plan), "mode": "check"}, login
             )
         except ReleaseError as exc:
             findings.problems.append(f"could not run the crates.io and npm check: {exc}")
@@ -493,7 +493,7 @@ def preflight_stalled_ci(state: Survey, plan: Plan, findings: Findings) -> None:
     for cid in plan.pending_ci:
         findings.problems.append(
             f"{cid} does not serve {state.version} ({state.ci_detail[cid]}) and no tag run is in progress; "
-            f"re-run that channel first (docs/releasing.md step 8)"
+            f"re-run that channel first (docs/releasing.md step 7)"
         )
 
 
@@ -583,7 +583,7 @@ def gate_registry_publish(state: Survey, plan: Plan) -> None:
         raise ReleaseError(
             "not publishing to crates.io or npm while CI-published channels are behind:\n  - "
             + "\n  - ".join(problems)
-            + "\nRe-run the failed channel (docs/releasing.md step 8), then re-run this script; it resumes here."
+            + "\nRe-run the failed channel (docs/releasing.md step 7), then re-run this script; it resumes here."
         )
     print("    every CI-published channel serves the version", flush=True)
 
@@ -591,7 +591,7 @@ def gate_registry_publish(state: Survey, plan: Plan) -> None:
 def publish_registries(state: Survey, login: str) -> None:
     section(f"Publishing to crates.io and npm ({PUBLISH_WORKFLOW}, mode: publish)")
     tag = tags_for(state.version)[0]
-    result = dispatch_and_wait(PUBLISH_WORKFLOW, {"ref": tag, "set": "workspace", "mode": "publish"}, login)
+    result = dispatch_and_wait(PUBLISH_WORKFLOW, {"ref": tag, "mode": "publish"}, login)
     if result["conclusion"] != "success":
         raise ReleaseError(
             f"{PUBLISH_WORKFLOW} ended {result['conclusion']}: {result['html_url']}\n  - "

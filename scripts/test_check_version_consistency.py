@@ -19,6 +19,7 @@ Tests cover:
  10. Claude Code plugin / marketplace version drift is detected, and a
      marketplace entry whose `source` no longer names the plugin
      directory fails hard
+ 11. A framework package's own version drifting from the workspace fails
 """
 
 from __future__ import annotations
@@ -55,6 +56,7 @@ def _build_repo(
     vscode_version: str = "0.2.0",
     napi_version: str = "0.2.0",
     tree_sitter_version: str = "0.2.0",
+    framework_versions: dict[str, str] | None = None,
     plugin_version: str = "0.2.0",
     marketplace_version: str = "0.2.0",
     plugin_source: str = "packages/claude-code-plugin",
@@ -73,6 +75,9 @@ def _build_repo(
         "core": "0.2.0",
         "cli": "0.2.0",
     }
+    framework_versions = {
+        name: "0.2.0" for name in check_version_consistency.FRAMEWORK_PACKAGE_DIRS
+    } | (framework_versions or {})
 
     # crates/*/Cargo.toml
     for name, version in crate_versions.items():
@@ -174,8 +179,7 @@ def _build_repo(
     )
 
     # packages/react/package.json — pins @chordsketch/wasm (dep) and
-    # @chordsketch/wasm-export (peerDep). react's own version is on its
-    # own track per CLAUDE.md so we only need the pin blocks.
+    # @chordsketch/wasm-export (peerDep), and versions with the workspace.
     react_dir = root / "packages" / "react"
     react_dir.mkdir(parents=True, exist_ok=True)
     (react_dir / "package.json").write_text(
@@ -183,7 +187,7 @@ def _build_repo(
             f"""
             {{
               "name": "@chordsketch/react",
-              "version": "0.2.0",
+              "version": "{framework_versions['react']}",
               "dependencies": {{
                 "@chordsketch/wasm": "{consumer_pin}"
               }},
@@ -198,7 +202,7 @@ def _build_repo(
     )
 
     # packages/vue/package.json and packages/svelte/package.json — the
-    # same dep + peerDep pin shape as react, each on its own version track.
+    # same dep + peerDep pin shape as react.
     for framework in ("vue", "svelte"):
         framework_dir = root / "packages" / framework
         framework_dir.mkdir(parents=True, exist_ok=True)
@@ -207,7 +211,7 @@ def _build_repo(
                 f"""
                 {{
                   "name": "@chordsketch/{framework}",
-                  "version": "0.1.0",
+                  "version": "{framework_versions[framework]}",
                   "dependencies": {{
                     "@chordsketch/wasm": "{consumer_pin}"
                   }},
@@ -218,6 +222,15 @@ def _build_repo(
                 """
             ).strip()
             + "\n",
+            encoding="utf-8",
+        )
+
+    # packages/react-ui and packages/chordpro-lite — no @chordsketch/wasm pin.
+    for name in ("react-ui", "chordpro-lite"):
+        package_dir = root / "packages" / name
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / "package.json").write_text(
+            f'{{\n  "name": "@chordsketch/{name}",\n  "version": "{framework_versions[name]}"\n}}\n',
             encoding="utf-8",
         )
 
@@ -241,6 +254,14 @@ def _build_repo(
         + "\n",
         encoding="utf-8",
     )
+
+    # The lockfile of every consumer that installs @chordsketch/wasm links the
+    # in-tree packages/npm (ADR-0073).
+    for name in ("vscode-extension", "react", "vue", "svelte", "ui-irealb-editor"):
+        (root / "packages" / name / "package-lock.json").write_text(
+            json.dumps({"packages": {"node_modules/@chordsketch/wasm": {"resolved": "../npm", "link": True}}}),
+            encoding="utf-8",
+        )
 
     # .github/workflows/readme-smoke.yml
     workflows_dir = root / ".github" / "workflows"
@@ -578,6 +599,55 @@ class CheckRunTests(unittest.TestCase):
                     manifest.write_text(json.dumps(data), encoding="utf-8")
                     rc = check_version_consistency.run(root, root / "nonexistent.toml")
                     self.assertEqual(rc, 1)
+
+    def test_when_a_consumer_lockfile_installs_wasm_from_npm_the_check_fails(self) -> None:
+        # The release commit raises the pins to a version npm does not serve
+        # yet (ADR-0073); a lockfile that resolves it from npm cannot install
+        # at that commit.
+        for name in ("vscode-extension", "react", "vue", "svelte", "ui-irealb-editor"):
+            with self.subTest(package=name), TemporaryDirectory() as td:
+                root = Path(td)
+                _build_repo(root)
+                lockfile = root / "packages" / name / "package-lock.json"
+                lockfile.write_text(
+                    json.dumps(
+                        {
+                            "packages": {
+                                "node_modules/@chordsketch/wasm": {
+                                    "version": "0.2.0",
+                                    "resolved": "https://registry.npmjs.org/@chordsketch/wasm/-/wasm-0.2.0.tgz",
+                                }
+                            }
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                problems = check_version_consistency.lockfile_link_problems(root)
+                self.assertEqual(len(problems), 1)
+                self.assertIn(f"packages/{name}/package-lock.json", problems[0])
+                self.assertIn("registry.npmjs.org", problems[0])
+                self.assertEqual(check_version_consistency.run(root, root / "nonexistent.toml"), 1)
+
+    def test_when_a_consumer_lockfile_is_missing_the_check_fails(self) -> None:
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            _build_repo(root)
+            (root / "packages" / "vue" / "package-lock.json").unlink()
+            self.assertEqual(
+                check_version_consistency.lockfile_link_problems(root),
+                ["packages/vue/package-lock.json: file not found"],
+            )
+
+    def test_framework_package_version_drift_detected(self) -> None:
+        # These packages publish with the workspace release (ADR-0073), so
+        # one left at its previous version would be skipped by the publish
+        # as already served, or published at a version the tag never named.
+        for name in check_version_consistency.FRAMEWORK_PACKAGE_DIRS:
+            with self.subTest(package=name), TemporaryDirectory() as td:
+                root = Path(td)
+                _build_repo(root, framework_versions={name: "0.1.0"})
+                rc = check_version_consistency.run(root, root / "nonexistent.toml")
+                self.assertEqual(rc, 1)
 
     # -- packaging/<channel>/ drift detection (#1864) --------------------
 

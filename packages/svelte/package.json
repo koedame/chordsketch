@@ -1,6 +1,6 @@
 {
   "name": "@chordsketch/svelte",
-  "version": "0.2.0",
+  "version": "0.6.0",
   "description": "Svelte 5 components for embedding ChordPro previews, editors and chord diagrams, powered by @chordsketch/wasm",
   "license": "MIT",
   "type": "module",

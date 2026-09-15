@@ -1,6 +1,6 @@
 {
   "name": "@chordsketch/chordpro-lite",
-  "version": "0.1.0",
+  "version": "0.6.0",
   "description": "Dependency-free ChordPro helpers — format detection, lyric extraction, and preview sampling — with no WebAssembly runtime",
   "license": "MIT",
   "type": "module",
