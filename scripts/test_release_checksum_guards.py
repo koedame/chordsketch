@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Every release channel must say which checksum it could not find.
 
-`post-release.yml` fans a release out to Homebrew, Scoop, AUR, Flathub and
+`post-release.yml` fans a release out to Homebrew, Scoop, AUR and
 Chocolatey. Each of those jobs downloads the release's `checksums.txt`, pulls
 one or more SHA256 values out of it, and validates them before filling a
 packaging template. The validation exists so that a missing or malformed
@@ -56,11 +56,11 @@ RUNNER_ARGS = ["--noprofile", "--norc", "-eo", "pipefail"]
 NO_KNOWN_TARGET = f"{'1' * 64}  chordsketch-v9.9.9-riscv64-unknown-none.tar.gz\n"
 
 # One extracting step per publication channel, at the time of writing:
-# Homebrew, Scoop, AUR, Flathub. Chocolatey generates through the
+# Homebrew, Scoop, AUR. Chocolatey generates through the
 # `chocolatey-generate-package` composite action, which
 # `test_chocolatey_generate_package.py` covers the same way. Asserted as a
 # floor so that a discovery bug cannot quietly reduce this suite to nothing.
-MIN_EXTRACTING_STEPS = 4
+MIN_EXTRACTING_STEPS = 3
 
 
 def extracting_steps() -> list[tuple[str, str]]:
