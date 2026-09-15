@@ -60,7 +60,7 @@ jobs:
         # `GLIBC_2.39' not found" on every older distribution. `cross`
         # builds inside a pinned container whose sysroot is glibc 2.23.
         # See ADR-0046.
-        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2
         with:
           tool: cross
 
@@ -138,7 +138,7 @@ jobs:
         # already built with `cross`, sits at 2.18. Same pin as
         # `kotlin.yml`, which has used `cross` for this target all along.
         if: matrix.cross
-        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2
         with:
           tool: cross
 
