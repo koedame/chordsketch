@@ -42,6 +42,9 @@ single round implements every high-confidence eligible issue (capped at
   arrive as one grouped PR per ecosystem (`dependabot/<ecosystem>/<group>-<hash>`),
   audited dependency by dependency; majors and security updates stay one PR per
   dependency ([ADR-0075](../../docs/adr/0075-dependabot-groups-patch-and-minor-updates.md)).
+  A github-actions major reaches that shape through the `actions-major` group,
+  so its head ref is `dependabot/github_actions/github_actions-<hash>`
+  ([ADR-0077](../../docs/adr/0077-dependabot-reads-composite-actions.md)).
   See [ADR-0016](../../docs/adr/0016-dependabot-review-skill.md)
   for the policy rationale and [Pull Request Workflow](pr-workflow.md) §"Bot-driven
   merge: conditional permission" for the four-clause merge gate the skill operates under.
