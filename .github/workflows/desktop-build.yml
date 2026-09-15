@@ -219,7 +219,6 @@ jobs:
           # doesn't produce a .deb) still uploads the formats it
           # does emit.
           if-no-files-found: warn
-          # 14 days is long enough to let #2078 (Releases upload)
-          # round-trip the artefacts during development without
-          # pinning unnecessary storage indefinitely.
-          retention-days: 14
+          # 7 days matches the repository's maximum artifact retention;
+          # a longer value is capped to 7 with a warning on every run.
+          retention-days: 7
