@@ -46,7 +46,7 @@ defaults:
 jobs:
   self-test:
     name: Publish checks self-test
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -66,7 +66,7 @@ jobs:
 
   crates-io:
     name: crates.io
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -85,7 +85,7 @@ jobs:
 
   npm-matrix:
     name: npm package list
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     outputs:
       packages: ${{ steps.matrix.outputs.packages }}
     steps:
@@ -101,7 +101,7 @@ jobs:
   npm:
     name: npm (${{ matrix.package }})
     needs: [npm-matrix]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -138,7 +138,7 @@ jobs:
 
   napi:
     name: npm (@chordsketch/node)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -200,7 +200,7 @@ jobs:
 
   vscode-extension:
     name: VS Code Marketplace and Open VSX
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -231,6 +231,7 @@ jobs:
 
   pypi:
     name: PyPI
+    # Stays on GitHub-hosted: maturin-action builds the wheels in a manylinux container (docker). See ADR-0076.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -261,7 +262,7 @@ jobs:
 
   ffi-library:
     name: chordsketch-ffi library for the binding packages
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -286,7 +287,7 @@ jobs:
   rubygems:
     name: RubyGems
     needs: [ffi-library]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -333,7 +334,7 @@ jobs:
   maven-central:
     name: Maven Central
     needs: [ffi-library]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -460,7 +461,7 @@ jobs:
 
   manifests:
     name: Scoop, winget, nixpkgs and the desktop updater
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -498,7 +499,7 @@ jobs:
 
   jetbrains:
     name: JetBrains Marketplace
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -560,6 +561,7 @@ jobs:
 
   aur:
     name: AUR
+    # Stays on GitHub-hosted: the AUR check runs makepkg in an Arch container (docker). See ADR-0076.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -601,6 +603,7 @@ jobs:
 
   cocoapods-and-swift:
     name: CocoaPods and Swift Package
+    # Stays on GitHub-hosted: the Swift check needs the Swift toolchain the hosted image ships. See ADR-0076.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -646,7 +649,7 @@ jobs:
       - snap
       - cocoapods-and-swift
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - name: Require every publish check to have passed
         env:
