@@ -1819,7 +1819,8 @@ def flatpak_lint_problems(kind: str, output: str, returncode: int) -> list[str]:
     details = {}
     for line in report.get("info", []):
         finding, _, detail = line.partition(": ")
-        details.setdefault(finding, []).append(detail)
+        # A failed URL check carries the start of the response body; the status is what matters.
+        details.setdefault(finding, []).append(detail if len(detail) <= 200 else detail[:200] + "…")
 
     def described(finding: str) -> str:
         return " — ".join([finding, *details.get(finding, [])])
