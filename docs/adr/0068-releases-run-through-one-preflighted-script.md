@@ -1,6 +1,6 @@
 # 0068. Releases run through one script that proves every channel can publish before the tag is pushed
 
-- **Status**: Accepted
+- **Status**: Accepted (the local crates.io and npm publish of Decisions 1, 2 and 4 moved into CI by ADR-0069 on 2026-09-15)
 - **Date**: 2026-09-14
 
 ## Context

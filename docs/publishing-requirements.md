@@ -56,9 +56,10 @@ These apply to every artifact any channel receives.
 
 ## crates.io
 
-Published by `scripts/release.py` from the maintainer's machine
-([ADR-0008](adr/0008-npm-publishing-is-local.md) covers the local publish
-model). Crates: every `kind = "crates-io"` channel in the manifest.
+Published by [`publish-registries.yml`](../.github/workflows/publish-registries.yml)
+with trusted publishing, which `scripts/release.py` dispatches
+([ADR-0069](adr/0069-crates-io-and-npm-publish-from-ci-with-trusted-publishing.md)).
+Crates: every `kind = "crates-io"` channel in the manifest.
 
 | Condition | Source | Checked by |
 |---|---|---|
@@ -70,16 +71,18 @@ model). Crates: every `kind = "crates-io"` channel in the manifest.
 | No `Cargo.lock` entry is yanked | [Cargo: `cargo package`](https://doc.rust-lang.org/cargo/commands/cargo-package.html) | the dry run's `is yanked` warning |
 | The packaged crate — not the workspace — builds | [Cargo: `cargo publish`](https://doc.rust-lang.org/cargo/commands/cargo-publish.html) (verification step) | `cargo publish --dry-run` |
 | The version is not already on crates.io | [Cargo: publishing](https://doc.rust-lang.org/cargo/reference/publishing.html) ("a version can never be overwritten") | release preflight only (`decide` in `release.py`); between releases every pull request is at a published version |
+| The crate already exists, and one of its trusted publishers names `koedame/chordsketch`, `publish-registries.yml` and the `crates-io` environment | [crates.io: trusted publishing](https://crates.io/docs/trusted-publishing) ("do not support creating new crates") | `publish-registries.yml` in `check` mode: `plan` refuses a crate that has never been published, and the job exchanges a token (a configuration missing for one crate only surfaces at upload) |
 
 ## npm
 
-Published by `scripts/release.py` from the maintainer's machine
-([ADR-0008](adr/0008-npm-publishing-is-local.md)): `@chordsketch/wasm`,
-`@chordsketch/wasm-export`, `tree-sitter-chordpro` and `@chordsketch/node`
-with its five platform packages on the release tag;
-`@chordsketch/react-ui`, `@chordsketch/react`, `@chordsketch/vue`,
-`@chordsketch/svelte` and `@chordsketch/chordpro-lite` on their own
-cadence. Every one of them is checked on every pull request, whatever its
+Published by [`publish-registries.yml`](../.github/workflows/publish-registries.yml)
+with trusted publishing
+([ADR-0069](adr/0069-crates-io-and-npm-publish-from-ci-with-trusted-publishing.md)):
+`@chordsketch/wasm`, `@chordsketch/wasm-export`, `tree-sitter-chordpro` and
+`@chordsketch/node` with its five platform packages on the release tag,
+dispatched by `scripts/release.py`; `@chordsketch/react-ui`,
+`@chordsketch/react`, `@chordsketch/vue`, `@chordsketch/svelte` and
+`@chordsketch/chordpro-lite` on their own cadence, dispatched by hand. Every one of them is checked on every pull request, whatever its
 cadence.
 
 | Condition | Source | Checked by |
@@ -90,6 +93,7 @@ cadence.
 | Every file `main`, `module`, `types`, `bin` and `exports` point at is inside the tarball | [npm: package.json `files`](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#files) (a missing file is silently left out) | `npm_manifest_problems` |
 | Every dependency resolves from the registry: no `file:`, `link:`, `workspace:`, git or URL spec, and some published version satisfies every range, unless it pins a package released in the same release at that exact version | [npm: package.json dependencies](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#dependencies) | `npm_dependency_problems` |
 | The packed tarball installs into an empty project and loads | — | `npm_smoke_problems` for `@chordsketch/wasm`, `@chordsketch/wasm-export`, `@chordsketch/chordpro-lite` and `@chordsketch/node` (resolver plus the Linux x86_64 platform package). The framework packages need a bundler to load and are covered by the entry-point check here and by `readme-smoke.yml` after publishing ([ADR-0064](adr/0064-framework-binding-smoke-tracks-latest.md)); `tree-sitter-chordpro` is grammar source with no Node entry point. (Its `main` pointed at Node bindings that were never packaged, so `require('tree-sitter-chordpro')` failed for every published version; the entry-point check found it.) |
+| The package already exists, and its trusted publisher names `koedame/chordsketch`, `publish-registries.yml` and the `npm` environment | [npm: trusted publishers](https://docs.npmjs.com/trusted-publishers) | `publish-registries.yml` in `check` mode: `plan` refuses a package that has never been published, and the job exchanges its OIDC token for each package as `npm publish` does |
 | Size: the npm registry documents no package size limit | [npm: package.json](https://docs.npmjs.com/cli/v10/configuring-npm/package-json) | nothing beyond the 1 MiB large-file rule |
 
 The napi platform packages are packed by
@@ -97,7 +101,9 @@ The napi platform packages are packed by
 job runs. On a pull request only the Linux x86_64 addon can be built, so
 it is staged into all five platform packages: the staging, packing and dry
 run are the release's, and only that one addon is loaded. The release job
-runs the same check against the five real addons before uploading them.
+runs the same check against the five real addons before uploading them to
+the GitHub Release, and `publish-registries.yml` runs it again on the
+tarballs it downloads from there before publishing them.
 
 ## VS Code Marketplace and Open VSX
 

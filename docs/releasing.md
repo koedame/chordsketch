@@ -55,19 +55,22 @@ Steps 1-3 (the `Release vX.Y.Z` commit) land on `main` through a PR as
 before. Everything after that — tagging, waiting for the CI publishes,
 crates.io, npm and the channel rollup — is one command, run from the
 maintainer's machine
-([ADR-0068](adr/0068-releases-run-through-one-preflighted-script.md)):
+([ADR-0068](adr/0068-releases-run-through-one-preflighted-script.md)).
+Nothing is built or published on that machine: crates.io and npm publish
+from CI too, through trusted publishing
+([ADR-0069](adr/0069-crates-io-and-npm-publish-from-ci-with-trusted-publishing.md)).
 
 ```bash
 git switch main && git pull --ff-only   # any up-to-date checkout of main
-scripts/release.py X.Y.Z --check        # preflight only; changes nothing
+scripts/release.py X.Y.Z --check        # preflight only; publishes nothing
 scripts/release.py X.Y.Z                # preflight, confirm, then release
 ```
 
-It builds and publishes from a temporary worktree of the release commit —
+It reads the release from a temporary worktree of the release commit —
 the commit the tags point at once they exist, the tip of `origin/main`
-before — so the local branch and any uncommitted changes never reach a
-registry, and a release that was tagged before the script existed can be
-finished with it.
+before — so the local branch and any uncommitted changes play no part,
+and a release that was tagged before the script existed can be finished
+with it.
 
 The script pushes no tag until every precondition it can check without
 publishing holds, and reports every failing one at once:
@@ -80,35 +83,43 @@ publishing holds, and reports every failing one at once:
   `.github/workflows/release-credentials.yml`, which the script dispatches,
   asks Docker Hub, the Marketplace, Open VSX, the Central Portal, CocoaPods
   trunk, GitHub, AUR and the Snap Store with read-only calls;
-- the local crates.io token and npm login are live and own the packages;
-- every pending crate and npm package passes the checks every pull
+- `.github/workflows/publish-registries.yml` passes in `check` mode for
+  the release commit, which the script dispatches alongside
+  `release-credentials.yml`. It runs, on a runner, what the publish will
+  run: every pending crate and npm package passes the checks every pull
   request's required `Publishable` check runs
   ([`docs/publishing-requirements.md`](publishing-requirements.md),
-  [ADR-0070](adr/0070-publishability-is-checked-on-every-pull-request.md)):
-  `cargo publish --dry-run` for every pending crate together, every
+  [ADR-0070](adr/0070-publishability-is-checked-on-every-pull-request.md))
+  — `cargo publish --dry-run` for every pending crate together, every
   `.crate` within crates.io's 10 MiB upload limit, every pending npm
   package built, packed and passing `npm publish --dry-run` with no
-  warning, and nothing in any package that must not be published. When
-  the tag is already out, the napi tarballs on the Release are checked the
-  same way.
+  warning, nothing in any package that must not be published, and, once
+  the tag is out, the napi tarballs on the Release; no pending package is
+  new to its registry; and crates.io and npm each hand that workflow a
+  token, which they only do when the package's trusted publisher names it
+  (see [Trusted publishing](#trusted-publishing)).
+
+A failed check is reported in the terminal with the errors its jobs
+annotated, so the run page only needs opening for the full log.
 
 It then pushes `vX.Y.Z` and `desktop-vX.Y.Z`, waits for the tag runs,
-publishes to crates.io and npm only if every CI-published channel serves
-the version, and dispatches `release-verify.yml`.
+dispatches `publish-registries.yml` in `publish` mode only if every
+CI-published channel serves the version, waits for it, and dispatches
+`release-verify.yml`. crates.io and npm go last because their versions
+are permanent: a release abandoned over a CI channel leaves nothing on
+them.
 
-What the maintainer's machine needs: `gh` logged in with push access;
-Cargo 1.90+ and a crates.io token in `CARGO_REGISTRY_TOKEN` or
-`~/.cargo/credentials.toml` (`cargo login`) — a token kept in a credential
-provider is not visible to the script, so export it; `npm login` as an
-owner of the packages; `wasm-pack` with the `wasm32-unknown-unknown`
-target. npm asks for a one-time password on each publish.
+What the maintainer's machine needs: `git`, Python 3.11+, and `gh` logged
+in with push access to the repository (which is also what dispatching
+the workflows needs). No registry login, token or one-time password.
 
 Re-running the script with the same version is always safe. It asks the
 registries what is already published, so an interrupted release resumes
 from what is missing, and a finished one is refused. It does not re-run a
 CI channel that failed after the tag: it names the channel and stops
 before crates.io and npm; re-run that channel (step 8), then re-run the
-script. winget and MacPorts remain manual (Post-Release).
+script; `publish-registries.yml` likewise skips whatever the registries
+already serve. winget and MacPorts remain manual (Post-Release).
 
 ### Pre-release sanity
 
@@ -135,10 +146,8 @@ at post-release verification rather than before the tag is cut.
    gh api repos/koedame/chordsketch/environments --jq '.environments[].name'
    ```
    Every `environment:` name used in a publish job (`docker-hub`,
-   `vscode-marketplace`, `pypi`, `rubygems`, `maven-central`) must
-   appear in the output. (`npm` and `napi` environment blocks were
-   removed in #1790 — those channels are published manually; see step 7
-   and the "napi distribution" section.)
+   `vscode-marketplace`, `pypi`, `rubygems`, `maven-central`, `crates-io`,
+   `npm`) must appear in the output.
 3. **`ci.yml` and `readme-smoke.yml` are green on the target commit.** The
    release workflow builds from that commit, so a red CI is a release
    blocker:
@@ -225,7 +234,7 @@ at post-release verification rather than before the tag is cut.
 
 3. **Commit** with message: `Release vX.Y.Z`
 
-   Steps 4-8 below are what `scripts/release.py` runs. They stay here as
+   Steps 4-6 and 8 below are what `scripts/release.py` runs. They stay here as
    the reference for what it does, and for re-running a single step by
    hand.
 
@@ -239,111 +248,41 @@ at post-release verification rather than before the tag is cut.
    `.github/workflows/release.yml`, which builds binaries for all targets and
    creates a GitHub Release with archives attached.
 
-6. **Publish to crates.io** in dependency order. The two zero-dep
-   foundations (`chordsketch-chordpro` and `chordsketch-ireal`) come
-   first. Crates that depend only on one foundation come next:
-   `chordsketch-render-text` / `-render-html` / `-render-pdf` /
-   `-convert-musicxml` depend on `chordsketch-chordpro`;
-   `chordsketch-render-ireal` depends on `chordsketch-ireal`. Then
-   `chordsketch-convert` (depends on chordpro + ireal;
-   `chordsketch-render-text` is a `[dev-dependencies]` entry only and
-   does not gate the publish), then `chordsketch-mcp` (depends on
-   chordpro + render-text + render-html), and finally the CLI
-   (`chordsketch`, depends on chordpro + ireal +
-   render-text/html/pdf/ireal + convert-musicxml + mcp).
-
+6. **Publish to crates.io and npm.** `scripts/release.py` dispatches
+   `publish-registries.yml` once every CI-published channel serves the
+   version:
    ```bash
-   cargo publish -p chordsketch-chordpro
-   cargo publish -p chordsketch-ireal
-   # Wait ~30 seconds for the crates.io index to update
-   cargo publish -p chordsketch-render-text
-   cargo publish -p chordsketch-render-html
-   cargo publish -p chordsketch-render-pdf
-   cargo publish -p chordsketch-render-ireal
-   cargo publish -p chordsketch-convert-musicxml
-   # Wait ~30 seconds for renderer crates to propagate
-   cargo publish -p chordsketch-convert
-   cargo publish -p chordsketch-mcp
-   # Wait ~30 seconds for chordsketch-mcp to propagate
-   cargo publish -p chordsketch
+   V=X.Y.Z  # replace with the actual version
+   gh workflow run publish-registries.yml -R koedame/chordsketch \
+     -f ref=v$V -f set=workspace -f mode=publish
    ```
+   The run publishes every crate and npm package whose channel in
+   `ci/release-channels.toml` carries the tag's version and is not served
+   yet, so dispatching it again resumes a failed run:
+   - **crates.io:** one `cargo publish` over the pending crates, which
+     verifies all of them before uploading any and uploads them in
+     dependency order ([crates.io Publishing Order](#cratesio-publishing-order)).
+     The crates are dry-run first, because the token the job exchanges
+     lasts 30 minutes.
+   - **npm:** `@chordsketch/wasm`, `@chordsketch/wasm-export` and
+     `tree-sitter-chordpro` are built and packed on the runner; the napi
+     resolver and its five platform packages come from the tarballs
+     `napi.yml` put on the GitHub Release, platform packages first. Each
+     tarball passes the publish checks before any is uploaded, and the job
+     waits until npm serves every package it published. Every upload
+     carries a provenance attestation.
 
-7. **Publish every npm package manually from your local machine.**
-   Per [ADR-0008](adr/0008-npm-publishing-is-local.md), every npm
-   publish for every ChordSketch-distributed package is a maintainer-
-   local operation. CI never publishes to npm. The flow:
-
+7. **Publish a framework package** (`@chordsketch/react-ui`,
+   `@chordsketch/react`, `@chordsketch/vue`, `@chordsketch/svelte`,
+   `@chordsketch/chordpro-lite`). These version on their own cadence, not
+   with the tag, so they are not part of a release. Land the version bump
+   on `main`, then dispatch the same workflow from `main` with the package
+   as the set — `check` first if in doubt:
    ```bash
-   # 7a. @chordsketch/wasm (dual web/node package, lean bundle)
-   cd packages/npm && npm run build && npm whoami && npm publish && cd ../..
-
-   # 7b. tree-sitter-chordpro
-   cd packages/tree-sitter-chordpro && npm publish --access public && cd ../..
-
-   # 7c. @chordsketch/node (napi-rs, 5 platforms + meta)
-   #     CI's napi.yml uploads the platform tarballs to the GitHub
-   #     Release; the local script fetches and publishes them.
-   ./crates/napi/scripts/local-publish.sh v$V
-
-   # 7d. @chordsketch/wasm-export (heavy bundle: PDF/PNG export,
-   #     dual web/node package). Ships in lockstep with
-   #     @chordsketch/wasm per #2466 — same canonical version, same
-   #     manual-publish workflow.
-   cd packages/npm-export && npm run build && npm publish && cd ../..
-
-   # 7e. @chordsketch/react-ui (wasm-free React design-system primitives,
-   #     ADR-0029). Independent of @chordsketch/wasm; versions on its own
-   #     cadence (same manual-publish pattern as the other scoped packages).
-   cd packages/react-ui && npm ci && npm run build && npm publish && cd ../..
-
-   # 7f. @chordsketch/react (React component library). Versions on its
-   #     own cadence, like the other framework packages.
-   cd packages/react && npm ci && npm run build && npm publish && cd ../..
-
-   # 7g. @chordsketch/vue (Vue 3 component library). Same shape as
-   #     @chordsketch/react and versioned on its own cadence.
-   cd packages/vue && npm ci && npm run build && npm publish && cd ../..
-
-   # 7h. @chordsketch/svelte (Svelte 5 component library). Same cadence
-   #     as the other framework packages; `npm run build` runs
-   #     svelte-package, which emits sources + declarations rather than
-   #     a bundle.
-   cd packages/svelte && npm ci && npm run build && npm publish && cd ../..
-
-   # 7i. @chordsketch/chordpro-lite (dependency-free ChordPro helpers,
-   #     ADR-0060). Carries no dependency on @chordsketch/wasm and
-   #     versions on its own cadence, like @chordsketch/react-ui.
-   cd packages/chordpro-lite && npm ci && npm run build && npm publish && cd ../..
+   gh workflow run publish-registries.yml -R koedame/chordsketch \
+     -f set=@chordsketch/vue -f mode=publish
    ```
-
-   `npm whoami` should print `unchidev` before any publish; if not,
-   run `npm login` (interactive 2FA via browser) first. Each
-   `npm publish` will prompt for a 2FA OTP.
-
-   Run the packages one at a time and read each result. The snippet
-   above chains with `&&`, so a failed publish leaves the shell inside
-   that package directory and every later line then runs against the
-   wrong `packages/<name>`.
-
-   Verify — but not immediately. npm's read path lags the write path
-   by up to a couple of minutes, so `npm view` can still 404 on a
-   package that published seconds earlier. A 404 here means "not
-   propagated yet", not "publish failed": wait a minute and re-run. The
-   authoritative answer is whether the `npm publish` itself exited 0.
-   ```bash
-   npm view @chordsketch/wasm version          # should show X.Y.Z
-   npm view @chordsketch/wasm-export version    # should show X.Y.Z
-   npm view @chordsketch/react-ui version       # should show X.Y.Z
-   npm view @chordsketch/react version          # should show X.Y.Z
-   npm view @chordsketch/vue version            # should show X.Y.Z
-   npm view @chordsketch/svelte version         # should show X.Y.Z
-   npm view @chordsketch/chordpro-lite version  # should show X.Y.Z
-   npm view tree-sitter-chordpro version        # should show X.Y.Z
-   npm view @chordsketch/node version          # should show X.Y.Z
-   for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
-     npm view "@chordsketch/node-$triple" version
-   done
-   ```
+   A package already served at its `package.json` version is skipped.
 
 8. **Run the channel rollup.** Every CI-published channel has already
    run inside the release workflow (step 5) — Docker, VS Code / Open
@@ -353,15 +292,15 @@ at post-release verification rather than before the tag is cut.
    [ADR-0039](adr/0039-release-fan-out-is-an-explicit-call-graph.md).
    Nothing needs dispatching to make the release happen.
 
-   What is left is the convergence check, and it can only run now that
-   steps 6-7 have published the manual channels:
+   What is left is the convergence check, and it can only run once
+   step 6 has published crates.io and npm:
    ```bash
    V=X.Y.Z  # replace with the actual version
    gh workflow run release-verify.yml -f tag=v$V -R koedame/chordsketch
    ```
    `release-verify.yml` also sweeps daily at 07:00 UTC, so a forgotten
    dispatch surfaces within a day rather than never. It is expected to be
-   red between the tag and the completion of steps 6-7 — that is an
+   red between the tag and the completion of step 6 — that is an
    accurate report of an unfinished release, not noise.
 
    To re-run a single channel against an existing tag (a failed publish,
@@ -377,7 +316,7 @@ at post-release verification rather than before the tag is cut.
    tag unless you tick `promote-latest`, so re-running an older tag
    cannot regress it (#1064). The `napi.yml` dispatch only re-runs the
    build matrix and re-uploads platform tarballs to the Release; it does
-   not publish to npm (Step 7c does that). A `swift.yml` dispatch rebuilds
+   not publish to npm (step 6 does that). A `swift.yml` dispatch rebuilds
    the XCFramework and **replaces** the release asset, which changes its
    SHA256; to retry only a failed CocoaPods or `Package.swift` update, re-run
    that job inside the release run instead
@@ -410,8 +349,10 @@ versions from the registry, not the local workspace. The inter-crate
 dependencies specify both `path` (for local development) and `version` (for
 crates.io).
 
-After publishing each crate, wait for the crates.io index to update before
-publishing dependents. This typically takes 10-30 seconds.
+`publish-registries.yml` publishes them with one `cargo publish` call, which
+derives this order itself and waits for each crate to be served before
+uploading its dependents. The list is here to review the dependency graph
+against, and for publishing a new crate's first version by hand.
 
 Publishing order:
 1. `chordsketch-chordpro` (no internal dependencies)
@@ -428,8 +369,7 @@ Publishing order:
 
 Steps 3-7 can be published in any order among themselves. All of steps 1-7 and
 step 9 must complete before step 10. Step 8 only requires steps 1-2 and is
-independent of step 10 — the bash script in Step 6 above orders them
-sequentially for simplicity.
+independent of step 10.
 
 ## Distribution Channels
 
@@ -439,8 +379,7 @@ has its own automation, secret, and verification path. The
 end-to-end on a daily schedule (and on PRs that touch the README system —
 ADR-0041) as the single source of truth for "is the project's promised
 distribution actually working right now". It deliberately does not run at
-release time: most channels are not updated until the manual publishes in
-steps 6-7 are done.
+release time: crates.io and npm are not updated until step 6 has run.
 
 This table is the **human-readable view** of `ci/release-channels.toml`.
 When adding a new channel, update both, and add what the channel requires
@@ -449,18 +388,18 @@ together with the check in `scripts/_publish_checks.py`.
 
 | Channel | Identifier | Trigger | Required secret(s) | Verified by |
 |---|---|---|---|---|
-| crates.io | `chordsketch` (CLI) + 9 lib crates | manual `cargo publish` (Step 6) | maintainer's `~/.cargo/credentials` | `cargo-install` job |
+| crates.io | `chordsketch` (CLI) + 9 lib crates | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6) | none (OIDC trusted publisher, environment `crates-io`) | `cargo-install` job |
 | GitHub Releases | binary archives | `release.yml` on tag push | `GITHUB_TOKEN` | `source-build` job |
 | GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml`, called by `release.yml` on tag push | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
 | Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml`, called by `release.yml` on tag push | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
-| npm (wasm) | `@chordsketch/wasm` | manual local `npm publish` (Step 7a) — see ADR-0008 | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-wasm` job |
-| npm (wasm-export) | `@chordsketch/wasm-export` | manual local `npm publish` (Step 7d) — see ADR-0008. Ships in lockstep with `@chordsketch/wasm` (#2466). | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-wasm-export` job |
-| npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | manual local `crates/napi/scripts/local-publish.sh` (Step 7c) — see ADR-0008. CI uploads platform tarballs to the GitHub Release. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `napi-node` job |
-| npm (tree-sitter) | `tree-sitter-chordpro` | manual local `npm publish --access public` (Step 7b) — see ADR-0008 | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-tree-sitter` rollup entry |
-| npm (React) | `@chordsketch/react-ui` (design-system primitives, ADR-0029) + `@chordsketch/react` (component library) | manual local `npm publish` (Steps 7e-7f) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-react-ui` / `npm-react` jobs in `readme-smoke.yml` install the `latest` dist-tag daily and server-render a component (ADR-0064), plus source-side `react-ui.yml` / `react.yml` / `playground-smoke.yml`. Rollup entries are `skip` — the daily install is the stronger check. |
-| npm (Vue) | `@chordsketch/vue` | manual local `npm publish` (Step 7g) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-vue` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064), plus source-side `vue.yml` / `playground-smoke.yml`. Rollup entry is `skip` — the daily install is the stronger check. |
-| npm (Svelte) | `@chordsketch/svelte` | manual local `npm publish` (Step 7h) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | `npm-svelte` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064), plus source-side `svelte.yml` / `playground-smoke.yml`. Rollup entry is `skip` — the daily install is the stronger check. |
-| npm (chordpro-lite) | `@chordsketch/chordpro-lite` | manual local `npm publish` (Step 7i) — see ADR-0008. Own release cadence, not the workspace tag. | none in CI; maintainer's `unchidev` npm session + 2FA OTP | rollup entry is `expected_version = "exists"` (ADR-0065): the daily `release-verify.yml` run asserts npm still serves it anonymously and its tarball is still fetchable. No `readme-smoke.yml` job — it is not an install method under README `## Installation`. Source side: `chordpro-lite.yml` plus the unfiltered `directive-catalog-sync` job in `ci.yml`. |
+| npm (wasm) | `@chordsketch/wasm` | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6) | none (OIDC trusted publisher, environment `npm`) | `npm-wasm` job |
+| npm (wasm-export) | `@chordsketch/wasm-export` | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6). Ships in lockstep with `@chordsketch/wasm` (#2466). | none (OIDC trusted publisher, environment `npm`) | `npm-wasm-export` job |
+| npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6), from the platform tarballs `napi.yml` uploads to the GitHub Release. | none (OIDC trusted publisher, environment `npm`) | `napi-node` job |
+| npm (tree-sitter) | `tree-sitter-chordpro` | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6) | none (OIDC trusted publisher, environment `npm`) | `npm-tree-sitter` rollup entry |
+| npm (React) | `@chordsketch/react-ui` (design-system primitives, ADR-0029) + `@chordsketch/react` (component library) | `publish-registries.yml` dispatched by hand with the package as the set (Step 7). Own release cadence, not the workspace tag. | none (OIDC trusted publisher, environment `npm`) | `npm-react-ui` / `npm-react` jobs in `readme-smoke.yml` install the `latest` dist-tag daily and server-render a component (ADR-0064), plus source-side `react-ui.yml` / `react.yml` / `playground-smoke.yml`. Rollup entries are `skip` — the daily install is the stronger check. |
+| npm (Vue) | `@chordsketch/vue` | `publish-registries.yml` dispatched by hand with the package as the set (Step 7). Own release cadence, not the workspace tag. | none (OIDC trusted publisher, environment `npm`) | `npm-vue` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064), plus source-side `vue.yml` / `playground-smoke.yml`. Rollup entry is `skip` — the daily install is the stronger check. |
+| npm (Svelte) | `@chordsketch/svelte` | `publish-registries.yml` dispatched by hand with the package as the set (Step 7). Own release cadence, not the workspace tag. | none (OIDC trusted publisher, environment `npm`) | `npm-svelte` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064), plus source-side `svelte.yml` / `playground-smoke.yml`. Rollup entry is `skip` — the daily install is the stronger check. |
+| npm (chordpro-lite) | `@chordsketch/chordpro-lite` | `publish-registries.yml` dispatched by hand with the package as the set (Step 7). Own release cadence, not the workspace tag. | none (OIDC trusted publisher, environment `npm`) | rollup entry is `expected_version = "exists"` (ADR-0065): the daily `release-verify.yml` run asserts npm still serves it anonymously and its tarball is still fetchable. No `readme-smoke.yml` job — it is not an install method under README `## Installation`. Source side: `chordpro-lite.yml` plus the unfiltered `directive-catalog-sync` job in `ci.yml`. |
 | Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `homebrew` job |
 | Scoop bucket | `koedame/scoop-bucket/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `scoop` job |
 | AUR | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `AUR_SSH_KEY` | `aur` rollup entry |
@@ -688,13 +627,15 @@ After the release workflow completes and the GitHub Release is published:
 | `TAP_GITHUB_TOKEN` | `contents:write` on `koedame/homebrew-tap` and `koedame/scoop-bucket` | Push updated formulae/manifests after release |
 | `DOCKERHUB_USERNAME` | string | Docker Hub username under which images are pushed (currently `koedame`) |
 | `DOCKERHUB_TOKEN` | Docker Hub Personal Access Token, "Read & Write" | Authenticate `docker push` against `docker.io/koedame/chordsketch` from `docker.yml` |
-| `NPM_TOKEN` | npm Granular Access Token, scope `@chordsketch` Read & Write, org `chordsketch` Read & Write | ⚠️ Authenticate `npm publish` against the `@chordsketch/*` scope from `npm-publish.yml`. The org-level grant is the **empirically working** configuration, not necessarily the minimal one — see "npm publish via CI" quirk below for what we tried. Narrowing the scope is an open question; if you experiment with it, file a follow-up issue and link results back here. |
 | `CHOCOLATEY_API_KEY` | Chocolatey Community Repository API key | Authenticate `choco push` from `post-release.yml` (windows-latest runner) |
 | `AUR_SSH_KEY` | ed25519 SSH private key registered with AUR account `koedame` | Authenticate `git push` to `ssh://aur@aur.archlinux.org/chordsketch.git` from `post-release.yml` |
 | `SNAP_STORE_TOKEN` | Snapcraft exported credentials (`snapcraft export-login`) | Authenticate `snapcraft upload` + `snapcraft release` from `post-release.yml` |
 | `COCOAPODS_TRUNK_TOKEN` | CocoaPods trunk session token (from `~/.netrc` after `pod trunk register`) | Authenticate `pod trunk push` from `swift.yml` |
 | `OPEN_VSX_TOKEN` | Open VSX personal access token (**environment secret** in `open-vsx`, not repo-level) | Authenticate `ovsx publish` from `vscode-extension.yml` |
 | `GITHUB_TOKEN` | provided automatically | Used by `docker.yml` to push to GHCR, by `release.yml` to upload assets, by `npm-publish.yml` checkout |
+
+crates.io, npm, PyPI and RubyGems need no secret: they publish through
+trusted publishing ([Trusted publishing](#trusted-publishing)).
 
 If any of these secrets are missing or wrong, the corresponding distribution
 channel will silently break. The `report-failure` job in `readme-smoke.yml`
@@ -709,7 +650,6 @@ following as the rotation policy:
 
 | Secret | Target cadence | Rotation UI |
 |--------|----------------|-------------|
-| `NPM_TOKEN` | Every 90 days, or immediately if the value has ever been pasted into chat / shared logs | <https://www.npmjs.com/settings/~/tokens> (sign in as the npm account that owns `@chordsketch`) |
 | `DOCKERHUB_TOKEN` | Every 90 days | <https://hub.docker.com/settings/security> |
 | `TAP_GITHUB_TOKEN` | Every 90 days, or whenever the issuing GitHub account changes 2FA / recovery setup | <https://github.com/settings/tokens> |
 | `CHOCOLATEY_API_KEY` | Only if regenerated on chocolatey.org | <https://community.chocolatey.org/account> → API Key → copy, then `gh secret set CHOCOLATEY_API_KEY` |
@@ -766,36 +706,20 @@ trigger.** Add a caller job for it in `release.yml` instead — that is
 what gives it tag-namespace filtering and after-the-Release-exists
 ordering.
 
-### npm publish via CI cannot create new packages (scoped or unscoped)
+### Trusted publishing cannot create a package
 
-The CI publish workflows with the current Granular `NPM_TOKEN` cannot
-create *new* packages — neither scoped (`@chordsketch/*`) nor unscoped
-(e.g., `tree-sitter-chordpro`). Every attempt to publish a brand-new
-package name returns:
+Neither crates.io nor npm lets a trusted publisher publish a package that
+does not exist yet. crates.io refuses the upload ("Trusted Publishing
+tokens do not support creating new crates"), and npm will not register a
+trusted publisher for a name that has never been published, so the OIDC
+exchange has nothing to match. `publish-registries.yml` names such a
+package in its `plan` job and stops before building anything.
 
-```
-npm error 404 Not Found - PUT https://registry.npmjs.org/<package-name>
-npm error 404  '<package-name>@X.Y.Z' is not in this registry.
-```
-
-This was confirmed for both `@chordsketch/wasm` (2026-04-07) and
-`tree-sitter-chordpro` (2026-04-14, #1744). The exact mechanism is
-unclear (likely a Granular token permission gap not exposed in the npm
-UI).
-
-**Workaround** — manual local publish for the first version only:
-
-```bash
-cd <package-directory>
-npm whoami              # must print the npm account that owns the package/scope
-# if not logged in: npm login (interactive 2FA OTP via browser)
-npm publish --access public
-npm view <package-name> version    # verify
-```
-
-Once the package exists on the registry, the CI workflow handles all
-subsequent version bumps automatically (confirmed with
-`tree-sitter-chordpro` in #1744).
+The first version of a new package is therefore published by hand; see
+[Adding a package](#adding-a-package). This replaces the older quirk that
+a granular `NPM_TOKEN` in CI answered `404 PUT` for new packages
+(ADR-0008): no token is involved any more, but the constraint on new
+packages remains, for a different reason.
 
 ### New GHCR packages are private by default
 
@@ -998,56 +922,18 @@ affected platform. The `napi-node` rollup entry in
 `ci/release-channels.toml` verifies every one of the six against the git
 tag at release time.
 
-### First-time manual publish
+### How it is published
 
-Because `NPM_TOKEN` in CI cannot create new packages in the
-`@chordsketch` scope (see "npm publish via CI cannot create new packages"
-quirk above), the **first publish of each of the six packages must be
-done manually from a maintainer's local checkout**. After the first
-publish, subsequent version bumps go through the CI publish job in
-`.github/workflows/napi.yml`.
+`napi.yml` builds the five platform addons, stages the six tarballs with
+`crates/napi/scripts/stage-release-tarballs.sh` and uploads them to the
+GitHub Release. `publish-registries.yml` downloads them from the Release,
+checks them, and publishes the platform packages before the resolver: the
+resolver's `optionalDependencies` name the platform packages, and an
+install that finds one missing silently skips it and then fails at
+`require()`.
 
-Procedure (from a clean local checkout of the target tag):
-
-```bash
-cd crates/napi
-
-# Install napi-rs CLI (matches devDependencies in crates/napi/package.json).
-npm install
-
-# Build every supported target. This requires cross-compilers; easier to
-# download the artifacts from the corresponding napi.yml run instead.
-gh run download -R koedame/chordsketch \
-  -D /tmp/napi-artifacts \
-  $(gh run list -R koedame/chordsketch --workflow=napi.yml --branch vX.Y.Z \
-      --limit 1 --json databaseId -q '.[0].databaseId')
-
-# Move each downloaded .node into its platform directory under npm/.
-# (The directory layout is created by `napi create-npm-dirs`; see
-# crates/napi/npm/ in the committed tree.)
-for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
-  cp /tmp/napi-artifacts/napi-${triple}/*.node npm/${triple}/
-done
-
-# Authenticate as the npm account that owns @chordsketch.
-npm whoami
-
-# Publish the FIVE platform packages FIRST. Order within this group
-# doesn't matter, but all five must succeed before the resolver.
-for triple in linux-x64-gnu linux-arm64-gnu darwin-x64 darwin-arm64 win32-x64-msvc; do
-  (cd npm/${triple} && npm publish --access public)
-done
-
-# Publish the main resolver package LAST. Its `optionalDependencies`
-# field references the five platform packages, so it must be published
-# after them or installs will fail with ENOENT.
-napi prepublish --skip-gh-release --tagstyle npm
-npm publish --access public
-```
-
-After the first successful manual publish, future releases are automatic
-via `napi.yml`'s publish job (no human action required unless that job
-fails and fallback to manual is needed).
+A new platform package — a sixth target — is a new npm package, so its
+first version is published by hand ([Adding a package](#adding-a-package)).
 
 ### Why the decision to ship napi (vs. defer)
 
@@ -1071,85 +957,140 @@ entry in `ci/release-channels.toml` to `expected_version = "skip"` with a
 `skip_reason` — that is the supported way to pause a channel without
 deleting its infrastructure.
 
-## Adding a New npm Package
+## Trusted publishing
 
-When adding a new npm package to the project (scoped or unscoped), the
-following procedure sets up automated CI publishing. This was established
-during `tree-sitter-chordpro` (#1744) and applies to any future npm
-package.
+crates.io and npm hand a job a short-lived publish token when the job's
+GitHub OIDC token matches the package's **trusted publisher**:
 
-### Step-by-step
+| Registry | Repository | Workflow | Environment |
+|---|---|---|---|
+| crates.io | `koedame/chordsketch` | `publish-registries.yml` | `crates-io` |
+| npm | `koedame/chordsketch` | `publish-registries.yml` | `npm` |
 
-1. **Create the publish workflow** at
-   `.github/workflows/npm-publish-<name>.yml`:
-   - Use `npm-publish.yml` (the `@chordsketch/wasm` workflow) as a
-     template
-   - Triggers: `workflow_call` and `workflow_dispatch`, both with a
-     `version` input. Add a caller job for it in `release.yml`'s fan-out
-     (ADR-0039); do **not** give it a `release:` trigger
-   - Do **not** add an `environment:` block — `NPM_TOKEN` is a repo-level
-     secret. An environment block was removed from `npm-publish.yml` in
-     #1791 to avoid stale deployment entries (see #1790).
-   - Include the duplicate-publish check (skip if version already exists)
-   - Use `--access public` on the `npm publish` command
-   - If no build step is needed (e.g., pre-committed generated files),
-     omit the build steps
+Both environments admit only `main` (Settings → Environments → Deployment
+branches and tags → Selected branches and tags → `main`), and
+`publish-registries.yml` refuses a dispatch from any other ref, so a token
+can only be minted for a run of the workflow as it is on `main`.
 
-2. **Add a channel entry** to `ci/release-channels.toml` **and** a
-   matching row to the Distribution Channels table in `docs/releasing.md`
-   (both must stay in sync):
+### One-time setup
+
+Done once, when moving from the maintainer-local publish (ADR-0008) to CI.
+
+1. **GitHub environments.** Create `crates-io` (the `npm` one exists) and
+   restrict both to `main`:
+   ```bash
+   for env in crates-io npm; do
+     gh api -X PUT repos/koedame/chordsketch/environments/$env \
+       -F 'deployment_branch_policy[protected_branches]=false' \
+       -F 'deployment_branch_policy[custom_branch_policies]=true'
+     gh api -X POST repos/koedame/chordsketch/environments/$env/deployment-branch-policies \
+       -f name=main -f type=branch
+   done
+   ```
+2. **npm.** With npm 11.15.0 or newer, logged in as an owner with 2FA on
+   the account, register every package. The first call asks for a
+   one-time password; choosing "skip two-factor authentication for the
+   next 5 minutes" on the npm page lets the rest go through:
+   ```bash
+   npm install -g npm@^11.15.0
+   for package in @chordsketch/wasm @chordsketch/wasm-export tree-sitter-chordpro \
+       @chordsketch/node @chordsketch/node-linux-x64-gnu @chordsketch/node-linux-arm64-gnu \
+       @chordsketch/node-darwin-x64 @chordsketch/node-darwin-arm64 @chordsketch/node-win32-x64-msvc \
+       @chordsketch/react-ui @chordsketch/react @chordsketch/vue @chordsketch/svelte @chordsketch/chordpro-lite; do
+     npm trust github "$package" --repo koedame/chordsketch --file publish-registries.yml --env npm --allow-publish --yes
+     sleep 2
+   done
+   ```
+   npm allows one trusted publisher per package; `npm trust list <package>`
+   shows it.
+3. **crates.io.** Create a token at <https://crates.io/settings/tokens>
+   with the `trusted-publishing` scope, then register every crate:
+   ```bash
+   read -rs CRATES_IO_TOKEN
+   for crate in chordsketch-chordpro chordsketch-ireal chordsketch-render-text chordsketch-render-html \
+       chordsketch-render-pdf chordsketch-render-ireal chordsketch-convert chordsketch-convert-musicxml \
+       chordsketch-mcp chordsketch; do
+     curl -fsS -X POST https://crates.io/api/v1/trusted_publishing/github_configs \
+       -H "Authorization: $CRATES_IO_TOKEN" -H 'Content-Type: application/json' \
+       -H 'User-Agent: chordsketch-maintainer (+https://github.com/koedame/chordsketch)' \
+       -d "{\"github_config\":{\"crate\":\"$crate\",\"repository_owner\":\"koedame\",\"repository_name\":\"chordsketch\",\"workflow_filename\":\"publish-registries.yml\",\"environment\":\"crates-io\"}}"
+     echo
+   done
+   ```
+   Revoke the token afterwards; it is not needed again until a crate is
+   added.
+4. **Prove it.** Dispatch the check for the workspace and for each
+   framework package. A check covers every package of its set, published
+   or not, so every run must pass; a package without a matching trusted
+   publisher fails by name:
+   ```bash
+   for set in workspace @chordsketch/react-ui @chordsketch/react @chordsketch/vue \
+       @chordsketch/svelte @chordsketch/chordpro-lite; do
+     gh workflow run publish-registries.yml -R koedame/chordsketch -f set="$set" -f mode=check
+   done
+   ```
+5. **After the first release published from CI**, close the token path:
+   - crates.io: each crate's Settings → Trusted Publishing → enable
+     "Trusted Publishing only".
+   - npm: each package's Settings → Publishing access → "Require
+     two-factor authentication and disallow tokens". Trusted publishing
+     keeps working, and so does a logged-in maintainer with a one-time
+     password.
+   - GitHub: delete the unused `NPM_TOKEN` secret
+     (`gh secret delete NPM_TOKEN -R koedame/chordsketch`).
+   - Revoke any crates.io publish token and npm token left on the
+     maintainer's machine.
+
+### Adding a package
+
+A package that has never been published cannot use trusted publishing
+(see [the quirk](#trusted-publishing-cannot-create-a-package)), so its
+first version goes out by hand and every later one from CI.
+
+1. **Make the package publishable in the pull request that adds it.**
+   - A crate: add it to `CRATES` in `scripts/_publish_checks.py`, give its
+     `Cargo.toml` a `description`, `license`, `repository` and `readme`,
+     and add it to [crates.io Publishing Order](#cratesio-publishing-order).
+   - An npm package: add it to `NPM_PACKAGES` in
+     `scripts/_publish_checks.py` — how it is built, any file over 1 MiB it
+     ships on purpose, and a smoke snippet if Node can load it. Give the
+     `package.json` a `description`, `license`, a README and
+     `repository.url` in the `git+https://github.com/koedame/chordsketch.git`
+     form (npm provenance requires the repository to match).
+   The `Publishable` check (`publishable.yml`) picks either up from there.
+2. **Add a channel entry** to `ci/release-channels.toml` and a matching
+   row to the Distribution Channels table above:
    ```toml
    [[channels]]
    id = "npm-<short-name>"
    display = "npm — <package-name>"
    kind = "npm"
    package = "<package-name>"
-   expected_version = "tag"
-   required_secrets = ["NPM_TOKEN"]
+   expected_version = "tag"   # or "exists" for a package on its own cadence
+   required_secrets = []      # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
    ```
-
-   Then add the package to `NPM_PACKAGES` in
-   `scripts/_publish_checks.py` — how it is built, any file over 1 MiB it
-   ships on purpose, and a smoke snippet if Node can load it. The
-   `Publishable` check (`publishable.yml`) picks it up from there, and its
-   self-test fails until the manifest and the definition agree. Give the
-   `package.json` a `description`, `license`, a README and
-   `repository.url` in the `git+https://…` form, or the check fails.
-
-3. **Add the package to the version bump list** in `docs/releasing.md`
-   under "Non-Rust manifests" in the Release Checklist.
-
-4. **Add to version-consistency tracking** — two files must be updated:
-   - `scripts/check-version-consistency.py`: add a
-     `load_package_json_version()` call in `load_all_sources()`
-   - `scripts/test_check_version_consistency.py`: add the package to the
-     `_build_repo()` fixture builder so unit tests create the file in
-     their temp directories
-
-5. **Sync the package version** with the workspace version (run
-   `python3 scripts/check-version-consistency.py` to find the canonical
-   version), or add an entry to `ci/version-skew-allowlist.toml` if the
-   skew is intentional.
-
-6. **Regenerate any derived files** if the version is embedded in them
-   (e.g., tree-sitter `src/parser.c` includes the version from
-   `package.json`; run `tree-sitter generate` after bumping).
-
-7. **Merge the PR** with the workflow and infrastructure changes.
-
-8. **Manually publish the first version** — the CI Granular token cannot
-   create new packages (see "Known Operational Quirks" above):
+   A package on its own cadence also goes into the `set` choices of
+   `publish-registries.yml`; `scripts/test_publish_registries.py` fails
+   until it does.
+3. **Track its version.** A tag-versioned package goes into the Step 1
+   bump list and into `scripts/check-version-consistency.py`
+   (`load_all_sources()`) and the `_build_repo()` fixture of
+   `scripts/test_check_version_consistency.py`; sync it with the workspace
+   version or add a `ci/version-skew-allowlist.toml` entry. Regenerate any
+   derived file that embeds the version (tree-sitter's `src/parser.c`).
+4. **Merge the pull request.**
+5. **Publish the first version by hand**, from a checkout of the merged
+   commit:
    ```bash
-   cd <package-directory>
-   npm publish --access public
+   # a crate: a token scoped to publish-new for that crate name
+   cargo publish -p <crate>
+   # an npm package: logged in as an owner, with a one-time password
+   cd <package-directory> && npm publish --access public
    ```
-
-9. **Verify CI works** by re-triggering the workflow with the same
-   version. It should succeed and skip the publish (already exists):
-   ```bash
-   gh workflow run npm-publish-<name>.yml \
-     -R koedame/chordsketch -f version=X.Y.Z
-   ```
+6. **Register its trusted publisher** with the command of the one-time
+   setup (step 2 or 3), for that package only.
+7. **Prove it** by dispatching `publish-registries.yml` in `check` mode for
+   the package's set. From then on it publishes from CI.
 
 ## First-Time Channel Setup
 

@@ -45,11 +45,10 @@ directory (the repository's top level — the directory containing
 
 - `## Versioning Policy` crate count matches `ls -d crates/*/ | wc -l`.
 - Step 1 manifest list lists every `crates/*/Cargo.toml`.
-- Step 6 `cargo publish` bash snippet covers every published crate in
-  a topological order valid against each crate's `[dependencies]`
-  block (NOT `[dev-dependencies]` — those do not gate `cargo publish`).
-- `## crates.io Publishing Order` numbered list and Step 6 bash
-  snippet agree on the same crate set, in the same order.
+- `## crates.io Publishing Order` numbered list covers every published
+  crate, in a topological order valid against each crate's
+  `[dependencies]` block (NOT `[dev-dependencies]` — those do not gate
+  `cargo publish`).
 - `## Distribution Channels` table's "N lib crates" / "N bin crates"
   counts match the workspace.
 
@@ -108,9 +107,14 @@ disk:
 - ADR-0007 (Tauri updater key with password) ↔
   `.github/workflows/desktop-release.yml` updater-bundle signing step
   + `apps/desktop/src-tauri/tauri.conf.json` updater public-key field.
-- ADR-0008 (npm publishing is local) ↔ no `npm publish` invocation in
-  any `.github/workflows/*.yml`. Verify with
-  `grep -RnE 'npm[[:space:]]+publish' .github/workflows/`.
+- ADR-0069 (crates.io and npm publish from CI with trusted publishing)
+  ↔ `cargo publish` and `npm publish` appear only in
+  `.github/workflows/publish-registries.yml` and
+  `scripts/publish-registries.py`, and `publish-registries.yml` has no
+  trigger other than `workflow_dispatch`. Verify with
+  `grep -RnE '(npm|cargo)[[:space:]]+publish' .github/workflows/ | grep -v -- '--dry-run'`
+  — every hit must be in `publish-registries.yml` (comment lines
+  mentioning dry runs are fine).
 - ADR-0039 (release fan-out is an explicit call graph) ↔ no workflow
   carries a `release:` trigger, and `release.yml` calls every
   publishing workflow as a `needs: [release]` job. Verify with

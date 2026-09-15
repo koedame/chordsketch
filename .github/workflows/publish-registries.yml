@@ -1,0 +1,231 @@
+name: Publish to crates.io and npm
+
+# Publishes the crates.io and npm packages with trusted publishing: each job
+# proves its identity with GitHub's OIDC token and the registry hands it a
+# credential for that job alone, so no publish token is stored anywhere
+# (ADR-0069, superseding the maintainer-local publish of ADR-0008).
+#
+# Dispatched, never called from another workflow. Both registries match the
+# trusted publisher against the *calling* workflow's file name, so calling
+# this from release.yml would mean trusting release.yml, which runs on every
+# tag push before `scripts/release.py` has seen the CI channels converge
+# (ADR-0068 Decision 4).
+#
+#   mode: check    everything `publish` needs, without uploading, for every
+#                  package of the set: it builds, packs and passes the
+#                  pull-request publish checks, it is not new, and its
+#                  registry mints a token for this workflow.
+#                  `scripts/release.py` dispatches it in its preflight,
+#                  before any tag is pushed.
+#   mode: publish  the same, for the packages the registries do not serve
+#                  yet, then the upload. `scripts/release.py` dispatches it
+#                  once every CI channel serves the version.
+#
+#   set: workspace            the crates and npm packages that carry the
+#                             release tag's version (`ci/release-channels.toml`)
+#   set: <framework package>  one package on its own cadence, from main
+#
+# The registries are the state: a publish skips what already serves its
+# manifest version, so a failed run is resumed by dispatching it again.
+#
+# Trusted publisher registration (once per package; docs/releasing.md,
+# "Trusted publishing"): repository koedame/chordsketch, workflow
+# publish-registries.yml, environment `crates-io` or `npm`. A package that has
+# never been published cannot use it; its first version is published by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "What to publish: a v* tag (required for the workspace set in publish mode) or a commit. Empty: main."
+        type: string
+        default: ""
+      set:
+        description: "workspace, or one framework package"
+        type: choice
+        default: workspace
+        options:
+          - workspace
+          - "@chordsketch/react-ui"
+          - "@chordsketch/react"
+          - "@chordsketch/vue"
+          - "@chordsketch/svelte"
+          - "@chordsketch/chordpro-lite"
+      mode:
+        description: "check: prove the publish would succeed, upload nothing. publish: upload."
+        type: choice
+        default: check
+        options:
+          - check
+          - publish
+
+permissions: {}
+
+# Two publishes of the same set would race for the same versions.
+concurrency:
+  group: publish-registries-${{ inputs.set }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      commit: ${{ steps.ref.outputs.commit }}
+      tag: ${{ steps.ref.outputs.tag }}
+      crates: ${{ steps.plan.outputs.crates }}
+      npm: ${{ steps.plan.outputs.npm }}
+      wasm: ${{ steps.plan.outputs.wasm }}
+    steps:
+      # The trusted publishers name environments whose deployment policy
+      # admits only main, so a dispatch from anywhere else could not mint a
+      # token. Say so here rather than after the builds.
+      - name: Check the dispatch
+        env:
+          REF_INPUT: ${{ inputs.ref }}
+          SET: ${{ inputs.set }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::dispatch this workflow from main (it was dispatched from $GITHUB_REF)"
+            exit 1
+          fi
+          if [ "$SET" = workspace ] && [ "$MODE" = publish ] && ! [[ "$REF_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::the workspace set publishes from its release tag: set ref to vX.Y.Z"
+            exit 1
+          fi
+          if [ "$SET" != workspace ] && [ -n "$REF_INPUT" ]; then
+            echo "::error::a framework package publishes from main: leave ref empty"
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+
+      # Every later job checks out this commit, so a tag moved mid-run cannot
+      # make the jobs build different trees.
+      - name: Resolve the commit
+        id: ref
+        env:
+          REF_INPUT: ${{ inputs.ref }}
+        run: |
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [[ "$REF_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [ "$(git ls-remote origin "refs/tags/$REF_INPUT^{}" "refs/tags/$REF_INPUT" | head -n 1 | cut -f 1)" = "" ]; then
+              echo "::error::$REF_INPUT is not a tag"
+              exit 1
+            fi
+            echo "tag=$REF_INPUT" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide which packages the run covers
+        id: plan
+        env:
+          SET: ${{ inputs.set }}
+          MODE: ${{ inputs.mode }}
+        run: python3 scripts/publish-registries.py plan --set "$SET" --mode "$MODE"
+
+  crates-io:
+    name: crates.io
+    needs: [plan]
+    if: needs.plan.outputs.crates != '[]'
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.commit }}
+
+      # No build cache: what is uploaded is built on a clean runner, not on
+      # top of a restored target directory.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      # Before the token exists: it lives 30 minutes, and this is the build.
+      - name: Check the crates
+        env:
+          CRATES: ${{ needs.plan.outputs.crates }}
+        run: python3 scripts/publish-registries.py crates --crates "$CRATES"
+
+      # Fails when no trusted publisher names this workflow and environment.
+      # Its post step revokes the token when the job ends.
+      - name: Exchange the OIDC token for a crates.io token
+        id: auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+      # One call: cargo verifies every crate before uploading any, then
+      # uploads in dependency order and waits for each to be served.
+      - name: Publish
+        if: inputs.mode == 'publish'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          CRATES: ${{ needs.plan.outputs.crates }}
+        run: |
+          mapfile -t flags < <(jq -r '.[] | ("-p", .)' <<< "$CRATES")
+          cargo publish --locked "${flags[@]}"
+
+  npm:
+    name: npm
+    needs: [plan]
+    if: needs.plan.outputs.npm != '[]'
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.commit }}
+
+      # No `registry-url`: it would write an .npmrc expecting
+      # NODE_AUTH_TOKEN, and there is no token to give it.
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+
+      # Trusted publishing needs npm 11.5.1+; Node 22 ships npm 10.
+      - name: Install npm 11
+        run: |
+          npm install -g npm@11.19.1
+          npm --version
+
+      - name: Install Rust toolchain
+        if: needs.plan.outputs.wasm == 'true'
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        if: needs.plan.outputs.wasm == 'true'
+        uses: ./.github/actions/install-wasm-pack
+
+      - name: ${{ inputs.mode == 'publish' && 'Check and publish' || 'Check, and exchange the OIDC token for each package' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGES: ${{ needs.plan.outputs.npm }}
+          MODE: ${{ inputs.mode }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: python3 scripts/publish-registries.py npm --packages "$PACKAGES" --mode "$MODE" --tag "$TAG" --out "$RUNNER_TEMP/npm-tarballs"

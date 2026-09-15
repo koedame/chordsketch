@@ -11,7 +11,7 @@
 #   <out-dir>:       where the six tarballs are written
 #
 # napi.yml's `upload-release-tarballs` job runs this at release time and
-# uploads the tarballs for crates/napi/scripts/local-publish.sh to publish.
+# uploads the tarballs for .github/workflows/publish-registries.yml to publish.
 # publishable.yml runs it on every pull request and hands the tarballs to
 # `scripts/check-publishable.py napi`, so the staging a release depends on
 # is exercised long before a release needs it.

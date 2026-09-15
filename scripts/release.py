@@ -2,22 +2,24 @@
 """Run a workspace release end to end, refusing to start one that cannot finish.
 
     scripts/release.py 0.7.0           # preflight, confirm, then release
-    scripts/release.py 0.7.0 --check   # preflight only; changes nothing
+    scripts/release.py 0.7.0 --check   # preflight only; publishes nothing
 
-Run it on the maintainer's machine from an up-to-date checkout of `main`,
-after the `Release vX.Y.Z` commit (docs/releasing.md steps 1-3) is on
-`main`. It replaces the hand-run steps 4-8. Everything it builds and
-publishes comes from a temporary worktree of the release commit — the
-tagged commit once the tags exist, `origin/main` before — so the local
-checkout's branch and uncommitted changes never reach a registry, and a
-release tagged before this script existed can still be finished with it.
+Run it from an up-to-date checkout of `main`, after the `Release vX.Y.Z`
+commit (docs/releasing.md steps 1-3) is on `main`. It replaces the hand-run
+steps 4-6 and 8. It reads the release from a temporary worktree of the
+release commit — the tagged commit once the tags exist, `origin/main`
+before — so the local checkout's branch and uncommitted changes play no
+part, and a release tagged before this script existed can still be
+finished with it.
 
 The failure it exists to prevent is a half-published release. A release
-touches ~30 registries; some are published by CI after the tag push, and
-crates.io and npm are published from this machine (ADR-0008). Every one of
+touches ~30 registries; most are published by CI from the tag push, and
+crates.io and npm by `.github/workflows/publish-registries.yml`, which this
+script dispatches once the others have converged (ADR-0069). Every one of
 them can refuse the release for a reason that was knowable beforehand — an
-expired token, a missing login, a build that does not package — and once
-the tag is out there is no undoing the channels that already accepted it.
+expired token, a missing trusted publisher, a build that does not package —
+and once the tag is out there is no undoing the channels that already
+accepted it.
 So the script asks every question it can answer without publishing first,
 and only if every answer is yes does it push the tag (ADR-0068):
 
@@ -28,18 +30,18 @@ and only if every answer is yes does it push the tag (ADR-0068):
     what is still missing, so a re-run resumes instead of re-publishing;
   * every CI publish credential is still accepted by its service
     (`.github/workflows/release-credentials.yml`);
-  * the local crates.io token and npm login are accepted, and the account
-    owns the packages;
-  * every pending crate and npm package passes the checks every pull
-    request runs (`scripts/_publish_checks.py`): it builds and packs, the
-    publish dry run prints no warning, and the package is within the
-    registry's limits and carries nothing it must not.
+  * `publish-registries.yml` in `check` mode passes for the release commit:
+    every pending crate and npm package passes the checks every pull request
+    runs (`scripts/_publish_checks.py`), none of them is new to its
+    registry, and crates.io and npm each mint a token for that workflow.
 
 Then, in order: push `vX.Y.Z` and `desktop-vX.Y.Z`; wait for the tag runs;
-refuse to publish locally unless every CI-published channel has converged
-on the version; publish the pending crates (one `cargo publish` call, which
-verifies all of them before uploading any); publish the pending npm
-packages; dispatch `release-verify.yml` and wait for it.
+refuse to publish crates.io and npm unless every CI-published channel has
+converged on the version; dispatch `publish-registries.yml` in `publish`
+mode and wait for it; dispatch `release-verify.yml` and wait for it.
+
+It needs only `git`, `gh` with push access and Python: nothing is built or
+published on this machine.
 
 Re-running with the same version is always safe. Every step checks the
 registry before acting, so an interrupted release resumes where it
@@ -52,7 +54,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -81,23 +82,11 @@ USER_AGENT = "chordsketch-release (+https://github.com/koedame/chordsketch)"
 HTTP_TIMEOUT = 15
 POLL_SECONDS = 30
 
-# Channels this machine publishes. Every other `expected_version = "tag"`
-# channel is published by CI from the tag push.
-LOCAL_KINDS = frozenset({"crates-io", "npm"})
-
-# `cargo publish` with several `-p` flags verifies every package against a
-# local overlay registry before uploading any, then uploads in dependency
-# order. Stabilised in Cargo 1.90.
-MIN_CARGO = (1, 90)
-
-# How each npm package is built and checked is defined once, in
-# scripts/_publish_checks.py, for this script and publishable.yml alike. A new
-# npm channel with no definition there fails preflight rather than being
-# silently left out of the release.
-NAPI_PACKAGE = checks.NAPI_PACKAGE
-# The napi resolver and its platform packages are prebuilt by CI and
-# published from the Release assets by crates/napi/scripts/local-publish.sh.
-NAPI_PUBLISH_SCRIPT = "crates/napi/scripts/local-publish.sh"
+# Channels published by PUBLISH_WORKFLOW, which this script dispatches after
+# every other `expected_version = "tag"` channel — published by CI from the
+# tag push — has converged.
+REGISTRY_KINDS = frozenset({"crates-io", "npm"})
+PUBLISH_WORKFLOW = "publish-registries.yml"
 # Workflows that must have passed on the release commit before it is tagged.
 REQUIRED_WORKFLOWS = ("ci.yml", "publishable.yml")
 
@@ -184,59 +173,9 @@ def decide(
     )
 
 
-def interpret_crates_token_probe(status: int, body: str) -> tuple[bool, str]:
-    """Classify crates.io's answer to an authenticated read.
-
-    The probe is `GET /api/v1/trusted_publishing/github_configs?crate=chordsketch`,
-    which crates.io authenticates before it checks the token's scopes, so the
-    answer separates a dead token from a live one without publishing:
-
-      200                                   legacy (unscoped) token, owner
-      400 "not an owner"                    live token, wrong account
-      403 "does not have the required ..."  live token scoped to publishing
-      403 "authentication failed"           expired, revoked or mistyped
-    """
-    try:
-        detail = "; ".join(e.get("detail", "") for e in json.loads(body).get("errors", []))
-    except (ValueError, AttributeError):
-        detail = body.strip()[:200]
-    if status == 200:
-        return True, ""
-    if status == 403 and "does not have the required permissions" in detail:
-        return True, (
-            "the crates.io token is scoped, and crates.io does not reveal a token's "
-            "scopes: it must allow publish-update for every chordsketch crate and "
-            "publish-new for any crate that has never been published"
-        )
-    if status == 403 and detail == "authentication failed":
-        return False, (
-            "crates.io does not recognise the token (HTTP 403: authentication failed): it has "
-            "expired, been revoked or been mistyped; create one at https://crates.io/settings/tokens"
-        )
-    if status == 400 and "not an owner" in detail:
-        return False, "the crates.io token belongs to an account that does not own `chordsketch`"
-    return False, f"crates.io rejected the token (HTTP {status}: {detail or 'no detail'})"
-
-
 def dated_changelog_heading(changelog: str, version: str) -> bool:
     pattern = rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}$"
     return re.search(pattern, changelog, flags=re.MULTILINE) is not None
-
-
-def parse_cargo_version(output: str) -> tuple[int, int] | None:
-    match = re.match(r"cargo (\d+)\.(\d+)", output)
-    return (int(match.group(1)), int(match.group(2))) if match else None
-
-
-def npm_publish_order(pending: tuple[str, ...]) -> list[str]:
-    """Recipe packages in docs order, with the napi set after tree-sitter.
-
-    The napi set is one step: the local-publish script handles the platform
-    packages and the resolver together, platform packages first.
-    """
-    order = ["@chordsketch/wasm", "tree-sitter-chordpro", NAPI_PACKAGE, "@chordsketch/wasm-export"]
-    napi_pending = any(checks.is_napi(name) for name in pending)
-    return [name for name in order if name in pending or (name == NAPI_PACKAGE and napi_pending)]
 
 
 # ---------------------------------------------------------------- process / HTTP helpers
@@ -358,6 +297,36 @@ def failed_jobs(run_id: int) -> list[str]:
     ]
 
 
+def failure_reasons(run: dict) -> list[str]:
+    """One line per failed job, with the errors it annotated.
+
+    `publish-registries.yml` and `release-credentials.yml` report each
+    problem as a `::error::` annotation, so the reason reaches the
+    maintainer's terminal instead of only the run page.
+    """
+    jobs = gh_api(f"repos/{REPO}/actions/runs/{run['id']}/jobs?per_page=100")
+    reasons = []
+    for job in jobs["jobs"]:  # type: ignore[index]
+        if job["conclusion"] in ("success", "skipped"):
+            continue
+        annotations = gh_api(f"repos/{REPO}/check-runs/{job['id']}/annotations?per_page=50")
+        errors = annotation_errors(annotations)  # type: ignore[arg-type]
+        reasons.append(f"{job['name']}: " + ("; ".join(errors) if errors else f"{job['conclusion']} — {run['html_url']}"))
+    return reasons
+
+
+def annotation_errors(annotations: list[dict]) -> list[str]:
+    """The messages of the failure annotations a job wrote.
+
+    GitHub adds its own "Process completed with exit code 1" annotation to
+    every failed step; it repeats the failure without a reason, so it is
+    dropped when the job said anything else.
+    """
+    errors = [a["message"] for a in annotations if a.get("annotation_level") == "failure"]
+    meaningful = [e for e in errors if not re.fullmatch(r"Process completed with exit code \d+\.?", e)]
+    return meaningful or errors
+
+
 def tag_runs(tag: str) -> list[dict]:
     runs = gh_api(f"repos/{REPO}/actions/runs?event=push&branch={urllib.parse.quote(tag)}&per_page=50")
     return list(runs["workflow_runs"])  # type: ignore[index]
@@ -379,13 +348,6 @@ class Survey:
     ci_detail: dict[str, str] = field(default_factory=dict)
     crates_published: dict[str, bool] = field(default_factory=dict)
     npm_published: dict[str, bool] = field(default_factory=dict)
-
-    @property
-    def npm_tarballs_dir(self) -> Path:
-        """Where the preflight packs npm packages and the publish step reads them."""
-        directory = self.tree.parent / "npm-tarballs"
-        directory.mkdir(exist_ok=True)
-        return directory
 
 
 def read_remote_tags(version: str) -> dict[str, str | None]:
@@ -418,7 +380,7 @@ def survey(version: str, commit: str, tree: Path, remote_tags: dict[str, str | N
         commit=commit,
         tree=tree,
         remote_tags=remote_tags,
-        ci_channels=[c for c in tag_channels if c.kind not in LOCAL_KINDS],
+        ci_channels=[c for c in tag_channels if c.kind not in REGISTRY_KINDS],
         crates=[c.package for c in tag_channels if c.kind == "crates-io"],
         npm=[c.package for c in tag_channels if c.kind == "npm"],
     )
@@ -445,7 +407,6 @@ def refresh_ci_channels(state: Survey) -> None:
 @dataclass
 class Findings:
     problems: list[str] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
 
     def check(self, ok: bool, problem: str) -> bool:
         if not ok:
@@ -453,14 +414,10 @@ class Findings:
         return ok
 
 
-def has_dry_runs_to_skip(plan: Plan) -> bool:
-    """Whether the "dry runs were skipped" note is worth printing.
-
-    With no crate or npm package pending, there was never going to be a
-    dry run to skip; saying otherwise would be a false note next to a
-    failure that has nothing to do with crates.io or npm.
-    """
-    return bool(plan.pending_crates or plan.pending_npm)
+def registry_ref(state: Survey, plan: Plan) -> str:
+    """What `publish-registries.yml` checks out: the tag once it is pushed."""
+    tag = tags_for(state.version)[0]
+    return state.commit if tag in plan.tags_to_push else tag
 
 
 def preflight(state: Survey, plan: Plan, login: str) -> Findings:
@@ -494,42 +451,33 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
     push = run(["gh", "api", f"repos/{REPO}", "--jq", ".permissions.push"], check=False).stdout.strip()
     findings.check(push == "true", f"the gh login `{login}` cannot push to {REPO}")
 
-    credentials_run = None
+    # Both are dispatched before anything waits, so they run side by side.
+    runs: dict[str, int] = {}
     if fresh or plan.pending_ci:
-        # Dispatched now so the local checks below use the time it takes.
         section("CI publish credentials (release-credentials.yml)")
         try:
-            credentials_run = dispatch("release-credentials.yml", {}, login)
+            runs["CI credential check"] = dispatch("release-credentials.yml", {}, login)
         except ReleaseError as exc:
             findings.problems.append(f"could not run the CI credential check: {exc}")
+    if plan.pending_crates or plan.pending_npm:
+        section(f"crates.io and npm ({PUBLISH_WORKFLOW}, mode: check)")
+        try:
+            runs["crates.io and npm check"] = dispatch(
+                PUBLISH_WORKFLOW, {"ref": registry_ref(state, plan), "set": "workspace", "mode": "check"}, login
+            )
+        except ReleaseError as exc:
+            findings.problems.append(f"could not run the crates.io and npm check: {exc}")
 
-    if plan.pending_crates:
-        preflight_crates(plan, findings)
-    if plan.pending_npm:
-        preflight_npm(state, plan, findings)
     if not fresh and plan.pending_ci:
         preflight_stalled_ci(state, plan, findings)
     if not fresh:
         preflight_release_assets(state, plan, findings)
 
-    if credentials_run is not None:
-        section("Waiting for release-credentials.yml")
-        credentials = wait_for_run(credentials_run)
-        if credentials["conclusion"] != "success":
-            for job in failed_jobs(credentials_run):
-                findings.problems.append(f"CI credential check failed: {job} — {credentials['html_url']}")
-
-    # The dry runs build every pending package, which takes minutes. Every
-    # other check is cheap, so a run that is going to fail anyway reports
-    # that first instead of after the builds.
-    if findings.problems:
-        if has_dry_runs_to_skip(plan):
-            findings.notes.append("the crates.io and npm dry runs were skipped; they run once the preflight problems are fixed")
-    else:
-        if plan.pending_crates:
-            dry_run_crates(state, plan, findings)
-        if plan.pending_npm:
-            dry_run_npm(state, plan, findings)
+    for label, run_id in runs.items():
+        section(f"Waiting for the {label}")
+        result = wait_for_run(run_id)
+        if result["conclusion"] != "success":
+            findings.problems.extend(f"{label} failed: {reason}" for reason in failure_reasons(result))
 
     return findings
 
@@ -549,119 +497,17 @@ def preflight_stalled_ci(state: Survey, plan: Plan, findings: Findings) -> None:
         )
 
 
-def preflight_crates(plan: Plan, findings: Findings) -> None:
-    section(f"crates.io ({len(plan.pending_crates)} pending)")
-    if not findings.check(shutil.which("cargo") is not None, "cargo is not on PATH"):
-        return
-    cargo = parse_cargo_version(run(["cargo", "--version"]).stdout)
-    if not findings.check(
-        cargo is not None and cargo >= MIN_CARGO,
-        f"cargo {MIN_CARGO[0]}.{MIN_CARGO[1]}+ is required to publish several crates in one call",
-    ):
-        return
-
-    found = crates_token()
-    if findings.check(found is not None, "no crates.io token: set CARGO_REGISTRY_TOKEN or run `cargo login`"):
-        token, source = found
-        status, body = http_status(
-            "https://crates.io/api/v1/trusted_publishing/github_configs?crate=chordsketch",
-            {"Authorization": token},
-        )
-        ok, message = interpret_crates_token_probe(status, body)
-        if ok and message:
-            new = [c for c in plan.pending_crates if not crate_exists(c)]
-            findings.notes.append(message + (f" (never published: {', '.join(new)})" if new else ""))
-        elif not ok:
-            findings.problems.append(f"{message} — token read from {source}")
-
-
-def dry_run_crates(state: Survey, plan: Plan, findings: Findings) -> None:
-    section("crates.io publish checks (verifies every pending crate together)")
-    findings.problems.extend(
-        checks.crates_problems(state.tree, plan.pending_crates, Path(os.environ["CARGO_TARGET_DIR"]))
-    )
-
-
-def crates_token() -> tuple[str, str] | None:
-    """The token cargo would publish with, and where it came from.
-
-    The source goes into every rejection message: a stale
-    `CARGO_REGISTRY_TOKEN` exported by a shell profile shadows a fresh
-    `cargo login`, and the rejection alone does not say which one to replace.
-    """
-    if os.environ.get("CARGO_REGISTRY_TOKEN"):
-        return os.environ["CARGO_REGISTRY_TOKEN"], "the CARGO_REGISTRY_TOKEN environment variable"
-    cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
-    for name in ("credentials.toml", "credentials"):
-        path = cargo_home / name
-        if path.is_file():
-            token = tomllib.loads(path.read_text()).get("registry", {}).get("token")
-            if token:
-                return str(token), str(path)
-    return None
-
-
-def crate_exists(crate: str) -> bool:
-    status, _ = http_status(f"https://crates.io/api/v1/crates/{crate}")
-    return status == 200
-
-
-def flag_each(flag: str, values: tuple[str, ...] | list[str]) -> list[str]:
-    return [item for value in values for item in (flag, value)]
-
-
-def preflight_npm(state: Survey, plan: Plan, findings: Findings) -> None:
-    section(f"npm ({len(plan.pending_npm)} pending)")
-    unknown = [p for p in state.npm if p not in checks.NPM_PACKAGES]
-    findings.check(not unknown, f"no publish definition in scripts/_publish_checks.py for npm channel(s): {', '.join(unknown)}")
-    if not findings.check(shutil.which("npm") is not None, "npm is not on PATH"):
-        return
-
-    whoami = run(["npm", "whoami"], check=False)
-    user = whoami.stdout.strip()
-    if findings.check(whoami.returncode == 0 and bool(user), "npm is not logged in: run `npm login`"):
-        for package in plan.pending_npm:
-            owners = run(["npm", "owner", "ls", package], check=False)
-            if owners.returncode == 0:
-                names = {line.split()[0] for line in owners.stdout.splitlines() if line.strip()}
-                findings.check(user in names, f"npm user `{user}` is not an owner of {package}")
-            elif package.startswith("@chordsketch/"):
-                members = run(["npm", "org", "ls", "chordsketch", user, "--json"], check=False)
-                findings.check(
-                    members.returncode == 0 and user in json.loads(members.stdout or "{}"),
-                    f"{package} does not exist yet and `{user}` is not a member of the chordsketch npm org",
-                )
-        findings.notes.append(
-            "npm asks for a one-time password on each publish if the account uses 2FA"
-        )
-
-    tools = sorted({tool for p in plan.pending_npm if p in checks.NPM_PACKAGES for tool in checks.NPM_PACKAGES[p].tools})
-    for tool in tools:
-        findings.check(shutil.which(tool) is not None, f"{tool} is not on PATH (needed to build the pending npm packages)")
-
-
-def dry_run_npm(state: Survey, plan: Plan, findings: Findings) -> None:
-    section("npm publish checks")
-    released_together = checks.repo_npm_versions(state.tree)
-    for package in plan.pending_npm:
-        if checks.is_napi(package) or package not in checks.NPM_PACKAGES:
-            continue
-        section(package)
-        findings.problems.extend(
-            checks.npm_problems(checks.NPM_PACKAGES[package], state.tree, state.npm_tarballs_dir, released_together)
-        )
-
-
 def preflight_release_assets(state: Survey, plan: Plan, findings: Findings) -> None:
-    """With the tag already out, the napi tarballs must be on the Release."""
+    """With the tag already out, the napi tarballs must be on the Release.
+
+    What is inside them is checked by the `check` run, which downloads them.
+    """
     if not any(checks.is_napi(p) for p in plan.pending_npm):
         return
     tag = tags_for(state.version)[0]
     missing = missing_napi_assets(state, tag)
-    if missing is None:
-        return
-    if findings.check(not missing, f"the {tag} Release lacks napi tarballs: {', '.join(missing)}"):
-        findings.problems.extend(napi_release_problems(state, tag))
+    if missing is not None:
+        findings.check(not missing, f"the {tag} Release lacks napi tarballs: {', '.join(missing)}")
 
 
 def missing_napi_assets(state: Survey, tag: str) -> list[str] | None:
@@ -672,16 +518,6 @@ def missing_napi_assets(state: Survey, tag: str) -> list[str] | None:
     assets = {asset["name"] for asset in json.loads(view.stdout)["assets"]}
     wanted = [checks.npm_tarball_name(p, state.version) for p in state.npm if checks.is_napi(p)]
     return [name for name in wanted if name not in assets]
-
-
-def napi_release_problems(state: Survey, tag: str) -> list[str]:
-    """Run the pull-request checks against the napi tarballs on the Release."""
-    section(f"npm publish checks for the napi tarballs on {tag}")
-    directory = state.tree.parent / "napi-release-assets"
-    directory.mkdir(exist_ok=True)
-    patterns = flag_each("-p", [checks.npm_tarball_name(p, state.version) for p in state.npm if checks.is_napi(p)])
-    run(["gh", "release", "download", tag, "-R", REPO, "-D", str(directory), "--clobber", *patterns])
-    return checks.napi_problems(directory, state.version, checks.repo_npm_versions(state.tree))
 
 
 # ---------------------------------------------------------------- release steps
@@ -714,8 +550,12 @@ def wait_for_tag_runs(state: Survey) -> None:
         time.sleep(POLL_SECONDS)
 
 
-def gate_local_publish(state: Survey, plan: Plan) -> None:
-    """Refuse crates.io and npm unless every CI-published channel converged."""
+def gate_registry_publish(state: Survey, plan: Plan) -> None:
+    """Refuse crates.io and npm unless every CI-published channel converged.
+
+    Their versions are permanent, so they go last: a release abandoned
+    because a CI channel cannot be fixed leaves nothing on them.
+    """
     section("Checking that CI published every channel")
     tag, desktop_tag = tags_for(state.version)
     refresh_ci_channels(state)
@@ -731,10 +571,8 @@ def gate_local_publish(state: Survey, plan: Plan) -> None:
         problems.append(f"Desktop Release for {desktop_tag} did not succeed")
     if any(checks.is_napi(p) for p in plan.pending_npm):
         missing = missing_napi_assets(state, tag)
-        if missing:
-            problems.append(f"the {tag} Release lacks napi tarballs: {', '.join(missing)}")
-        elif missing is not None:
-            problems.extend(napi_release_problems(state, tag))
+        if missing is None or missing:
+            problems.append(f"the {tag} Release lacks napi tarballs: {', '.join(missing or ['all of them'])}")
 
     for r in tag_runs(tag) + tag_runs(desktop_tag):
         if r["conclusion"] not in ("success", "skipped"):
@@ -750,44 +588,15 @@ def gate_local_publish(state: Survey, plan: Plan) -> None:
     print("    every CI-published channel serves the version", flush=True)
 
 
-def ensure_local_logins(plan: Plan) -> None:
-    """The CI wait can outlast an npm login session; re-check before publishing."""
-    if plan.pending_npm and run(["npm", "whoami"], check=False).returncode != 0:
-        if not sys.stdin.isatty():
-            raise ReleaseError("npm is no longer logged in; run `npm login` and re-run the script")
-        print("    npm is no longer logged in; starting `npm login`", flush=True)
-        run(["npm", "login"], capture=False)
-        run(["npm", "whoami"])
-    if plan.pending_crates:
-        found = crates_token()
-        if found is None:
-            raise ReleaseError("the crates.io token disappeared; set CARGO_REGISTRY_TOKEN and re-run the script")
-        token, source = found
-        ok, message = interpret_crates_token_probe(*http_status(
-            "https://crates.io/api/v1/trusted_publishing/github_configs?crate=chordsketch",
-            {"Authorization": token},
-        ))
-        if not ok:
-            raise ReleaseError(f"{message} — token read from {source}")
-
-
-def publish_crates(state: Survey, plan: Plan) -> None:
-    section(f"Publishing {len(plan.pending_crates)} crates")
-    run(["cargo", "publish", "--locked", *flag_each("-p", plan.pending_crates)], cwd=state.tree, capture=False)
-
-
-def publish_npm(state: Survey, plan: Plan) -> None:
+def publish_registries(state: Survey, login: str) -> None:
+    section(f"Publishing to crates.io and npm ({PUBLISH_WORKFLOW}, mode: publish)")
     tag = tags_for(state.version)[0]
-    for package in npm_publish_order(plan.pending_npm):
-        section(f"Publishing {package}")
-        if package == NAPI_PACKAGE:
-            run(["bash", NAPI_PUBLISH_SCRIPT, tag], cwd=state.tree, capture=False)
-            continue
-        # The tarball the preflight checked, so what is uploaded is exactly
-        # what passed.
-        version = json.loads((state.tree / checks.NPM_PACKAGES[package].directory / "package.json").read_text())["version"]
-        tarball = state.npm_tarballs_dir / checks.npm_tarball_name(package, version)
-        run(["npm", "publish", "--access", "public", str(tarball)], cwd=state.tree, capture=False)
+    result = dispatch_and_wait(PUBLISH_WORKFLOW, {"ref": tag, "set": "workspace", "mode": "publish"}, login)
+    if result["conclusion"] != "success":
+        raise ReleaseError(
+            f"{PUBLISH_WORKFLOW} ended {result['conclusion']}: {result['html_url']}\n  - "
+            + "\n  - ".join(failure_reasons(result))
+        )
 
 
 def verify_release(state: Survey, login: str) -> None:
@@ -827,15 +636,16 @@ def print_plan(state: Survey, plan: Plan) -> None:
         print("    wait for the tag runs (the CI-published channels)")
     if plan.pending_ci:
         print(f"    CI channels not yet on {state.version}: {', '.join(plan.pending_ci)}")
-    print(f"    crates.io: {', '.join(plan.pending_crates) or 'nothing pending'}")
-    print(f"    npm: {', '.join(plan.pending_npm) or 'nothing pending'}")
+    print(f"    then {PUBLISH_WORKFLOW} publishes, once every CI channel serves {state.version}:")
+    print(f"      crates.io: {', '.join(plan.pending_crates) or 'nothing pending'}")
+    print(f"      npm: {', '.join(plan.pending_npm) or 'nothing pending'}")
     print("    dispatch release-verify.yml")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
     parser.add_argument("version", help="the version being released, without the leading v (e.g. 0.7.0)")
-    parser.add_argument("--check", action="store_true", help="run the preflight and stop; changes nothing")
+    parser.add_argument("--check", action="store_true", help="run the preflight and stop; publishes nothing")
     parser.add_argument("--yes", action="store_true", help="do not ask for confirmation after the preflight")
     args = parser.parse_args()
 
@@ -857,8 +667,6 @@ def main() -> int:
             print(f"\nerror: {refusal}", file=sys.stderr)
             return 1
 
-        # The cargo build cache of this checkout is reused by the worktree.
-        os.environ.setdefault("CARGO_TARGET_DIR", str(REPO_ROOT / "target"))
         with release_tree(commit) as tree:
             return release(args, login, commit, tree, remote_tags)
     except ReleaseError as exc:
@@ -877,8 +685,6 @@ def release(args: argparse.Namespace, login: str, commit: str, tree: Path, remot
     print_plan(state, plan)
 
     findings = preflight(state, plan, login)
-    for note in findings.notes:
-        print(f"\nnote: {note}", flush=True)
     if findings.problems:
         print("\nPreflight failed. Nothing was published. Fix these and re-run:", file=sys.stderr)
         for problem in findings.problems:
@@ -895,12 +701,9 @@ def release(args: argparse.Namespace, login: str, commit: str, tree: Path, remot
     if plan.tags_to_push:
         push_tags(state, plan.tags_to_push)
     wait_for_tag_runs(state)
-    gate_local_publish(state, plan)
-    ensure_local_logins(plan)
-    if plan.pending_crates:
-        publish_crates(state, plan)
-    if plan.pending_npm:
-        publish_npm(state, plan)
+    gate_registry_publish(state, plan)
+    if plan.pending_crates or plan.pending_npm:
+        publish_registries(state, login)
     verify_release(state, login)
 
     print(f"\nv{args.version} is released. winget and MacPorts are still manual (docs/releasing.md, Post-Release).")

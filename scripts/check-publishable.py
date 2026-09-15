@@ -8,8 +8,9 @@
 Run by `.github/workflows/publishable.yml` on every pull request, every
 push to `main` and nightly. The conditions, and the reason each exists, are
 in `docs/publishing-requirements.md`; the checks themselves live in
-`scripts/_publish_checks.py`, which `scripts/release.py` runs too, so a
-release is held to exactly what every pull request was held to.
+`scripts/_publish_checks.py`, which `scripts/publish-registries.py` runs
+too before crates.io and npm publish, so a release is held to exactly what
+every pull request was held to.
 
 Subcommands:
 

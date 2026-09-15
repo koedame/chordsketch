@@ -2,11 +2,9 @@ name: "@chordsketch/vue"
 
 # Typecheck, test, and build the @chordsketch/vue package on every PR
 # that touches it, plus pushes to main for post-merge verification.
-# Publish-on-tag is intentionally NOT handled here — per ADR-0008,
-# every npm publish for every ChordSketch-distributed package is a
-# maintainer-local manual operation. The maintainer runs
-# `cd packages/vue && npm run build && npm publish --access public`
-# on the release machine.
+# Publish-on-tag is intentionally NOT handled here — publishing is
+# done by dispatching `publish-registries.yml` from main with
+# `set: @chordsketch/vue` (ADR-0069).
 #
 # Unlike @chordsketch/react, this package does not type-check against
 # the in-tree wasm build: every wasm call site casts the dynamic
