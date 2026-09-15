@@ -142,7 +142,9 @@ hold for a PR:
    or a `FIXED` verdict (the automation applied the required code-side
    adaptation as commits on the Dependabot branch). The audit covers
    diff sanity, GitHub Advisory Database exposure, and release notes
-   across every version between old and new.
+   across every version between old and new — for every dependency the
+   PR updates, so a grouped PR is cleared only when each of its rows is
+   ([ADR-0075](../../docs/adr/0075-dependabot-groups-patch-and-minor-updates.md)).
 3. **Full check rollup green** on the final commit (clause 2 above,
    unchanged — required AND non-required; for a `FIXED` PR, the rollup
    *after* the adaptation commits).

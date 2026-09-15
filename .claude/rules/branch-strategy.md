@@ -38,7 +38,11 @@ single round implements every high-confidence eligible issue (capped at
   the `/dependabot-review` slash command (`.claude/commands/dependabot-review.md`),
   which audits each open Dependabot PR — reading the dependency's CHANGELOG,
   checking for advisories, running build/test/clippy, applying any required
-  code-side fixes — and squash-merges the safe ones. See [ADR-0016](../../docs/adr/0016-dependabot-review-skill.md)
+  code-side fixes — and squash-merges the safe ones. Patch and minor updates
+  arrive as one grouped PR per ecosystem (`dependabot/<ecosystem>/<group>-<hash>`),
+  audited dependency by dependency; majors and security updates stay one PR per
+  dependency ([ADR-0075](../../docs/adr/0075-dependabot-groups-patch-and-minor-updates.md)).
+  See [ADR-0016](../../docs/adr/0016-dependabot-review-skill.md)
   for the policy rationale and [Pull Request Workflow](pr-workflow.md) §"Bot-driven
   merge: conditional permission" for the four-clause merge gate the skill operates under.
 - A **scheduled, maintainer-operated automation** may additionally run the same
