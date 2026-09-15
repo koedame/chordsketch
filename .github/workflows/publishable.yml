@@ -543,7 +543,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Generate, run makepkg --printsrcinfo and namcap
+      - name: Generate both packages, build the source package, run namcap
         run: python3 scripts/check-publishable.py aur
 
   snap:

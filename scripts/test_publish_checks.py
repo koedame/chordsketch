@@ -674,6 +674,16 @@ class PackageRuleTest(unittest.TestCase):
         self.assertTrue(checks.AUR_PKGVER.match("1.2.0"))
         self.assertFalse(checks.AUR_PKGVER.match("1.2.0-rc1"))
 
+    def test_when_an_aur_package_without_build_is_not_named_bin_it_is_reported(self) -> None:
+        pkgbuild = "pkgname=chordsketch\npackage() {\n    install -Dm755 chordsketch x\n}\n"
+        self.assertEqual(checks.aur_naming_problems("chordsketch", pkgbuild), ["chordsketch/PKGBUILD repackages a prebuilt binary, which the AUR wants under a -bin name"])
+        self.assertEqual(checks.aur_naming_problems("chordsketch-bin", pkgbuild), [])
+
+    def test_when_an_aur_package_that_builds_from_source_is_named_bin_it_is_reported(self) -> None:
+        pkgbuild = "pkgname=chordsketch-bin\nbuild() {\n    cargo build\n}\npackage() {\n    true\n}\n"
+        self.assertEqual(checks.aur_naming_problems("chordsketch-bin", pkgbuild), ["chordsketch-bin/PKGBUILD builds from source, but its name ends in -bin"])
+        self.assertEqual(checks.aur_naming_problems("chordsketch", pkgbuild), [])
+
     def test_when_a_pkgbuild_uses_shell_variables_they_are_expanded_for_the_url_check(self) -> None:
         text = 'source=("https://example/v${pkgver}/x-${CARCH}.tar.gz")'
         self.assertEqual(checks.expand_shell_variables(text, {"pkgver": "1.2.0", "CARCH": "x86_64"}), 'source=("https://example/v1.2.0/x-x86_64.tar.gz")')
