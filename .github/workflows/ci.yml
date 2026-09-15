@@ -346,7 +346,7 @@ jobs:
     # that decides whether a Chocolatey moderation queue fails a release or
     # merely annotates it, and the bash that fills the package templates
     # from `checksums.txt` — plus the equivalent checksum-extracting steps
-    # `post-release.yml` carries for Homebrew, Scoop, AUR and Flathub.
+    # `post-release.yml` carries for Homebrew, Scoop and AUR.
     # Nothing on a PR would catch a regression in any of it until the next
     # release broke, which is the failure mode that left the 403 handling in
     # only one of the two Chocolatey callers to begin with (#1852).

@@ -95,6 +95,6 @@ the larger Linux audience that installs ChordSketch only as a CLI
 (via `cargo install`, snap, AUR, or Nix) without pulling in the full
 Tauri desktop bundle.
 
-The snap / flatpak / AUR / .deb packages can include these three files
+The snap / AUR / .deb packages can include these three files
 in their post-install hooks. Tracking issues for those package-side
 integrations live under #1603 (distribution channel coverage).

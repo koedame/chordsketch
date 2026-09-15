@@ -1208,7 +1208,7 @@ def container_image_problems(image: str, version: str, runner: Runner = run) -> 
 
 # ---------------------------------------------------------------- package managers
 #
-# Homebrew, Scoop, Chocolatey, AUR, Snap, Flathub, CocoaPods and the Swift
+# Homebrew, Scoop, Chocolatey, AUR, Snap, CocoaPods and the Swift
 # package are published by filling a template with the release's version and
 # checksums. The checks below run the release's own generating step — lifted
 # out of the workflow, so there is no second copy to drift — against a
@@ -1528,29 +1528,6 @@ def snap_problems(version: str, binary: Path, runner: Runner = run) -> list[str]
         shutil.rmtree(directory, ignore_errors=True)
 
 
-def flathub_problems(version: str, runner: Runner = run) -> list[str]:
-    outputs, problems, directory = generated("post-release.yml", "update-flatpak", "Generate manifest", ("me.koeda.chordsketch.yml",), version, runner)
-    try:
-        if not outputs:
-            return problems
-        text = outputs["me.koeda.chordsketch.yml"]
-        problems += download_url_problems("Flathub manifest", text, version) + checksum_problems("Flathub manifest", text, version)
-        # https://docs.flathub.org/docs/for-app-authors/linter
-        lint = runner(["docker", "run", "--rm", "-v", f"{directory}:/work", "-w", "/work", "ghcr.io/flathub/flatpak-builder-lint:latest", "manifest", "me.koeda.chordsketch.yml"], directory)
-        document = lint.stdout[lint.stdout.find("{") :] if "{" in lint.stdout else ""
-        try:
-            report = json.loads(document) if document else {}
-        except ValueError:
-            report = {}
-        if lint.returncode != 0 and not report:
-            return problems + [f"flatpak-builder-lint could not run:\n{tail(lint.stdout)}"]
-        problems += [f"flatpak-builder-lint error: {e}" for e in report.get("errors", [])]
-        problems += [f"flatpak-builder-lint warning: {w}" for w in report.get("warnings", [])]
-        return problems
-    finally:
-        shutil.rmtree(directory, ignore_errors=True)
-
-
 # https://guides.cocoapods.org/syntax/podspec.html
 REQUIRED_PODSPEC_ATTRIBUTES = ("name", "version", "summary", "license", "homepage", "authors", "source")
 
@@ -1683,7 +1660,7 @@ def chocolatey_problems(workspace: Path, version: str, runner: Runner = run) -> 
 
 
 # What each consumer takes out of a CLI archive: the tarball's top directory
-# is stripped by the VS Code, Snap and Flathub steps, entered by AUR's
+# is stripped by the VS Code and Snap steps, entered by AUR's
 # `package()` and named by docker.yml.
 CLI_ARCHIVE_FILES = ("chordsketch", "chordsketch-lsp", "LICENSE", "README.md")
 CLI_ARCHIVE_LARGE_FILES = ("*/chordsketch", "*/chordsketch-lsp")

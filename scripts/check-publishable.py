@@ -41,7 +41,7 @@ Subcommands:
   fabricate-release
               Write the `checksums.txt` / `SHA256SUMS` a release job has
               downloaded, for a checksum per asset, into `--dir`.
-  homebrew, scoop, aur, flathub, cocoapods, swift-package, winget
+  homebrew, scoop, aur, cocoapods, swift-package, winget
               Generate the channel's manifest with the release's own step and
               check it with the channel's tooling.
   snap        As above, packing the snap with `--binary` staged.
@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     archive = sub.add_parser("cli-archive", help="package and check a release archive")
     archive.add_argument("--binaries", type=Path, required=True, help="directory holding chordsketch and chordsketch-lsp")
     archive.add_argument("--target", default="x86_64-unknown-linux-gnu")
-    for channel in ("homebrew", "scoop", "aur", "flathub", "cocoapods", "swift-package", "winget", "desktop-updater", "jetbrains", "nixpkgs"):
+    for channel in ("homebrew", "scoop", "aur", "cocoapods", "swift-package", "winget", "desktop-updater", "jetbrains", "nixpkgs"):
         sub.add_parser(channel, help=f"check the {channel} manifest")
     snap = sub.add_parser("snap", help="generate and pack the snap")
     snap.add_argument("--binary", type=Path, required=True, help="a Linux x86_64 chordsketch to stage")
@@ -160,7 +160,6 @@ def main(argv: list[str] | None = None) -> int:
             "homebrew": checks.homebrew_problems,
             "scoop": checks.scoop_problems,
             "aur": checks.aur_problems,
-            "flathub": checks.flathub_problems,
             "cocoapods": checks.cocoapods_problems,
             "swift-package": checks.swift_package_problems,
             "winget": checks.winget_problems,
