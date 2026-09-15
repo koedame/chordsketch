@@ -328,7 +328,7 @@ at post-release verification rather than before the tag is cut.
    gh run list -R koedame/chordsketch --workflow release.yml --limit 5
    ```
    Check that post-release.yml updates Homebrew, Scoop, AUR, Snap,
-   Chocolatey, and Flathub, and that the Swift Package jobs push to
+   and Chocolatey, and that the Swift Package jobs push to
    CocoaPods and open the `Package.swift` PR. Docker pushes to both
    GHCR and Docker Hub. VS Code publishes **8 VSIXes per release**
    (1 universal + 7 platform-specific: `linux-x64`, `linux-arm64`,
@@ -1202,7 +1202,7 @@ its failure detail ([ADR-0049](adr/0049-chocolatey-rollup-reports-pending-as-its
 | `❌ FAIL` | the repository does not have it | run the dispatch above once the queue drains |
 
 This re-runs only the pack-and-push steps and does not re-trigger the
-other 5 post-release jobs (AUR, Flathub, Snap, Homebrew, Scoop), avoiding
+other 4 post-release jobs (AUR, Snap, Homebrew, Scoop), avoiding
 duplicate side effects.
 
 The workflow is safe to dispatch repeatedly. It checks the Chocolatey

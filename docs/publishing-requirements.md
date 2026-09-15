@@ -359,19 +359,7 @@ Submitted by hand as a pull request to `microsoft/winget-pkgs` from
 
 ## Flathub
 
-`post-release.yml` generates a manifest and would open a pull request on
-`flathub/me.koeda.chordsketch` if `FLATHUB_TOKEN` were set; the application
-has not been submitted to Flathub, and the channel is not in
-`ci/release-channels.toml`.
-
-| Condition | Source | Checked by |
-|---|---|---|
-| `flatpak-builder-lint manifest` reports no error or warning | [Flathub linter](https://docs.flathub.org/docs/for-app-authors/linter) | `flathub_problems` — **not in the required check**: on `main` it reports `finish-args-home-filesystem-access` and an outdated runtime |
-| The app builds from source and ships AppStream metainfo | [Flathub requirements](https://docs.flathub.org/docs/for-app-authors/requirements) | not met: the manifest installs the prebuilt release binary and there is no metainfo |
-
-Flathub does not accept console software ("Console softwares will not be
-accepted", [requirements](https://docs.flathub.org/docs/for-app-authors/requirements)),
-so the CLI this manifest packages cannot be submitted however the manifest is
-fixed. Whether to submit the desktop app instead or drop the dormant job is a
-maintainer decision; until then the channel is documented here and checked
-only on demand (`scripts/check-publishable.py flathub`).
+Not a channel. Flathub does not accept console software ("Console softwares
+will not be accepted", [requirements](https://docs.flathub.org/docs/for-app-authors/requirements)),
+so the CLI is not submitted there
+([ADR-0072](adr/0072-the-cli-is-not-published-to-flathub.md)).

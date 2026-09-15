@@ -4,9 +4,9 @@ name: Chocolatey Retry Push
 #
 # Use this when post-release.yml's `update-chocolatey` job fails (e.g.
 # 403 Forbidden because the previous version is still in Chocolatey
-# community moderation) while the other 7 jobs succeeded. Re-dispatching
+# community moderation) while the other 4 jobs succeeded. Re-dispatching
 # the whole post-release.yml would duplicate non-idempotent side effects
-# in AUR, Flathub, Snap, CocoaPods, Homebrew, Scoop, and Swift.
+# in AUR, Snap, Homebrew, and Scoop.
 #
 # See #1852 (original v0.2.2 failure) and #2030 (this workflow).
 #
