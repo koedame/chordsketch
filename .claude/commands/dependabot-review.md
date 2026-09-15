@@ -119,9 +119,14 @@ transitive.
 >    names do not share a common prefix with a listed dependency and
 >    that are not reachable from a listed dependency's entry in
 >    `Cargo.lock`, `uses:` lines naming an action that is not in the
->    list, or CI configuration other than `uses:` lines (including the
->    version comment on the same line). Report `BLOCKED` with a
->    description of the unexpected change.
+>    list, or CI configuration other than `uses:` lines. A permitted
+>    `uses:` line's trailing version-pin comment changing to name the
+>    new version (e.g. `# v4.4.0` -> `# v4.6.0`) is expected — every
+>    action pin in this repo is a SHA plus that comment
+>    (`.claude/rules/action-pin-provenance.md`), so Dependabot updates
+>    it together with the SHA on every bump; flag it only if it does
+>    NOT match `<NEW>`. Report `BLOCKED` with a description of the
+>    unexpected change.
 >
 > 3. **Advisory check.** For `<ECOSYSTEM>`:
 >    - **cargo**: install `cargo-audit` if not present (`cargo install
