@@ -38,18 +38,28 @@ gh pr list \
   --json number,title,headRefName,baseRefName,createdAt
 ```
 
-A Dependabot PR has one of two shapes (ADR-0075):
+A Dependabot PR has one of two shapes (ADR-0075, ADR-0077):
 
 - **Single-dependency PR** — every major update and every security
-  update. Title `fix(deps): bump <DEP> from <OLD> to <NEW>`, head ref
-  `dependabot/<ecosystem>/<DEP>-<NEW>`.
+  update. A cargo major or any security update has the title
+  `fix(deps): bump <DEP> from <OLD> to <NEW>` and the head ref
+  `dependabot/<ecosystem>/<DEP>-<NEW>`. A github-actions major comes
+  through the `actions-major` group, which opens one PR per action
+  covering every workflow and composite action that pins it: its title
+  is `fix(deps): bump <DEP> in /` with no versions, its head ref is
+  `dependabot/github_actions/github_actions-<hash>`, and its body
+  carries the versions in an ``Updates `<DEP>` from <OLD> to <NEW>`` line.
 - **Grouped PR** — the week's patch and minor updates for one
-  ecosystem. Title `… bump the <GROUP> group with <N> updates`, head
-  ref `dependabot/<ecosystem>/<GROUP>-<hash>`, where `<GROUP>` is
-  `cargo-minor-patch` or `actions-minor-patch` (the group names in
-  `.github/dependabot.yml`). Its body opens with a
-  `| Package | From | To |` table listing every dependency it updates,
-  followed by one `Updates <DEP> from <OLD> to <NEW>` section per row.
+  ecosystem. Title `… bump the <GROUP> group with <N> updates`, or
+  `… bump the <GROUP> group across <D> directories with <N> updates`
+  when the updates touch more than one directory, head ref `dependabot/<ecosystem>/<GROUP>-<hash>`,
+  where `<GROUP>` is `cargo-minor-patch` or `actions-minor-patch` (the
+  group names in `.github/dependabot.yml`). Its body carries one
+  ``Updates `<DEP>` from <OLD> to <NEW>`` section per dependency; a body
+  spanning several directories repeats that section for each directory
+  that pins the action and opens with one `Bumps the <GROUP> group …
+  in the <DIR> directory` line per directory. The body may also open
+  with a `| Package | From | To |` table listing every dependency.
 
 If `$ARGUMENTS` is set, narrow the list to the matching PR number and
 verify its author is `dependabot[bot]`. If the author is not Dependabot,
@@ -76,10 +86,12 @@ needs. Use the following template, substituting `<PR>`, `<ECOSYSTEM>`,
 `<HEAD_REF>`, and `<UPDATES>` from the PR metadata
 (`gh pr view <PR> --json title,body,headRefName,labels,files`).
 `<UPDATES>` is one `<DEP> <OLD> → <NEW>` line per dependency: the
-single dependency named in the title of a single-dependency PR, or
-every row of the `| Package | From | To |` table of a grouped PR. Copy
-the table rows as they appear; do not drop rows for crates that look
-transitive.
+single dependency of a single-dependency PR (from its title, or from
+its `Updates` line when the title carries no versions), or every
+dependency of a grouped PR — the rows of its `| Package | From | To |`
+table when it has one, otherwise its `Updates` lines with the
+per-directory repeats collapsed to one line each. Copy the rows as they
+appear; do not drop rows for crates that look transitive.
 
 > You are auditing Dependabot PR #`<PR>` in the `<ECOSYSTEM>`
 > ecosystem (head ref: `<HEAD_REF>`). It updates these dependencies:
