@@ -1,11 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Narrow capability set. `core:app:default` + `core:window:default` are the baseline from #2069. `dialog:allow-save` + `dialog:allow-message` land in #2074 (Export flow). `dialog:allow-open` + `dialog:allow-ask` land in #2080 (File → Open and the Quit-unsaved prompt). `updater:allow-check` + `updater:allow-download-and-install` + `process:allow-restart` land in #2076 (auto-update via Tauri updater + relaunch after install). The updater grants are minimised — we withhold `updater:allow-install`, which would accept a pre-downloaded file path from the WebView (widening XSS-to-RCE surface). `opener:allow-open-url` is scoped to the project homepage URL only (#2199 Help menu); a wider allowlist would let any compromised WebView script invoke `xdg-open` / `open` with arbitrary arguments. Note on custom Rust commands (`open_file`, `save_file`, `export_pdf`, `export_html`): Tauri v2 does NOT apply the capability system to commands registered via `invoke_handler!`, so withholding `fs:*` does not restrict those commands — the WebView can call them with any path it chooses. The actual trust boundary is the WebView content source (local Vite build only) plus the CSP; code signing closes the binary-layer integrity gap when #2075 lands. See ADR-0006 for the full threat-model rationale.",
+  "description": "Narrow capability set. `core:app:default` + `core:window:default` are the baseline from #2069. `core:menu:default` builds the native menu bar, `core:window:allow-set-title` writes the unsaved-changes marker into the window title, and `core:event:allow-listen` / `core:event:allow-unlisten` + `core:window:allow-destroy` back the Quit-unsaved prompt on close; the frontend calls all of them during startup, which fails with `Command plugin:menu|new not allowed by ACL` without them. `dialog:allow-save` + `dialog:allow-message` land in #2074 (Export flow). `dialog:allow-open` + `dialog:allow-ask` land in #2080 (File → Open and the Quit-unsaved prompt). `updater:allow-check` + `updater:allow-download-and-install` + `process:allow-restart` land in #2076 (auto-update via Tauri updater + relaunch after install). The updater grants are minimised — we withhold `updater:allow-install`, which would accept a pre-downloaded file path from the WebView (widening XSS-to-RCE surface). `opener:allow-open-url` is scoped to the project homepage URL only (#2199 Help menu); a wider allowlist would let any compromised WebView script invoke `xdg-open` / `open` with arbitrary arguments. Note on custom Rust commands (`open_file`, `save_file`, `export_pdf`, `export_html`): Tauri v2 does NOT apply the capability system to commands registered via `invoke_handler!`, so withholding `fs:*` does not restrict those commands — the WebView can call them with any path it chooses. The actual trust boundary is the WebView content source (local Vite build only) plus the CSP; code signing closes the binary-layer integrity gap when #2075 lands. See ADR-0006 for the full threat-model rationale.",
   "windows": ["main"],
   "permissions": [
     "core:app:default",
     "core:window:default",
+    "core:window:allow-set-title",
+    "core:window:allow-destroy",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:menu:default",
     "dialog:allow-save",
     "dialog:allow-open",
     "dialog:allow-message",
