@@ -7,8 +7,9 @@ name: Publishable
 # lists every condition per registry and the job that checks it.
 #
 # The checks are defined once, in `scripts/_publish_checks.py`, and
-# `scripts/release.py` runs the same definitions in its preflight, so a
-# release is held to exactly what every pull request was held to.
+# `publish-registries.yml` runs the same definitions before it publishes
+# crates.io and npm, so a release is held to exactly what every pull
+# request was held to.
 #
 # The `Publishable` job at the bottom is the required status check. It
 # has no `paths:` filter on purpose: a required check must report on every
@@ -61,7 +62,7 @@ jobs:
         run: npm --version
 
       - name: Unit tests
-        run: python3 -m unittest scripts/test_publish_checks.py scripts/test_release.py
+        run: python3 -m unittest scripts/test_publish_checks.py scripts/test_release.py scripts/test_publish_registries.py
 
   crates-io:
     name: crates.io

@@ -2,11 +2,9 @@ name: "@chordsketch/chordpro-lite"
 
 # Typecheck, test, and build the @chordsketch/chordpro-lite package on
 # every PR that touches it, plus pushes to main for post-merge
-# verification. Publish-on-tag is intentionally NOT handled here — per
-# ADR-0008, every npm publish for every ChordSketch-distributed package
-# is a maintainer-local manual operation. The maintainer runs
-# `cd packages/chordpro-lite && npm run build && npm publish --access public`
-# on the release machine.
+# verification. Publish-on-tag is intentionally NOT handled here —
+# publishing is done by dispatching `publish-registries.yml` from
+# main with `set: @chordsketch/chordpro-lite` (ADR-0069).
 #
 # Like @chordsketch/react-ui, this package carries no wasm dependency
 # (ADR-0060), so there is deliberately no Rust toolchain / wasm-pack /

@@ -123,7 +123,9 @@ it after the workflow's `ready-for-merge` (or equivalent) terminal:
   of a `pr-review`-equivalent phase.
 - `git push origin main` (or any direct push to the default branch).
 - `cargo publish` / `npm publish` / `gem push` / `mvn deploy` / any
-  registry-publication command. Releases are ADR-0008-/ADR-0009-gated.
+  registry-publication command. Releases run through `scripts/release.py`,
+  and crates.io / npm publish only from `publish-registries.yml`
+  (ADR-0068/ADR-0069).
 - `gh release create`, `gh release edit`, `gh release delete`.
 - `gh secret set`, `gh secret remove`, or any other write to repository
   secrets / Actions variables.

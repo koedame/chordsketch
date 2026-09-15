@@ -226,13 +226,14 @@ jobs:
           node-version: 22
 
       # Release-cut tolerance: a release-cut PR bumps WASM_VERSION here
-      # in lockstep with the workspace, but the matching `npm publish`
-      # is a maintainer-local manual step that happens AFTER squash-
-      # merge per ADR-0008. During the PR window between version-bump
-      # and manual publish, `npm install @chordsketch/wasm@<VERSION>`
-      # returns ETARGET (notarget: no matching version) and fails this
-      # job — a false-positive that historically blocked every release
-      # cut PR (see #2412/v0.4.0).
+      # in lockstep with the workspace, but the matching npm publish
+      # happens at release time (`publish-registries.yml`, ADR-0069),
+      # AFTER squash-merge and the tag. During the PR window between
+      # version-bump and that release-time publish,
+      # `npm install @chordsketch/wasm@<VERSION>` returns ETARGET
+      # (notarget: no matching version) and fails this job — a
+      # false-positive that historically blocked every release cut PR
+      # (see #2412/v0.4.0).
       #
       # This step probes the registry for the pinned version. If the
       # version is not yet published, subsequent install + smoke steps
@@ -251,7 +252,7 @@ jobs:
           # exit).
           published=$(npm view "@chordsketch/wasm@${WASM_VERSION}" version 2>/dev/null || true)
           if [ -z "$published" ]; then
-            echo "::notice::@chordsketch/wasm@${WASM_VERSION} not yet on npm — assuming release-cut window (per ADR-0008, npm publish is a maintainer-local manual step after this PR squash-merges). Skipping install + smoke; the next daily / main-push run will re-validate against the published artifact."
+            echo "::notice::@chordsketch/wasm@${WASM_VERSION} not yet on npm — assuming release-cut window (the npm publish happens at release time via publish-registries.yml, ADR-0069, after this PR squash-merges). Skipping install + smoke; the next daily / main-push run will re-validate against the published artifact."
             echo "should-skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "Found @chordsketch/wasm@${published} on npm; proceeding with install + smoke."
@@ -329,7 +330,7 @@ jobs:
           set -euo pipefail
           published=$(npm view "@chordsketch/wasm-export@${WASM_EXPORT_VERSION}" version 2>/dev/null || true)
           if [ -z "$published" ]; then
-            echo "::notice::@chordsketch/wasm-export@${WASM_EXPORT_VERSION} not yet on npm — assuming release-cut window (per ADR-0008, npm publish is a maintainer-local manual step after this PR squash-merges). Skipping install + smoke; the next daily / main-push run will re-validate against the published artifact."
+            echo "::notice::@chordsketch/wasm-export@${WASM_EXPORT_VERSION} not yet on npm — assuming release-cut window (the npm publish happens at release time via publish-registries.yml, ADR-0069, after this PR squash-merges). Skipping install + smoke; the next daily / main-push run will re-validate against the published artifact."
             echo "should-skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "Found @chordsketch/wasm-export@${published} on npm; proceeding with install + smoke."
