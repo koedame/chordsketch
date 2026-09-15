@@ -2,24 +2,35 @@ version: 2
 
 # Backlog note: Dependabot stops opening pull requests for an ecosystem once
 # five of its PRs are open (the default `open-pull-requests-limit`), and no
-# scheduled job for that ecosystem has appeared since its fifth PR was opened
-# (github_actions: 2026-07-12, cargo: 2026-07-19). Updates only resume when the
-# open PRs are merged or closed — an unattended backlog silently stops updates
-# rather than queueing them.
+# scheduled job for that ecosystem appeared while five were open
+# (github_actions: from 2026-07-12, cargo: from 2026-07-19). Updates only
+# resume when the open PRs are merged or closed — an unattended backlog
+# silently stops updates rather than queueing them. Grouping (below) keeps an
+# ecosystem at one grouped PR plus its majors, so the limit is reached only by
+# five unmerged majors.
 updates:
-  # Dependabot opens one PR per dependency for every update type
-  # (patch, minor, AND major). The `/dependabot-review` slash command
-  # processes the resulting backlog: it audits each PR for advisories
-  # and behavioural deltas, applies any required code changes, and
-  # squash-merges the safe ones. See `.claude/commands/dependabot-review.md`
-  # and ADR-0016 for the rationale, and #1838 for the prior major-block
-  # decision this configuration supersedes.
+  # Patch and minor updates are grouped into one PR per ecosystem per week;
+  # every major update still opens its own PR, one dependency per PR (ADR-0075).
+  # Cargo classifies a pre-1.0 minor bump (0.55 -> 0.57) as major, so those
+  # stay individual too. Security updates are not grouped (`applies-to`
+  # defaults to version updates) and still open immediately, one per
+  # advisory. The `/dependabot-review` slash command processes both shapes:
+  # it audits every dependency a PR updates for advisories and behavioural
+  # deltas, applies any required code changes, and squash-merges the safe
+  # ones. See `.claude/commands/dependabot-review.md`, ADR-0016, ADR-0024 and
+  # ADR-0075.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      cargo-minor-patch:
+        update-types: ["minor", "patch"]

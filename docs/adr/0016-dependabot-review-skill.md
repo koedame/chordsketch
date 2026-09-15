@@ -1,6 +1,6 @@
 # 0016. Dependabot review moves from a CI bot to a session skill; major bumps are no longer suppressed
 
-- **Status**: Accepted (unattended scheduled run added by ADR-0024 on 2026-05-25)
+- **Status**: Accepted (unattended scheduled run added by ADR-0024 on 2026-05-25; patch and minor updates grouped per ecosystem by ADR-0075 on 2026-09-15, majors stay one PR per dependency)
 - **Date**: 2026-05-03
 
 > **Update (2026-05-25):** [ADR-0024](0024-scheduled-dependabot-merge.md) adds a

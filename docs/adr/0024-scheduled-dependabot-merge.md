@@ -1,6 +1,6 @@
 # 0024. Scheduled unattended Dependabot review-and-merge
 
-- **Status**: Accepted
+- **Status**: Accepted (decision 2's release-note read and diff-sanity gate apply per dependency of a grouped PR since ADR-0075 on 2026-09-15)
 - **Date**: 2026-05-25
 
 ## Context
