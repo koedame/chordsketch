@@ -28,7 +28,7 @@ runs:
       # manifest now points at `wasm-bindgen/wasm-pack`, the
       # canonical home for the release assets, so the
       # macOS / Linux / Windows installers resolve again.
-      uses: taiki-e/install-action@c070f87102a1c75b3183910f391c1cb887fe13c8 # v2
+      uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2
       with:
         # The fallback is the canonical repo-wide version. Keep it
         # in sync with the release cadence of the upstream
