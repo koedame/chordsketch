@@ -313,8 +313,11 @@ jobs:
           snapcraft upload "$SNAP_FILE" --release=stable
 
   update-aur:
-    name: Update AUR package
+    name: Update AUR packages
     runs-on: ubuntu-latest
+    # Two package bases, per the AUR submission guidelines: `chordsketch`
+    # builds the tagged source, `chordsketch-bin` repackages the release's
+    # prebuilt Linux archive. ADR-0071.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -333,12 +336,18 @@ jobs:
         with:
           tag: ${{ steps.version.outputs.tag }}
 
-      - name: Download checksums
+      - name: Download checksums and the source archive
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           gh release download "$TAG" -p checksums.txt
+          # The source package downloads GitHub's archive of the tag, which
+          # is not a release asset and has no line in checksums.txt; its
+          # checksum is taken from the same bytes makepkg will fetch.
+          curl -fsSL --retry 3 -o "chordsketch-${VERSION}.tar.gz" \
+            "https://github.com/koedame/chordsketch/archive/refs/tags/${TAG}.tar.gz"
 
       - name: Generate PKGBUILD and .SRCINFO
         env:
@@ -355,34 +364,35 @@ jobs:
             exit 1
           fi
 
-          # Generate PKGBUILD from template
-          sed \
-            -e "s/{{VERSION}}/${VERSION}/g" \
-            -e "s/{{SHA256_X86_64_UNKNOWN_LINUX_GNU}}/${SHA_LINUX}/g" \
-            packaging/aur/PKGBUILD.template > PKGBUILD
+          SHA_SOURCE=$(sha256sum "chordsketch-${VERSION}.tar.gz" | awk '{ print $1 }')
 
-          # Generate .SRCINFO deterministically (the format is a flat
-          # key-value representation of PKGBUILD fields).
-          cat > .SRCINFO <<SRCINFO
-          pkgbase = chordsketch
-          	pkgdesc = ChordPro file format parser and renderer
-          	pkgver = ${VERSION}
-          	pkgrel = 1
-          	url = https://github.com/koedame/chordsketch
-          	arch = x86_64
-          	license = MIT
-          	provides = chordsketch
-          	conflicts = chordsketch-git
-          	source = https://github.com/koedame/chordsketch/releases/download/v${VERSION}/chordsketch-v${VERSION}-x86_64-unknown-linux-gnu.tar.gz
-          	sha256sums = ${SHA_LINUX}
+          for pkg in chordsketch chordsketch-bin; do
+            mkdir -p "aur/${pkg}"
+            sed \
+              -e "s/{{VERSION}}/${VERSION}/g" \
+              -e "s/{{SHA256_X86_64_UNKNOWN_LINUX_GNU}}/${SHA_LINUX}/g" \
+              -e "s/{{SHA256_SOURCE}}/${SHA_SOURCE}/g" \
+              "packaging/aur/${pkg}/PKGBUILD.template" > "aur/${pkg}/PKGBUILD"
+          done
 
-          pkgname = chordsketch
-          SRCINFO
+          # The AUR reads .SRCINFO, and `makepkg --printsrcinfo` is the
+          # writer the submission guidelines name. makepkg refuses to run
+          # as root, hence the unprivileged user.
+          docker run --rm -v "$PWD/aur:/aur" archlinux:base-devel bash -euo pipefail -c '
+            useradd -m builder
+            for pkg in chordsketch chordsketch-bin; do
+              cp -r "/aur/${pkg}" /home/builder/
+              chown -R builder "/home/builder/${pkg}"
+              su builder -c "cd /home/builder/${pkg} && makepkg --printsrcinfo" > "/aur/${pkg}/.SRCINFO"
+            done
+          '
 
-          echo "=== PKGBUILD ==="
-          cat PKGBUILD
-          echo "=== .SRCINFO ==="
-          cat .SRCINFO
+          for pkg in chordsketch chordsketch-bin; do
+            echo "=== ${pkg}/PKGBUILD ==="
+            cat "aur/${pkg}/PKGBUILD"
+            echo "=== ${pkg}/.SRCINFO ==="
+            cat "aur/${pkg}/.SRCINFO"
+          done
 
       - name: Push to AUR
         env:
@@ -407,21 +417,26 @@ jobs:
             User aur
           SSH_CONFIG
 
-          # Clone, update, and push
-          git clone ssh://aur@aur.archlinux.org/chordsketch.git aur-repo
-          cd aur-repo
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          cp ../PKGBUILD .
-          cp ../.SRCINFO .
-          git add PKGBUILD .SRCINFO
-          # If nothing changed (re-run on same release), skip the push.
-          if git diff --cached --quiet; then
-            echo "AUR package already up-to-date for ${VERSION}; nothing to do."
-            exit 0
-          fi
-          git commit -m "Update to ${VERSION}"
-          git push
+          # Cloning a package base that does not exist yet yields an empty
+          # repository, and the first push creates the package; the AUR
+          # only accepts `master`.
+          for pkg in chordsketch chordsketch-bin; do
+            git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "aur-repo-${pkg}"
+            (
+              cd "aur-repo-${pkg}"
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              cp "../aur/${pkg}/PKGBUILD" "../aur/${pkg}/.SRCINFO" .
+              git add PKGBUILD .SRCINFO
+              # If nothing changed (re-run on same release), skip the push.
+              if git diff --cached --quiet; then
+                echo "AUR package ${pkg} already up-to-date for ${VERSION}; nothing to do."
+                exit 0
+              fi
+              git commit -m "Update to ${VERSION}"
+              git push origin HEAD:master
+            )
+          done
 
   update-flatpak:
     name: Update Flathub manifest
