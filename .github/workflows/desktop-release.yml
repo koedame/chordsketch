@@ -510,13 +510,15 @@ jobs:
         if: steps.version.outputs.prerelease == 'false'
         env:
           GH_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           repo=flathub/io.github.koedame.chordsketch
           # Only a 404 means "not on Flathub yet"; any other failure to ask
-          # must not skip a release's update silently.
-          status=$(curl -sS -o /dev/null -w '%{http_code}' "https://api.github.com/repos/${repo}")
+          # must not skip a release's update silently. Authenticated, so the
+          # anonymous per-IP rate limit shared by hosted runners cannot 403 it.
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${GITHUB_TOKEN}" "https://api.github.com/repos/${repo}")
           if [ "$status" = 404 ]; then
             echo "::notice::${repo} does not exist yet: the app has not been accepted on Flathub. Nothing to update."
             exit 0
