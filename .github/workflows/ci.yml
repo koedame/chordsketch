@@ -31,7 +31,7 @@ env:
 jobs:
   fmt:
     name: Format
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -46,7 +46,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -79,7 +79,7 @@ jobs:
 
   doc:
     name: Docs
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -122,7 +122,7 @@ jobs:
     # gives near-instant feedback on PRs that forget to bump a manifest.
     # No rust-cache entry is needed (per .claude/rules/ci-parallelization.md
     # §2: the job does not compile Rust).
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -156,7 +156,7 @@ jobs:
     # `.claude/rules/ci-parallelization.md` §2 the job does not compile
     # Rust). See ADR-0062 for why this is a text check rather than a
     # `docker build` job.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -173,7 +173,7 @@ jobs:
     # `.claude/rules/ci-parallelization.md` §3 — no paths: filter, runs on
     # every PR. Python-only, ~1 second wall clock; no rust-cache needed
     # (does not compile Rust).
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -195,7 +195,7 @@ jobs:
     # project-wide guarantee, so it runs on every PR the way the other
     # guard jobs in this workflow do. Python-only, sub-second wall clock;
     # no rust-cache needed (the job does not compile Rust).
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -216,7 +216,7 @@ jobs:
     # step fragile. Guarantee-style check per
     # `.claude/rules/ci-parallelization.md` §3 — no paths: filter, runs on
     # every PR. Python-only, sub-second wall clock; no rust-cache needed.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -240,7 +240,7 @@ jobs:
     # §3 — no paths: filter, runs on every PR (the drift arrives through
     # `Cargo.lock` in dependency-update PRs). Python-only, sub-second
     # wall clock; no rust-cache needed (§2).
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -272,7 +272,7 @@ jobs:
     # Guarantee-style check per `.claude/rules/ci-parallelization.md`
     # §3 — no paths: filter, runs on every PR. Python-only, sub-second
     # wall clock; no rust-cache needed (§2).
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -296,7 +296,7 @@ jobs:
     # lockfile that matters is the one inside the tarball.
     # Same guarantee-style trigger as `fixture-counts`: runs on every
     # PR, no path filter, Python-only, < 1 s wall clock.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -329,7 +329,7 @@ jobs:
     # guarantee-style trigger as `fixture-counts` and
     # `macports-portfile-sync`: every PR, no path filter, Python-only,
     # < 1 s wall clock.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -359,7 +359,7 @@ jobs:
     # `.claude/rules/ci-parallelization.md` §3 — no paths: filter, runs on
     # every PR. Python + pwsh only, no Rust compiled, so no rust-cache entry
     # is needed (§2).
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -379,11 +379,17 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable, "1.88.0"]
+        include:
+          # The Linux cell keeps `ubuntu-latest` in its name (required checks
+          # are matched by name) and runs on the Linux runner pool when
+          # LINUX_RUNNER is set. See ADR-0076.
+          - os: ubuntu-latest
+            runner: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

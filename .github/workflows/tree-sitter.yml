@@ -30,7 +30,7 @@ permissions:
 jobs:
   test:
     name: Tree-sitter grammar tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: packages/tree-sitter-chordpro

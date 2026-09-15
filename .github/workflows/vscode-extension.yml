@@ -145,7 +145,7 @@ jobs:
     # land under server/linux-*; the alpine-* VSIX channel is what routes
     # it to musl users.
     if: inputs.tag != ''
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     outputs:
       matrix: ${{ steps.targets.outputs.matrix }}
     steps:
@@ -155,7 +155,7 @@ jobs:
 
   build-platform:
     name: Package ${{ matrix.vs_target }} VSIX
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     # Release-only matrix that downloads the per-platform chordsketch-lsp
     # binary from the GitHub Release assets (produced by release.yml), places
     # it at server/<platform>-<arch>/chordsketch-lsp[.exe], and packages a
