@@ -267,3 +267,41 @@ gh run list --workflow <file>.yml -R koedame/chordsketch --limit 100 --json crea
 
 If the workflow runs less than weekly, most caching optimizations will be
 ineffective — the cache expires before the next run uses it.
+
+## 7. Linux jobs run on the pool named by `LINUX_RUNNER`
+
+A job that needs nothing beyond a Linux userland MUST select its runner
+through the repository variable, never by writing a label into the file
+([ADR-0076](../../docs/adr/0076-linux-jobs-run-on-a-runner-pool-named-by-a-repository-variable.md)):
+
+```yaml
+runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+```
+
+A matrix job keeps `ubuntu-latest` as its `os` cell (required checks are
+matched by name) and picks the runner through an `include` key:
+
+```yaml
+runs-on: ${{ matrix.runner || matrix.os }}
+strategy:
+  matrix:
+    os: [ubuntu-latest, macos-latest, windows-latest]
+    include:
+      - os: ubuntu-latest
+        runner: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+```
+
+The pool is ephemeral and unprivileged: no `sudo`, no container engine,
+nothing mounted from its host. A job stays on plain `ubuntu-latest` when
+it needs `sudo` / `apt-get`, a container engine (`docker`, `cross`,
+`maturin-action`'s manylinux build, the AUR and Flathub checks),
+`snapcraft`, `flatpak`, Homebrew, the Swift toolchain, a display
+(`xvfb-run`, Playwright `--with-deps`), or when it runs with
+`pull_request_target`. So do release, publish and deploy workflows, the
+Claude workflows and the `workflow_run`-driven maintenance workflows.
+When the reason is not visible in the job's own steps (it is inside a
+script the job calls), a one-line comment above `runs-on` names it.
+
+When a job on the pool starts failing for a tool the image lacks, move
+that job back to `ubuntu-latest` with such a comment; do not add the tool
+to the workflow with `sudo`.

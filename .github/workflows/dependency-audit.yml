@@ -48,7 +48,7 @@ permissions:
 jobs:
   audit:
     name: RustSec advisories
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
       issues: write

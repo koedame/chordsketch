@@ -37,7 +37,7 @@ env:
 jobs:
   coverage:
     name: Measure and upload coverage
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     # needs: [] — intentional; this workflow must never gate other jobs.
     permissions:
       contents: read

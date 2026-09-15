@@ -202,7 +202,7 @@ jobs:
 
   npm-wasm:
     name: npm (@chordsketch/wasm)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     # Pin to the exact released version so the smoke test verifies
     # the *specific* artifact it was written against, rather than
     # silently following whatever the latest published version
@@ -311,7 +311,7 @@ jobs:
 
   npm-wasm-export:
     name: npm (@chordsketch/wasm-export)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     # Heavy-bundle sister package added in #2466 — carries
     # `render_pdf` (and PNG export) which were split out of
     # `@chordsketch/wasm` to keep the lean bundle ~175 KB
@@ -405,7 +405,7 @@ jobs:
 
   npm-react:
     name: npm (@chordsketch/react)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -458,7 +458,7 @@ jobs:
 
   npm-react-ui:
     name: npm (@chordsketch/react-ui)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -513,7 +513,7 @@ jobs:
 
   npm-vue:
     name: npm (@chordsketch/vue)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -562,7 +562,7 @@ jobs:
 
   npm-svelte:
     name: npm (@chordsketch/svelte)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -622,7 +622,7 @@ jobs:
 
   cargo-install:
     name: cargo install chordsketch
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -650,7 +650,7 @@ jobs:
 
   source-build:
     name: From source (git clone + cargo install)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -968,7 +968,7 @@ jobs:
 
   library-smoke:
     name: Library Usage
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       # Checkout is needed even on non-PR runs because the PR branch
       # variant uses workspace path-deps. Cheap on shallow clone.
@@ -1124,7 +1124,7 @@ jobs:
 
   usage-smoke:
     name: README Usage examples (source build)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -1175,7 +1175,7 @@ jobs:
       - library-smoke
       - usage-smoke
     if: failure() && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - name: Open or update tracking issue
         env:
