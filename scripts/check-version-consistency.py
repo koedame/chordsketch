@@ -54,7 +54,13 @@ Sources checked:
      DLL ships inside the desktop installer, so it moves with it.)
  19. `packages/{react-ui,react,vue,svelte,chordpro-lite}/package.json`
      `version` — the npm packages that used to version on their own
-     cadence and now publish with every workspace release (ADR-0072)
+     cadence and now publish with every workspace release (ADR-0073)
+
+Beyond versions, the lockfile of every consumer in (10) that installs
+`@chordsketch/wasm` must install it from the in-tree `packages/npm` rather
+than from npm (ADR-0073). The release commit raises those caret pins to a
+version npm does not serve until the release publishes it; only a lockfile
+that links the in-tree package still installs at that commit.
 
 Each source is a (file, field, current_value) triple. The allowlist file has
 the same (file, field, current_value) shape plus a mandatory `tracking_issue`
@@ -72,6 +78,8 @@ stdlib only — no external deps.
 from __future__ import annotations
 
 import argparse
+import json
+import posixpath
 import re
 import sys
 import tomllib
@@ -457,6 +465,49 @@ def load_consumer_pin_constraints(repo_root: Path) -> list[Source]:
     return sources
 
 
+# The in-tree directory each consumer's lockfile installs a pinned sister
+# package from (ADR-0073). `@chordsketch/wasm-export` is only an optional peer
+# of its consumers, so no lockfile installs it.
+_IN_TREE_PACKAGES: dict[str, str] = {"@chordsketch/wasm": "packages/npm"}
+
+
+def lockfile_link_problems(repo_root: Path) -> list[str]:
+    """Consumer lockfiles that install an in-tree sister package from npm.
+
+    A lockfile links a directory as `node_modules/<name>` with
+    `{"resolved": "<relative path>", "link": true}`. npm keeps that link
+    through `npm ci` and `npm install` for as long as the directory's version
+    satisfies the pin, which the version check above guarantees.
+    """
+    problems: list[str] = []
+    for rel, _block, dep in _CONSUMER_PINS:
+        directory = _IN_TREE_PACKAGES.get(dep)
+        if directory is None:
+            continue
+        consumer = posixpath.dirname(rel)
+        lockfile = f"{consumer}/package-lock.json"
+        path = repo_root / lockfile
+        if not path.is_file():
+            problems.append(f"{lockfile}: file not found")
+            continue
+        try:
+            packages = json.loads(path.read_text(encoding="utf-8")).get("packages", {})
+        except json.JSONDecodeError as exc:
+            problems.append(f"{lockfile}: invalid JSON: {exc}")
+            continue
+        relative = posixpath.relpath(directory, consumer)
+        entry = packages.get(f"node_modules/{dep}")
+        if entry == {"resolved": relative, "link": True}:
+            continue
+        found = entry.get("resolved", "an entry without `resolved`") if isinstance(entry, dict) else "nowhere"
+        problems.append(
+            f"{lockfile}: installs {dep} from {found}, not from the in-tree {directory}.\n"
+            f"      In {consumer}, set the {dep} pin in package.json to `file:{relative}`, run\n"
+            f"      `npm install --package-lock-only --ignore-scripts`, set the pin back, and run it again."
+        )
+    return problems
+
+
 def load_napi_platform_package_versions(repo_root: Path) -> list[Source]:
     """Collect versions from every `crates/napi/npm/*/package.json`.
 
@@ -597,7 +648,7 @@ def load_claude_code_plugin_versions(repo_root: Path) -> list[Source]:
 
 # The npm packages built on top of the engine (the framework bindings, the
 # design-system primitives and the text helpers). They publish with every
-# workspace release, at its version (ADR-0072).
+# workspace release, at its version (ADR-0073).
 FRAMEWORK_PACKAGE_DIRS = ("react-ui", "react", "vue", "svelte", "chordpro-lite")
 
 
@@ -845,6 +896,7 @@ def run(
     allowlist = load_allowlist(allowlist_path)
 
     drifts, stale_entries = check(sources, allowlist, canonical)
+    link_problems = lockfile_link_problems(repo_root)
 
     # Report.
     print(f"canonical version (from crates/*/Cargo.toml): {canonical}")
@@ -867,7 +919,13 @@ def run(
             print(f"      no matching source found — the drift has been resolved.")
             print(f"      remove this entry AND close tracking issue {entry.tracking_issue}.")
 
-    if drifts or stale_entries:
+    if link_problems:
+        print()
+        print(f"ERROR: {len(link_problems)} lockfile(s) do not install the in-tree package:")
+        for problem in link_problems:
+            print(f"  - {problem}")
+
+    if drifts or stale_entries or link_problems:
         return 1
 
     print()

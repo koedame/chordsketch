@@ -255,6 +255,14 @@ def _build_repo(
         encoding="utf-8",
     )
 
+    # The lockfile of every consumer that installs @chordsketch/wasm links the
+    # in-tree packages/npm (ADR-0073).
+    for name in ("vscode-extension", "react", "vue", "svelte", "ui-irealb-editor"):
+        (root / "packages" / name / "package-lock.json").write_text(
+            json.dumps({"packages": {"node_modules/@chordsketch/wasm": {"resolved": "../npm", "link": True}}}),
+            encoding="utf-8",
+        )
+
     # .github/workflows/readme-smoke.yml
     workflows_dir = root / ".github" / "workflows"
     workflows_dir.mkdir(parents=True, exist_ok=True)
@@ -592,8 +600,46 @@ class CheckRunTests(unittest.TestCase):
                     rc = check_version_consistency.run(root, root / "nonexistent.toml")
                     self.assertEqual(rc, 1)
 
+    def test_when_a_consumer_lockfile_installs_wasm_from_npm_the_check_fails(self) -> None:
+        # The release commit raises the pins to a version npm does not serve
+        # yet (ADR-0073); a lockfile that resolves it from npm cannot install
+        # at that commit.
+        for name in ("vscode-extension", "react", "vue", "svelte", "ui-irealb-editor"):
+            with self.subTest(package=name), TemporaryDirectory() as td:
+                root = Path(td)
+                _build_repo(root)
+                lockfile = root / "packages" / name / "package-lock.json"
+                lockfile.write_text(
+                    json.dumps(
+                        {
+                            "packages": {
+                                "node_modules/@chordsketch/wasm": {
+                                    "version": "0.2.0",
+                                    "resolved": "https://registry.npmjs.org/@chordsketch/wasm/-/wasm-0.2.0.tgz",
+                                }
+                            }
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                problems = check_version_consistency.lockfile_link_problems(root)
+                self.assertEqual(len(problems), 1)
+                self.assertIn(f"packages/{name}/package-lock.json", problems[0])
+                self.assertIn("registry.npmjs.org", problems[0])
+                self.assertEqual(check_version_consistency.run(root, root / "nonexistent.toml"), 1)
+
+    def test_when_a_consumer_lockfile_is_missing_the_check_fails(self) -> None:
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            _build_repo(root)
+            (root / "packages" / "vue" / "package-lock.json").unlink()
+            self.assertEqual(
+                check_version_consistency.lockfile_link_problems(root),
+                ["packages/vue/package-lock.json: file not found"],
+            )
+
     def test_framework_package_version_drift_detected(self) -> None:
-        # These packages publish with the workspace release (ADR-0072), so
+        # These packages publish with the workspace release (ADR-0073), so
         # one left at its previous version would be skipped by the publish
         # as already served, or published at a version the tag never named.
         for name in check_version_consistency.FRAMEWORK_PACKAGE_DIRS:

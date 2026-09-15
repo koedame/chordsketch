@@ -49,6 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   binary moves to a new `chordsketch-bin` package, as the AUR submission
   guidelines ask
   ([ADR-0071](docs/adr/0071-aur-ships-a-source-package-and-a-bin-package.md)).
+- **`@chordsketch/react`, `@chordsketch/react-ui`, `@chordsketch/vue`,
+  `@chordsketch/svelte` and `@chordsketch/chordpro-lite` now carry the
+  workspace version and are published with every release**, depending on
+  the `@chordsketch/wasm` of that same release. They had versioned on their
+  own: npm served `@chordsketch/react` 0.4.0, which still depended on
+  `@chordsketch/wasm` 0.5, and the other four at 0.1.0. They jump to this
+  release's version
+  ([ADR-0073](docs/adr/0073-packages-built-on-the-engine-release-with-it.md)).
 
 ## [0.6.0] - 2026-09-14
 

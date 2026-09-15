@@ -256,6 +256,20 @@ class NpmDependencyTest(unittest.TestCase):
         released = {"@chordsketch/node-darwin-arm64": "0.7.0"}
         self.assertEqual(checks.npm_dependency_problems(manifest, released, self.never_published), [])
 
+    def test_when_a_dependency_is_the_caret_range_of_a_package_released_together_it_passes_without_asking_the_registry(self) -> None:
+        manifest = {
+            "name": "@chordsketch/react",
+            "dependencies": {"@chordsketch/wasm": "^0.7.0"},
+            "peerDependencies": {"@chordsketch/wasm-export": "^0.7.0"},
+        }
+        released = {"@chordsketch/wasm": "0.7.0", "@chordsketch/wasm-export": "0.7.0"}
+        self.assertEqual(checks.npm_dependency_problems(manifest, released, self.never_published), [])
+
+    def test_when_a_caret_range_names_another_version_than_the_one_released_together_the_registry_is_asked(self) -> None:
+        manifest = {"name": "@chordsketch/vue", "dependencies": {"@chordsketch/wasm": "^0.6.0"}}
+        problems = checks.npm_dependency_problems(manifest, {"@chordsketch/wasm": "0.7.0"}, self.never_published)
+        self.assertEqual(problems, ["@chordsketch/vue dependencies `@chordsketch/wasm@^0.6.0` matches no version published on npm"])
+
     def test_when_no_published_version_satisfies_a_range_it_is_reported(self) -> None:
         manifest = {"name": "@chordsketch/react", "peerDependencies": {"@chordsketch/wasm-export": "^9.0.0"}}
         problems = checks.npm_dependency_problems(manifest, {"@chordsketch/wasm-export": "0.6.0"}, self.never_published)

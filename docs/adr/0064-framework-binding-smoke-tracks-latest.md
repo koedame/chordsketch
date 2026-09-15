@@ -1,6 +1,6 @@
 # 0064. The framework-binding smoke jobs track the `latest` dist-tag
 
-- **Status**: Accepted
+- **Status**: Accepted (the packages version with the workspace since ADR-0073 on 2026-09-15; the `latest` smoke jobs stand)
 - **Date**: 2026-09-12
 
 ## Context

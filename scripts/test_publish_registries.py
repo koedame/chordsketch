@@ -11,7 +11,7 @@ first to notice:
      package that has never been published, since trusted publishing cannot
      create one.
   2. Every package with a publish definition is published with the release,
-     so none can be left without a way to reach its registry (ADR-0072).
+     so none can be left without a way to reach its registry (ADR-0073).
   3. The napi platform packages are published before their resolver.
   4. A failed OIDC token exchange names the package and what its trusted
      publisher must say.

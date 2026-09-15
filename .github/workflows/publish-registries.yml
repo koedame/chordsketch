@@ -24,7 +24,7 @@ name: Publish to crates.io and npm
 #
 # What is published: every crate and npm package whose channel in
 # `ci/release-channels.toml` carries the release tag's version, which is every
-# one this repository publishes (ADR-0072). There is no per-package dispatch:
+# one this repository publishes (ADR-0073). There is no per-package dispatch:
 # a package ships with a release.
 #
 # The registries are the state: a publish skips what already serves its

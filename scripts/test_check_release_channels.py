@@ -300,7 +300,7 @@ expected_version = "exists"
         smoke job installs, because it is not advertised under README
         `## Installation`. While its entry said `skip` the rollup issued no
         request for it at all, so an unpublish was invisible. It now ships
-        with the release (ADR-0072), so the rollup asks for the tag's
+        with the release (ADR-0073), so the rollup asks for the tag's
         version; flipping it back to `skip` must fail here.
         """
         channel = next(

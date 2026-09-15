@@ -6,7 +6,7 @@
 
 Run it from an up-to-date checkout of `main`, after the `Release vX.Y.Z`
 commit (docs/releasing.md steps 1-3) is on `main`. It replaces the hand-run
-steps 4-6 and 8. It reads the release from a temporary worktree of the
+steps 4-7. It reads the release from a temporary worktree of the
 release commit — the tagged commit once the tags exist, `origin/main`
 before — so the local checkout's branch and uncommitted changes play no
 part, and a release tagged before this script existed can still be
@@ -493,7 +493,7 @@ def preflight_stalled_ci(state: Survey, plan: Plan, findings: Findings) -> None:
     for cid in plan.pending_ci:
         findings.problems.append(
             f"{cid} does not serve {state.version} ({state.ci_detail[cid]}) and no tag run is in progress; "
-            f"re-run that channel first (docs/releasing.md step 8)"
+            f"re-run that channel first (docs/releasing.md step 7)"
         )
 
 
@@ -583,7 +583,7 @@ def gate_registry_publish(state: Survey, plan: Plan) -> None:
         raise ReleaseError(
             "not publishing to crates.io or npm while CI-published channels are behind:\n  - "
             + "\n  - ".join(problems)
-            + "\nRe-run the failed channel (docs/releasing.md step 8), then re-run this script; it resumes here."
+            + "\nRe-run the failed channel (docs/releasing.md step 7), then re-run this script; it resumes here."
         )
     print("    every CI-published channel serves the version", flush=True)
 

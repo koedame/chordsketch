@@ -121,7 +121,7 @@ jobs:
 
       # The channels a release promised are the ones in the manifest it was
       # tagged with. main's manifest also lists channels that moved onto the
-      # tag after it (ADR-0072), which the tag never published; the checkers
+      # tag after it (ADR-0073), which the tag never published; the checkers
       # themselves still come from main, so a fixed checker applies to every
       # tag it verifies.
       - name: Read the manifest at the tag

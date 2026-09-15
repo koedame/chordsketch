@@ -51,7 +51,7 @@
 #
 # The rollup reads this file as it is at the tag it verifies, not at main,
 # so a channel added or moved onto the tag between releases is first
-# asserted for the release that ships it (ADR-0072).
+# asserted for the release that ships it (ADR-0073).
 
 # ---------------------------------------------------------------- crates.io
 
@@ -196,7 +196,7 @@ notes = "Unscoped per ADR-0008 §Decision 6 (tree-sitter ecosystem convention). 
 # @chordsketch/react-ui, @chordsketch/react, @chordsketch/vue,
 # @chordsketch/svelte and @chordsketch/chordpro-lite carry the workspace
 # version and publish with every release, like the packages above
-# (ADR-0072). Beyond the tag-equality assertion, readme-smoke.yml installs
+# (ADR-0073). Beyond the tag-equality assertion, readme-smoke.yml installs
 # the `latest` dist-tag of the first four daily and server-renders a
 # component from it (ADR-0064); chordpro-lite is not an install method under
 # README ## Installation, so it has no smoke job.

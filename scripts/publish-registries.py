@@ -85,7 +85,7 @@ def workspace_packages(tree: Path) -> tuple[list[str], list[str]]:
     Read from `ci/release-channels.toml`, the same manifest `release.py`
     surveys, so the two cannot disagree about what a release publishes.
     Every crate and npm package this repository publishes is among them
-    (ADR-0072).
+    (ADR-0073).
     """
     channels = [c for c in load_channels(tree / "ci" / "release-channels.toml") if c.expected_version == "tag"]
     return (

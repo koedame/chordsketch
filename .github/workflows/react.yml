@@ -2,10 +2,9 @@ name: "@chordsketch/react"
 
 # Lint, typecheck, build, and smoke-test the @chordsketch/react
 # package on every PR that touches it, plus pushes to main for
-# post-merge verification. Publish-on-tag is intentionally NOT
-# handled here — publishing is done by dispatching
-# `publish-registries.yml` from main with `set: @chordsketch/react`
-# (ADR-0069).
+# post-merge verification. Publishing is not handled here: the
+# package publishes with every release, from `publish-registries.yml`
+# (ADR-0073).
 
 on:
   push:
