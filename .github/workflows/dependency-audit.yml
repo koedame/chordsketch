@@ -65,7 +65,7 @@ jobs:
           toolchain: stable
 
       - name: Install cargo-audit
-        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2
         with:
           # Deliberately unpinned: the advisory database is fetched at run
           # time anyway, and a security scanner that lags its own upstream
