@@ -849,7 +849,7 @@ dependencies = [
  "chordsketch-render-html",
  "raw-window-handle",
  "windows",
- "windows-core 0.61.2",
+ "windows-core 0.62.2",
  "wry",
 ]
 

@@ -42,7 +42,7 @@ raw-window-handle = "0.6"
 # `windows::core::implement` expands to absolute `::windows_core::`
 # paths, so the crate behind that re-export has to be a direct
 # dependency as well.
-windows-core = "0.61"
+windows-core = "0.62"
 # Every `windows` feature this crate's own code reaches for is listed
 # here rather than left to Cargo's feature unification with `wry`. An
 # omission is invisible while `wry` pulls the same `windows` major and
