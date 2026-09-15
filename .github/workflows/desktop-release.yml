@@ -206,7 +206,7 @@ jobs:
           name: chordsketch-desktop-${{ matrix.platform.label }}
           path: release-artefacts/${{ matrix.platform.label }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
   release:
     name: Publish GitHub Release
