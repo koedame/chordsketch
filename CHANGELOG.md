@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Every function the Python package documents can be imported.**
+  `import chordsketch` exposed only 14 of the 36 bindings; the
+  `*_with_warnings` variants, `parse_and_render_html_body`,
+  `render_html_css`, the chord-diagram and pitch helpers, and the
+  `StaffNote` / `ChordDefine` / `ValidationError` types raised
+  `AttributeError`. The package now re-exports everything the generated
+  bindings declare, so new functions no longer need a second list.
 - **The desktop app finishes starting up.** Its permissions did not allow
   building the menu bar, so every launch showed "ChordSketch failed to
   start", with no menu bar, no unsaved marker in the window title and no
