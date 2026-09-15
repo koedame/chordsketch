@@ -119,6 +119,27 @@ jobs:
         with:
           tag: ${{ steps.tag.outputs.tag }}
 
+      # The channels a release promised are the ones in the manifest it was
+      # tagged with. main's manifest also lists channels that moved onto the
+      # tag after it (ADR-0072), which the tag never published; the checkers
+      # themselves still come from main, so a fixed checker applies to every
+      # tag it verifies.
+      - name: Read the manifest at the tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "refs/tags/$TAG:refs/tags/$TAG"
+          git show "$TAG:ci/release-channels.toml" > "$RUNNER_TEMP/release-channels.toml"
+
+      - name: Upload the manifest for the verify jobs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-channels-manifest
+          path: ${{ runner.temp }}/release-channels.toml
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Extract channel ids from manifest
         id: read
         run: |
@@ -126,11 +147,12 @@ jobs:
           python3 -c '
           import json
           import sys
+          from pathlib import Path
           sys.path.insert(0, "scripts")
           from _release_channels import load_channels
-          ids = [c.id for c in load_channels()]
+          ids = [c.id for c in load_channels(Path(sys.argv[1]))]
           print(json.dumps(ids))
-          ' > /tmp/channels.json
+          ' "$RUNNER_TEMP/release-channels.toml" > /tmp/channels.json
           channels=$(cat /tmp/channels.json)
           echo "channels=$channels" >> "$GITHUB_OUTPUT"
           echo "Loaded $(jq length /tmp/channels.json) channels"
@@ -152,6 +174,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Download the manifest at the tag
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-channels-manifest
+          path: ${{ runner.temp }}/manifest
+
       - name: Check channel
         env:
           TAG: ${{ needs.collect-channels.outputs.tag }}
@@ -170,6 +198,7 @@ jobs:
           if python3 scripts/check-release-channels.py \
               --tag "$TAG" \
               --channel "$CHANNEL" \
+              --manifest "$RUNNER_TEMP/manifest/release-channels.toml" \
               --force-stale "${FORCE_STALE:-}" > "$out" 2>&1; then
             echo "status=ok" >> "$GITHUB_ENV"
           else

@@ -52,6 +52,9 @@ Sources checked:
      (CLI and GUI are always in lockstep; the four desktop manifests
      must all agree with the workspace canonical. The preview handler
      DLL ships inside the desktop installer, so it moves with it.)
+ 19. `packages/{react-ui,react,vue,svelte,chordpro-lite}/package.json`
+     `version` — the npm packages that used to version on their own
+     cadence and now publish with every workspace release (ADR-0072)
 
 Each source is a (file, field, current_value) triple. The allowlist file has
 the same (file, field, current_value) shape plus a mandatory `tracking_issue`
@@ -592,6 +595,12 @@ def load_claude_code_plugin_versions(repo_root: Path) -> list[Source]:
     return sources
 
 
+# The npm packages built on top of the engine (the framework bindings, the
+# design-system primitives and the text helpers). They publish with every
+# workspace release, at its version (ADR-0072).
+FRAMEWORK_PACKAGE_DIRS = ("react-ui", "react", "vue", "svelte", "chordpro-lite")
+
+
 def load_all_sources(repo_root: Path) -> list[Source]:
     sources: list[Source] = []
     sources.extend(load_crate_versions(repo_root))
@@ -612,6 +621,10 @@ def load_all_sources(repo_root: Path) -> list[Source]:
         load_package_json_version(
             repo_root, "packages/tree-sitter-chordpro/package.json"
         )
+    )
+    sources.extend(
+        load_package_json_version(repo_root, f"packages/{name}/package.json")
+        for name in FRAMEWORK_PACKAGE_DIRS
     )
     sources.extend(load_claude_code_plugin_versions(repo_root))
     sources.extend(load_napi_platform_package_versions(repo_root))

@@ -1,6 +1,6 @@
 {
   "name": "@chordsketch/react",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "React components for embedding ChordPro and iReal Pro editors + previews, powered by @chordsketch/wasm",
   "license": "MIT AND OFL-1.1",
   "type": "module",

@@ -463,7 +463,7 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
         section(f"crates.io and npm ({PUBLISH_WORKFLOW}, mode: check)")
         try:
             runs["crates.io and npm check"] = dispatch(
-                PUBLISH_WORKFLOW, {"ref": registry_ref(state, plan), "set": "workspace", "mode": "check"}, login
+                PUBLISH_WORKFLOW, {"ref": registry_ref(state, plan), "mode": "check"}, login
             )
         except ReleaseError as exc:
             findings.problems.append(f"could not run the crates.io and npm check: {exc}")
@@ -591,7 +591,7 @@ def gate_registry_publish(state: Survey, plan: Plan) -> None:
 def publish_registries(state: Survey, login: str) -> None:
     section(f"Publishing to crates.io and npm ({PUBLISH_WORKFLOW}, mode: publish)")
     tag = tags_for(state.version)[0]
-    result = dispatch_and_wait(PUBLISH_WORKFLOW, {"ref": tag, "set": "workspace", "mode": "publish"}, login)
+    result = dispatch_and_wait(PUBLISH_WORKFLOW, {"ref": tag, "mode": "publish"}, login)
     if result["conclusion"] != "success":
         raise ReleaseError(
             f"{PUBLISH_WORKFLOW} ended {result['conclusion']}: {result['html_url']}\n  - "
