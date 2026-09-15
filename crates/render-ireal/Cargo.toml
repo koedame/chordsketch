@@ -52,7 +52,7 @@ chordsketch-ireal = { version = "0.6.0", path = "../ireal" }
 # `svg2pdf` 0.13, whose `usvg ^0.45` requirement is the newest
 # usvg line any published svg2pdf accepts; moving resvg past 0.45
 # on its own would split the usvg tree again.
-resvg = { version = "0.45", optional = true }
+resvg = { version = "0.48", optional = true }
 svg2pdf = { version = "0.13", optional = true }
 
 [features]
