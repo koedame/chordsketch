@@ -25,12 +25,26 @@
  *   future "always update" forced-policy change can invalidate
  *   stale opt-outs without a migration.
  */
+import { invoke } from '@tauri-apps/api/core';
 import { ask, message } from '@tauri-apps/plugin-dialog';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check } from '@tauri-apps/plugin-updater';
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const OPT_OUT_KEY = 'chordsketch-desktop-auto-update-opt-out/v1';
+
+let selfUpdateEnabled: Promise<boolean> | null = null;
+
+/**
+ * Does this installation update itself? `false` inside Flatpak, where
+ * the store delivers new versions and the Rust side does not register
+ * the updater plugin at all (`self_update_enabled` in `main.rs`). Asked
+ * once: the answer cannot change while the app runs.
+ */
+function isSelfUpdateEnabled(): Promise<boolean> {
+  selfUpdateEnabled ??= invoke<boolean>('self_update_enabled');
+  return selfUpdateEnabled;
+}
 
 /** Is the user opted out of automatic update checks? */
 export function isAutoUpdateOptedOut(): boolean {
@@ -89,6 +103,16 @@ export async function checkForUpdates(
   options: { silent?: boolean } = {},
 ): Promise<void> {
   const silent = options.silent ?? true;
+
+  if (!(await isSelfUpdateEnabled())) {
+    if (!silent) {
+      await message(
+        'Updates for this installation come from the software store it was installed from.',
+        { title: 'ChordSketch', kind: 'info' },
+      );
+    }
+    return;
+  }
 
   // Respect opt-out for background auto-checks (silent: true).
   // An explicit user-triggered check (silent: false) bypasses this

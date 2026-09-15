@@ -476,6 +476,26 @@ jobs:
       - name: Build and check the desktop updater manifest
         run: python3 scripts/check-publishable.py desktop-updater
 
+  flathub:
+    name: Flathub (desktop app)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the source list generators' dependencies
+        run: python3 -m pip install -r packaging/flatpak/requirements.txt
+
+      # desktop-release.yml's `Generate Flathub files`, flatpak-builder-lint on
+      # the manifest, metainfo and built repository, an offline build in the
+      # image Flathub's GitHub actions use, and a launch under Xvfb that has to
+      # reach the window title the app sets once its startup has finished.
+      - name: Generate, lint, build and launch the Flatpak
+        run: python3 scripts/check-publishable.py flathub
+
   jetbrains:
     name: JetBrains Marketplace
     runs-on: ubuntu-latest
@@ -617,6 +637,7 @@ jobs:
       - container-image
       - homebrew
       - manifests
+      - flathub
       - jetbrains
       - macports
       - nixpkgs-build

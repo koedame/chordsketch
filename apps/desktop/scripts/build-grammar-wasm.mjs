@@ -41,21 +41,32 @@ if (!existsSync(publicDir)) {
   mkdirSync(publicDir, { recursive: true });
 }
 
-console.log('Building tree-sitter-chordpro.wasm…');
-// `shell: true` routes through the platform shell so the npx
-// lookup obeys PATHEXT on Windows (where the executable is
-// actually `npx.cmd`, not `npx`). Without this, Node's
-// CreateProcess-backed `execFileSync('npx', ...)` fails with
-// `ENOENT` on the Windows cell of `desktop-build.yml`. The args
-// array stays a literal whitelist so the shell pass-through
-// does not introduce injection surface.
-execFileSync('npx', ['tree-sitter', 'build', '--wasm'], {
-  cwd: grammarDir,
-  stdio: 'inherit',
-  shell: true,
-});
-
 const grammarSrc = resolve(grammarDir, 'tree-sitter-chordpro.wasm');
+
+// `--grammar-prebuilt` skips step 1 and takes the grammar wasm already
+// at `grammarSrc`. The Flatpak build uses it: `tree-sitter build --wasm`
+// downloads its compiler, and a Flatpak build has no network, so the
+// manifest compiles the grammar itself (`packaging/flatpak/`).
+if (process.argv.includes('--grammar-prebuilt')) {
+  if (!existsSync(grammarSrc)) {
+    throw new Error(`--grammar-prebuilt given, but ${grammarSrc} does not exist`);
+  }
+} else {
+  console.log('Building tree-sitter-chordpro.wasm…');
+  // `shell: true` routes through the platform shell so the npx
+  // lookup obeys PATHEXT on Windows (where the executable is
+  // actually `npx.cmd`, not `npx`). Without this, Node's
+  // CreateProcess-backed `execFileSync('npx', ...)` fails with
+  // `ENOENT` on the Windows cell of `desktop-build.yml`. The args
+  // array stays a literal whitelist so the shell pass-through
+  // does not introduce injection surface.
+  execFileSync('npx', ['tree-sitter', 'build', '--wasm'], {
+    cwd: grammarDir,
+    stdio: 'inherit',
+    shell: true,
+  });
+}
+
 const grammarDst = resolve(publicDir, 'tree-sitter-chordpro.wasm');
 copyFileSync(grammarSrc, grammarDst);
 console.log(`Copied ${grammarSrc} → ${grammarDst}`);

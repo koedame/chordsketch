@@ -51,6 +51,9 @@ Subcommands:
               and check its layout and checksum line.
   desktop-updater
               Build latest.json with desktop-release.yml's step and check it.
+  flathub     Generate the desktop app's Flathub files with desktop-release.yml's
+              step, lint them, build the Flatpak without network and launch it.
+              Needs docker, and the Python packages aiohttp, tomlkit and PyYAML.
   jetbrains   Build the JetBrains plugin distribution and check it.
   nixpkgs     Check the nixpkgs derivation template's metadata.
 
@@ -99,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     archive = sub.add_parser("cli-archive", help="package and check a release archive")
     archive.add_argument("--binaries", type=Path, required=True, help="directory holding chordsketch and chordsketch-lsp")
     archive.add_argument("--target", default="x86_64-unknown-linux-gnu")
-    for channel in ("homebrew", "scoop", "aur", "cocoapods", "swift-package", "winget", "desktop-updater", "jetbrains", "nixpkgs"):
+    for channel in ("homebrew", "scoop", "aur", "cocoapods", "swift-package", "winget", "desktop-updater", "flathub", "jetbrains", "nixpkgs"):
         sub.add_parser(channel, help=f"check the {channel} manifest")
     snap = sub.add_parser("snap", help="generate and pack the snap")
     snap.add_argument("--binary", type=Path, required=True, help="a Linux x86_64 chordsketch to stage")
@@ -164,6 +167,7 @@ def main(argv: list[str] | None = None) -> int:
             "swift-package": checks.swift_package_problems,
             "winget": checks.winget_problems,
             "desktop-updater": checks.desktop_updater_problems,
+            "flathub": checks.flathub_problems,
             "nixpkgs": checks.nixpkgs_problems,
         }
         if args.command in simple:

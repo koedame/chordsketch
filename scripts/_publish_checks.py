@@ -37,6 +37,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import tomllib
@@ -1787,6 +1788,129 @@ def desktop_updater_problems(version: str, runner: Runner = run) -> list[str]:
         if DESKTOP_UPDATER_ENDPOINT not in endpoints:
             problems.append(f"tauri.conf.json's updater does not read {DESKTOP_UPDATER_ENDPOINT}, where the release publishes latest.json")
         return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- Flathub
+
+
+FLATPAK_APP_ID = "io.github.koedame.chordsketch"
+# The image flatpak/flatpak-github-actions builds in: flatpak-builder,
+# flatpak-builder-lint, Xvfb and the GNOME runtime the manifest names.
+FLATPAK_IMAGE = "ghcr.io/flathub-infra/flatpak-github-actions:gnome-50"
+# The desktop app writes this title once its startup has finished (the menu
+# bar, the close prompt, then the title), and this one when startup failed.
+FLATPAK_STARTED_TITLE = "Untitled — ChordSketch"
+FLATPAK_FAILED_TITLE = "ChordSketch failed to start"
+
+
+def flatpak_lint_problems(kind: str, output: str, returncode: int) -> list[str]:
+    """Read `flatpak-builder-lint manifest|repo`, which prints a JSON report only when it finds something.
+
+    https://docs.flathub.org/docs/for-app-authors/linter
+    """
+    document = output[output.find("{") :] if "{" in output else ""
+    try:
+        report = json.loads(document) if document else {}
+    except ValueError:
+        report = {}
+    # `info` holds the explanation of a finding, as "<finding>: <detail>".
+    details = {}
+    for line in report.get("info", []):
+        finding, _, detail = line.partition(": ")
+        # A failed URL check carries the start of the response body; the status is what matters.
+        details.setdefault(finding, []).append(detail if len(detail) <= 200 else detail[:200] + "…")
+
+    def described(finding: str) -> str:
+        return " — ".join([finding, *details.get(finding, [])])
+
+    problems = [f"flatpak-builder-lint {kind} error: {described(e)}" for e in report.get("errors", [])]
+    problems += [f"flatpak-builder-lint {kind} warning: {described(w)}" for w in report.get("warnings", [])]
+    if returncode != 0 and not problems:
+        problems.append(f"flatpak-builder-lint {kind} failed:\n{tail(output)}")
+    return problems
+
+
+def flatpak_launch_problems(titles: list[str]) -> list[str]:
+    if FLATPAK_FAILED_TITLE in titles:
+        return [f"the Flatpak shows \"{FLATPAK_FAILED_TITLE}\" on launch"]
+    if FLATPAK_STARTED_TITLE not in titles:
+        return [f"the Flatpak did not reach the window title {FLATPAK_STARTED_TITLE!r} within 90 s; its windows: {titles}"]
+    return []
+
+
+def flathub_problems(version: str, runner: Runner = run) -> list[str]:
+    """The Flathub files as desktop-release.yml generates them, linted, built without network, and launched.
+
+    The generated manifest builds the release tag from GitHub, which does not
+    exist yet, so it is only linted; the build uses the same manifest pointed at
+    this checkout. The repository is mounted at its own path because the
+    manifest names it by absolute path.
+    """
+    directory = Path(tempfile.mkdtemp(prefix="update-flathub-"))
+    try:
+        fabricated_release(directory, version)
+        commit = runner(["git", "rev-parse", "HEAD"], REPO_ROOT).stdout.strip().splitlines()[-1]
+        env = {"TAG": f"desktop-v{version}", "COMMIT": commit}
+        generated_files = run_release_step("desktop-release.yml", "update-flathub", "Generate Flathub files", directory, env, runner)
+        if generated_files.returncode != 0:
+            return [f"desktop-release.yml `update-flathub` / `Generate Flathub files` failed:\n{tail(generated_files.stdout)}"]
+        problems = []
+        source = json.loads((directory / "flathub/chordsketch-source.json").read_text())
+        if source != [{"type": "git", "url": "https://github.com/koedame/chordsketch.git", "tag": env["TAG"], "commit": commit}]:
+            problems.append(f"the Flathub manifest does not build {env['TAG']} at {commit}: {source}")
+        local = runner([sys.executable, str(REPO_ROOT / "packaging/flatpak/prepare.py"), "--out", str(directory / "local")], REPO_ROOT)
+        if local.returncode != 0:
+            return problems + [f"packaging/flatpak/prepare.py failed:\n{tail(local.stdout)}"]
+
+        manifest = f"{FLATPAK_APP_ID}.yml"
+        flatpak = f"{REPO_ROOT}/packaging/flatpak"
+        # The build runs in the container's own filesystem: the sandbox
+        # flatpak-builder starts cannot read a bind-mounted directory owned by
+        # the runner's user. Only reports are written back to /work.
+        script = (
+            "set -uo pipefail; mkdir -p /var/tmp/flatpak && cd /var/tmp/flatpak; "
+            f"flatpak-builder-lint manifest /work/flathub/{manifest} > /work/lint-manifest.txt 2>&1; echo $? > /work/lint-manifest.status; "
+            f"flatpak-builder-lint appstream {flatpak}/{FLATPAK_APP_ID}.metainfo.xml > /work/lint-appstream.txt 2>&1; echo $? > /work/lint-appstream.status; "
+            f"desktop-file-validate {flatpak}/{FLATPAK_APP_ID}.desktop > /work/desktop-file.txt 2>&1; echo $? > /work/desktop-file.status; "
+            # The screenshot mirror options are Flathub's (its `flathub-build`); the repo lint expects them.
+            "flatpak-builder --install-deps-from=flathub --disable-rofiles-fuse --mirror-screenshots-url=https://dl.flathub.org/media --compose-url-policy=full "
+            f"--repo=repo build /work/local/{manifest} > /work/build.txt 2>&1 || exit 10; "
+            "flatpak-builder-lint repo repo > /work/lint-repo.txt 2>&1; echo $? > /work/lint-repo.status; "
+            f"{{ flatpak remote-add --no-gpg-verify built /var/tmp/flatpak/repo && flatpak install -y --noninteractive built {FLATPAK_APP_ID}; }} > /work/install.txt 2>&1 || exit 11; "
+            # Xvfb directly: `xvfb-run` waits for a SIGUSR1 that can get lost when it runs under the container's init.
+            "Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp > /work/xvfb.txt 2>&1 & "
+            "for i in $(seq 30); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 1; done; "
+            "DISPLAY=:99 dbus-run-session -- sh -c '"
+            f"flatpak run {FLATPAK_APP_ID} > /work/app.txt 2>&1 & app=$!; "
+            f"for i in $(seq 90); do sleep 1; python3 {flatpak}/window-titles.py > /work/titles.txt; "
+            f"grep -qx -e \"{FLATPAK_STARTED_TITLE}\" -e \"{FLATPAK_FAILED_TITLE}\" /work/titles.txt && break; done; kill $app 2>/dev/null; true'"
+        )
+        container = runner(["docker", "run", "--rm", "--privileged", "-v", f"{REPO_ROOT}:{REPO_ROOT}:ro", "-v", f"{directory}:/work", FLATPAK_IMAGE, "bash", "-c", script], directory)
+        if container.returncode == 10:
+            return problems + [f"flatpak-builder failed:\n{tail((directory / 'build.txt').read_text(), 40)}"]
+        if container.returncode == 11:
+            return problems + [f"installing the built Flatpak failed:\n{tail((directory / 'install.txt').read_text())}"]
+        if container.returncode != 0:
+            return problems + [f"the Flatpak build container failed:\n{tail(container.stdout)}"]
+
+        def result(name: str) -> tuple[str, int]:
+            return (directory / f"{name}.txt").read_text(), int((directory / f"{name}.status").read_text())
+
+        problems += flatpak_lint_problems("manifest", *result("lint-manifest"))
+        problems += flatpak_lint_problems("repo", *result("lint-repo"))
+        # `appstreamcli validate` counts warnings as failures; so does its exit status.
+        appstream, status = result("lint-appstream")
+        if status != 0:
+            problems.append(f"flatpak-builder-lint appstream failed:\n{tail(appstream)}")
+        desktop_file, status = result("desktop-file")
+        if status != 0 or desktop_file.strip():
+            problems.append(f"desktop-file-validate: {desktop_file.strip() or 'failed'}")
+        launch = flatpak_launch_problems((directory / "titles.txt").read_text().splitlines())
+        if launch:
+            launch[-1] += f"\n{tail((directory / 'app.txt').read_text())}"
+        return problems + launch
     finally:
         shutil.rmtree(directory, ignore_errors=True)
 

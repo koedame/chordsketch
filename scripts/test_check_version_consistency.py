@@ -65,6 +65,7 @@ def _build_repo(
     macports_version: str = "0.2.0",
     nix_version: str = "0.2.0",
     winget_version: str = "0.2.0",
+    flatpak_release_version: str = "0.2.0",
 ) -> None:
     """Build a minimal repo layout under `root` that satisfies every extractor.
 
@@ -94,6 +95,17 @@ def _build_repo(
             + "\n",
             encoding="utf-8",
         )
+
+    # packaging/flatpak metainfo — the newest release is checked
+    flatpak_dir = root / "packaging" / "flatpak"
+    flatpak_dir.mkdir(parents=True, exist_ok=True)
+    (flatpak_dir / "io.github.koedame.chordsketch.metainfo.xml").write_text(
+        "<component>\n  <releases>\n"
+        f'    <release version="{flatpak_release_version}" date="2026-02-01"/>\n'
+        '    <release version="0.1.0" date="2026-01-01"/>\n'
+        "  </releases>\n</component>\n",
+        encoding="utf-8",
+    )
 
     # crates/napi/package.json — the check script explicitly looks at this
     napi_dir = root / "crates" / "napi"
@@ -672,6 +684,13 @@ class CheckRunTests(unittest.TestCase):
         with TemporaryDirectory() as td:
             root = Path(td)
             _build_repo(root, winget_version="0.1.0")
+            rc = check_version_consistency.run(root, root / "nonexistent.toml")
+            self.assertEqual(rc, 1)
+
+    def test_when_the_flatpak_metainfo_has_no_release_for_the_version_the_check_fails(self) -> None:
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            _build_repo(root, flatpak_release_version="0.1.1")
             rc = check_version_consistency.run(root, root / "nonexistent.toml")
             self.assertEqual(rc, 1)
 
