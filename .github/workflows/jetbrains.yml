@@ -29,7 +29,7 @@ permissions:
 jobs:
   build:
     name: Build and verify plugin
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: packages/jetbrains-plugin

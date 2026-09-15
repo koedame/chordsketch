@@ -35,11 +35,17 @@ permissions:
 jobs:
   test:
     name: Test action (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        include:
+          # The Linux cell keeps `ubuntu-latest` in its name (required checks
+          # are matched by name) and runs on the Linux runner pool when
+          # LINUX_RUNNER is set. See ADR-0076.
+          - os: ubuntu-latest
+            runner: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

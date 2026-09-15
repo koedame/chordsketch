@@ -49,7 +49,7 @@ permissions:
 jobs:
   check-design-system-sync:
     name: Verify generated design-system blocks are committed
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
