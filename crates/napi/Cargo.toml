@@ -28,7 +28,7 @@ chordsketch-render-ireal = { version = "0.6.0", path = "../render-ireal", featur
 # update` with potentially incompatible glue. Bump intentionally via
 # Dependabot or a tracked PR. See #1078.
 napi = { version = "=3.4.0", features = ["napi9"] }
-napi-derive = "=3.3.0"
+napi-derive = "=3.6.5"
 
 [build-dependencies]
 napi-build = "=2.4.1"
