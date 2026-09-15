@@ -2,9 +2,8 @@ name: "@chordsketch/chordpro-lite"
 
 # Typecheck, test, and build the @chordsketch/chordpro-lite package on
 # every PR that touches it, plus pushes to main for post-merge
-# verification. Publish-on-tag is intentionally NOT handled here —
-# publishing is done by dispatching `publish-registries.yml` from
-# main with `set: @chordsketch/chordpro-lite` (ADR-0069).
+# verification. Publishing is not handled here: the package publishes
+# with every release, from `publish-registries.yml` (ADR-0073).
 #
 # Like @chordsketch/react-ui, this package carries no wasm dependency
 # (ADR-0060), so there is deliberately no Rust toolchain / wasm-pack /

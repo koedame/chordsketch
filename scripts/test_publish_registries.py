@@ -5,14 +5,13 @@ The script decides, inside `publish-registries.yml`, what reaches crates.io
 and npm. These tests pin the decisions a registry would otherwise be the
 first to notice:
 
-  1. `plan` lists every package of the set, for the token check, and as
+  1. `plan` lists every package of the release, for the token check, and as
      pending exactly those the registries do not serve yet, for the builds
-     and the upload; reads the workspace set from the release manifest; and
-     refuses a package that has never been published, since trusted
-     publishing cannot create one.
-  2. The workflow's `set` choices are the framework packages of the publish
-     definition, so a package added there cannot be missing from the
-     dispatch form.
+     and the upload; reads them from the release manifest; and refuses a
+     package that has never been published, since trusted publishing cannot
+     create one.
+  2. Every package with a publish definition is published with the release,
+     so none can be left without a way to reach its registry (ADR-0073).
   3. The napi platform packages are published before their resolver.
   4. A failed OIDC token exchange names the package and what its trusted
      publisher must say.
@@ -69,14 +68,20 @@ class PlanTest(unittest.TestCase):
         serving |= {(p, publish.npm_version(REPO_ROOT, p)) for p in publish.checks.NPM_PACKAGES}
         return serving
 
-    def test_workspace_set_is_the_tag_versioned_crates_and_npm_packages_of_the_manifest(self) -> None:
+    def test_the_release_publishes_the_tag_versioned_crates_and_npm_packages_of_the_manifest(self) -> None:
         self.assertIn("chordsketch", self.crates)
         self.assertIn("@chordsketch/wasm", self.npm)
         self.assertIn("@chordsketch/node-darwin-arm64", self.npm)
-        self.assertNotIn("@chordsketch/react", self.npm)
+        self.assertIn("@chordsketch/react", self.npm)
+
+    def test_every_npm_package_with_a_publish_definition_is_published_with_the_release(self) -> None:
+        self.assertEqual(sorted(self.npm), sorted(publish.checks.NPM_PACKAGES))
+
+    def test_every_crate_with_a_publish_definition_is_published_with_the_release(self) -> None:
+        self.assertEqual(sorted(self.crates), sorted(publish.checks.CRATES))
 
     def test_every_package_of_the_set_is_listed_even_when_all_are_published(self) -> None:
-        result = publish.plan(REPO_ROOT, "workspace", registry(self.everything_published()))
+        result = publish.plan(REPO_ROOT, registry(self.everything_published()))
         self.assertEqual((result.crates, result.npm), (self.crates, self.npm))
         self.assertEqual((result.pending_crates, result.pending_npm, result.problems), ([], [], []))
 
@@ -87,14 +92,14 @@ class PlanTest(unittest.TestCase):
         wasm = publish.npm_version(REPO_ROOT, "@chordsketch/wasm")
         serving.discard(("@chordsketch/wasm", wasm))
         serving.add(("@chordsketch/wasm", "0.0.1"))
-        result = publish.plan(REPO_ROOT, "workspace", registry(serving))
+        result = publish.plan(REPO_ROOT, registry(serving))
         self.assertEqual(result.pending_crates, ["chordsketch"])
         self.assertEqual(result.pending_npm, ["@chordsketch/wasm"])
         self.assertEqual(result.problems, [])
 
     def test_a_package_that_was_never_published_is_refused_by_name(self) -> None:
         serving = {entry for entry in self.everything_published() if entry[0] not in ("chordsketch-mcp", "@chordsketch/wasm-export")}
-        result = publish.plan(REPO_ROOT, "workspace", registry(serving))
+        result = publish.plan(REPO_ROOT, registry(serving))
         self.assertEqual(result.pending_crates, ["chordsketch-mcp"])
         self.assertEqual(result.pending_npm, ["@chordsketch/wasm-export"])
         self.assertEqual(len(result.problems), 2)
@@ -102,14 +107,6 @@ class PlanTest(unittest.TestCase):
         self.assertIn("publish-new", result.problems[0])
         self.assertIn("@chordsketch/wasm-export has never been published", result.problems[1])
 
-    def test_framework_set_is_that_one_package(self) -> None:
-        serving = {e for e in self.everything_published() if e[0] != "@chordsketch/vue"} | {("@chordsketch/vue", "0.0.1")}
-        result = publish.plan(REPO_ROOT, "@chordsketch/vue", registry(serving))
-        self.assertEqual((result.crates, result.npm, result.pending_npm, result.problems), ([], ["@chordsketch/vue"], ["@chordsketch/vue"], []))
-
-    def test_a_workspace_package_is_not_a_set_of_its_own(self) -> None:
-        result = publish.plan(REPO_ROOT, "@chordsketch/wasm", registry(self.everything_published()))
-        self.assertIn("neither `workspace` nor a framework package", result.problems[0])
 
 
 class WorkflowTest(unittest.TestCase):
@@ -118,12 +115,6 @@ class WorkflowTest(unittest.TestCase):
         block = re.search(rf"^      {name}:\n(?:        .*\n)*?        options:\n((?:          - .*\n)+)", text, re.MULTILINE)
         assert block is not None, f"no options for input {name}"
         return [line.strip()[2:].strip('"') for line in block.group(1).splitlines()]
-
-    def test_set_choices_are_workspace_and_every_framework_package(self) -> None:
-        self.assertEqual(
-            self.workflow_input_options("set"),
-            ["workspace", *publish.framework_packages(REPO_ROOT)],
-        )
 
     def test_mode_choices_are_what_the_script_accepts(self) -> None:
         self.assertEqual(self.workflow_input_options("mode"), ["check", "publish"])
@@ -221,7 +212,7 @@ class NothingPendingTest(unittest.TestCase):
             mock.patch.object(publish, "run") as ran,
         ):
             code = publish.main([
-                "npm", "--packages", "[]", "--set-packages", json.dumps(["@chordsketch/wasm", "@chordsketch/node"]),
+                "npm", "--packages", "[]", "--all-packages", json.dumps(["@chordsketch/wasm", "@chordsketch/node"]),
                 "--mode", "check", "--out", str(Path(os.environ.get("TMPDIR", "/tmp")) / "publish-registries-test"),
             ])
         self.assertEqual(code, 0)

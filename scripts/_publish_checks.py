@@ -504,17 +504,21 @@ def npm_dependency_problems(manifest: dict, released_together: dict[str, str], v
     """Dependencies a user installing the package could not resolve.
 
     `released_together` maps the npm packages of this repository to the
-    version on disk: a dependency pinned to exactly that version is
-    published in the same release. Anything else must already be satisfiable
-    from the registry, which `view(name, range)` answers.
+    version on disk: a dependency on exactly that version, or on its caret
+    range, is published in the same release. The release commit raises the
+    `@chordsketch/wasm` ranges of the packages built on it to the version it
+    releases (ADR-0073), so they name a version npm does not serve until the
+    release publishes it. Anything else must already be satisfiable from the
+    registry, which `view(name, range)` answers.
     """
     name = manifest.get("name", "<unnamed>")
     problems = []
     for field in ("dependencies", "peerDependencies", "optionalDependencies"):
         for dependency, spec in (manifest.get(field) or {}).items():
+            on_disk = released_together.get(dependency)
             if NON_REGISTRY_SPEC.match(spec):
                 problems.append(f"{name} {field} `{dependency}` is `{spec}`, which does not resolve from the npm registry")
-            elif released_together.get(dependency) == spec:
+            elif on_disk is not None and spec in (on_disk, f"^{on_disk}"):
                 continue
             elif not view(dependency, spec):
                 problems.append(f"{name} {field} `{dependency}@{spec}` matches no version published on npm")

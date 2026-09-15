@@ -1,6 +1,6 @@
 # 0065. `expected_version = "exists"` watches channels no smoke job installs
 
-- **Status**: Accepted
+- **Status**: Accepted (`@chordsketch/chordpro-lite` moved to `expected_version = "tag"` by ADR-0073 on 2026-09-15; the mode stands)
 - **Date**: 2026-09-13
 
 ## Context

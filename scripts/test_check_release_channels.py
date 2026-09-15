@@ -293,19 +293,20 @@ expected_version = "exists"
                 load_channels(path)
             self.assertIn("must have a package", str(ctx.exception))
 
-    def test_chordpro_lite_is_checked_for_existence(self) -> None:
+    def test_chordpro_lite_is_checked_against_the_tag(self) -> None:
         """Regression guard for the hole ADR-0065 closed.
 
         `@chordsketch/chordpro-lite` is the one published package that no
         smoke job installs, because it is not advertised under README
         `## Installation`. While its entry said `skip` the rollup issued no
-        request for it at all, so an unpublish was invisible. Flipping it
-        back to `skip` must fail here.
+        request for it at all, so an unpublish was invisible. It now ships
+        with the release (ADR-0073), so the rollup asks for the tag's
+        version; flipping it back to `skip` must fail here.
         """
         channel = next(
             c for c in load_channels() if c.id == "npm-chordpro-lite"
         )
-        self.assertEqual(channel.expected_version, "exists")
+        self.assertEqual(channel.expected_version, "tag")
 
 
 # ---------------------------------------------------------------- verify_channel

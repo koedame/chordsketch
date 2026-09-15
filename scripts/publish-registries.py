@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Publish the crates.io and npm packages from CI, with trusted publishing.
 
-    python3 scripts/publish-registries.py plan --set workspace
+    python3 scripts/publish-registries.py plan
     python3 scripts/publish-registries.py crates --crates '["chordsketch"]'
-    python3 scripts/publish-registries.py npm --packages '["@chordsketch/wasm"]' --set-packages '[...]' --mode check --tag v0.7.0 --out DIR
+    python3 scripts/publish-registries.py npm --packages '["@chordsketch/wasm"]' --all-packages '[...]' --mode check --tag v0.7.0 --out DIR
 
 Run only by `.github/workflows/publish-registries.yml` (ADR-0069). The jobs
 there authenticate with the registries through GitHub's OIDC token, so this
@@ -11,11 +11,11 @@ script never sees a stored credential.
 
 Subcommands:
 
-  plan    List the crates and npm packages of the dispatched set, and those
+  plan    List the crates and npm packages the release publishes, and those
           whose manifest version the registry does not serve yet (pending),
-          as JSON lists in `$GITHUB_OUTPUT`. Fails when a package of the set
-          has never been published: neither registry lets trusted publishing
-          create a package.
+          as JSON lists in `$GITHUB_OUTPUT`. Fails when one of them has never
+          been published: neither registry lets trusted publishing create a
+          package.
   crates  Run the pull-request publish checks (`scripts/_publish_checks.py`)
           over the pending crates, including one `cargo publish --dry-run`
           over all of them, so the real publish that follows is not the
@@ -23,7 +23,7 @@ Subcommands:
   npm     Build, pack and check every pending npm package — the napi
           resolver and platform packages from the tarballs on the tag's
           GitHub Release. Then, with `--mode check`, exchange the job's OIDC
-          token for every package of the set (`--set-packages`), published
+          token for every package the release publishes (`--all-packages`), published
           or not, which fails for a package whose trusted publisher does not
           name this workflow and environment; with `--mode publish`, publish
           the checked tarballs and wait until the registry serves them.
@@ -61,7 +61,6 @@ import _publish_checks as checks  # noqa: E402
 from _release_channels import load_channels  # noqa: E402
 
 REPO = "koedame/chordsketch"
-WORKSPACE_SET = "workspace"
 USER_AGENT = "chordsketch-publish-registries (+https://github.com/koedame/chordsketch)"
 HTTP_TIMEOUT = 30
 NPM_REGISTRY = "https://registry.npmjs.org"
@@ -77,7 +76,7 @@ SERVE_ATTEMPTS = 30
 SERVE_INTERVAL_SECONDS = 10
 
 
-# ---------------------------------------------------------------- sets
+# ---------------------------------------------------------------- packages
 
 
 def workspace_packages(tree: Path) -> tuple[list[str], list[str]]:
@@ -85,18 +84,14 @@ def workspace_packages(tree: Path) -> tuple[list[str], list[str]]:
 
     Read from `ci/release-channels.toml`, the same manifest `release.py`
     surveys, so the two cannot disagree about what a release publishes.
+    Every crate and npm package this repository publishes is among them
+    (ADR-0073).
     """
     channels = [c for c in load_channels(tree / "ci" / "release-channels.toml") if c.expected_version == "tag"]
     return (
         [c.package for c in channels if c.kind == "crates-io"],
         [c.package for c in channels if c.kind == "npm"],
     )
-
-
-def framework_packages(tree: Path) -> list[str]:
-    """The npm packages that publish on their own cadence, one dispatch each."""
-    _, tagged = workspace_packages(tree)
-    return [name for name in checks.NPM_PACKAGES if name not in tagged]
 
 
 def crate_versions(tree: Path) -> dict[str, str]:
@@ -247,9 +242,9 @@ def run(cmd: list[str], cwd: Path = REPO_ROOT) -> subprocess.CompletedProcess[st
 
 @dataclass(frozen=True)
 class Plan:
-    """The packages of a dispatched set, and those the registries do not serve yet.
+    """The packages a release publishes, and those the registries do not serve yet.
 
-    A check exchanges a token for every package of the set, but builds and
+    A check exchanges a token for every one of them, but builds and
     dry-runs only the unpublished ones: npm 11's `publish --dry-run` refuses
     a version that is already published. A publish covers the unpublished
     ones alone.
@@ -262,18 +257,13 @@ class Plan:
     problems: list[str] = field(default_factory=list)
 
 
-def plan(tree: Path, chosen: str, served: Callable[[str, str, str | None], bool]) -> Plan:
-    """What a run for the set `chosen` covers.
+def plan(tree: Path, served: Callable[[str, str, str | None], bool]) -> Plan:
+    """What a run for the release at `tree` covers.
 
     `served(kind, name, version)` answers whether the registry serves that
     version, or with `version=None` whether the package exists at all.
     """
-    if chosen == WORKSPACE_SET:
-        crates, npm = workspace_packages(tree)
-    elif chosen in framework_packages(tree):
-        crates, npm = [], [chosen]
-    else:
-        return Plan(problems=[f"`{chosen}` is neither `{WORKSPACE_SET}` nor a framework package in scripts/_publish_checks.py"])
+    crates, npm = workspace_packages(tree)
 
     problems = []
     unknown = [name for name in npm if name not in checks.NPM_PACKAGES]
@@ -308,14 +298,14 @@ def served_on_registry(kind: str, name: str, version: str | None) -> bool:
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
-    result = plan(REPO_ROOT, args.set, served_on_registry)
+    result = plan(REPO_ROOT, served_on_registry)
     write_output("crates", json.dumps(result.crates))
     write_output("npm", json.dumps(result.npm))
     write_output("pending_crates", json.dumps(result.pending_crates))
     write_output("pending_npm", json.dumps(result.pending_npm))
     write_output("wasm", json.dumps(any("wasm-pack" in checks.NPM_PACKAGES[p].tools for p in result.pending_npm)))
     if not result.pending_crates and not result.pending_npm and not result.problems:
-        print(f"::notice::every package in `{args.set}` is already published at its manifest version", flush=True)
+        print("::notice::every package is already published at its manifest version", flush=True)
     return report(result.problems)
 
 
@@ -429,9 +419,9 @@ def cmd_npm(args: argparse.Namespace) -> int:
         return report(problems)
 
     if args.mode == "check":
-        print("\n==> trusted publisher of every package of the set", flush=True)
+        print("\n==> trusted publisher of every package", flush=True)
         id_token = github_id_token("npm:registry.npmjs.org")
-        return report([problem for p in json.loads(args.set_packages) if (problem := npm_exchange_problem(p, id_token))])
+        return report([problem for p in json.loads(args.all_packages) if (problem := npm_exchange_problem(p, id_token))])
     return report(publish_npm_packages(packages, args.out))
 
 
@@ -441,13 +431,12 @@ def cmd_npm(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    plan_parser = sub.add_parser("plan", help="decide what the dispatched set still needs")
-    plan_parser.add_argument("--set", required=True, help=f"`{WORKSPACE_SET}` or one framework npm package")
+    sub.add_parser("plan", help="decide what the release still needs")
     crates_parser = sub.add_parser("crates", help="check the pending crates before publishing them")
     crates_parser.add_argument("--crates", required=True, help="JSON list, from `plan`")
     npm_parser = sub.add_parser("npm", help="check, then token-check or publish, the pending npm packages")
     npm_parser.add_argument("--packages", required=True, help="the pending packages, a JSON list from `plan`")
-    npm_parser.add_argument("--set-packages", default="[]", help="every package of the set, a JSON list from `plan`; `--mode check` exchanges a token for each")
+    npm_parser.add_argument("--all-packages", default="[]", help="every npm package of the release, a JSON list from `plan`; `--mode check` exchanges a token for each")
     npm_parser.add_argument("--mode", choices=("check", "publish"), required=True)
     npm_parser.add_argument("--tag", default="", help="the release tag whose GitHub Release carries the napi tarballs")
     npm_parser.add_argument("--out", type=Path, required=True, help="directory to pack into")

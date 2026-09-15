@@ -1,6 +1,6 @@
 # 0069. crates.io and npm publish from CI with trusted publishing
 
-- **Status**: Accepted
+- **Status**: Accepted (Decision 6, the per-package `set` dispatch, replaced by ADR-0073 on 2026-09-15: the framework packages publish with the release)
 - **Date**: 2026-09-15
 
 ## Context

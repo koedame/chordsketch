@@ -47,6 +47,12 @@ returns the **Rust crate version** (`"0.1.0"`), not the npm wrapper version,
 because it is compiled into the `.wasm` binary. This skew is acceptable and
 re-syncs at the next workspace-wide release.
 
+The npm packages built on the engine — `@chordsketch/react-ui`,
+`@chordsketch/react`, `@chordsketch/vue`, `@chordsketch/svelte` and
+`@chordsketch/chordpro-lite` — carry the workspace version as well and publish
+with every release
+([ADR-0073](adr/0073-packages-built-on-the-engine-release-with-it.md)).
+
 ## Release Checklist
 
 ### Running the release
@@ -117,7 +123,7 @@ Re-running the script with the same version is always safe. It asks the
 registries what is already published, so an interrupted release resumes
 from what is missing, and a finished one is refused. It does not re-run a
 CI channel that failed after the tag: it names the channel and stops
-before crates.io and npm; re-run that channel (step 8), then re-run the
+before crates.io and npm; re-run that channel (step 7), then re-run the
 script; `publish-registries.yml` likewise skips whatever the registries
 already serve. winget and MacPorts remain manual (Post-Release).
 
@@ -198,6 +204,9 @@ at post-release verification rather than before the tag is cut.
    - `crates/napi/package.json` — both the main package and the per-platform
      manifests under `crates/napi/npm/<triple>/package.json`
    - `packages/tree-sitter-chordpro/package.json`
+   - `packages/{react-ui,react,vue,svelte,chordpro-lite}/package.json` —
+     the packages built on the engine publish with every release
+     ([ADR-0073](adr/0073-packages-built-on-the-engine-release-with-it.md))
    - `packages/claude-code-plugin/.claude-plugin/plugin.json` and the
      matching entry in `.claude-plugin/marketplace.json` — Claude Code
      caches plugins per version and will not re-fetch an unchanged one, so
@@ -211,6 +220,26 @@ at post-release verification rather than before the tag is cut.
    - `apps/desktop/package.json` — `version`
    - `apps/desktop/preview-handler/Cargo.toml` — `package.version`
      (the Windows preview handler DLL ships inside the same installer)
+
+   Pins on the wasm packages, all `^X.Y.Z` of the version being released:
+   - `@chordsketch/wasm` in `dependencies` of
+     `packages/{vscode-extension,react,vue,svelte}/package.json` and in
+     `peerDependencies` of `packages/ui-irealb-editor/package.json`
+   - `@chordsketch/wasm-export` in `peerDependencies` of
+     `packages/{react,vue,svelte}/package.json`
+
+   Then refresh the lockfiles, after `packages/npm/package.json` carries the
+   new version:
+   ```bash
+   for d in react-ui react vue svelte chordpro-lite ui-irealb-editor vscode-extension; do
+     (cd packages/$d && npm install --package-lock-only --ignore-scripts --no-audit --no-fund)
+   done
+   ```
+   Those lockfiles install `@chordsketch/wasm` from `packages/npm`, not
+   from npm, so the release commit installs and tests against the version
+   it releases before npm serves it (ADR-0073). They keep that link while
+   `packages/npm`'s version satisfies the pin; `check-version-consistency.py`
+   fails if a lockfile resolves it from npm instead.
 
    Hardcoded pins in CI:
    - `.github/workflows/readme-smoke.yml` ~line 204:
@@ -234,7 +263,7 @@ at post-release verification rather than before the tag is cut.
 
 3. **Commit** with message: `Release vX.Y.Z`
 
-   Steps 4-6 and 8 below are what `scripts/release.py` runs. They stay here as
+   Steps 4-7 below are what `scripts/release.py` runs. They stay here as
    the reference for what it does, and for re-running a single step by
    hand.
 
@@ -254,7 +283,7 @@ at post-release verification rather than before the tag is cut.
    ```bash
    V=X.Y.Z  # replace with the actual version
    gh workflow run publish-registries.yml -R koedame/chordsketch \
-     -f ref=v$V -f set=workspace -f mode=publish
+     -f ref=v$V -f mode=publish
    ```
    The run publishes every crate and npm package whose channel in
    `ci/release-channels.toml` carries the tag's version and is not served
@@ -264,27 +293,17 @@ at post-release verification rather than before the tag is cut.
      dependency order ([crates.io Publishing Order](#cratesio-publishing-order)).
      The crates are dry-run first, because the token the job exchanges
      lasts 30 minutes.
-   - **npm:** `@chordsketch/wasm`, `@chordsketch/wasm-export` and
-     `tree-sitter-chordpro` are built and packed on the runner; the napi
+   - **npm:** `@chordsketch/wasm`, `@chordsketch/wasm-export`,
+     `tree-sitter-chordpro`, `@chordsketch/react-ui`, `@chordsketch/react`,
+     `@chordsketch/vue`, `@chordsketch/svelte` and
+     `@chordsketch/chordpro-lite` are built and packed on the runner; the napi
      resolver and its five platform packages come from the tarballs
      `napi.yml` put on the GitHub Release, platform packages first. Each
      tarball passes the publish checks before any is uploaded, and the job
      waits until npm serves every package it published. Every upload
      carries a provenance attestation.
 
-7. **Publish a framework package** (`@chordsketch/react-ui`,
-   `@chordsketch/react`, `@chordsketch/vue`, `@chordsketch/svelte`,
-   `@chordsketch/chordpro-lite`). These version on their own cadence, not
-   with the tag, so they are not part of a release. Land the version bump
-   on `main`, then dispatch the same workflow from `main` with the package
-   as the set — `check` first if in doubt:
-   ```bash
-   gh workflow run publish-registries.yml -R koedame/chordsketch \
-     -f set=@chordsketch/vue -f mode=publish
-   ```
-   A package already served at its `package.json` version is skipped.
-
-8. **Run the channel rollup.** Every CI-published channel has already
+7. **Run the channel rollup.** Every CI-published channel has already
    run inside the release workflow (step 5) — Docker, VS Code / Open
    VSX, napi tarballs, the Swift Package (with its CocoaPods and
    `Package.swift` updates), and the whole `post-release.yml` fan-out are
@@ -322,7 +341,7 @@ at post-release verification rather than before the tag is cut.
    that job inside the release run instead
    (`gh run rerun <run-id> --failed -R koedame/chordsketch`).
 
-9. **Verify each channel.** The release run from step 5 covers every
+8. **Verify each channel.** The release run from step 5 covers every
    CI-published channel, so check that first:
    ```bash
    gh run list -R koedame/chordsketch --workflow release.yml --limit 5
@@ -339,7 +358,7 @@ at post-release verification rather than before the tag is cut.
    `chordsketch-*.vsix` should both show 8 entries for the new
    version.
 
-10. **Submit winget-pkgs PR**: see "Post-Release > winget" below. This is the
+9. **Submit winget-pkgs PR**: see "Post-Release > winget" below. This is the
    only post-release step that involves an external repo (`microsoft/winget-pkgs`).
 
 ## crates.io Publishing Order
@@ -396,17 +415,17 @@ together with the check in `scripts/_publish_checks.py`.
 | npm (wasm-export) | `@chordsketch/wasm-export` | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6). Ships in lockstep with `@chordsketch/wasm` (#2466). | none (OIDC trusted publisher, environment `npm`) | `npm-wasm-export` job |
 | npm (napi) | `@chordsketch/node` + 5 prebuilt platform packages | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6), from the platform tarballs `napi.yml` uploads to the GitHub Release. | none (OIDC trusted publisher, environment `npm`) | `napi-node` job |
 | npm (tree-sitter) | `tree-sitter-chordpro` | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6) | none (OIDC trusted publisher, environment `npm`) | `npm-tree-sitter` rollup entry |
-| npm (React) | `@chordsketch/react-ui` (design-system primitives, ADR-0029) + `@chordsketch/react` (component library) | `publish-registries.yml` dispatched by hand with the package as the set (Step 7). Own release cadence, not the workspace tag. | none (OIDC trusted publisher, environment `npm`) | `npm-react-ui` / `npm-react` jobs in `readme-smoke.yml` install the `latest` dist-tag daily and server-render a component (ADR-0064), plus source-side `react-ui.yml` / `react.yml` / `playground-smoke.yml`. Rollup entries are `skip` — the daily install is the stronger check. |
-| npm (Vue) | `@chordsketch/vue` | `publish-registries.yml` dispatched by hand with the package as the set (Step 7). Own release cadence, not the workspace tag. | none (OIDC trusted publisher, environment `npm`) | `npm-vue` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064), plus source-side `vue.yml` / `playground-smoke.yml`. Rollup entry is `skip` — the daily install is the stronger check. |
-| npm (Svelte) | `@chordsketch/svelte` | `publish-registries.yml` dispatched by hand with the package as the set (Step 7). Own release cadence, not the workspace tag. | none (OIDC trusted publisher, environment `npm`) | `npm-svelte` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064), plus source-side `svelte.yml` / `playground-smoke.yml`. Rollup entry is `skip` — the daily install is the stronger check. |
-| npm (chordpro-lite) | `@chordsketch/chordpro-lite` | `publish-registries.yml` dispatched by hand with the package as the set (Step 7). Own release cadence, not the workspace tag. | none (OIDC trusted publisher, environment `npm`) | rollup entry is `expected_version = "exists"` (ADR-0065): the daily `release-verify.yml` run asserts npm still serves it anonymously and its tarball is still fetchable. No `readme-smoke.yml` job — it is not an install method under README `## Installation`. Source side: `chordpro-lite.yml` plus the unfiltered `directive-catalog-sync` job in `ci.yml`. |
+| npm (React) | `@chordsketch/react-ui` (design-system primitives, ADR-0029) + `@chordsketch/react` (component library) | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6). Versions with the workspace (ADR-0073). | none (OIDC trusted publisher, environment `npm`) | `npm-react-ui` / `npm-react` rollup entries, plus `npm-react-ui` / `npm-react` jobs in `readme-smoke.yml` that install the `latest` dist-tag daily and server-render a component (ADR-0064), plus source-side `react-ui.yml` / `react.yml` / `playground-smoke.yml`. |
+| npm (Vue) | `@chordsketch/vue` | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6). Versions with the workspace (ADR-0073). | none (OIDC trusted publisher, environment `npm`) | `npm-vue` rollup entry, plus the `npm-vue` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064) and source-side `vue.yml` / `playground-smoke.yml`. |
+| npm (Svelte) | `@chordsketch/svelte` | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6). Versions with the workspace (ADR-0073). | none (OIDC trusted publisher, environment `npm`) | `npm-svelte` rollup entry, plus the `npm-svelte` job in `readme-smoke.yml` (daily `latest` install + server render, ADR-0064) and source-side `svelte.yml` / `playground-smoke.yml`. |
+| npm (chordpro-lite) | `@chordsketch/chordpro-lite` | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6). Versions with the workspace (ADR-0073). | none (OIDC trusted publisher, environment `npm`) | `npm-chordpro-lite` rollup entry. No `readme-smoke.yml` job — it is not an install method under README `## Installation`. Source side: `chordpro-lite.yml` plus the unfiltered `directive-catalog-sync` job in `ci.yml`. |
 | Homebrew tap | `koedame/tap/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `homebrew` job |
 | Scoop bucket | `koedame/scoop-bucket/chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `TAP_GITHUB_TOKEN` | `scoop` job |
 | AUR | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `AUR_SSH_KEY` | `aur` rollup entry |
 | Chocolatey | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push (windows-latest) | `CHOCOLATEY_API_KEY` | `chocolatey` rollup entry |
 | Snap Store | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `SNAP_STORE_TOKEN` | `snap` rollup entry |
 | nixpkgs | `pkgs.chordsketch` | manual PR to `NixOS/nixpkgs` | none | `nixpkgs` rollup entry |
-| winget | `koedame.chordsketch` | manual PR to `microsoft/winget-pkgs` (Step 8) | none (uses your `gh` token to fork+push) | `winget` job |
+| winget | `koedame.chordsketch` | manual PR to `microsoft/winget-pkgs` (Step 9) | none (uses your `gh` token to fork+push) | `winget` job |
 | MacPorts | `textproc/chordsketch` | manual PR to `macports/macports-ports` (Step 5) | none | `macports` job |
 | VS Code Marketplace | `koedame.chordsketch` (1 universal + 7 platform-specific VSIXes, #1789) | `vscode-extension.yml`, called by `release.yml` on tag push | `VSCE_PAT` (PAT, Marketplace Publish scope) | `vscode-marketplace` rollup entry |
 | PyPI | `chordsketch` | `python.yml` on tag push | none (OIDC trusted publisher) | `pypi` rollup entry |
@@ -442,7 +461,7 @@ After the release workflow completes and the GitHub Release is published:
    install instructions from `README.md` and stop referencing
    `docker.io/koedame/chordsketch` in `readme-smoke.yml`.
 
-3. **npm package** — see Step 7 of the Release Checklist above. CI workflow
+3. **npm package** — see Step 6 of the Release Checklist above. CI workflow
    only updates existing packages; first publish of any new `@chordsketch/*`
    name requires the manual local fallback (see quirks).
 
@@ -569,7 +588,7 @@ After the release workflow completes and the GitHub Release is published:
    has `on: release: types: [published]`, but like the other publish
    workflows it does **not** auto-trigger when `release.yml` creates the
    release with `GITHUB_TOKEN` (anti-recursion rule, see Known
-   Operational Quirks). Manual dispatch is included in step 8 of the
+   Operational Quirks). Manual dispatch is included in step 7 of the
    Release Checklist. Once dispatched, it queries every registry listed
    in `ci/release-channels.toml` and appends a
    `## Channel Verification` section to the release body. Wait for that
@@ -823,6 +842,11 @@ Add an entry only when:
    crates.io actually serves, which lags workspace during the bump-then-
    publish window).
 
+The `@chordsketch/wasm` and `@chordsketch/wasm-export` pins of the packages
+built on them cannot lag: their lockfiles install `@chordsketch/wasm` from
+`packages/npm`, which `npm ci` refuses once its version leaves the pin's
+range (ADR-0073).
+
 **Do not** add an entry to hide a legitimate mistake (forgot to bump, copy-
 paste error). Fix the source instead.
 
@@ -1019,15 +1043,11 @@ Done once, when moving from the maintainer-local publish (ADR-0008) to CI.
    ```
    Revoke the token afterwards; it is not needed again until a crate is
    added.
-4. **Prove it.** Dispatch the check for the workspace and for each
-   framework package. A check exchanges a token for every package of its
-   set, published or not, so every run must pass; a package without a
-   matching trusted publisher fails by name:
+4. **Prove it.** Dispatch the check. It exchanges a token for every
+   package, published or not, so a package without a matching trusted
+   publisher fails by name:
    ```bash
-   for set in workspace @chordsketch/react-ui @chordsketch/react @chordsketch/vue \
-       @chordsketch/svelte @chordsketch/chordpro-lite; do
-     gh workflow run publish-registries.yml -R koedame/chordsketch -f set="$set" -f mode=check
-   done
+   gh workflow run publish-registries.yml -R koedame/chordsketch -f mode=check
    ```
 5. **After the first release published from CI**, close the token path:
    - crates.io: each crate's Settings → Trusted Publishing → enable
@@ -1066,12 +1086,12 @@ first version goes out by hand and every later one from CI.
    display = "npm — <package-name>"
    kind = "npm"
    package = "<package-name>"
-   expected_version = "tag"   # or "exists" for a package on its own cadence
+   expected_version = "tag"
    required_secrets = []      # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
    ```
-   A package on its own cadence also goes into the `set` choices of
-   `publish-registries.yml`; `scripts/test_publish_registries.py` fails
-   until it does.
+   Every package this repository publishes carries the tag's version
+   (ADR-0073); `scripts/test_publish_registries.py` fails for one that
+   does not.
 3. **Track its version.** A tag-versioned package goes into the Step 1
    bump list and into `scripts/check-version-consistency.py`
    (`load_all_sources()`) and the `_build_repo()` fixture of
@@ -1089,8 +1109,7 @@ first version goes out by hand and every later one from CI.
    ```
 6. **Register its trusted publisher** with the command of the one-time
    setup (step 2 or 3), for that package only.
-7. **Prove it** by dispatching `publish-registries.yml` in `check` mode for
-   the package's set. From then on it publishes from CI.
+7. **Prove it** by dispatching `publish-registries.yml` in `check` mode. From then on it publishes from CI.
 
 ## First-Time Channel Setup
 

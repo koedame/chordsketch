@@ -1,6 +1,6 @@
 {
   "name": "@chordsketch/vue",
-  "version": "0.2.0",
+  "version": "0.6.0",
   "description": "Vue 3 components for embedding ChordPro previews, editors and chord diagrams, powered by @chordsketch/wasm",
   "license": "MIT",
   "type": "module",

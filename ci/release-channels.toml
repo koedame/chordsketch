@@ -46,9 +46,12 @@
 #   - The channel has no publish on this tag at all (manual PR flows such as
 #     winget, nixpkgs, MacPorts).
 #   - The channel publishes on its own cadence AND something else already
-#     asserts it is installable — the `@chordsketch/{react-ui,react,vue,svelte}`
-#     framework packages, which readme-smoke.yml installs daily (ADR-0064).
+#     asserts it is installable (a daily readme-smoke.yml install, ADR-0064).
 #     Off-cadence channels with no such coverage take `"exists"` instead.
+#
+# The rollup reads this file as it is at the tag it verifies, not at main,
+# so a channel added or moved onto the tag between releases is first
+# asserted for the release that ships it (ADR-0073).
 
 # ---------------------------------------------------------------- crates.io
 
@@ -188,107 +191,60 @@ expected_version = "tag"
 required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
 notes = "Unscoped per ADR-0008 §Decision 6 (tree-sitter ecosystem convention). Published by publish-registries.yml (ADR-0069); version tracks workspace releases."
 
-# ------------------------------------------------ npm (framework packages)
+# ------------------------------------------------ npm (packages built on the engine)
 #
-# @chordsketch/react-ui, @chordsketch/react, @chordsketch/vue and
-# @chordsketch/svelte are published from packages/<name>/ on their own
-# release cadence, by dispatching publish-registries.yml from main with
-# the package as the set (ADR-0069), decoupled from the workspace
-# version that the release tag carries. The rollup's only
-# assertion is "the registry's newest version equals the tag", which is
-# not a claim that holds for these packages, so they carry
-# `expected_version = "skip"` rather than a version the tag never
-# promised. Their per-PR verification is source-side: react-ui.yml,
-# react.yml, vue.yml, svelte.yml and playground-smoke.yml build and test
-# each package from the workspace on every PR that touches it.
-#
-# `skip` here does not mean nothing watches the registry. That these four
-# are installable from npm is asserted daily by readme-smoke.yml's
-# npm-react-ui / npm-react / npm-vue / npm-svelte jobs, which install the
-# `latest` dist-tag and server-render a component from it (ADR-0064).
+# @chordsketch/react-ui, @chordsketch/react, @chordsketch/vue,
+# @chordsketch/svelte and @chordsketch/chordpro-lite carry the workspace
+# version and publish with every release, like the packages above
+# (ADR-0073). Beyond the tag-equality assertion, readme-smoke.yml installs
+# the `latest` dist-tag of the first four daily and server-renders a
+# component from it (ADR-0064); chordpro-lite is not an install method under
+# README ## Installation, so it has no smoke job.
 
 [[channels]]
 id = "npm-react-ui"
 display = "npm — @chordsketch/react-ui"
 kind = "npm"
 package = "@chordsketch/react-ui"
-expected_version = "skip"
-skip_reason = """
-Versions on its own cadence per ADR-0029, not on the workspace release
-tag, so the rollup's tag-equality assertion does not apply. First
-published at 0.1.0 on 2026-09-12.
-"""
+expected_version = "tag"
 required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by dispatching publish-registries.yml with its package as the set (ADR-0069). Carries no @chordsketch/wasm dependency."
+notes = "Published by publish-registries.yml (ADR-0069). Carries no @chordsketch/wasm dependency."
 
 [[channels]]
 id = "npm-react"
 display = "npm — @chordsketch/react"
 kind = "npm"
 package = "@chordsketch/react"
-expected_version = "skip"
-skip_reason = """
-Versions on its own cadence, not on the workspace release tag, so the
-rollup's tag-equality assertion does not apply. First published at
-0.4.0 on 2026-09-12.
-"""
+expected_version = "tag"
 required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by dispatching publish-registries.yml with its package as the set (ADR-0069)."
+notes = "Published by publish-registries.yml (ADR-0069)."
 
 [[channels]]
 id = "npm-vue"
 display = "npm — @chordsketch/vue"
 kind = "npm"
 package = "@chordsketch/vue"
-expected_version = "skip"
-skip_reason = """
-Versions on its own cadence, not on the workspace release tag, so the
-rollup's tag-equality assertion does not apply. First published at
-0.1.0 on 2026-09-12.
-"""
+expected_version = "tag"
 required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by dispatching publish-registries.yml with its package as the set (ADR-0069)."
+notes = "Published by publish-registries.yml (ADR-0069)."
 
 [[channels]]
 id = "npm-svelte"
 display = "npm — @chordsketch/svelte"
 kind = "npm"
 package = "@chordsketch/svelte"
-expected_version = "skip"
-skip_reason = """
-Versions on its own cadence, not on the workspace release tag, so the
-rollup's tag-equality assertion does not apply. First published at
-0.1.0 on 2026-09-12.
-"""
+expected_version = "tag"
 required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by dispatching publish-registries.yml with its package as the set (ADR-0069). npm run build runs svelte-package, which emits sources + declarations rather than a bundle."
-
-# ------------------------------------------------ npm (chordpro-lite)
-#
-# @chordsketch/chordpro-lite is not a framework binding but shares their
-# release shape: published from packages/chordpro-lite/ on its own
-# cadence, by dispatching publish-registries.yml with its package as
-# the set (ADR-0069), decoupled from the workspace version the release
-# tag carries, so tag-equality is not a statement about it either.
-#
-# Unlike the four above it is not advertised under README ## Installation —
-# it is a helper for consumers already using the engine, listed in the
-# packages table — so readme-smoke.yml has no job for it and nothing was
-# asking npm about it at all. This is the channel `exists` was added for
-# (ADR-0065): the rollup asserts daily that the registry still serves it
-# anonymously and that its tarball is still fetchable. Its per-PR
-# verification stays source-side: chordpro-lite.yml typechecks, tests and
-# builds it, and the unfiltered directive-catalog-sync job in ci.yml fails
-# if its generated directive list drifts from the Rust catalog (ADR-0060).
+notes = "Published by publish-registries.yml (ADR-0069). npm run build runs svelte-package, which emits sources + declarations rather than a bundle."
 
 [[channels]]
 id = "npm-chordpro-lite"
 display = "npm — @chordsketch/chordpro-lite"
 kind = "npm"
 package = "@chordsketch/chordpro-lite"
-expected_version = "exists"
+expected_version = "tag"
 required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by dispatching publish-registries.yml with its package as the set (ADR-0069). Carries no @chordsketch/wasm dependency (ADR-0060). First published at 0.1.0 on 2026-09-12."
+notes = "Published by publish-registries.yml (ADR-0069). Carries no @chordsketch/wasm dependency (ADR-0060)."
 
 # ---------------------------------------------------------------- installers
 

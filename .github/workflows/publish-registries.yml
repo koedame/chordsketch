@@ -12,7 +12,7 @@ name: Publish to crates.io and npm
 # (ADR-0068 Decision 4).
 #
 #   mode: check    everything `publish` needs, without uploading: every
-#                  package of the set exists and its registry mints a token
+#                  package exists and its registry mints a token
 #                  for this workflow, and every one not published yet
 #                  builds, packs and passes the pull-request publish checks.
 #                  `scripts/release.py` dispatches it in its preflight,
@@ -22,9 +22,10 @@ name: Publish to crates.io and npm
 #                  serve yet, then the upload. `scripts/release.py`
 #                  dispatches it once every CI channel serves the version.
 #
-#   set: workspace            the crates and npm packages that carry the
-#                             release tag's version (`ci/release-channels.toml`)
-#   set: <framework package>  one package on its own cadence, from main
+# What is published: every crate and npm package whose channel in
+# `ci/release-channels.toml` carries the release tag's version, which is every
+# one this repository publishes (ADR-0073). There is no per-package dispatch:
+# a package ships with a release.
 #
 # The registries are the state: a publish skips what already serves its
 # manifest version, so a failed run is resumed by dispatching it again.
@@ -38,20 +39,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "What to publish: a v* tag (required for the workspace set in publish mode) or a commit. Empty: main."
+        description: "What to publish: a v* tag (required in publish mode) or, to check, a commit. Empty: main."
         type: string
         default: ""
-      set:
-        description: "workspace, or one framework package"
-        type: choice
-        default: workspace
-        options:
-          - workspace
-          - "@chordsketch/react-ui"
-          - "@chordsketch/react"
-          - "@chordsketch/vue"
-          - "@chordsketch/svelte"
-          - "@chordsketch/chordpro-lite"
       mode:
         description: "check: prove the publish would succeed, upload nothing. publish: upload."
         type: choice
@@ -62,9 +52,9 @@ on:
 
 permissions: {}
 
-# Two publishes of the same set would race for the same versions.
+# Two publishes would race for the same versions.
 concurrency:
-  group: publish-registries-${{ inputs.set }}
+  group: publish-registries
   cancel-in-progress: false
 
 env:
@@ -95,19 +85,14 @@ jobs:
       - name: Check the dispatch
         env:
           REF_INPUT: ${{ inputs.ref }}
-          SET: ${{ inputs.set }}
           MODE: ${{ inputs.mode }}
         run: |
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             echo "::error::dispatch this workflow from main (it was dispatched from $GITHUB_REF)"
             exit 1
           fi
-          if [ "$SET" = workspace ] && [ "$MODE" = publish ] && ! [[ "$REF_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::the workspace set publishes from its release tag: set ref to vX.Y.Z"
-            exit 1
-          fi
-          if [ "$SET" != workspace ] && [ -n "$REF_INPUT" ]; then
-            echo "::error::a framework package publishes from main: leave ref empty"
+          if [ "$MODE" = publish ] && ! [[ "$REF_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::a publish is of a release: set ref to its tag, vX.Y.Z"
             exit 1
           fi
 
@@ -134,16 +119,14 @@ jobs:
             echo "tag=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: List the packages of the set and those not published yet
+      - name: List the packages and those not published yet
         id: plan
-        env:
-          SET: ${{ inputs.set }}
-        run: python3 scripts/publish-registries.py plan --set "$SET"
+        run: python3 scripts/publish-registries.py plan
 
   crates-io:
     name: crates.io
     needs: [plan]
-    # A publish needs a crate to upload; a check proves the token for the set.
+    # A publish needs a crate to upload; a check proves the token for every crate.
     if: needs.plan.outputs.pending_crates != '[]' || (inputs.mode == 'check' && needs.plan.outputs.crates != '[]')
     runs-on: ubuntu-latest
     environment: crates-io
@@ -229,9 +212,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGES: ${{ needs.plan.outputs.pending_npm }}
-          SET_PACKAGES: ${{ needs.plan.outputs.npm }}
+          ALL_PACKAGES: ${{ needs.plan.outputs.npm }}
           MODE: ${{ inputs.mode }}
           TAG: ${{ needs.plan.outputs.tag }}
         run: >-
-          python3 scripts/publish-registries.py npm --packages "$PACKAGES" --set-packages "$SET_PACKAGES"
+          python3 scripts/publish-registries.py npm --packages "$PACKAGES" --all-packages "$ALL_PACKAGES"
           --mode "$MODE" --tag "$TAG" --out "$RUNNER_TEMP/npm-tarballs"
