@@ -19,11 +19,6 @@ first to notice:
      fails naming the ones it never serves.
   6. A check with nothing pending builds nothing: npm 11 refuses a dry run
      over a published version, which a check between releases hit.
-  7. A package whose lockfile links `@chordsketch/wasm` in-tree (ADR-0073)
-     gets it built even when `@chordsketch/wasm` itself is not part of the
-     run — the shape a resumed release takes once `@chordsketch/wasm` has
-     already published but a package built on it has not — and the same
-     run still installs the Rust + wasm-pack toolchain that build needs.
 
 Stdlib `unittest` only. Nothing here touches the network.
 """
@@ -34,7 +29,6 @@ import importlib.util
 import json
 import os
 import re
-import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -140,67 +134,6 @@ class NpmPublishOrderTest(unittest.TestCase):
             order,
             ["@chordsketch/node-darwin-arm64", "@chordsketch/node", "@chordsketch/wasm", "tree-sitter-chordpro"],
         )
-
-
-class EnsureWasmBuiltTest(unittest.TestCase):
-    """A resumed release can dispatch `["@chordsketch/react"]` alone, once
-    `@chordsketch/wasm` already published in an earlier attempt. Its lockfile
-    still links `../npm` (ADR-0073), which is unbuilt on this run's fresh
-    checkout unless something builds it."""
-
-    def test_a_wasm_linked_consumer_without_wasm_in_the_run_builds_it(self) -> None:
-        calls = []
-
-        def runner(cmd: list[str], cwd) -> subprocess.CompletedProcess[str]:
-            calls.append((cmd, cwd))
-            return subprocess.CompletedProcess(cmd, 0, "")
-
-        problems = publish.ensure_wasm_built(REPO_ROOT, ["@chordsketch/react"], runner)
-        self.assertEqual(problems, [])
-        wasm = publish.checks.NPM_PACKAGES["@chordsketch/wasm"]
-        self.assertEqual(calls, [(list(cmd), REPO_ROOT / wasm.directory) for cmd in wasm.build])
-
-    def test_wasm_already_in_the_run_is_not_built_twice(self) -> None:
-        def runner(cmd: list[str], cwd) -> subprocess.CompletedProcess[str]:
-            self.fail("@chordsketch/wasm builds itself when it is part of the run")
-
-        problems = publish.ensure_wasm_built(REPO_ROOT, ["@chordsketch/wasm", "@chordsketch/react"], runner)
-        self.assertEqual(problems, [])
-
-    def test_no_wasm_linked_consumer_in_the_run_builds_nothing(self) -> None:
-        def runner(cmd: list[str], cwd) -> subprocess.CompletedProcess[str]:
-            self.fail("nothing in this run needs the in-tree wasm build")
-
-        problems = publish.ensure_wasm_built(REPO_ROOT, ["@chordsketch/chordpro-lite"], runner)
-        self.assertEqual(problems, [])
-
-    def test_a_failed_build_is_reported_against_wasm(self) -> None:
-        def runner(cmd: list[str], cwd) -> subprocess.CompletedProcess[str]:
-            return subprocess.CompletedProcess(cmd, 1, "boom")
-
-        problems = publish.ensure_wasm_built(REPO_ROOT, ["@chordsketch/vue"], runner)
-        self.assertEqual(len(problems), 1)
-        self.assertIn("@chordsketch/wasm", problems[0])
-
-
-class WasmPackNeededTest(unittest.TestCase):
-    """The `wasm` plan output gates whether the npm job installs Rust and
-    wasm-pack (`publish-registries.yml`). It must stay true on a resumed
-    release where `@chordsketch/wasm` already published but a
-    `WASM_LINKED_CONSUMERS` package has not — `ensure_wasm_built` needs the
-    toolchain even though `@chordsketch/wasm` itself is not in the run."""
-
-    def test_wasm_itself_pending_needs_the_toolchain(self) -> None:
-        self.assertTrue(publish.wasm_pack_needed(["@chordsketch/wasm"]))
-
-    def test_a_wasm_linked_consumer_alone_still_needs_the_toolchain(self) -> None:
-        self.assertTrue(publish.wasm_pack_needed(["@chordsketch/react"]))
-
-    def test_neither_wasm_nor_a_linked_consumer_needs_no_toolchain(self) -> None:
-        self.assertFalse(publish.wasm_pack_needed(["@chordsketch/chordpro-lite", "tree-sitter-chordpro"]))
-
-    def test_empty_pending_needs_no_toolchain(self) -> None:
-        self.assertFalse(publish.wasm_pack_needed([]))
 
 
 class NpmExchangeTest(unittest.TestCase):

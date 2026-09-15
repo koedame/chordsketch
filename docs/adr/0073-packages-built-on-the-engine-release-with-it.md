@@ -60,16 +60,6 @@ previous wasm from npm rather than the one being released.
 6. **`release-verify.yml` reads `ci/release-channels.toml` at the tag it
    verifies.** Otherwise the daily run over the previous tag would assert
    channels, like these five, that moved onto the tag after it was cut.
-7. **`publish-registries.py` builds `@chordsketch/wasm` for its lockfile-linked
-   consumers even when `@chordsketch/wasm` itself is not part of the run.**
-   The `npm` job's `packages` list is only the packages still pending; on a
-   resumed release where `@chordsketch/wasm` already published but
-   `@chordsketch/react` (or `vue` / `svelte`) has not, `@chordsketch/wasm`
-   would be absent from that list, leaving its lockfile link pointed at an
-   unbuilt `packages/npm` on the fresh checkout. `ensure_wasm_built` builds it
-   as a prerequisite in that case, and `wasm_pack_needed` extends the `wasm`
-   plan output — which gates installing Rust and wasm-pack on the runner — to
-   cover it too.
 
 ## Rationale
 
@@ -122,4 +112,3 @@ the link; and `packages/npm` at 0.8.0 against `^0.7.0` fails `npm ci`.
 - ADR-0064, ADR-0065, ADR-0069 — the own cadence this replaces
 - `scripts/check-version-consistency.py` `lockfile_link_problems`
 - `scripts/_publish_checks.py` `npm_dependency_problems`
-- `scripts/publish-registries.py` `ensure_wasm_built`, `wasm_pack_needed`
