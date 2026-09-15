@@ -43,6 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The CocoaPods podspec inlines its MIT licence text.** It named a
   `LICENSE` file the XCFramework zip does not contain.
 
+### Security
+
+- **The desktop app uses `rustls` 0.23.45**, clearing RUSTSEC-2026-0285
+  (TLS 1.3 handshake messages accepted across encryption level
+  boundaries). `rustls` is reached only through `tauri` and
+  `tauri-plugin-updater`, so `chordsketch-desktop` is the only affected
+  artefact. Lockfile-only update within the existing semver range, which
+  also moves `rustls-webpki` to 0.103.15.
+
 ### Changed
 
 - **Every pull request now proves every published package can still be
