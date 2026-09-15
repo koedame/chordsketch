@@ -1,4 +1,4 @@
-# 0074. The desktop app is built for Flathub from source, as `me.koeda.ChordSketch`
+# 0074. The desktop app is built for Flathub from source, as `io.github.koedame.chordsketch`
 
 - **Status**: Accepted
 - **Date**: 2026-09-15
@@ -18,6 +18,11 @@ that shape the manifest:
   package and toolchain component is a checksummed source in the manifest.
 - "The ID must not end in generic terms like `.desktop, .app, .linux`." The
   Tauri identifier is `me.koeda.chordsketch.desktop`.
+- A domain ID requires that "the author or developer must have control over
+  the domain"; applications "hosted on `github.com`" may instead use an
+  `io.github.` ID, whose last two components are the repository's owner and
+  name. `flatpak-builder-lint manifest` fetches the URL an ID stands for and
+  fails with `appid-url-not-reachable` when it does not answer.
 - "The runtime(s) used in the manifest must be hosted on Flathub and must be
   the latest version at that time of submission."
 - "When a suitable XDG portal exists … using the portal becomes mandatory
@@ -32,7 +37,10 @@ Flatpak regardless: the application lives on a read-only `/app`, and
 
 ## Decision
 
-1. **The Flatpak ID is `me.koeda.ChordSketch`.** The Tauri identifier stays
+1. **The Flatpak ID is `io.github.koedame.chordsketch`**, the code-hosting ID
+   for `github.com/koedame/chordsketch`. Flathub verifies it through an
+   administrator of the `koedame` organization signing in with GitHub, so
+   nothing has to be served from a domain. The Tauri identifier stays
    `me.koeda.chordsketch.desktop`: macOS and Windows installations, and the
    Homebrew cask's `zap` paths, key their data on it. The Flatpak build does
    not enable GTK's application ID, so the two never meet; the desktop file
@@ -75,7 +83,7 @@ Flatpak regardless: the application lives on a read-only `/app`, and
    desktop file with `desktop-file-validate`, builds the Flatpak offline in the image Flathub's
    GitHub actions use, and launches it under Xvfb until the window title the
    app sets at the end of its startup appears.
-7. **Updates are pull requests on `flathub/me.koeda.ChordSketch`**, opened by
+7. **Updates are pull requests on `flathub/io.github.koedame.chordsketch`**, opened by
    `desktop-release.yml`'s `update-flathub` job with the files `prepare.py`
    writes for the tag and the `FLATHUB_TOKEN` secret. A maintainer installs
    the test build Flathub links and merges. The job stops before the pull
@@ -115,6 +123,12 @@ through its startup (#2907), which the jobs that only compile it could not.
 
 ## Alternatives considered
 
+- **`me.koeda.ChordSketch`, the domain of the Tauri identifier.** `koeda.me`
+  answers automated requests from GitHub's runners with a Cloudflare
+  challenge (`403`), so the linter's `appid-url-not-reachable` fails in CI
+  and would fail in Flathub's own checks; passing it means turning off the
+  bot protection for every site under the domain. The ID cannot be changed
+  after the first submission, so it should not depend on that setting.
 - **Repackage the release `.deb`** (Tauri's documented Flatpak route). Not a
   source build.
 - **`org.freedesktop.Platform`.** Has no WebKitGTK.

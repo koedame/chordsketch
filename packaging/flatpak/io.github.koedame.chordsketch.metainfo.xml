@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Copyright 2026 koedame -->
 <component type="desktop-application">
-  <id>me.koeda.ChordSketch</id>
+  <id>io.github.koedame.chordsketch</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>AGPL-3.0-only AND MIT AND OFL-1.1</project_license>
 
   <name>ChordSketch</name>
   <summary>Write chord sheets with a live preview</summary>
-  <developer id="me.koeda">
+  <developer id="io.github.koedame">
     <name>koedame</name>
   </developer>
 
@@ -26,7 +26,7 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">me.koeda.ChordSketch.desktop</launchable>
+  <launchable type="desktop-id">io.github.koedame.chordsketch.desktop</launchable>
 
   <url type="homepage">https://github.com/koedame/chordsketch</url>
   <url type="bugtracker">https://github.com/koedame/chordsketch/issues</url>

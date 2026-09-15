@@ -8,7 +8,7 @@ A Flatpak build has no network, so every file the build reads is listed in
 the manifest as a source with a checksum. Most of that list is generated
 from the lockfiles, and this script generates it:
 
-  me.koeda.ChordSketch.yml    copied from this directory
+  io.github.koedame.chordsketch.yml    copied from this directory
   chordsketch-source.json     this checkout (default), or the tagged commit
                               on GitHub (`--git-tag` / `--git-commit`), which
                               is the form Flathub builds
@@ -39,7 +39,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-APP_ID = "me.koeda.ChordSketch"
+APP_ID = "io.github.koedame.chordsketch"
 REPOSITORY_URL = "https://github.com/koedame/chordsketch.git"
 
 FLATPAK_BUILDER_TOOLS = "https://github.com/flatpak/flatpak-builder-tools.git"

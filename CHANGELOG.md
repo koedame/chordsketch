@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The desktop app builds as a Flatpak for Flathub** (`me.koeda.ChordSketch`),
+- **The desktop app builds as a Flatpak for Flathub** (`io.github.koedame.chordsketch`),
   entirely from source and without network access; `packaging/flatpak/`
   has the manifest, AppStream metadata and build steps. Inside a Flatpak
   the app does not check for updates itself, since Flathub delivers them.

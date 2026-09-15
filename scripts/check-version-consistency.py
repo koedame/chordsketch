@@ -55,7 +55,7 @@ Sources checked:
  19. `packages/{react-ui,react,vue,svelte,chordpro-lite}/package.json`
      `version` — the npm packages that used to version on their own
      cadence and now publish with every workspace release (ADR-0073)
- 20. `packaging/flatpak/me.koeda.ChordSketch.metainfo.xml` — the newest
+ 20. `packaging/flatpak/io.github.koedame.chordsketch.metainfo.xml` — the newest
      `<release version>` (the Flathub listing's release history, ADR-0074)
 
 Beyond versions, the lockfile of every consumer in (10) that installs
@@ -607,7 +607,7 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
             )
         )
 
-    metainfo_rel = "packaging/flatpak/me.koeda.ChordSketch.metainfo.xml"
+    metainfo_rel = "packaging/flatpak/io.github.koedame.chordsketch.metainfo.xml"
     metainfo = repo_root / metainfo_rel
     if metainfo.is_file():
         # The first <release> is the newest; AppStream lists them newest first.

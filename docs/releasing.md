@@ -220,7 +220,7 @@ at post-release verification rather than before the tag is cut.
    - `apps/desktop/package.json` — `version`
    - `apps/desktop/preview-handler/Cargo.toml` — `package.version`
      (the Windows preview handler DLL ships inside the same installer)
-   - `packaging/flatpak/me.koeda.ChordSketch.metainfo.xml` — a new
+   - `packaging/flatpak/io.github.koedame.chordsketch.metainfo.xml` — a new
      `<release version="X.Y.Z" date="YYYY-MM-DD">` at the top of
      `<releases>` (the Flathub listing's release history)
 
@@ -654,7 +654,7 @@ After the release workflow completes and the GitHub Release is published:
 | `SNAP_STORE_TOKEN` | Snapcraft exported credentials (`snapcraft export-login`) | Authenticate `snapcraft upload` + `snapcraft release` from `post-release.yml` |
 | `COCOAPODS_TRUNK_TOKEN` | CocoaPods trunk session token (from `~/.netrc` after `pod trunk register`) | Authenticate `pod trunk push` from `swift.yml` |
 | `OPEN_VSX_TOKEN` | Open VSX personal access token (**environment secret** in `open-vsx`, not repo-level) | Authenticate `ovsx publish` from `vscode-extension.yml` |
-| `FLATHUB_TOKEN` | Classic token with `public_repo`, from an account with write access to `flathub/me.koeda.ChordSketch` | Open the update pull request from `desktop-release.yml`'s `update-flathub` job. Not set until the first submission is accepted ([Flathub](#flathub-desktop-app)) |
+| `FLATHUB_TOKEN` | Classic token with `public_repo`, from an account with write access to `flathub/io.github.koedame.chordsketch` | Open the update pull request from `desktop-release.yml`'s `update-flathub` job. Not set until the first submission is accepted ([Flathub](#flathub-desktop-app)) |
 | `GITHUB_TOKEN` | provided automatically | Used by `docker.yml` to push to GHCR, by `release.yml` to upload assets, by `npm-publish.yml` checkout |
 
 crates.io, npm, PyPI and RubyGems need no secret: they publish through
@@ -1365,26 +1365,26 @@ requires disclosing AI-generated code and packaging in the submission.
      --git-tag "$TAG" --git-commit "$(git rev-parse "$TAG^{commit}")"
    ```
 3. Build, run and lint them as `packaging/flatpak/README.md` describes,
-   using `flathub-submission/me.koeda.ChordSketch.yml`.
+   using `flathub-submission/io.github.koedame.chordsketch.yml`.
 4. Fork <https://github.com/flathub/flathub> with *Copy the master branch
    only* unchecked, then:
    ```bash
    git clone --branch=new-pr git@github.com:<you>/flathub.git && cd flathub
-   git checkout -b me.koeda.ChordSketch new-pr
+   git checkout -b io.github.koedame.chordsketch new-pr
    cp ../flathub-submission/* .
-   git add . && git commit && git push -u origin me.koeda.ChordSketch
+   git add . && git commit && git push -u origin io.github.koedame.chordsketch
    ```
 5. Open the pull request against the **`new-pr`** branch in the GitHub web
-   interface, titled `Add me.koeda.ChordSketch`, and fill in its template,
+   interface, titled `Add io.github.koedame.chordsketch`, and fill in its template,
    including the AI disclosure. Reviewers start a test build with
    `bot, build`.
-6. Once it is merged, Flathub creates `flathub/me.koeda.ChordSketch` and
+6. Once it is merged, Flathub creates `flathub/io.github.koedame.chordsketch` and
    invites you. Create a classic token with the `public_repo` scope from
    the account Flathub invited, and store it:
    `gh secret set FLATHUB_TOKEN -R koedame/chordsketch`. From the next
    release, `desktop-release.yml`'s `update-flathub` job opens the update
    pull request; install the test build Flathub links from it, then merge.
-7. Verify the app on the Flathub developer portal, which asks for a token at
-   `https://koeda.me/.well-known/org.flathub.VerifiedApps.txt`.
+7. Verify the app on the Flathub developer portal by signing in with a
+   GitHub account that is an administrator of the `koedame` organization.
 8. Add the channel to `ci/release-channels.toml` and the
    [Distribution Channels](#distribution-channels) table.

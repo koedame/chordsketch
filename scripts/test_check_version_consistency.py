@@ -99,7 +99,7 @@ def _build_repo(
     # packaging/flatpak metainfo — the newest release is checked
     flatpak_dir = root / "packaging" / "flatpak"
     flatpak_dir.mkdir(parents=True, exist_ok=True)
-    (flatpak_dir / "me.koeda.ChordSketch.metainfo.xml").write_text(
+    (flatpak_dir / "io.github.koedame.chordsketch.metainfo.xml").write_text(
         "<component>\n  <releases>\n"
         f'    <release version="{flatpak_release_version}" date="2026-02-01"/>\n'
         '    <release version="0.1.0" date="2026-01-01"/>\n'

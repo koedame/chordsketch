@@ -1795,7 +1795,7 @@ def desktop_updater_problems(version: str, runner: Runner = run) -> list[str]:
 # ---------------------------------------------------------------- Flathub
 
 
-FLATPAK_APP_ID = "me.koeda.ChordSketch"
+FLATPAK_APP_ID = "io.github.koedame.chordsketch"
 # The image flatpak/flatpak-github-actions builds in: flatpak-builder,
 # flatpak-builder-lint, Xvfb and the GNOME runtime the manifest names.
 FLATPAK_IMAGE = "ghcr.io/flathub-infra/flatpak-github-actions:gnome-50"
