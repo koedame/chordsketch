@@ -445,6 +445,113 @@ jobs:
           git commit --allow-empty -m "Update chordsketch desktop cask to ${VERSION}"
           git push
 
+  update-flathub:
+    name: Update Flathub
+    # Opens a pull request on `flathub/io.github.koedame.chordsketch` with the
+    # manifest and source lists `packaging/flatpak/prepare.py` writes for
+    # this tag (ADR-0074). Flathub builds the pull request and posts a test
+    # build; a maintainer installs it and merges. The repository exists only
+    # once the first submission is accepted, so until then the job generates
+    # the files and stops, as it does for prerelease tags. `publishable.yml`
+    # runs the `Generate Flathub files` step on every pull request.
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Determine version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+          # Flathub's stable repository takes stable releases only.
+          case "$TAG" in
+            *-*) PRERELEASE=true ;;
+            *) PRERELEASE=false ;;
+          esac
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#desktop-v}"
+            echo "commit=$(git rev-parse HEAD)"
+            echo "prerelease=$PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Re-validate tag format
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+          prefix: desktop-
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the source list generators' dependencies
+        run: python3 -m pip install -r packaging/flatpak/requirements.txt
+
+      - name: Generate Flathub files
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          python3 packaging/flatpak/prepare.py --out flathub --git-tag "$TAG" --git-commit "$COMMIT"
+
+      - name: Open the Flathub pull request
+        if: steps.version.outputs.prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          repo=flathub/io.github.koedame.chordsketch
+          # Only a 404 means "not on Flathub yet"; any other failure to ask
+          # must not skip a release's update silently. Authenticated, so the
+          # anonymous per-IP rate limit shared by hosted runners cannot 403 it.
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${GITHUB_TOKEN}" "https://api.github.com/repos/${repo}")
+          if [ "$status" = 404 ]; then
+            echo "::notice::${repo} does not exist yet: the app has not been accepted on Flathub. Nothing to update."
+            exit 0
+          fi
+          if [ "$status" != 200 ]; then
+            echo "::error::GitHub answered ${status} when asked for ${repo}."
+            exit 1
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::${repo} exists but FLATHUB_TOKEN is not set, so the update cannot be proposed."
+            exit 1
+          fi
+          # The token embeds into `flathub-repo/.git/config`. Do NOT
+          # upload that directory as an artifact.
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" flathub-repo
+          cd flathub-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          branch="update-${VERSION}"
+          git switch -c "$branch"
+          cp ../flathub/* .
+          git add -A
+          if git diff --cached --quiet; then
+            echo "::notice::${repo} already builds ${VERSION}."
+            exit 0
+          fi
+          git commit -m "Update to ${VERSION}"
+          git push --force-with-lease origin "$branch"
+          if [ -z "$(gh pr list --repo "$repo" --head "$branch" --json number --jq '.[].number')" ]; then
+            gh pr create --repo "$repo" --head "$branch" --title "Update to ${VERSION}" \
+              --body "ChordSketch ${VERSION}: https://github.com/koedame/chordsketch/releases/tag/desktop-v${VERSION}"
+          fi
+
   publish-updater-manifest:
     name: Publish Tauri updater manifest
     # Generates `latest.json` — the manifest the Tauri updater

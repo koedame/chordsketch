@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The desktop app builds as a Flatpak for Flathub** (`io.github.koedame.chordsketch`),
+  entirely from source and without network access; `packaging/flatpak/`
+  has the manifest, AppStream metadata and build steps. Inside a Flatpak
+  the app does not check for updates itself, since Flathub delivers them.
+  It is not on Flathub yet.
+
 ### Fixed
 
+- **The desktop app finishes starting up.** Its permissions did not allow
+  building the menu bar, so every launch showed "ChordSketch failed to
+  start", with no menu bar, no unsaved marker in the window title and no
+  prompt before closing with unsaved changes.
 - **`tree-sitter-chordpro` no longer declares a Node entry point it does
   not ship.** Its `main` and `types` pointed at `bindings/node`, which
   was never in the package, so `require('tree-sitter-chordpro')` threw

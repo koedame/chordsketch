@@ -174,30 +174,53 @@ fn save_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, content).map_err(|e| format!("Failed to write {path}: {e}"))
 }
 
+/// Whether this installation updates itself through the Tauri updater.
+///
+/// Not inside a Flatpak sandbox: there the application lives on a
+/// read-only `/app`, and the store it was installed from delivers every
+/// new version, so an in-app updater could neither install nor should
+/// it try. Flatpak writes `/.flatpak-info` into every sandbox
+/// (flatpak-metadata(5)).
+fn self_updates() -> bool {
+    !Path::new("/.flatpak-info").exists()
+}
+
+/// Tells the frontend whether to run the update check loop. See
+/// [`self_updates`].
+#[tauri::command]
+fn self_update_enabled() -> bool {
+    self_updates()
+}
+
 fn main() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         // `tauri-plugin-opener` exposes `openUrl()` to the frontend
         // so the Help → "Visit project homepage" menu item can hand
         // the URL off to the OS default browser. Scoped via the
         // capability allowlist to the project homepage only (#2199).
-        .plugin(tauri_plugin_opener::init())
-        // `tauri-plugin-updater` lets the frontend call `check()` /
-        // `downloadAndInstall()` against the release manifest at the
-        // endpoint configured in `tauri.conf.json`. Signatures are
-        // verified against the bundled `pubkey` before install, so
-        // a compromised GitHub Release CDN cannot push rogue updates.
-        // See ADR-0005 (#2076).
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        // `tauri-plugin-process` exposes `relaunch()` to the
-        // frontend so the user can restart the app after the
-        // updater installs a new version.
-        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init());
+    if self_updates() {
+        builder = builder
+            // `tauri-plugin-updater` lets the frontend call `check()` /
+            // `downloadAndInstall()` against the release manifest at the
+            // endpoint configured in `tauri.conf.json`. Signatures are
+            // verified against the bundled `pubkey` before install, so
+            // a compromised GitHub Release CDN cannot push rogue updates.
+            // See ADR-0005 (#2076).
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            // `tauri-plugin-process` exposes `relaunch()` to the
+            // frontend so the user can restart the app after the
+            // updater installs a new version.
+            .plugin(tauri_plugin_process::init());
+    }
+    builder
         .invoke_handler(tauri::generate_handler![
             export_pdf,
             export_html,
             open_file,
             save_file,
+            self_update_enabled,
         ])
         .run(tauri::generate_context!())
         // `expect` is justified: this is process entry — if the Tauri

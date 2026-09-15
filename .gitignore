@@ -96,3 +96,8 @@ __pycache__/
 
 # Local scratch / reference assets (screenshots, sample PDFs)
 tmp/
+
+# Flatpak builds (packaging/flatpak/README.md): generated manifests,
+# flatpak-builder state and build directories.
+/build/
+.flatpak-builder/
