@@ -13,6 +13,7 @@ The CLI is not published there
 | `io.github.koedame.chordsketch.metainfo.xml` | AppStream metadata: the Flathub listing. |
 | `io.github.koedame.chordsketch.desktop` | The launcher entry. |
 | `screenshots/` | The listing's screenshots. The metainfo links them from a commit on `main`, as Flathub asks. |
+| `screenshot.py` | Re-takes `screenshots/editor.png` from the built Flatpak, so the listing shows what the app actually looks like. |
 | `requirements.txt` | The Python packages `prepare.py`'s generators need. |
 | `window-titles.py` | Lists the X windows' titles; the launch check waits for the one the app sets when its startup has finished. |
 
@@ -38,6 +39,13 @@ flatpak run io.github.koedame.chordsketch
 `prepare.py` refuses to run while `apps/desktop/node_modules` or
 `packages/react/node_modules` exists: the npm source list must come from the
 lockfiles alone.
+
+After a change to how the app looks, re-take the listing's screenshot and
+point the metainfo at the commit that carries the new file:
+
+```bash
+packaging/flatpak/screenshot.py
+```
 
 `python3 scripts/check-publishable.py flathub` runs what the `Publishable`
 check runs (docker is enough): it generates the files with the release job's

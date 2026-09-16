@@ -29,6 +29,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { App } from './App';
 import { desktopBridge, type EditorMode } from './desktop-bridge';
 import { ErrorBoundary } from './ErrorBoundary';
+import './app-shell.css';
 import './codemirror-editor.css';
 // The iRealb bar-grid GUI editor renders directly into DOM that
 // is not styled by `@chordsketch/react/styles.css`; the package

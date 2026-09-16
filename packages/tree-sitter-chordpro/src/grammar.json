@@ -76,8 +76,37 @@
           "content": {
             "type": "ALIAS",
             "content": {
-              "type": "PATTERN",
-              "value": "start_of_[a-zA-Z][a-zA-Z0-9_-]*"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "start_of_abc"
+                },
+                {
+                  "type": "STRING",
+                  "value": "start_of_grid"
+                },
+                {
+                  "type": "STRING",
+                  "value": "start_of_ly"
+                },
+                {
+                  "type": "STRING",
+                  "value": "start_of_musicxml"
+                },
+                {
+                  "type": "STRING",
+                  "value": "start_of_svg"
+                },
+                {
+                  "type": "STRING",
+                  "value": "start_of_tab"
+                },
+                {
+                  "type": "STRING",
+                  "value": "start_of_textblock"
+                }
+              ]
             },
             "named": true,
             "value": "directive_name"
@@ -142,8 +171,37 @@
           "content": {
             "type": "ALIAS",
             "content": {
-              "type": "PATTERN",
-              "value": "end_of_[a-zA-Z][a-zA-Z0-9_-]*"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "end_of_abc"
+                },
+                {
+                  "type": "STRING",
+                  "value": "end_of_grid"
+                },
+                {
+                  "type": "STRING",
+                  "value": "end_of_ly"
+                },
+                {
+                  "type": "STRING",
+                  "value": "end_of_musicxml"
+                },
+                {
+                  "type": "STRING",
+                  "value": "end_of_svg"
+                },
+                {
+                  "type": "STRING",
+                  "value": "end_of_tab"
+                },
+                {
+                  "type": "STRING",
+                  "value": "end_of_textblock"
+                }
+              ]
             },
             "named": true,
             "value": "directive_name"
