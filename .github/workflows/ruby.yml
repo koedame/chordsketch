@@ -64,7 +64,7 @@ jobs:
         with:
           tool: cross
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # This cell links against `cross`'s sysroot now rather than the
           # runner's own toolchain, so its objects and build-script
@@ -142,7 +142,7 @@ jobs:
         with:
           tool: cross
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Only the aarch64 cell changed toolchain (apt
           # `gcc-aarch64-linux-gnu` to `cross`), so only it needs a new
@@ -183,7 +183,7 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: ruby-generate
           save-if: ${{ github.ref == 'refs/heads/main' }}

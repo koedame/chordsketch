@@ -75,7 +75,7 @@ jobs:
         with:
           toolchain: stable
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: publishable-crates-io
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -125,7 +125,7 @@ jobs:
         if: contains(matrix.tools, 'wasm-pack')
         uses: ./.github/actions/install-wasm-pack
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: contains(matrix.tools, 'wasm-pack')
         with:
           shared-key: publishable-wasm
@@ -147,7 +147,7 @@ jobs:
         with:
           toolchain: stable
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: publishable-napi
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -266,7 +266,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: publishable-ffi
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -296,7 +296,7 @@ jobs:
           name: publishable-ffi
           path: ffi
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: publishable-ffi
           save-if: false
@@ -343,7 +343,7 @@ jobs:
           name: publishable-ffi
           path: ffi
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: publishable-ffi
           save-if: false
@@ -412,7 +412,7 @@ jobs:
         with:
           tool: cross
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: publishable-cli-x86_64-unknown-linux-musl-cross
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -546,7 +546,7 @@ jobs:
       - name: Pack with the release's Pack step and check the package
         run: python scripts/check-publishable.py chocolatey --dir .
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: publishable-cli-x86_64-pc-windows-msvc
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -580,7 +580,7 @@ jobs:
         with:
           toolchain: stable
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: publishable-cli
           save-if: ${{ github.ref == 'refs/heads/main' }}

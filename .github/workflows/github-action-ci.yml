@@ -62,7 +62,7 @@ jobs:
       # with the cache, subsequent runs reuse the same target/ dir.
       # `save-if: main only` keeps the cache pool from filling with
       # PR-specific entries (see `.claude/rules/ci-parallelization.md` §2).
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: github-action-ci-${{ runner.os }}-${{ runner.arch }}
           save-if: ${{ github.ref == 'refs/heads/main' }}

@@ -983,7 +983,7 @@ jobs:
       # is NOT in the workspace; rust-cache will attempt to save the workspace
       # target/ but it will be empty for this job (harmless). The registry cache
       # alone is worthwhile given the daily + PR cadence.
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: readme-smoke-library
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -1135,7 +1135,7 @@ jobs:
       # Caches the workspace target/ directory. Although CARGO_HOME is redirected to
       # /tmp/cargo-usage, cargo install --path still compiles into the workspace
       # target/, so subsequent runs skip recompiling unchanged crates.
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: readme-smoke-usage
           save-if: ${{ github.ref == 'refs/heads/main' }}
