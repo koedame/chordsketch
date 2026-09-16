@@ -117,7 +117,7 @@ jobs:
     #
     # They are guarantees, so none of them has a `paths:` filter and all of
     # them run on every pull request; none compiles Rust, so none needs a
-    # `Swatinem/rust-cache` entry (`.claude/rules/ci-parallelization.md` §2).
+    # `rust-cache` entry (`.claude/rules/ci-parallelization.md` §2).
     #
     # Each used to be a job of its own, which is what §3 asks for while runner
     # minutes are free. They stopped being free when Linux jobs moved to the
@@ -323,6 +323,18 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - uses: ./.github/actions/rust-cache
+        # Linux cells only — see `.claude/rules/ci-parallelization.md` §2
+        # "Cache budget". The six `test` cells were the single largest
+        # claim on the repository's 10 GiB Actions cache pool — 3.75 GiB
+        # across the six, of which the four hosted cells hold 2.37 GiB —
+        # which put total demand per `main` push above the cap and made
+        # LRU evict entries written by the same run. The Windows / macOS
+        # cells give the budget up because they are not on the critical
+        # path (measured cold penalty: Windows 2.5 min -> 8.1 min,
+        # macOS 1.4 min -> 4.8 min, on runners with no queue pressure),
+        # while the Linux cells run on the `LINUX_RUNNER` pool (§7),
+        # where a cold build costs ~21 min on a contended 8-slot pool.
+        if: matrix.os == 'ubuntu-latest'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
