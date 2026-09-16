@@ -1,0 +1,98 @@
+# SYNTAX TEST "source.chordpro"
+#
+# Which sections hold verbatim content is the list `Parser::verbatim_end_for`
+# in `crates/chordpro` uses: abc, grid, ly, musicxml, svg, tab and textblock
+# (plus the `sot` / `sog` aliases).  Everything else — a verse, a chorus, or
+# any custom section name — is an ordinary section whose lines carry chords.
+#
+# Note: the annotation prefix '#' occupies column 0, so no assertion below
+# can address column 0 of the line above it.
+
+# --- The verbatim environments ------------------------------------------
+
+{start_of_tab}
+E|--0--[G]--|
+#       ^ markup.raw.block.chordpro
+{end_of_tab}
+
+{start_of_grid}
+|| [G] | [C] |
+#   ^ markup.raw.block.chordpro
+{end_of_grid}
+
+{start_of_abc}
+K:[G]
+#  ^ markup.raw.block.chordpro
+{end_of_abc}
+
+{start_of_ly}
+c4 [G] d4
+#   ^ markup.raw.block.chordpro
+{end_of_ly}
+
+{start_of_musicxml}
+<note>[G]</note>
+#      ^ markup.raw.block.chordpro
+{end_of_musicxml}
+
+{start_of_svg}
+<text>[G]</text>
+#      ^ markup.raw.block.chordpro
+{end_of_svg}
+
+{start_of_textblock}
+Not a [G] chord here
+#      ^ markup.raw.block.chordpro
+{end_of_textblock}
+
+# --- The short aliases ---------------------------------------------------
+
+{sot}
+E|--0--[G]--|
+#       ^ markup.raw.block.chordpro
+{eot}
+
+{sog}
+|| [G] | [C] |
+#   ^ markup.raw.block.chordpro
+{eog}
+
+# --- A label does not stop the section being verbatim --------------------
+
+{start_of_tab: Solo}
+E|--0--[G]--|
+#       ^ markup.raw.block.chordpro
+{end_of_tab}
+
+# --- Nor does a label on the end directive: `is_verbatim_end_ahead` in
+# `crates/chordpro/src/parser.rs` only inspects the name token, so
+# `{end_of_tab: Solo}` closes the section exactly like `{end_of_tab}`.
+
+{start_of_tab}
+E|--0--[G]--|
+#       ^ markup.raw.block.chordpro
+{end_of_tab: Solo}
+Sing [G]on
+#     ^ entity.name.chord.chordpro
+
+# --- Everything else keeps its chords ------------------------------------
+
+{start_of_outro}
+Fade [G]out
+#    ^ punctuation.definition.chord.begin.chordpro
+#     ^ entity.name.chord.chordpro
+#      ^ punctuation.definition.chord.end.chordpro
+{end_of_outro}
+
+{start_of_verse}
+Sing [G]on
+#     ^ entity.name.chord.chordpro
+{end_of_verse}
+
+# A custom name that merely starts with a verbatim environment's name is
+# an ordinary section: `tablature` is not `tab`.
+
+{start_of_tablature}
+Play [G]on
+#     ^ entity.name.chord.chordpro
+{end_of_tablature}
