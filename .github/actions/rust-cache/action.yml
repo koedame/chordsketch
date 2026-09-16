@@ -1,0 +1,59 @@
+name: "Rust cache"
+description: >
+  Cache the cargo registry and `target/` for a Rust-compiling job.
+  On a runner that provides a persistent cache directory
+  (`RUST_CACHE_DIR`, set by the self-hosted pool named by
+  `LINUX_RUNNER`), `target/` is pointed at a per-job subdirectory of it
+  and the GitHub Actions cache is not touched. Everywhere else this is
+  `Swatinem/rust-cache` with the inputs passed through (ADR-0078).
+inputs:
+  shared-key:
+    description: >
+      `Swatinem/rust-cache` shared-key. Also names the `target/`
+      subdirectory on the pool; empty falls back to the workflow and
+      job name, as `Swatinem/rust-cache` falls back to the job id.
+    required: false
+    default: ""
+  save-if:
+    description: >
+      `Swatinem/rust-cache` save-if. Required so every caller states
+      that only `main` writes to the GitHub Actions cache
+      (`.claude/rules/ci-parallelization.md` §2). Ignored on the pool,
+      whose directory is not shared with other runners.
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Use the runner's cache directory
+      id: local
+      shell: bash
+      env:
+        SHARED_KEY: ${{ inputs.shared-key }}
+      run: |
+        set -euo pipefail
+        if [ -z "${RUST_CACHE_DIR:-}" ]; then
+          exit 0
+        fi
+        name="${SHARED_KEY:-${GITHUB_WORKFLOW}-${GITHUB_JOB}}"
+        name="$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '_')"
+        # One directory per toolchain, as rust-cache keys on `rustc -vV`,
+        # so the two `test` toolchains do not rebuild each other's deps.
+        toolchain="$(rustc -vV | sha256sum | cut -c1-8)"
+        dir="${RUST_CACHE_DIR}/${name}-${toolchain}"
+        mkdir -p "$dir"
+        if [ -e target ] || [ -L target ]; then
+          echo "::error::target/ already exists; the cache step must run before the first cargo command"
+          exit 1
+        fi
+        ln -s "$dir" target
+        # rust-cache sets this; incremental state is not reusable across
+        # checkouts and would only grow the directory.
+        echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+        echo "dir=$dir" >> "$GITHUB_OUTPUT"
+        echo "target/ -> $dir ($(du -sh "$dir" | cut -f1))"
+
+    - if: steps.local.outputs.dir == ''
+      uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      with:
+        shared-key: ${{ inputs.shared-key }}
+        save-if: ${{ inputs.save-if }}
