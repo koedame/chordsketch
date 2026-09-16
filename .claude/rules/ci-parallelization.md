@@ -179,6 +179,50 @@ each pay runner boot + cache restore independently. Any proposed matrix split fo
 `swift.yml` MUST measure both the cold-cache and warm-cache cases before merging.
 See #1465 for the tracking issue.
 
+### Linux minutes stopped being free: the pool is eight slots
+
+"Runner minutes are free" held while every Linux job ran on a GitHub-hosted
+runner. Linux jobs now go to the pool named by `LINUX_RUNNER`
+([ADR-0076](../../docs/adr/0076-linux-jobs-run-on-a-runner-pool-named-by-a-repository-variable.md)),
+which is **eight concurrent slots for the whole repository** — every workflow,
+every branch, and `main` draw from the same eight. A job there holds a slot for
+its entire wall clock, so a split that used to cost nothing now delays whatever
+is behind it in the queue.
+
+Measured over every job of the `main` push for
+[e007b7d](https://github.com/koedame/chordsketch/commit/e007b7d5f0d1ed9495415d1be3c6ce3eec207e1d)
+— 26 workflow runs, 103 jobs, 59 of them on the pool:
+
+| | value |
+|---|---|
+| jobs on the pool | 59 |
+| queue wait (created → started), median / max | 6.0 min / 49.3 min |
+| pool execution time, total | 297 min |
+| pool jobs finishing in under 60 s | 27, together 12.3 min of execution |
+
+Ten of those 27 were `ci.yml`'s Python-only guard jobs — roughly 18 s of work
+each, each behind its own checkout and runner setup, each holding a slot. They
+are now one `guards` job.
+
+For a job that lands on the pool:
+
+- **Split when each cell does minutes of work.** The trade-off above is
+  unchanged; the split still finishes sooner than a sequential loop.
+- **Do NOT split when each cell does seconds of work.** Batch the cells into one
+  job, one step each. Per-job checkout and runner setup dominate what such a
+  cell measures, and every extra job pushes a real one further down the queue.
+- **Put `if: ${{ !cancelled() }}` on each batched step**, so batching does not
+  cost the property the separate jobs had: a push that breaks three guards
+  reports all three in one run rather than stopping at the first.
+- **Check branch protection before batching a job away.** Required checks are
+  matched by name (§7 makes the same point about matrix cells), so a batch that
+  swallows one has to rename it in branch protection in the same change. None of
+  the ten guard jobs was required.
+
+The numbers §4 asks for come from `gh api
+repos/koedame/chordsketch/actions/runs/<id>/jobs --paginate`, which carries
+`created_at` / `started_at` / `completed_at` and the runner `labels` per job.
+
 ## 4. Measure before shipping workflow performance changes
 
 PRs that claim to improve CI wall-clock MUST include before/after numbers from
