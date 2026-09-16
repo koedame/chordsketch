@@ -1,8 +1,8 @@
 ; Fold captures use the nvim-treesitter vocabulary (@fold).
 ;
-; Delegate blocks ({start_of_chorus} … {end_of_chorus},
-; {start_of_tab} … {end_of_tab}, {start_of_abc} … {end_of_abc}, …) are
-; the only multi-line construct the grammar produces, so they are the
-; only region worth folding. Everything else in ChordPro is a single
-; line.
+; Delegate blocks ({start_of_abc} … {end_of_abc}, {start_of_ly} …
+; {end_of_ly}, …) are the only multi-line construct the grammar
+; produces, so they are the only region worth folding. A {start_of_verse}
+; section is not one: its lines are ordinary song lines, each a node of
+; its own, so the grammar has nothing spanning the section to fold.
 (delegate_block) @fold

@@ -102,7 +102,7 @@ cp packages/tree-sitter-chordpro/queries/*.scm \
 | Query | What it does |
 |---|---|
 | `highlights.scm` | Colours directives, chord names, comments, and delegate-block bodies |
-| `folds.scm` | Makes each `{start_of_X}` … `{end_of_X}` block foldable |
+| `folds.scm` | Makes each delegate block (`{start_of_abc}` … `{end_of_abc}`, …) foldable |
 | `indents.scm` | Keeps ChordPro lines at column 0 and leaves delegate-block bodies to the editor's own indent logic |
 
 ### LSP setup

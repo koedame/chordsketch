@@ -17,6 +17,7 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 | Comments | `# comment` | `comment` |
 | Directives | `{title: Song Name}` | `directive` (with `directive_name`, `directive_value`) |
 | Delegate blocks | `{start_of_abc}...{end_of_abc}` | `delegate_block` (with `block_start_directive`, `block_content`, `block_end_directive`) |
+| Sections | `{start_of_verse}...{end_of_verse}` | `directive`, then the section's own lines |
 | Chords | `[Am]`, `[G/B]` | `chord` (with `chord_name`) |
 | Lyrics | `Amazing grace` | `lyrics` |
 
@@ -25,7 +26,7 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project.
 | File | Capture vocabulary | Purpose |
 |---|---|---|
 | `queries/highlights.scm` | standard tree-sitter highlight names | Directives, chord names, comments, delegate-block bodies |
-| `queries/folds.scm` | nvim-treesitter (`@fold`) | Folds each `{start_of_X}` … `{end_of_X}` delegate block |
+| `queries/folds.scm` | nvim-treesitter (`@fold`) | Folds each `{start_of_abc}` … `{end_of_abc}` delegate block |
 | `queries/indents.scm` | nvim-treesitter (`@indent.zero` / `@indent.auto`) | Pins ChordPro lines to column 0; leaves delegate-block bodies to the editor |
 | `queries/helix/highlights.scm` | Helix (`@comment.line`, `@keyword.directive`, `@markup.raw.block`) | The same nodes as `queries/highlights.scm`, named in Helix's vocabulary |
 
