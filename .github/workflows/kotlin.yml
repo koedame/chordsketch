@@ -12,6 +12,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/kotlin.yml"
+      - ".github/actions/rust-cache/action.yml"
   pull_request:
     paths:
       - "crates/ffi/**"
@@ -21,6 +22,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/kotlin.yml"
+      - ".github/actions/rust-cache/action.yml"
   workflow_dispatch:
     inputs:
       tag:
@@ -64,7 +66,7 @@ jobs:
         with:
           tool: cross
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           # This cell links against `cross`'s sysroot now rather than the
           # runner's own toolchain, so its objects and build-script
@@ -138,7 +140,7 @@ jobs:
         with:
           tool: cross
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           shared-key: kotlin-${{ matrix.target }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -184,7 +186,7 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           shared-key: kotlin-generate
           save-if: ${{ github.ref == 'refs/heads/main' }}

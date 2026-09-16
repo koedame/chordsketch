@@ -33,8 +33,13 @@ publish:
 
 Every Rust-compiling job (any step that invokes `cargo build/test/clippy/doc`,
 or a tool that internally runs cargo: maturin, napi-rs, wasm-pack, cross) SHOULD
-include `Swatinem/rust-cache` with a meaningful `shared-key` — **unless** the
-workflow runs less often than once per 7 days.
+include the local `./.github/actions/rust-cache` with a meaningful `shared-key`
+— **unless** the workflow runs less often than once per 7 days. Do not call
+`Swatinem/rust-cache` directly: the local action runs it on GitHub-hosted
+runners and uses the runner's own cache directory on the `LINUX_RUNNER` pool
+([ADR-0078](../../docs/adr/0078-the-runner-pool-keeps-a-rust-cache-per-runner.md)).
+It takes the same `shared-key` and `save-if` inputs, and the examples below
+apply to it unchanged.
 
 GitHub Actions cache entries are evicted by LRU after 7 days of inactivity.
 Cache additions to infrequent workflows deliver no wall-clock benefit and add
@@ -58,16 +63,16 @@ re-propose adding cache.
 The `shared-key` SHOULD include the target triple when the job compiles for a
 specific target, to avoid cache thrashing across targets:
 ```yaml
-- uses: Swatinem/rust-cache@...
+- uses: ./.github/actions/rust-cache
   with:
     shared-key: kotlin-x86_64-unknown-linux-gnu
 ```
 
-Every `Swatinem/rust-cache` invocation MUST also pin `save-if` so only
+Every `rust-cache` invocation MUST also pin `save-if` so only
 main pushes write to the cache:
 
 ```yaml
-- uses: Swatinem/rust-cache@...
+- uses: ./.github/actions/rust-cache
   with:
     shared-key: kotlin-x86_64-unknown-linux-gnu
     save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -336,7 +341,11 @@ strategy:
 ```
 
 The pool is ephemeral and unprivileged: no `sudo`, no container engine,
-nothing mounted from its host. A job stays on plain `ubuntu-latest` when
+nothing mounted from its host except a per-runner Rust cache directory that a
+later job reuses
+([ADR-0078](../../docs/adr/0078-the-runner-pool-keeps-a-rust-cache-per-runner.md)).
+Because a pull request can leave build output there, **nothing that is
+published may be built on the pool**. A job stays on plain `ubuntu-latest` when
 it needs `sudo` / `apt-get`, a container engine (`docker`, `cross`,
 `maturin-action`'s manylinux build, the AUR and Flathub checks),
 `snapcraft`, `flatpak`, Homebrew, the Swift toolchain, a display

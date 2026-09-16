@@ -2,6 +2,14 @@
 
 - **Status**: Accepted
 - **Date**: 2026-09-16
+- **Amended by**: [ADR-0078](0078-the-runner-pool-keeps-a-rust-cache-per-runner.md)
+
+> Amended on 2026-09-16 by
+> [ADR-0078](0078-the-runner-pool-keeps-a-rust-cache-per-runner.md). Each
+> runner now keeps a Rust cache directory from its host across jobs, so
+> "nothing carried over" and "nothing of the host mounted" below have
+> that one exception. The `vscode-extension.yml` release jobs that ran on
+> the pool moved back to `ubuntu-latest`.
 
 ## Context
 
