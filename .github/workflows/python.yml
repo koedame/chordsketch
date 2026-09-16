@@ -171,7 +171,7 @@ jobs:
       # remains the sole cache layer here: it works at the cargo level (skipping
       # the rustc invocation entirely for unchanged crates on a warm hit), so
       # it does not depend on stable absolute paths the way sccache does.
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: python-x86_64-pc-windows-msvc
           save-if: ${{ github.ref == 'refs/heads/main' }}
