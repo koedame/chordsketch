@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **VS Code and the JetBrains IDEs highlight the right sections as
+  verbatim.** The TextMate grammar decided by exclusion — every section
+  except `verse`, `chorus`, `bridge`, `grid` and `tab` was a verbatim
+  block — so a custom section such as `{start_of_outro}` lost its chord
+  colouring, while `{start_of_tab}` and `{start_of_grid}`, whose content
+  really is verbatim, had theirs parsed as chords. The grammar now names
+  the seven environments the parser in `crates/chordpro` treats as
+  verbatim (`abc`, `grid`, `ly`, `musicxml`, `svg`, `tab`, `textblock`),
+  and recognises two forms it never matched at all: the `sot` / `sog`
+  aliases and a labelled start such as `{start_of_tab: Solo}`.
 - **Every function the Python package documents can be imported.**
   `import chordsketch` exposed only 14 of the 36 bindings; the
   `*_with_warnings` variants, `parse_and_render_html_body`,
