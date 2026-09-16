@@ -5,9 +5,10 @@
 //
 //     python3 scripts/generate-bare-directives.py --apply
 //
-// The `directive-catalog-sync` job in `.github/workflows/ci.yml` fails
-// when this file and the catalog disagree, so a directive added to the
-// catalog cannot leave this surface behind.
+// The `Directive catalog sync` step of the `guards` job in
+// `.github/workflows/ci.yml` fails when this file and the catalog
+// disagree, so a directive added to the catalog cannot leave this
+// surface behind.
 
 /**
  * ChordPro directive names that are legal with no value at all - the

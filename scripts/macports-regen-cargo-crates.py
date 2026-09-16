@@ -65,7 +65,7 @@ Usage:
     python3 scripts/macports-regen-cargo-crates.py --apply
 
     # Verify the Portfile matches the tagged Cargo.lock; exits
-    # non-zero on drift. The `macports-portfile-sync` CI guard runs
+    # non-zero on drift. The `MacPorts Portfile sync` guard step runs
     # this on every PR. Falls back to HEAD when the auto-resolved
     # tag does not yet exist (release-cut window).
     python3 scripts/macports-regen-cargo-crates.py --check
