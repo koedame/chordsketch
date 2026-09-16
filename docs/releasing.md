@@ -1074,7 +1074,7 @@ Done once, when moving from the maintainer-local publish (ADR-0008) to CI.
      ```
    - **crates.io.** A token with the `trusted-publishing` scope, as in
      step 3. Every crate answers `200`, and each one sends a
-     settings-changed mail:
+     settings-changed email:
      ```bash
      read -rs CRATES_IO_TOKEN
      for crate in chordsketch-chordpro chordsketch-ireal chordsketch-render-text chordsketch-render-html \
