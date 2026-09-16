@@ -19,17 +19,22 @@
             }
         },
         "delegate-block": {
-            "begin": "(?i)({)(start_of_(?!(?:verse|chorus|bridge|grid|tab)\\b)[a-z][a-z0-9_]*)(})",
+            "comment": "Sections whose body is verbatim: no chords, no directives. The environments listed here are the ones `Parser::verbatim_end_for` in `crates/chordpro/src/parser.rs` treats that way, plus the `sot` / `sog` / `eot` / `eog` aliases; every other section name (a verse, a chorus, `{start_of_outro}`) is an ordinary section and falls through to `#directive` so its lines keep their chords. Keep this list and the parser's in step.",
+            "begin": "(?i)({)((?:start_of_(?:abc|grid|ly|musicxml|svg|tab|textblock)|sot|sog)\\b)(?:\\s*(:)\\s*([^{}]*?))?\\s*(})",
             "beginCaptures": {
                 "1": {"name": "punctuation.definition.directive.begin.chordpro"},
                 "2": {"name": "keyword.control.directive.chordpro"},
-                "3": {"name": "punctuation.definition.directive.end.chordpro"}
+                "3": {"name": "punctuation.separator.directive.chordpro"},
+                "4": {"name": "string.unquoted.directive-value.chordpro"},
+                "5": {"name": "punctuation.definition.directive.end.chordpro"}
             },
-            "end": "(?i)({)(end_of_(?!(?:verse|chorus|bridge|grid|tab)\\b)[a-z][a-z0-9_]*)(})",
+            "end": "(?i)({)((?:end_of_(?:abc|grid|ly|musicxml|svg|tab|textblock)|eot|eog)\\b)(?:\\s*(:)\\s*([^{}]*?))?\\s*(})",
             "endCaptures": {
                 "1": {"name": "punctuation.definition.directive.begin.chordpro"},
                 "2": {"name": "keyword.control.directive.chordpro"},
-                "3": {"name": "punctuation.definition.directive.end.chordpro"}
+                "3": {"name": "punctuation.separator.directive.chordpro"},
+                "4": {"name": "string.unquoted.directive-value.chordpro"},
+                "5": {"name": "punctuation.definition.directive.end.chordpro"}
             },
             "contentName": "markup.raw.block.chordpro"
         },
