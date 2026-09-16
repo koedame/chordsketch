@@ -12,7 +12,7 @@ name: "@chordsketch/chordpro-lite"
 # The generated `src/bare-directives.ts` is NOT guarded here: it derives
 # from the Rust directive catalog, and a catalog-only change matches
 # none of the paths below. That guard is the unfiltered
-# `directive-catalog-sync` job in `ci.yml`, which runs on every PR.
+# `Directive catalog sync` guard step in `ci.yml`, which runs on every PR.
 
 on:
   push:

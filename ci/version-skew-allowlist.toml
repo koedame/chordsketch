@@ -1,7 +1,8 @@
 # Version skew allowlist.
 #
 # Consumed by `scripts/check-version-consistency.py` and enforced via the
-# `version-consistency` job in `.github/workflows/ci.yml`.
+# `Version consistency` step of the `guards` job in
+# `.github/workflows/ci.yml`.
 #
 # Each `[[allowed_skews]]` entry declares that a specific (file, field) is
 # intentionally out of sync with the canonical workspace crate version, plus

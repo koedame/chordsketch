@@ -109,270 +109,194 @@ jobs:
         env:
           RUSTDOCFLAGS: "-D warnings"
 
-  version-consistency:
-    name: Version consistency
-    # Enforces that every versioned manifest (workspace crates, the npm,
-    # vscode-extension, and napi package.json files, and the hardcoded pins
-    # inside readme-smoke.yml) is either aligned with the canonical workspace
-    # crate version or has an explicit entry in
-    # ci/version-skew-allowlist.toml. Every allowlist entry must reference a
-    # tracking issue so skews cannot silently rot. See #1506.
+  guards:
+    name: Repository guards
+    # Every guarantee-style check this workflow carries that is Python-only
+    # (plus pwsh for the release-publication steps) and finishes in seconds,
+    # batched into one job.
     #
-    # Intentionally Python-only, no cargo invocation — runs in ~2-3 seconds,
-    # gives near-instant feedback on PRs that forget to bump a manifest.
-    # No rust-cache entry is needed (per .claude/rules/ci-parallelization.md
-    # §2: the job does not compile Rust).
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Run consistency check
-        run: python3 scripts/check-version-consistency.py
-
-      - name: Unit tests
-        run: |
-          python3 -m unittest scripts/test_check_version_consistency.py scripts/test_check_release_channels.py scripts/test_release.py
-
-  msrv-consistency:
-    name: MSRV consistency
-    # Keeps every restatement of `rust-version` in step with the
-    # workspace declaration: the `FROM rust:<tag>@sha256:<digest>`
-    # builder pin in every Dockerfile, and README's "Requires Rust N.M
-    # or later." sentence under the from-source install section.
+    # They are guarantees, so none of them has a `paths:` filter and all of
+    # them run on every pull request; none compiles Rust, so none needs a
+    # `Swatinem/rust-cache` entry (`.claude/rules/ci-parallelization.md` §2).
     #
-    # Neither site is built or asserted by anything else on a PR.
-    # `docker.yml` publishes from `Dockerfile.release`, which copies a
-    # prebuilt musl binary and never compiles Rust, so the from-source
-    # `Dockerfile` is baked by no workflow at all; `readme-sync.yml`
-    # snapshots the bash commands in that README section, not the prose
-    # around them. A pin left behind by an MSRV bump therefore stays
-    # green until a user runs `docker build .` — which is how the
-    # builder sat on `rust:1.85-bookworm` after the workspace moved to
-    # 1.88, where `cargo build` refuses to compile at all.
+    # Each used to be a job of its own, which is what §3 asks for while runner
+    # minutes are free. They stopped being free when Linux jobs moved to the
+    # runner pool named by `LINUX_RUNNER` ([ADR-0076](../../docs/adr/0076-linux-jobs-run-on-a-runner-pool-named-by-a-repository-variable.md)):
+    # ten checks that each do ~18 s of work still took ten of the pool's eight
+    # slots and queued behind the multi-minute cargo jobs, so per-job checkout
+    # and runner setup dominated what they actually measured. Batching trades
+    # ten check badges for one and gives nine slots per run back to the jobs
+    # that need them. See §3 for the measurement that decided it.
     #
-    # Guarantee-style check like the guard jobs around it: no paths:
-    # filter, runs on every PR. Python-only, no network and no docker
-    # pull, sub-second wall clock; no rust-cache needed (per
-    # `.claude/rules/ci-parallelization.md` §2 the job does not compile
-    # Rust). See ADR-0062 for why this is a text check rather than a
-    # `docker build` job.
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check the MSRV restatements
-        run: python3 scripts/check-msrv-consistency.py
-
-      - name: Unit tests
-        run: python3 -m unittest scripts/test_check_msrv_consistency.py
-
-  fixture-counts:
-    name: Fixture counts
-    # Enforces the minimum per-renderer golden fixture counts documented in
-    # `.claude/rules/golden-tests.md`. Guarantee-style check per
-    # `.claude/rules/ci-parallelization.md` §3 — no paths: filter, runs on
-    # every PR. Python-only, ~1 second wall clock; no rust-cache needed
-    # (does not compile Rust).
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Count fixtures
-        run: python3 scripts/check-fixture-counts.py
-
-      - name: Unit tests
-        run: python3 -m unittest scripts/test_check_fixture_counts.py
-
-  design-system-tertiary:
-    name: Design system tertiary ink
-    # Keeps the tertiary tone off small copy in the design-system static
-    # reference pages, the way `packages/react{,-ui}/tests/tertiary-ink.test.ts`
-    # keeps it off the shipped stylesheets: `--ink-500` is 3.53:1, which
-    # clears the 3:1 WCAG 1.4.11 asks of non-text UI but not the 4.5:1
-    # SC 1.4.3 asks of text below 18.66px bold / 24px regular (ADR-0054).
-    # Those pages have no test runner of their own, so the guard is a
-    # standalone script. No paths: filter — the constraint is a
-    # project-wide guarantee, so it runs on every PR the way the other
-    # guard jobs in this workflow do. Python-only, sub-second wall clock;
-    # no rust-cache needed (the job does not compile Rust).
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check tertiary-ink sites
-        run: python3 scripts/check-design-system-tertiary.py
-
-      - name: Unit tests
-        run: python3 -m unittest scripts/test_check_design_system_tertiary.py
-
-  core-zero-deps:
-    name: Core crate zero-deps
-    # Enforces the zero-external-dependency contract for the core crates
-    # (`chordsketch-chordpro`, `chordsketch-ireal`) documented in CLAUDE.md
-    # "Dependency Policy" and `.claude/rules/code-style.md`. A stray
-    # dev/build/normal dep drags a network-fetched transitive graph
-    # (e.g. tempfile -> getrandom) back into every `cargo metadata`
-    # resolution, which is what made the cold-cache desktop-build wasm
-    # step fragile. Guarantee-style check per
-    # `.claude/rules/ci-parallelization.md` §3 — no paths: filter, runs on
-    # every PR. Python-only, sub-second wall clock; no rust-cache needed.
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check core crate dependencies
-        run: python3 scripts/check-zero-deps.py
-
-      - name: Unit tests
-        run: python3 -m unittest scripts/test_check_zero_deps.py
-
-  webview-lockstep:
-    name: WebView2 stack lockstep
-    # The Windows preview handler and the desktop app ship in one
-    # installer and embed WebView2 through the same `wry` / `windows` /
-    # `windows-core`, so the handler's requirements are held at the
-    # versions Tauri resolves (ADR-0066). A caret requirement left behind
-    # when Tauri moves — or bumped ahead of it — puts a second copy of the
-    # stack in `Cargo.lock` without failing any build, so this job
-    # compares the two consumers' lock entries directly.
-    #
-    # Guarantee-style check per `.claude/rules/ci-parallelization.md`
-    # §3 — no paths: filter, runs on every PR (the drift arrives through
-    # `Cargo.lock` in dependency-update PRs). Python-only, sub-second
-    # wall clock; no rust-cache needed (§2).
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Compare the handler's and Tauri's WebView2 crates
-        run: python3 scripts/check-webview-lockstep.py
-
-      - name: Unit tests
-        run: python3 -m unittest scripts/test_check_webview_lockstep.py
-
-  glibc-floor:
-    name: Linux glibc floor
-    # Guards the support floor of every Linux artifact this project
-    # publishes. A Linux target in `release.yml`'s build matrix without
-    # `cross: true` is compiled against the `ubuntu-latest` runner's
-    # glibc, which produces an archive that installs cleanly on the
-    # runner and then fails to start on any older distribution
-    # ("version `GLIBC_2.39' not found"). The desktop bundles have the
-    # same failure from the same cause, expressed as a runner label
-    # rather than a container: they link the build host's webkit2gtk, so
-    # their matrices pin `ubuntu-22.04` (ADR-0056). Nothing on a PR
-    # would notice either one: `readme-smoke.yml` only ever exercises
-    # `ubuntu-latest`, so the first report comes from a user. This job
-    # answers the config half of both questions on every PR — including
-    # for `desktop-release.yml`, which has no pull_request trigger of
-    # its own; the "Verify glibc floor" steps in `release.yml` and the
-    # desktop build composite answer the artifact half before anything
-    # is published.
-    #
-    # Guarantee-style check per `.claude/rules/ci-parallelization.md`
-    # §3 — no paths: filter, runs on every PR. Python-only, sub-second
-    # wall clock; no rust-cache needed (§2).
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check the release and desktop matrices hold their floors
-        run: python3 scripts/check-glibc-floor.py
-
-      - name: Unit tests
-        run: python3 -m unittest scripts/test_check_glibc_floor.py
-
-  macports-portfile-sync:
-    name: MacPorts Portfile sync
-    # Guards against the `cargo.crates` block in
-    # `packaging/macports/Portfile` drifting from the `Cargo.lock`
-    # shipped in the source tarball that the Portfile's `github.setup`
-    # line points at. The cargo portgroup downloads each crate listed
-    # in `cargo.crates` and validates its checksum against what the
-    # tarball's lockfile demands; if the two are out of sync, the
-    # upstream MacPorts build fails with "checksum mismatch on
-    # <crate>" before any compilation begins. This is therefore a
-    # tag-relative check: HEAD's Cargo.lock is irrelevant — the only
-    # lockfile that matters is the one inside the tarball.
-    # Same guarantee-style trigger as `fixture-counts`: runs on every
-    # PR, no path filter, Python-only, < 1 s wall clock.
+    # `if: ${{ !cancelled() }}` on every check keeps the property the separate
+    # jobs had: a push that breaks three guards reports all three in one run
+    # instead of stopping at the first.
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Need the tagged commit reachable so `git show
-          # vX.Y.Z:Cargo.lock` works inside the regen script. The
-          # script auto-detects the tag from the Portfile's
-          # `github.setup` line, so no explicit tag wiring is needed
-          # here.
+          # Needed by the MacPorts Portfile check below, which reads the
+          # lockfile out of the tagged commit. The other checks read the
+          # worktree only.
           fetch-depth: 0
 
-      - name: Verify Portfile cargo.crates matches tagged Cargo.lock
-        run: python3 scripts/macports-regen-cargo-crates.py --check
-
-      - name: Unit tests for the regen script
-        run: python3 -m unittest scripts/test_macports_regen_cargo_crates.py
-
-  directive-catalog-sync:
-    name: Directive catalog sync
-    # Guards `packages/chordpro-lite/src/bare-directives.ts` — the
-    # generated TypeScript copy of `BARE_DIRECTIVE_NAMES` in
-    # `crates/chordpro/src/directive_catalog.rs` — against drifting from
-    # the catalog. A directive added to the catalog alone would leave the
-    # wasm-free format sniffer unable to recognise it, which is the
-    # duplicated-list failure ADR-0028 exists to prevent and ADR-0060
-    # inherits.
-    #
-    # Deliberately NOT a step in `chordpro-lite.yml`: that workflow is
-    # path-filtered on the package, so a catalog-only change — exactly
-    # the drift direction that matters — would not trigger it. Same
-    # guarantee-style trigger as `fixture-counts` and
-    # `macports-portfile-sync`: every PR, no path filter, Python-only,
-    # < 1 s wall clock.
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Verify the generated bare-directive list matches the catalog
-        run: python3 scripts/generate-bare-directives.py --check
-
-      - name: Unit tests for the generator script
-        run: python3 -m unittest scripts/test_generate_bare_directives.py
-
-  release-publish-steps:
-    name: Release publication steps
-    # Exercises the code that only ever runs during a release fan-out: the
-    # two `.github/actions/chocolatey-*` composite actions — the PowerShell
-    # that decides whether a Chocolatey moderation queue fails a release or
-    # merely annotates it, and the bash that fills the package templates
-    # from `checksums.txt` — plus the equivalent checksum-extracting steps
-    # `post-release.yml` carries for Homebrew, Scoop and AUR.
-    # Nothing on a PR would catch a regression in any of it until the next
-    # release broke, which is the failure mode that left the 403 handling in
-    # only one of the two Chocolatey callers to begin with (#1852).
-    #
-    # The step bodies run under this runner's `pwsh` (7.6.5 on ubuntu-24.04)
-    # and `bash` with `choco`, the Chocolatey feed, and the workspace
-    # stubbed; what they exercise is HTTP status handling, string matching,
-    # exit codes, and template substitution, none of which is
-    # Windows-specific. Guarantee-style check per
-    # `.claude/rules/ci-parallelization.md` §3 — no paths: filter, runs on
-    # every PR. Python + pwsh only, no Rust compiled, so no rust-cache entry
-    # is needed (§2).
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # The suite skips its pwsh-backed cases when no interpreter is present,
-      # so that the repo's other Python unit tests still run on a machine
-      # without PowerShell. That fallback must not silently hollow out this
-      # job if pwsh ever leaves the runner image — fail loudly instead.
+      # The publication-step suite skips its pwsh-backed cases when no
+      # interpreter is present, so that the repo's other Python unit tests
+      # still run on a machine without PowerShell. That fallback must not
+      # silently hollow out this job if pwsh ever leaves the runner image —
+      # fail loudly instead.
       - name: Verify pwsh is available
+        if: ${{ !cancelled() }}
         run: pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
 
+      # Enforces that every versioned manifest (workspace crates, the npm,
+      # vscode-extension, and napi package.json files, and the hardcoded pins
+      # inside readme-smoke.yml) is either aligned with the canonical workspace
+      # crate version or has an explicit entry in
+      # ci/version-skew-allowlist.toml. Every allowlist entry must reference a
+      # tracking issue so skews cannot silently rot. See #1506.
+      - name: Version consistency
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-version-consistency.py
+
+      # Keeps every restatement of `rust-version` in step with the workspace
+      # declaration: the `FROM rust:<tag>@sha256:<digest>` builder pin in every
+      # Dockerfile, and README's "Requires Rust N.M or later." sentence under
+      # the from-source install section.
+      #
+      # Neither site is built or asserted by anything else on a PR.
+      # `docker.yml` publishes from `Dockerfile.release`, which copies a
+      # prebuilt musl binary and never compiles Rust, so the from-source
+      # `Dockerfile` is baked by no workflow at all; `readme-sync.yml`
+      # snapshots the bash commands in that README section, not the prose
+      # around them. A pin left behind by an MSRV bump therefore stays green
+      # until a user runs `docker build .` — which is how the builder sat on
+      # `rust:1.85-bookworm` after the workspace moved to 1.88, where `cargo
+      # build` refuses to compile at all. See ADR-0062 for why this is a text
+      # check rather than a `docker build` job.
+      - name: MSRV consistency
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-msrv-consistency.py
+
+      # Enforces the minimum per-renderer golden fixture counts documented in
+      # `.claude/rules/golden-tests.md`.
+      - name: Fixture counts
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-fixture-counts.py
+
+      # Keeps the tertiary tone off small copy in the design-system static
+      # reference pages, the way `packages/react{,-ui}/tests/tertiary-ink.test.ts`
+      # keeps it off the shipped stylesheets: `--ink-500` is 3.53:1, which
+      # clears the 3:1 WCAG 1.4.11 asks of non-text UI but not the 4.5:1
+      # SC 1.4.3 asks of text below 18.66px bold / 24px regular (ADR-0054).
+      # Those pages have no test runner of their own, so the guard is a
+      # standalone script.
+      - name: Design system tertiary ink
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-design-system-tertiary.py
+
+      # Enforces the zero-external-dependency contract for the core crates
+      # (`chordsketch-chordpro`, `chordsketch-ireal`) documented in CLAUDE.md
+      # "Dependency Policy" and `.claude/rules/code-style.md`. A stray
+      # dev/build/normal dep drags a network-fetched transitive graph
+      # (e.g. tempfile -> getrandom) back into every `cargo metadata`
+      # resolution, which is what made the cold-cache desktop-build wasm step
+      # fragile.
+      - name: Core crate zero-deps
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-zero-deps.py
+
+      # The Windows preview handler and the desktop app ship in one installer
+      # and embed WebView2 through the same `wry` / `windows` / `windows-core`,
+      # so the handler's requirements are held at the versions Tauri resolves
+      # (ADR-0066). A caret requirement left behind when Tauri moves — or
+      # bumped ahead of it — puts a second copy of the stack in `Cargo.lock`
+      # without failing any build, so this compares the two consumers' lock
+      # entries directly. The drift arrives through `Cargo.lock` in
+      # dependency-update PRs.
+      - name: WebView2 stack lockstep
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-webview-lockstep.py
+
+      # Guards the support floor of every Linux artifact this project
+      # publishes. A Linux target in `release.yml`'s build matrix without
+      # `cross: true` is compiled against the `ubuntu-latest` runner's glibc,
+      # which produces an archive that installs cleanly on the runner and then
+      # fails to start on any older distribution ("version `GLIBC_2.39' not
+      # found"). The desktop bundles have the same failure from the same cause,
+      # expressed as a runner label rather than a container: they link the
+      # build host's webkit2gtk, so their matrices pin `ubuntu-22.04`
+      # (ADR-0056). Nothing on a PR would notice either one: `readme-smoke.yml`
+      # only ever exercises `ubuntu-latest`, so the first report comes from a
+      # user. This answers the config half of both questions on every PR —
+      # including for `desktop-release.yml`, which has no pull_request trigger
+      # of its own; the "Verify glibc floor" steps in `release.yml` and the
+      # desktop build composite answer the artifact half before anything is
+      # published.
+      - name: Linux glibc floor
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-glibc-floor.py
+
+      # Guards against the `cargo.crates` block in
+      # `packaging/macports/Portfile` drifting from the `Cargo.lock` shipped in
+      # the source tarball that the Portfile's `github.setup` line points at.
+      # The cargo portgroup downloads each crate listed in `cargo.crates` and
+      # validates its checksum against what the tarball's lockfile demands; if
+      # the two are out of sync, the upstream MacPorts build fails with
+      # "checksum mismatch on <crate>" before any compilation begins. This is
+      # therefore a tag-relative check: HEAD's Cargo.lock is irrelevant — the
+      # only lockfile that matters is the one inside the tarball, which is why
+      # this job checks out with `fetch-depth: 0`. The script auto-detects the
+      # tag from the Portfile's `github.setup` line.
+      - name: MacPorts Portfile sync
+        if: ${{ !cancelled() }}
+        run: python3 scripts/macports-regen-cargo-crates.py --check
+
+      # Guards `packages/chordpro-lite/src/bare-directives.ts` — the generated
+      # TypeScript copy of `BARE_DIRECTIVE_NAMES` in
+      # `crates/chordpro/src/directive_catalog.rs` — against drifting from the
+      # catalog. A directive added to the catalog alone would leave the
+      # wasm-free format sniffer unable to recognise it, which is the
+      # duplicated-list failure ADR-0028 exists to prevent and ADR-0060
+      # inherits.
+      #
+      # Deliberately NOT a step in `chordpro-lite.yml`: that workflow is
+      # path-filtered on the package, so a catalog-only change — exactly the
+      # drift direction that matters — would not trigger it.
+      - name: Directive catalog sync
+        if: ${{ !cancelled() }}
+        run: python3 scripts/generate-bare-directives.py --check
+
+      # Unit tests for the guard scripts above, plus the code that only ever
+      # runs during a release fan-out: the two `.github/actions/chocolatey-*`
+      # composite actions — the PowerShell that decides whether a Chocolatey
+      # moderation queue fails a release or merely annotates it, and the bash
+      # that fills the package templates from `checksums.txt` — plus the
+      # equivalent checksum-extracting steps `post-release.yml` carries for
+      # Homebrew, Scoop and AUR. Nothing on a PR would catch a regression in
+      # any of that until the next release broke, which is the failure mode
+      # that left the 403 handling in only one of the two Chocolatey callers to
+      # begin with (#1852).
+      #
+      # The release-publication step bodies run under this runner's `pwsh` and
+      # `bash` with `choco`, the Chocolatey feed, and the workspace stubbed;
+      # what they exercise is HTTP status handling, string matching, exit
+      # codes, and template substitution, none of which is Windows-specific.
       - name: Unit tests
+        if: ${{ !cancelled() }}
         run: |
           python3 -m unittest \
+            scripts/test_check_version_consistency.py \
+            scripts/test_check_release_channels.py \
+            scripts/test_release.py \
+            scripts/test_check_msrv_consistency.py \
+            scripts/test_check_fixture_counts.py \
+            scripts/test_check_design_system_tertiary.py \
+            scripts/test_check_zero_deps.py \
+            scripts/test_check_webview_lockstep.py \
+            scripts/test_check_glibc_floor.py \
+            scripts/test_macports_regen_cargo_crates.py \
+            scripts/test_generate_bare_directives.py \
             scripts/test_chocolatey_pack_push.py \
             scripts/test_chocolatey_generate_package.py \
             scripts/test_release_checksum_guards.py
