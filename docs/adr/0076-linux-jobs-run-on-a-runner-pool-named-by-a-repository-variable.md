@@ -8,8 +8,10 @@
 > [ADR-0078](0078-the-runner-pool-keeps-a-rust-cache-per-runner.md). Each
 > runner now keeps a Rust cache directory from its host across jobs, so
 > "nothing carried over" and "nothing of the host mounted" below have
-> that one exception. The `vscode-extension.yml` release jobs that ran on
-> the pool moved back to `ubuntu-latest`.
+> that one exception. The release jobs that still ran on the pool
+> (`vscode-extension.yml`'s VSIX packaging, and the `kotlin.yml` /
+> `ruby.yml` bindings jobs whose artifact is published) moved back to
+> `ubuntu-latest`.
 
 ## Context
 

@@ -46,9 +46,11 @@ to reach and crowds the repository's 10 GiB budget:
    job — including a `main` push — reuses. This is accepted. What bounds
    it is that nothing built on the pool is published: jobs whose output
    is released stay on GitHub-hosted runners, as ADR-0076 already
-   requires. The platform VSIX packaging in `vscode-extension.yml`
-   (`targets`, `build-platform`), which ran on the pool while being part
-   of the release, moves back to `ubuntu-latest`.
+   requires. Three places ran on the pool while feeding the release, and
+   move back to `ubuntu-latest`: the platform VSIX packaging in
+   `vscode-extension.yml` (`targets`, `build-platform`), and
+   `generate-and-test` in `kotlin.yml` and `ruby.yml`, whose bindings
+   artifact the `publish` job ships as built.
 
 This amends ADR-0076's "nothing carried over to the next job" and
 "nothing of the host mounted": the Rust cache directory is the one

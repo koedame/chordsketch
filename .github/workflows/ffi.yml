@@ -19,8 +19,8 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/ffi.yml"
-
       - ".github/actions/rust-cache/action.yml"
+
 # Cancel stale PR runs when a new commit is pushed to the same PR so
 # that rebase / force-push does not leave two parallel FFI builds
 # contending for Linux runner capacity (every job here is

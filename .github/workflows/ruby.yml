@@ -179,7 +179,10 @@ jobs:
     # this job.  The remaining targets (build-native-others) run in parallel
     # and are joined by publish for release completeness.
     needs: [build-native-linux-x64]
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    # `publish` ships this job's ruby-bindings artifact rather than rebuilding
+    # it, so it must not reuse the pool's Rust cache, which pull requests
+    # can write (ADR-0078).
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

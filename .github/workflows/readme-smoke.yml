@@ -53,8 +53,8 @@ on:
       - ".github/actions/cli-render-smoke/action.yml"
       - ".github/actions/install-macports/action.yml"
       - ".github/workflows/readme-smoke.yml"
-
       - ".github/actions/rust-cache/action.yml"
+
 # Cancel previous runs on the same PR when new commits land. Daily cron
 # runs fall through to `github.ref` and are never cancelled
 # (cancel-in-progress is gated on `pull_request` events).
