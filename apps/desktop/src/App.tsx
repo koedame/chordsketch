@@ -30,6 +30,7 @@ import type { ChangeEvent } from 'react';
 import {
   ChordProPreview,
   IrealPreview,
+  SplitLayout,
 } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
@@ -186,9 +187,8 @@ export function App(): JSX.Element {
     return detach;
   }, [focusActiveEditor]);
 
-  // Editor pane — branch on mode. The wrapper class matches the
-  // shared design-system split-pane shell so the global stylesheet
-  // styles it.
+  // Editor pane — branch on mode. Rendered into the start half of
+  // the `<SplitLayout>` below.
   const editorPane = useMemo(() => {
     switch (mode) {
       case 'chordpro':
@@ -232,33 +232,35 @@ export function App(): JSX.Element {
 
   return (
     <div className="chordsketch-desktop">
-      <div className="chordsketch-desktop__split">
-        <div className="chordsketch-desktop__editor-pane">{editorPane}</div>
-        <div
-          ref={previewPaneRef}
-          className="chordsketch-desktop__preview-pane"
-          tabIndex={-1}
-        >
-          {isIrealMode ? (
-            <IrealPreview
-              source={source}
-              className="chordsketch-desktop__ireal-preview"
-            />
-          ) : (
-            <ChordProPreview
-              source={source}
-              format={format}
-              onFormatChange={setFormat}
-              transpose={transpose}
-              onTransposeChange={setTranspose}
-              transposeMin={TRANSPOSE_MIN}
-              transposeMax={TRANSPOSE_MAX}
-              pdfFilename="chordsketch.pdf"
-              className="chordsketch-desktop__chordpro-preview"
-            />
-          )}
-        </div>
-      </div>
+      <SplitLayout
+        start={editorPane}
+        end={
+          <div
+            ref={previewPaneRef}
+            className="chordsketch-desktop__preview-pane"
+            tabIndex={-1}
+          >
+            {isIrealMode ? (
+              <IrealPreview
+                source={source}
+                className="chordsketch-desktop__ireal-preview"
+              />
+            ) : (
+              <ChordProPreview
+                source={source}
+                format={format}
+                onFormatChange={setFormat}
+                transpose={transpose}
+                onTransposeChange={setTranspose}
+                transposeMin={TRANSPOSE_MIN}
+                transposeMax={TRANSPOSE_MAX}
+                pdfFilename="chordsketch.pdf"
+                className="chordsketch-desktop__chordpro-preview"
+              />
+            )}
+          </div>
+        }
+      />
     </div>
   );
 }
