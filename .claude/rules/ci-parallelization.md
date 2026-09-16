@@ -133,9 +133,8 @@ comment naming the measured cold penalty, so the trade-off can be
 re-examined with numbers rather than re-litigated from scratch:
 
 - `ci.yml` `test` — Windows and macOS cells (`if: matrix.os ==
-  'ubuntu-latest'`). The six cells asked for 3.74 GiB of the pool
-  (Windows 1.31 GiB, macOS 1.05 GiB, Linux 1.38 GiB); restricting them
-  to Linux frees 2.37 GiB.
+  'ubuntu-latest'`). The six cells asked for 3.75 GiB of the pool; the
+  four hosted ones hold 2.37 GiB of that, which this rule gives back.
 
 ### Tool-version single source of truth
 
