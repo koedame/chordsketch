@@ -2,12 +2,17 @@ name: Cache Prune
 
 # Prevents `v0-rust-*` cache generation accumulation on `refs/heads/main`
 # from gradually pushing the repo's GitHub Actions cache pool back toward
-# the 10 GB ceiling. As Cargo.toml / Cargo.lock evolve, each unique
-# env-hash + lockfile-hash combination produces a fresh
-# `Swatinem/rust-cache` entry under the same `shared-key` prefix; older
-# generations linger until the 7-day idle TTL fires. This pruner keeps
-# the newest entry per prefix and deletes the rest, holding the
-# steady-state cache pool flat regardless of churn frequency.
+# the 10 GB ceiling. As Cargo.toml / Cargo.lock evolve, each new
+# lockfile-hash produces a fresh `Swatinem/rust-cache` entry next to the
+# previous one; older generations linger until the 7-day idle TTL fires.
+# This pruner keeps the newest entry per `shared-key` + env-hash and
+# deletes the rest, holding the steady-state cache pool flat regardless
+# of churn frequency.
+#
+# The env-hash stays in the grouping key because it separates toolchains:
+# the `test` matrix's stable and MSRV cells share a `shared-key` and
+# differ only there. Grouping them together deleted one of the pair on
+# every run, so that cell compiled cold on the next push.
 #
 # Pairs with #2308 / #2309 (which stops PR + merge-queue runs from
 # saving zombie caches in the first place) and #2310 (which removes
@@ -69,10 +74,12 @@ jobs:
           # rust-cache key shape:
           #   v0-rust-{shared-key}-{os-arch}-{env-hash}-{lockfile-hash}
           # env-hash and lockfile-hash are 8 lowercase hex chars each.
-          # Stripping the trailing `-{8hex}-{8hex}` yields the prefix
-          # that all generations of the same logical cache share.
+          # Stripping only the trailing `-{lockfile-hash}` yields the
+          # prefix that all generations of the same logical cache share.
+          # The env-hash must stay: it is what tells a stable cell from
+          # an MSRV cell under the same shared-key, and both are live.
           RUST_KEY_RE = re.compile(r"^v0-rust-.*-[0-9a-f]{8}-[0-9a-f]{8}$")
-          SUFFIX_RE = re.compile(r"-[0-9a-f]{8}-[0-9a-f]{8}$")
+          SUFFIX_RE = re.compile(r"-[0-9a-f]{8}$")
 
           MAIN_REF = "refs/heads/main"
 
