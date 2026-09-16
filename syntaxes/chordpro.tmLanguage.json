@@ -28,11 +28,13 @@
                 "4": {"name": "string.unquoted.directive-value.chordpro"},
                 "5": {"name": "punctuation.definition.directive.end.chordpro"}
             },
-            "end": "(?i)({)((?:end_of_(?:abc|grid|ly|musicxml|svg|tab|textblock)|eot|eog)\\b)\\s*(})",
+            "end": "(?i)({)((?:end_of_(?:abc|grid|ly|musicxml|svg|tab|textblock)|eot|eog)\\b)(?:\\s*(:)\\s*([^{}]*?))?\\s*(})",
             "endCaptures": {
                 "1": {"name": "punctuation.definition.directive.begin.chordpro"},
                 "2": {"name": "keyword.control.directive.chordpro"},
-                "3": {"name": "punctuation.definition.directive.end.chordpro"}
+                "3": {"name": "punctuation.separator.directive.chordpro"},
+                "4": {"name": "string.unquoted.directive-value.chordpro"},
+                "5": {"name": "punctuation.definition.directive.end.chordpro"}
             },
             "contentName": "markup.raw.block.chordpro"
         },

@@ -25,8 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   really is verbatim, had theirs parsed as chords. The grammar now names
   the seven environments the parser in `crates/chordpro` treats as
   verbatim (`abc`, `grid`, `ly`, `musicxml`, `svg`, `tab`, `textblock`),
-  and recognises two forms it never matched at all: the `sot` / `sog`
-  aliases and a labelled start such as `{start_of_tab: Solo}`.
+  and recognises forms it never matched at all: the `sot` / `sog`
+  aliases and a label on either the start or the end directive
+  (`{start_of_tab: Solo}` and `{end_of_tab: Solo}` both stay verbatim
+  and close the section, matching `is_verbatim_end_ahead`, which only
+  inspects the directive's name token).
 - **Every function the Python package documents can be imported.**
   `import chordsketch` exposed only 14 of the 36 bindings; the
   `*_with_warnings` variants, `parse_and_render_html_body`,

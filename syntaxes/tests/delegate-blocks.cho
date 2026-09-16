@@ -64,6 +64,17 @@ E|--0--[G]--|
 #       ^ markup.raw.block.chordpro
 {end_of_tab}
 
+# --- Nor does a label on the end directive: `is_verbatim_end_ahead` in
+# `crates/chordpro/src/parser.rs` only inspects the name token, so
+# `{end_of_tab: Solo}` closes the section exactly like `{end_of_tab}`.
+
+{start_of_tab}
+E|--0--[G]--|
+#       ^ markup.raw.block.chordpro
+{end_of_tab: Solo}
+Sing [G]on
+#     ^ entity.name.chord.chordpro
+
 # --- Everything else keeps its chords ------------------------------------
 
 {start_of_outro}
