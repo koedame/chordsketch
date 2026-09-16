@@ -915,7 +915,42 @@ jobs:
       - name: Install via Chocolatey
         shell: powershell
         run: |
-          choco install chordsketch -y --no-progress
+          # The package's `chocolateyInstall.ps1` pulls the release ZIP
+          # from GitHub's release-asset CDN via
+          # `Install-ChocolateyZipPackage`
+          # (`packaging/chocolatey/tools/chocolateyInstall.ps1.template`),
+          # and neither that helper nor `choco install` retries a failed
+          # download. A transient 5xx from the CDN therefore fails this
+          # job on a package that is perfectly healthy: the 2026-09-15
+          # dispatch (run 34988783878) died on a 500 for
+          # `chordsketch-v0.5.0-x86_64-pc-windows-msvc.zip` while that
+          # exact URL served 200 on a later fetch, and it opened the
+          # tracking issue this workflow reserves for real registry
+          # breakage (#2920). Absorb the blip with the same bounded
+          # shape as the `winget` (#2208) and `snap` (#2345) steps in
+          # this file — three attempts, 10s apart — so a sustained
+          # outage still exhausts them and surfaces via
+          # `report-failure`.
+          #
+          # `$LASTEXITCODE` has to gate each attempt: the runner
+          # prepends `$ErrorActionPreference = 'stop'`, but that does
+          # not apply to a native command's exit code, so a failed
+          # `choco install` otherwise falls straight through to
+          # `chordsketch --version` and the step's verdict rests on
+          # whether a shim happens to be on PATH rather than on whether
+          # the install succeeded.
+          $attempt = 0
+          while ($true) {
+            $attempt++
+            choco install chordsketch -y --no-progress
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -ge 3) {
+              Write-Error "choco install failed after $attempt attempts"
+              exit 1
+            }
+            Write-Host "choco install attempt $attempt failed; retrying in 10s"
+            Start-Sleep -Seconds 10
+          }
           # choco shims are on PATH by default on GitHub Actions runners
           chordsketch --version
 
