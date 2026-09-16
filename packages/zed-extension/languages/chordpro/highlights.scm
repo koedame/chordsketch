@@ -12,7 +12,8 @@
 (directive
   value: (directive_value) @string)
 
-; Delegate blocks: {start_of_X} ... {end_of_X}
+; Delegate blocks: {start_of_abc} ... {end_of_abc}, and the other
+; environments whose content is verbatim
 (block_start_directive
   "{" @punctuation.bracket
   name: (directive_name) @keyword

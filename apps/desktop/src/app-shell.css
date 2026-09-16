@@ -1,0 +1,67 @@
+/*
+ * Window shell for the desktop frontend.
+ *
+ * The editor / preview split itself is `<SplitLayout>` from
+ * `@chordsketch/react`, which ships its own rules in
+ * `@chordsketch/react/styles.css` — the same component and design
+ * tokens the browser playground uses. All this file does is give
+ * that layout a window to fill: the WebView document has no
+ * intrinsic height, so without an explicit chain from `html` down
+ * to `.chordsketch-desktop` every flex child collapses to its
+ * content height and the two panes stack vertically instead of
+ * sitting side by side.
+ */
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+.chordsketch-desktop {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The three editor variants and the preview wrapper are direct
+ * children of a `<SplitLayout>` pane (`display: flex`, column), so
+ * they claim the pane's height by growing rather than by asking
+ * for `height: 100%`. */
+.chordsketch-desktop__preview-pane,
+.chordsketch-desktop__ireal-grid,
+.chordsketch-desktop__ireal-text {
+  flex: 1;
+  min-height: 0;
+}
+
+.chordsketch-desktop__preview-pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.chordsketch-desktop__ireal-grid {
+  overflow: auto;
+}
+
+/* Raw `irealb://` URL editing — a plain textarea, painted to match
+ * the CodeMirror pane it replaces. */
+.chordsketch-desktop__ireal-text {
+  border: 0;
+  padding: 1rem;
+  resize: none;
+  background: var(--cs-surface, #ffffff);
+  color: var(--cs-text-primary, #0a0a0b);
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas,
+    monospace;
+  font-size: 0.875rem;
+  line-height: 1.857;
+}
+
+.chordsketch-desktop__ireal-text:focus-visible {
+  outline: none;
+}
