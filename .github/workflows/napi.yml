@@ -10,6 +10,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/napi.yml"
+      - ".github/actions/rust-cache/action.yml"
   pull_request:
     paths:
       - "crates/napi/**"
@@ -18,6 +19,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/napi.yml"
+      - ".github/actions/rust-cache/action.yml"
   # Reusable: called by release.yml's fan-out after the GitHub Release
   # exists, so `upload-release-tarballs` has somewhere to upload to
   # (ADR-0039). A non-empty `tag` is what puts this workflow in release
@@ -99,7 +101,7 @@ jobs:
         run: |
           rustup target add ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           # The Linux cells compile and link against the napi-cross
           # sysroot, so their C artifacts and build-script binaries are
@@ -270,7 +272,7 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           shared-key: napi-lint
           save-if: ${{ github.ref == 'refs/heads/main' }}

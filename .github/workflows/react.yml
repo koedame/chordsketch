@@ -12,6 +12,7 @@ on:
     paths:
       - 'packages/react/**'
       - '.github/workflows/react.yml'
+      - '.github/actions/rust-cache/action.yml'
       # The `wasm-pack` pin this workflow consumes through the
       # composite action (#2225). Without this entry a pin bump
       # would not re-run the wasm build that depends on it.
@@ -20,6 +21,7 @@ on:
     paths:
       - 'packages/react/**'
       - '.github/workflows/react.yml'
+      - '.github/actions/rust-cache/action.yml'
       # The `wasm-pack` pin this workflow consumes through the
       # composite action (#2225). Without this entry a pin bump
       # would not re-run the wasm build that depends on it.
@@ -60,7 +62,7 @@ jobs:
           toolchain: stable
           targets: wasm32-unknown-unknown
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           shared-key: react-wasm32-unknown-unknown
           save-if: ${{ github.ref == 'refs/heads/main' }}

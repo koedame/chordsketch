@@ -17,6 +17,7 @@ on:
     paths:
       - 'packages/vue/**'
       - '.github/workflows/vue.yml'
+      - '.github/actions/rust-cache/action.yml'
       # The `wasm-pack` pin the in-tree wasm build below consumes
       # through the composite action (#2225).
       - '.github/actions/install-wasm-pack/action.yml'
@@ -24,6 +25,7 @@ on:
     paths:
       - 'packages/vue/**'
       - '.github/workflows/vue.yml'
+      - '.github/actions/rust-cache/action.yml'
       # The `wasm-pack` pin the in-tree wasm build below consumes
       # through the composite action (#2225).
       - '.github/actions/install-wasm-pack/action.yml'
@@ -55,7 +57,7 @@ jobs:
           toolchain: stable
           targets: wasm32-unknown-unknown
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           shared-key: vue-wasm32-unknown-unknown
           save-if: ${{ github.ref == 'refs/heads/main' }}
