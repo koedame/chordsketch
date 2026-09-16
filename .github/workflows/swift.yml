@@ -11,6 +11,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/swift.yml"
+      - ".github/actions/rust-cache/action.yml"
   pull_request:
     paths:
       - "crates/ffi/**"
@@ -20,6 +21,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/swift.yml"
+      - ".github/actions/rust-cache/action.yml"
   # Reusable: called by release.yml's fan-out after the GitHub Release
   # exists, so `publish` has a release to upload the xcframework to and
   # the two package updates below can depend on that upload with
@@ -97,7 +99,7 @@ jobs:
       - name: Install Rust target
         run: rustup target add ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           shared-key: swift-${{ matrix.target }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -149,7 +151,7 @@ jobs:
       # Cache the workspace target/ so that the uniffi-bindgen host binary
       # is compiled once and reused. Without this, every assemble run
       # re-compiles uniffi-bindgen (~60s cold; 0s warm).
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           shared-key: swift-assemble
           save-if: ${{ github.ref == 'refs/heads/main' }}

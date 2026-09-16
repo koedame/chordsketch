@@ -11,6 +11,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/python.yml"
+      - ".github/actions/rust-cache/action.yml"
   pull_request:
     paths:
       - "crates/ffi/**"
@@ -19,6 +20,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/python.yml"
+      - ".github/actions/rust-cache/action.yml"
 
 # Cancel stale PR runs when a new commit is pushed to the same PR so
 # that rebase / force-push does not leave two parallel Python builds
@@ -171,7 +173,7 @@ jobs:
       # remains the sole cache layer here: it works at the cargo level (skipping
       # the rustc invocation entirely for unchanged crates on a warm hit), so
       # it does not depend on stable absolute paths the way sccache does.
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           shared-key: python-x86_64-pc-windows-msvc
           save-if: ${{ github.ref == 'refs/heads/main' }}

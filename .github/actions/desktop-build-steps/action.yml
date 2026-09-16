@@ -91,7 +91,7 @@ runs:
 
     - name: Configure rust-cache
       if: inputs.enable-cache == 'true'
-      uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      uses: ./.github/actions/rust-cache
       with:
         # Target-triple in the shared-key so the four matrix
         # cells do not thrash the cache against each other (per

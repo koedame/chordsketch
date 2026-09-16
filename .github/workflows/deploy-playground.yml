@@ -40,6 +40,7 @@ on:
       # docs go silently stale.
       - 'docs/sdk/**'
       - '.github/workflows/deploy-playground.yml'
+      - '.github/actions/rust-cache/action.yml'
       # The `wasm-pack` pin this workflow consumes through the
       # composite action (#2225). The deployed playground ships the
       # bundle wasm-pack produces, so a pin bump must redeploy or
@@ -71,7 +72,7 @@ jobs:
           toolchain: stable
           targets: wasm32-unknown-unknown
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 

@@ -14,6 +14,7 @@ on:
       # The build and publish-setup composites, and the packaging checks
       # every job here runs.
       - ".github/actions/vscode-extension-build/action.yml"
+      - ".github/actions/rust-cache/action.yml"
       - ".github/actions/vscode-extension-publish-setup/action.yml"
       - "scripts/_publish_checks.py"
       - "scripts/check-publishable.py"
@@ -29,6 +30,7 @@ on:
       # The build and publish-setup composites, and the packaging checks
       # every job here runs.
       - ".github/actions/vscode-extension-build/action.yml"
+      - ".github/actions/rust-cache/action.yml"
       - ".github/actions/vscode-extension-publish-setup/action.yml"
       - "scripts/_publish_checks.py"
       - "scripts/check-publishable.py"
@@ -145,7 +147,8 @@ jobs:
     # land under server/linux-*; the alpine-* VSIX channel is what routes
     # it to musl users.
     if: inputs.tag != ''
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    # Release job: stays hosted (ADR-0076, ADR-0078).
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.targets.outputs.matrix }}
     steps:
@@ -155,7 +158,9 @@ jobs:
 
   build-platform:
     name: Package ${{ matrix.vs_target }} VSIX
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    # Builds the VSIXes the release publishes, so it must not reuse the
+    # pool's Rust cache, which pull requests can write (ADR-0078).
+    runs-on: ubuntu-latest
     # Release-only matrix that downloads the per-platform chordsketch-lsp
     # binary from the GitHub Release assets (produced by release.yml), places
     # it at server/<platform>-<arch>/chordsketch-lsp[.exe], and packages a

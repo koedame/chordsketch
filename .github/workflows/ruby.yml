@@ -12,6 +12,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/ruby.yml"
+      - ".github/actions/rust-cache/action.yml"
   pull_request:
     paths:
       - "crates/ffi/**"
@@ -21,6 +22,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/ruby.yml"
+      - ".github/actions/rust-cache/action.yml"
   workflow_dispatch:
     inputs:
       tag:
@@ -64,7 +66,7 @@ jobs:
         with:
           tool: cross
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           # This cell links against `cross`'s sysroot now rather than the
           # runner's own toolchain, so its objects and build-script
@@ -142,7 +144,7 @@ jobs:
         with:
           tool: cross
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           # Only the aarch64 cell changed toolchain (apt
           # `gcc-aarch64-linux-gnu` to `cross`), so only it needs a new
@@ -177,13 +179,16 @@ jobs:
     # this job.  The remaining targets (build-native-others) run in parallel
     # and are joined by publish for release completeness.
     needs: [build-native-linux-x64]
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    # `publish` ships this job's ruby-bindings artifact rather than rebuilding
+    # it, so it must not reuse the pool's Rust cache, which pull requests
+    # can write (ADR-0078).
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/rust-cache
         with:
           shared-key: ruby-generate
           save-if: ${{ github.ref == 'refs/heads/main' }}
