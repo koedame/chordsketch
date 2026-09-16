@@ -401,8 +401,8 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         # Linux cells only — see `.claude/rules/ci-parallelization.md` §2
         # "Cache budget". The six `test` cells were the single largest
-        # claim on the repository's 10 GiB Actions cache pool (4.02 GB:
-        # 1.41 GB Windows + 1.13 GB macOS + 1.48 GB Linux), which put
+        # claim on the repository's 10 GiB Actions cache pool (3.74 GiB:
+        # 1.31 GiB Windows + 1.05 GiB macOS + 1.38 GiB Linux), which put
         # total demand per `main` push above the cap and made LRU evict
         # entries written by the same run. The hosted Windows / macOS
         # cells give the budget up because they are not on the critical

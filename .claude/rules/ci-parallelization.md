@@ -107,7 +107,9 @@ and then pays again to upload a cache nobody will read.
 
 Measured on the 2026-09-16 `main` pushes: all 35 entries in the pool had
 been created within the preceding 40 minutes, and every Linux cell on the
-`LINUX_RUNNER` pool missed.
+`LINUX_RUNNER` pool missed. The pool peaked at 10.87 GiB and settled back
+to 9.98 GiB, so GitHub's documented "10 GB" cap is 10 GiB in practice —
+quote cache sizes in GiB when comparing against it.
 
 When demand approaches the cap, the cells that give up their cache are
 the ones on **unconstrained** runners. GitHub-hosted Windows and macOS
@@ -131,9 +133,9 @@ comment naming the measured cold penalty, so the trade-off can be
 re-examined with numbers rather than re-litigated from scratch:
 
 - `ci.yml` `test` — Windows and macOS cells (`if: matrix.os ==
-  'ubuntu-latest'`). The six cells asked for 4.02 GB of the pool
-  (Windows 1.41 GB, macOS 1.13 GB, Linux 1.48 GB); restricting them to
-  Linux frees 2.54 GB.
+  'ubuntu-latest'`). The six cells asked for 3.74 GiB of the pool
+  (Windows 1.31 GiB, macOS 1.05 GiB, Linux 1.38 GiB); restricting them
+  to Linux frees 2.37 GiB.
 
 ### Tool-version single source of truth
 
