@@ -27,10 +27,6 @@ import {
 } from 'react';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import {
-  HighlightStyle,
-  syntaxHighlighting,
-} from '@codemirror/language';
-import {
   forEachDiagnostic,
   setDiagnostics,
   type Diagnostic,
@@ -45,7 +41,6 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from '@codemirror/view';
-import { tags as t, type Tag } from '@lezer/highlight';
 import { Language, Parser, Query } from 'web-tree-sitter';
 
 import { HIGHLIGHTS_QUERY } from './highlights-query.generated';
@@ -70,49 +65,35 @@ export interface ChordProDesktopEditorProps {
   className?: string;
 }
 
-// `tags` recognises a fixed vocabulary. Map every tree-sitter
-// capture name in `queries/highlights.scm` to one of them so
-// `HighlightStyle` can colour them. Kept narrow — the grammar
-// only uses five capture classes.
-const CAPTURE_TO_TAG: Record<string, Tag> = {
-  comment: t.comment,
-  keyword: t.keyword,
-  string: t.string,
-  constant: t.literal,
-  'punctuation.bracket': t.punctuation,
-  embedded: t.special(t.string),
-};
-
-// Mark decorations keyed by capture name. Built once, reused on
-// every highlight pass. `Decoration.mark` is correct for inline
-// spans (leaves line structure alone); the grammar never spans
-// whole blocks so we don't need `Decoration.line`.
-const CAPTURE_MARK: Record<string, Decoration> = Object.fromEntries(
-  Object.keys(CAPTURE_TO_TAG).map((capture) => [
-    capture,
-    // `replaceAll` covers multi-dotted capture names like
-    // `variable.parameter.builtin` should the grammar ever emit
-    // them. `.replace('.', '-')` only substitutes the first dot
-    // and would collide with sibling captures on the second
-    // segment.
-    Decoration.mark({ class: `cm-capture-${capture.replaceAll('.', '-')}` }),
-  ]),
-);
-
 /**
- * CodeMirror `HighlightStyle` pairing each tag with the desktop
- * theme colours. Light + dark are applied by CSS variables in
- * `apps/desktop/src/codemirror-editor.css`, so the theme respects
- * `prefers-color-scheme` without JS work.
+ * Mark decorations keyed by the capture names
+ * `packages/tree-sitter-chordpro/queries/highlights.scm` emits.
+ * Built once, reused on every highlight pass. `Decoration.mark` is
+ * correct for inline spans (leaves line structure alone); the
+ * grammar never spans whole blocks so we don't need
+ * `Decoration.line`.
+ *
+ * The plugin publishes these marks directly, so their classes —
+ * not `@lezer/highlight` tags — are what has to be painted, and
+ * `chordproTheme` below paints them. A `HighlightStyle` would never
+ * fire here: that pipeline colours a Lezer parse tree, and this
+ * editor has no Lezer language, only tree-sitter. Keeping the class
+ * names and their colours in one file is what stops the two from
+ * drifting apart, which is exactly how the editor came to render
+ * every capture in the body colour (#711).
+ *
+ * The captures left out are deliberate. `@string` (a directive's
+ * value) and `@embedded` (the lines inside a verbatim
+ * `{start_of_abc}` block) are copy, not syntax — the design-system
+ * editor reference leaves both unstyled, and so does
+ * `<ChordSourceArea>` in `@chordsketch/react`.
  */
-const chordproHighlightStyle = HighlightStyle.define([
-  { tag: CAPTURE_TO_TAG.comment, class: 'cm-chordpro-comment' },
-  { tag: CAPTURE_TO_TAG.keyword, class: 'cm-chordpro-keyword' },
-  { tag: CAPTURE_TO_TAG.string, class: 'cm-chordpro-string' },
-  { tag: CAPTURE_TO_TAG.constant, class: 'cm-chordpro-chord' },
-  { tag: CAPTURE_TO_TAG['punctuation.bracket'], class: 'cm-chordpro-punct' },
-  { tag: CAPTURE_TO_TAG.embedded, class: 'cm-chordpro-embedded' },
-]);
+const CAPTURE_MARK: Record<string, Decoration> = {
+  comment: Decoration.mark({ class: 'cm-chordpro-comment' }),
+  keyword: Decoration.mark({ class: 'cm-chordpro-keyword' }),
+  constant: Decoration.mark({ class: 'cm-chordpro-chord' }),
+  'punctuation.bracket': Decoration.mark({ class: 'cm-chordpro-punct' }),
+};
 
 interface LoadedGrammar {
   parser: Parser;
@@ -177,7 +158,7 @@ function highlightPlugin(grammar: LoadedGrammar) {
 
       constructor(view: EditorView) {
         this.tree = grammar.parser.parse(view.state.doc.toString()) ?? null;
-        this.decorations = this.buildDecorations(view);
+        this.decorations = this.buildDecorations();
       }
 
       update(update: ViewUpdate) {
@@ -190,27 +171,26 @@ function highlightPlugin(grammar: LoadedGrammar) {
             update.state.doc.toString(),
             this.tree ?? undefined,
           );
-          this.decorations = this.buildDecorations(update.view);
+          this.decorations = this.buildDecorations();
           publishDiagnostics(update.view, this.tree);
         }
       }
 
-      buildDecorations(view: EditorView): DecorationSet {
+      buildDecorations(): DecorationSet {
         if (!this.tree) return Decoration.none;
         const builder = new RangeDecorationBuilder();
-        // Pass the full document extent to the query so tree-sitter
-        // walks every node. Viewport-scoped decorations would be
-        // cheaper for very long buffers, but the current chord
-        // fixtures comfortably fit the "reparse on every keystroke"
-        // budget, and viewport scoping requires maintaining a
-        // per-visible-range decoration set — a future optimisation
-        // if large files become a concern. Keep the call symmetric
-        // with `tree.rootNode.text` so a future reader can't
-        // mistakenly assume range scoping is already in place.
-        const matches = grammar.query.matches(this.tree.rootNode, {
-          startIndex: 0,
-          endIndex: view.state.doc.length,
-        });
+        // No range option: the query walks the whole tree. The
+        // obvious `{ startIndex: 0, endIndex: doc.length }` is a trap
+        // — `web-tree-sitter` passes those straight to tree-sitter's
+        // BYTE range, while a CodeMirror document position counts
+        // UTF-16 code units, so the range covers only the first half
+        // of an ASCII document and everything after it silently loses
+        // its highlighting. Viewport-scoped decorations would be
+        // cheaper for very long buffers, but that needs a
+        // per-visible-range decoration set; the chord sheets this
+        // editor opens fit the "reparse on every keystroke" budget
+        // whole.
+        const matches = grammar.query.matches(this.tree.rootNode);
         for (const match of matches) {
           for (const capture of match.captures) {
             const mark = CAPTURE_MARK[capture.name];
@@ -354,27 +334,63 @@ function hasExistingDiagnostics(view: EditorView): boolean {
   return found;
 }
 
-// Base theme that fills the pane and matches the dark surface of
-// the shared design tokens. Light-mode overrides live in
-// `codemirror-editor.css` (which Vite bundles alongside this
-// module) and kick in via `prefers-color-scheme: light`.
-const chordproTheme = EditorView.theme(
-  {
-    '&': {
-      height: '100%',
-      fontSize: '0.9rem',
-      fontFamily:
-        "'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace",
-    },
-    '.cm-scroller': {
-      fontFamily: 'inherit',
-      lineHeight: '1.6',
-      padding: '1rem',
-    },
-    '&.cm-focused': { outline: 'none' },
+// Theme for the editor's own surface, and the paint for the marks
+// above. Both the metrics and the token roles mirror
+// `<ChordSourceArea>`'s theme in `@chordsketch/react`, so the
+// desktop source pane reads the same as the browser playground's:
+// a crimson chord, secondary-tone directives, brackets and
+// comments, and the song's copy as plain text. The values are the
+// design tokens `@chordsketch/react/styles.css` puts in scope on the
+// surrounding `<SplitLayout>`, with the same inline fallbacks that
+// package uses.
+const chordproTheme = EditorView.theme({
+  '&': {
+    height: '100%',
+    fontSize: '0.875rem',
+    backgroundColor: 'var(--cs-surface, #FFFFFF)',
+    color: 'var(--cs-text-primary, #0A0A0B)',
+    fontFamily:
+      "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
   },
-  { dark: true },
-);
+  '.cm-scroller': {
+    fontFamily: 'inherit',
+    lineHeight: '1.857',
+    padding: '1rem',
+  },
+  '.cm-content': {
+    caretColor: 'var(--cs-crimson-500, #BD1642)',
+  },
+  '.cm-gutters': {
+    backgroundColor: 'var(--cs-surface, #FFFFFF)',
+    borderRight: '1px solid var(--cs-border, #E8E6EA)',
+    color: 'var(--cs-text-secondary, #67646D)',
+  },
+  '.cm-activeLine': {
+    // A 4 % ink overlay rather than an opaque tint: CodeMirror paints
+    // the selection below the line background, and an opaque one
+    // would hide the selection wash on the caret line.
+    backgroundColor: 'rgba(10, 10, 11, 0.04)',
+  },
+  '.cm-activeLineGutter': {
+    backgroundColor: 'var(--cs-surface-hover, #F6F4F7)',
+  },
+  // Chord annotations (`[Am]`) — the one accent in the source pane.
+  '.cm-chordpro-chord': {
+    color: 'var(--cs-crimson-500, #BD1642)',
+    fontWeight: '600',
+  },
+  // Directive names (`title`, `start_of_verse`) and the braces and
+  // brackets around them. Both recede so the chords and lyrics read
+  // first.
+  '.cm-chordpro-keyword, .cm-chordpro-punct': {
+    color: 'var(--cs-text-secondary, #67646D)',
+  },
+  '.cm-chordpro-comment': {
+    color: 'var(--cs-text-secondary, #67646D)',
+    fontStyle: 'italic',
+  },
+  '&.cm-focused': { outline: 'none' },
+});
 
 /**
  * Controlled CodeMirror editor with tree-sitter-chordpro
@@ -442,7 +458,6 @@ export const ChordProDesktopEditor = forwardRef<
         keymap.of([...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
         chordproTheme,
-        syntaxHighlighting(chordproHighlightStyle),
         listenerExt,
         placeholder(placeholderText ?? ''),
         // Start empty; `loadGrammar()` injects the highlight plugin
@@ -546,19 +561,7 @@ export const ChordProDesktopEditor = forwardRef<
   return (
     <>
       {grammarStatus === 'failed' ? (
-        <div
-          role="alert"
-          className="chordsketch-cm-grammar-banner"
-          style={{
-            padding: '0.5rem 1rem',
-            background: '#3a2a00',
-            color: '#ffd66e',
-            borderBottom: '1px solid #66501a',
-            fontSize: '0.85rem',
-            fontFamily:
-              "'-apple-system', 'BlinkMacSystemFont', 'Segoe UI', sans-serif",
-          }}
-        >
+        <div role="alert" className="chordsketch-cm-grammar-banner">
           Syntax highlighting unavailable — ChordPro grammar failed to load.
           Edit will work but without highlighting or diagnostics.
         </div>
