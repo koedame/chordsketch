@@ -39,9 +39,13 @@ K:G
 |:GABc|d2d2:|
 {end_of_abc}
 
+# A custom section is an ordinary section, not a verbatim one: its lines
+# keep their chords and directives.  The verbatim environments have their
+# own file, tests/delegate-blocks.cho.
+
 {start_of_custom}
-raw content: [not a chord] and {not_a_directive}
-#^ markup.raw.block.chordpro
-#             ^ markup.raw.block.chordpro
-#                               ^ markup.raw.block.chordpro
+content: [G] and {comment: hi}
+#        ^ punctuation.definition.chord.begin.chordpro
+#         ^ entity.name.chord.chordpro
+#                 ^^^^^^^ keyword.control.directive.chordpro
 {end_of_custom}
