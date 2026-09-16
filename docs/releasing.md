@@ -1054,17 +1054,53 @@ Done once, when moving from the maintainer-local publish (ADR-0008) to CI.
    ```bash
    gh workflow run publish-registries.yml -R koedame/chordsketch -f mode=check
    ```
-5. **After the first release published from CI**, close the token path:
-   - crates.io: each crate's Settings → Trusted Publishing → enable
-     "Trusted Publishing only".
-   - npm: each package's Settings → Publishing access → "Require
-     two-factor authentication and disallow tokens". Trusted publishing
-     keeps working, and so does a logged-in maintainer with a one-time
-     password.
-   - GitHub: delete the unused `NPM_TOKEN` secret
+5. **After the first release published from CI**, close the token path.
+   Both registries take it over their API, so it is two loops rather
+   than a settings page per package.
+   - **npm.** Same npm version and login as step 2. The first call asks
+     for a one-time password; "skip two-factor authentication for the
+     next 5 minutes" on the npm page lets the rest through. Trusted
+     publishing keeps working afterwards, and so does a logged-in
+     maintainer with a one-time password — only tokens lose the ability
+     to publish:
+     ```bash
+     for package in @chordsketch/wasm @chordsketch/wasm-export tree-sitter-chordpro \
+         @chordsketch/node @chordsketch/node-linux-x64-gnu @chordsketch/node-linux-arm64-gnu \
+         @chordsketch/node-darwin-x64 @chordsketch/node-darwin-arm64 @chordsketch/node-win32-x64-msvc \
+         @chordsketch/react-ui @chordsketch/react @chordsketch/vue @chordsketch/svelte @chordsketch/chordpro-lite; do
+       npm access set mfa=publish "$package" && echo "OK $package"
+       sleep 2
+     done
+     ```
+   - **crates.io.** A token with the `trusted-publishing` scope, as in
+     step 3. Every crate answers `200`, and each one sends a
+     settings-changed email:
+     ```bash
+     read -rs CRATES_IO_TOKEN
+     for crate in chordsketch-chordpro chordsketch-ireal chordsketch-render-text chordsketch-render-html \
+         chordsketch-render-pdf chordsketch-render-ireal chordsketch-convert chordsketch-convert-musicxml \
+         chordsketch-mcp chordsketch; do
+       curl -sS -o /dev/null -w "$crate %{http_code}\n" -X PATCH "https://crates.io/api/v1/crates/$crate" \
+         -H "Authorization: $CRATES_IO_TOKEN" -H 'Content-Type: application/json' \
+         -H 'User-Agent: chordsketch-maintainer (+https://github.com/koedame/chordsketch)' \
+         -d '{"crate":{"trustpub_only":true}}'
+       sleep 1
+     done
+     ```
+     Revoke the token afterwards. **To hand the token path back to a
+     crate** — the way to publish it from a maintainer's machine if
+     publishing from CI breaks — send the same `PATCH` with
+     `{"crate":{"trustpub_only":false}}`.
+   - **GitHub**: delete the unused `NPM_TOKEN` secret
      (`gh secret delete NPM_TOKEN -R koedame/chordsketch`).
    - Revoke any crates.io publish token and npm token left on the
      maintainer's machine.
+   The crates.io side reads back anonymously, so the switch is
+   verifiable; npm's is not exposed by the registry API:
+   ```bash
+   curl -fsS -H 'User-Agent: chordsketch-maintainer (+https://github.com/koedame/chordsketch)' \
+     https://crates.io/api/v1/crates/<crate> | jq .crate.trustpub_only
+   ```
 
 ### Adding a package
 
@@ -1115,6 +1151,20 @@ first version goes out by hand and every later one from CI.
 6. **Register its trusted publisher** with the command of the one-time
    setup (step 2 or 3), for that package only.
 7. **Prove it** by dispatching `publish-registries.yml` in `check` mode. From then on it publishes from CI.
+8. **Close the token path for it**, with the command of the one-time
+   setup's step 5, for that package only. It comes after the hand
+   publish, because that publish needs the very token path this closes:
+   ```bash
+   # an npm package
+   npm access set mfa=publish <package>
+   # a crate, with a token scoped to trusted-publishing
+   curl -sS -X PATCH https://crates.io/api/v1/crates/<crate> \
+     -H "Authorization: $CRATES_IO_TOKEN" -H 'Content-Type: application/json' \
+     -H 'User-Agent: chordsketch-maintainer (+https://github.com/koedame/chordsketch)' \
+     -d '{"crate":{"trustpub_only":true}}'
+   ```
+   Skip it and the new package stays publishable by anyone holding a
+   token, alone among the packages this repository publishes.
 
 ## First-Time Channel Setup
 
