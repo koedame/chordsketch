@@ -13,11 +13,9 @@
   },
   "devDependencies": {
     "@codemirror/commands": "^6.10.3",
-    "@codemirror/language": "^6.12.3",
     "@codemirror/lint": "^6.9.5",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.1",
-    "@lezer/highlight": "^1.2.3",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.11.0",
     "@types/react": "^18.3.12",
