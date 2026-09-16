@@ -17,6 +17,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The desktop app shows the editor and the preview side by side again.**
+  Nothing styled the window's split, so the two panes stacked vertically and
+  a default-sized window showed the preview's title row and nothing else. The
+  window now uses the same split layout, with a draggable divider, that the
+  browser playground does.
+- **ChordPro source is highlighted in the desktop app.** Chord names, the
+  directives around them and comments were all rendered in the body colour:
+  the highlighter labelled them with one set of class names and the
+  stylesheet painted another. The class names and their colours now live
+  together, and the colours are the design system's editor palette, the
+  same one the browser playground uses. A second bug hid the highlighting
+  of everything past the middle of a document, where the query was given a
+  range in characters that tree-sitter reads as bytes.
+- **`tree-sitter-chordpro` parses the chords inside a verse or a chorus.**
+  It read every `{start_of_X}` … `{end_of_X}` as a verbatim delegate block,
+  so a whole verse arrived as one opaque `block_content` node and its chords
+  were invisible to `queries/highlights.scm`. Only the environments whose
+  content really is verbatim — `abc`, `grid`, `ly`, `musicxml`, `svg`,
+  `tab`, `textblock`, the list the reference parser uses — are delegate
+  blocks now; a verse is a directive followed by ordinary song lines. Editors
+  reading `queries/folds.scm` fold those delegate blocks as before, and no
+  longer fold a verse, which is no longer a single node.
 - **Every function the Python package documents can be imported.**
   `import chordsketch` exposed only 14 of the 36 bindings; the
   `*_with_warnings` variants, `parse_and_render_html_body`,
