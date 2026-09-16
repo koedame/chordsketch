@@ -94,6 +94,48 @@ prefix; they simply do not write back. Cargo.lock-changing PRs
 (mostly Dependabot) trade away one warm cache they would not have
 hit cleanly anyway in exchange for keeping `main`'s cache resident.
 
+### Cache budget: the pool is finite, spend it on the constrained runner
+
+`save-if` keeps PR refs out of the 10 GiB pool, but it does not bound
+what a single `main` push writes. Every Rust-compiling cell saves its own
+entry containing the whole cargo registry plus its `target/`, so the
+entries are largely duplicates of each other and the total scales with
+the number of cells, not with the amount of distinct work. Once the
+per-push total exceeds the cap, LRU evicts entries written **by the same
+run** — every job reports `No cache found.`, pays the full cold build,
+and then pays again to upload a cache nobody will read.
+
+Measured on the 2026-09-16 `main` pushes: all 35 entries in the pool had
+been created within the preceding 40 minutes, and every Linux cell on the
+`LINUX_RUNNER` pool missed. The pool peaked at 10.87 GiB and settled back
+to 9.98 GiB, so GitHub's documented "10 GB" cap is 10 GiB in practice —
+quote cache sizes in GiB when comparing against it.
+
+When demand approaches the cap, the cells that give up their cache are
+the ones on **unconstrained** runners. GitHub-hosted Windows and macOS
+minutes are free on a public repo and those cells sit off the critical
+path, so their cold penalty is absorbed in parallel. The self-hosted
+Linux pool (§7) is the scarce resource — 8 slots, 2 CPUs each — so a cold
+build there lands directly on CI wall-clock and on every other job
+queued behind it.
+
+Before adding a `Swatinem/rust-cache` entry to a cell, check the
+headroom:
+
+```bash
+gh api "repos/koedame/chordsketch/actions/caches?per_page=100" \
+  --jq '[.actions_caches[].size_in_bytes] | add' \
+  | awk '{printf "%.2f GiB of 10 GiB\n", $1/1073741824}'
+```
+
+Cells that deliberately run without cache under this rule carry a
+comment naming the measured cold penalty, so the trade-off can be
+re-examined with numbers rather than re-litigated from scratch:
+
+- `ci.yml` `test` — Windows and macOS cells (`if: matrix.os ==
+  'ubuntu-latest'`). The six cells asked for 3.75 GiB of the pool; the
+  four hosted ones hold 2.37 GiB of that, which this rule gives back.
+
 ### Tool-version single source of truth
 
 Tool versions that multiple workflows pin SHOULD live in exactly one
