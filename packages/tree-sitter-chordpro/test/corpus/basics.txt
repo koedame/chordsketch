@@ -70,9 +70,9 @@ K:C
 Labeled delegate block
 ==================
 
-{start_of_verse: Verse 1}
-[G]Amazing grace
-{end_of_verse}
+{start_of_abc: Refrain}
+X:1
+{end_of_abc}
 
 ---
 
@@ -84,6 +84,27 @@ Labeled delegate block
     (block_content)
     (block_end_directive
       name: (directive_name))))
+
+==================
+Section block keeps its chords
+==================
+
+{start_of_verse: Verse 1}
+[G]Amazing grace
+{end_of_verse}
+
+---
+
+(source_file
+  (directive
+    name: (directive_name)
+    value: (directive_value))
+  (content_line
+    (chord
+      (chord_name))
+    (lyrics))
+  (directive
+    name: (directive_name)))
 
 ==================
 Chord line

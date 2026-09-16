@@ -1,6 +1,19 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
+// Environments whose content is verbatim: no chords, no directives, just
+// text for another tool to render. Mirrors `Parser::verbatim_end_for` in
+// `crates/chordpro/src/parser.rs`, the project's reference parser. Every
+// other `{start_of_X}` — `verse`, `chorus`, `bridge`, a custom section — holds
+// ordinary song lines, so its chords have to stay visible to the tree.
+const DELEGATE_ENVIRONMENTS = ["abc", "grid", "ly", "musicxml", "svg", "tab", "textblock"];
+
+// `prec` settles the tie with `directive_name`, which matches these names too:
+// both alternatives are the same length, so without it the lexer has no reason
+// to prefer the delegate token for `{start_of_abc}`.
+const delegateName = (prefix) =>
+  token(prec(1, new RegExp(`${prefix}_(?:${DELEGATE_ENVIRONMENTS.join("|")})`)));
+
 module.exports = grammar({
   name: "chordpro",
 
@@ -27,7 +40,7 @@ module.exports = grammar({
 
     _empty_line: (_) => /\n/,
 
-    // Delegate blocks: {start_of_X} ... {end_of_X}
+    // Delegate blocks: {start_of_abc} ... {end_of_abc}
     // These wrap content like ABC notation, Lilypond, etc.
     delegate_block: ($) =>
       seq(
@@ -39,7 +52,7 @@ module.exports = grammar({
     block_start_directive: ($) =>
       seq(
         "{",
-        field("name", alias(/start_of_[a-zA-Z][a-zA-Z0-9_-]*/, $.directive_name)),
+        field("name", alias(delegateName("start_of"), $.directive_name)),
         optional(
           seq(token.immediate(/[: ]\s*/), field("value", $.directive_value)),
         ),
@@ -50,7 +63,7 @@ module.exports = grammar({
     block_end_directive: ($) =>
       seq(
         "{",
-        field("name", alias(/end_of_[a-zA-Z][a-zA-Z0-9_-]*/, $.directive_name)),
+        field("name", alias(delegateName("end_of"), $.directive_name)),
         "}",
         optional("\n"),
       ),

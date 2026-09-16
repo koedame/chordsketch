@@ -76,8 +76,15 @@
           "content": {
             "type": "ALIAS",
             "content": {
-              "type": "PATTERN",
-              "value": "start_of_[a-zA-Z][a-zA-Z0-9_-]*"
+              "type": "TOKEN",
+              "content": {
+                "type": "PREC",
+                "value": 1,
+                "content": {
+                  "type": "PATTERN",
+                  "value": "start_of_(?:abc|grid|ly|musicxml|svg|tab|textblock)"
+                }
+              }
             },
             "named": true,
             "value": "directive_name"
@@ -142,8 +149,15 @@
           "content": {
             "type": "ALIAS",
             "content": {
-              "type": "PATTERN",
-              "value": "end_of_[a-zA-Z][a-zA-Z0-9_-]*"
+              "type": "TOKEN",
+              "content": {
+                "type": "PREC",
+                "value": 1,
+                "content": {
+                  "type": "PATTERN",
+                  "value": "end_of_(?:abc|grid|ly|musicxml|svg|tab|textblock)"
+                }
+              }
             },
             "named": true,
             "value": "directive_name"
