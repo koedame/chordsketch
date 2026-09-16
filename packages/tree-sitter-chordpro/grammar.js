@@ -8,11 +8,22 @@
 // ordinary song lines, so its chords have to stay visible to the tree.
 const DELEGATE_ENVIRONMENTS = ["abc", "grid", "ly", "musicxml", "svg", "tab", "textblock"];
 
-// `prec` settles the tie with `directive_name`, which matches these names too:
-// both alternatives are the same length, so without it the lexer has no reason
-// to prefer the delegate token for `{start_of_abc}`.
+// Built from string literals, not a regex, and deliberately with no
+// `prec()`: a bare literal like "start_of_tab" has no continuation once it
+// reaches its own end, so it cannot out-compete `directive_name` (which
+// keeps consuming identifier characters) on a longer custom section name —
+// tree-sitter's longest-match rule picks `directive_name` for
+// `{start_of_tablature}` or `{start_of_lyrics}` the same way it would for
+// any other non-delegate section. A `new RegExp(...)` version of this
+// (tried first) used `prec(1, ...)` to win the exact-match tie against
+// `directive_name`, but that same precedence let the delegate token win the
+// *prefix* match too, breaking those two names outright — a plain literal
+// still wins the exact-match tie without that side effect, because a tie
+// between an explicit-precedence-free literal and an explicit-precedence-free
+// regex of equal length is settled by declaration order, and
+// `block_start_directive` is declared above `directive_name` below.
 const delegateName = (prefix) =>
-  token(prec(1, new RegExp(`${prefix}_(?:${DELEGATE_ENVIRONMENTS.join("|")})`)));
+  choice(...DELEGATE_ENVIRONMENTS.map((env) => `${prefix}_${env}`));
 
 module.exports = grammar({
   name: "chordpro",

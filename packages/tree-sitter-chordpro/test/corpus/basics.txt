@@ -326,3 +326,23 @@ Mixed content
     (chord
       (chord_name))
     (lyrics)))
+
+==================
+Custom section sharing a delegate keyword's prefix keeps its chords
+==================
+
+{start_of_tablature}
+[G]Some line
+{end_of_tablature}
+
+---
+
+(source_file
+  (directive
+    name: (directive_name))
+  (content_line
+    (chord
+      (chord_name))
+    (lyrics))
+  (directive
+    name: (directive_name)))
