@@ -28,6 +28,7 @@ Stdlib `unittest` only. Only the last group runs a tool (npm, offline).
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import re
@@ -757,6 +758,43 @@ class FlathubTest(unittest.TestCase):
                 "flatpak-builder-lint repo warning: runtime-is-eol-org.gnome.Platform-48",
             ],
         )
+
+    def test_when_a_newer_runtime_lacks_an_sdk_extension_the_manifest_needs_its_update_warning_is_not_a_problem(self) -> None:
+        report = '{"warnings": ["runtime-update-available-to-org.gnome.Platform-51"]}'
+        blockers = {"51": ["org.freedesktop.Sdk.Extension.node24//26.08"]}
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(checks.flatpak_lint_problems("repo", report, 0, blockers), [])
+        self.assertIn("org.freedesktop.Sdk.Extension.node24//26.08", out.getvalue())
+
+    def test_when_a_newer_runtime_has_every_sdk_extension_its_update_warning_is_a_problem(self) -> None:
+        report = '{"warnings": ["runtime-update-available-to-org.gnome.Platform-51"]}'
+        self.assertEqual(
+            checks.flatpak_lint_problems("repo", report, 0, {}),
+            ["flatpak-builder-lint repo warning: runtime-update-available-to-org.gnome.Platform-51"],
+        )
+
+    def test_when_the_blocked_runtime_is_not_the_one_the_warning_names_the_warning_is_a_problem(self) -> None:
+        report = '{"warnings": ["runtime-update-available-to-org.gnome.Platform-52"]}'
+        blockers = {"51": ["org.freedesktop.Sdk.Extension.node24//26.08"]}
+        self.assertEqual(
+            checks.flatpak_lint_problems("repo", report, 0, blockers),
+            ["flatpak-builder-lint repo warning: runtime-update-available-to-org.gnome.Platform-52"],
+        )
+
+    def test_when_the_probe_reports_missing_extensions_they_are_grouped_by_runtime_version(self) -> None:
+        output = "51 org.freedesktop.Sdk.Extension.node24//26.08\n51 org.freedesktop.Sdk.Extension.llvm22//26.08\n\n"
+        self.assertEqual(
+            checks.flatpak_runtime_update_blockers(output),
+            {"51": ["org.freedesktop.Sdk.Extension.node24//26.08", "org.freedesktop.Sdk.Extension.llvm22//26.08"]},
+        )
+
+    def test_when_the_manifest_lists_sdk_extensions_they_are_read_in_order(self) -> None:
+        manifest = "runtime: org.gnome.Platform\nsdk-extensions:\n  - org.freedesktop.Sdk.Extension.node24\n  - org.freedesktop.Sdk.Extension.llvm22\ncommand: x\n"
+        self.assertEqual(checks.flatpak_sdk_extensions(manifest), ["org.freedesktop.Sdk.Extension.node24", "org.freedesktop.Sdk.Extension.llvm22"])
+
+    def test_when_the_shipped_manifest_is_read_its_sdk_extensions_are_found(self) -> None:
+        manifest = (checks.REPO_ROOT / "packaging/flatpak" / f"{checks.FLATPAK_APP_ID}.yml").read_text()
+        self.assertIn("org.freedesktop.Sdk.Extension.node24", checks.flatpak_sdk_extensions(manifest))
 
     def test_when_flatpak_builder_lint_explains_a_finding_the_explanation_is_in_the_problem(self) -> None:
         report = '{"errors": ["appid-url-not-reachable"], "info": ["appid-url-not-reachable: Tried https://example.org | Status: 403"]}'
