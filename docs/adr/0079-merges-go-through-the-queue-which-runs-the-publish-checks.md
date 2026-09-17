@@ -56,10 +56,10 @@ the pull request can skip.
    checked on (the queue decides the method). `gh pr merge <N>` cannot
    do this while auto-merge stays disabled at the repository level: it
    enqueues through auto-merge and is refused. Never pass `--admin`,
-   which merges past the queue. A merge is done when the pull request is `MERGED`, not when the
-   command returns. If the queue removes the pull request, fix the cause,
-   push, meet conditions (2) and (3) on the new HEAD again, and enqueue
-   again. Conditions (1)–(3) are unchanged.
+   which merges past the queue. A merge is done when the pull request
+   is `MERGED`, not when the command returns. If the queue removes the
+   pull request, fix the cause, push, meet conditions (2) and (3) on the
+   new HEAD again, and enqueue again. Conditions (1)–(3) are unchanged.
 
 ## Rationale
 
