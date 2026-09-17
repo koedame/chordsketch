@@ -2,7 +2,7 @@ name: "Set up the VS Code extension publish tools"
 description: >
   Install what the Marketplace and Open VSX publish jobs run `vsce` and
   `ovsx` from. Shared by those two jobs and by `publishable.yml`, which
-  runs it on every pull request: v0.6.0's publish jobs both died here
+  runs it before every merge: v0.6.0's publish jobs both died here
   with `tsup: not found`, on a path no pull request had exercised
   (ADR-0070).
 runs:

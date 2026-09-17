@@ -832,6 +832,96 @@ class FlathubTest(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("npm"), "npm is not on PATH")
+class PackagingScopeTest(unittest.TestCase):
+    """Which pull requests run the publish checks before the merge queue does."""
+
+    def test_when_a_change_touches_only_source_and_docs_no_publish_check_runs(self) -> None:
+        changes = {"crates/chordpro/src/parser.rs": 4000, "docs/guide.md": 900, "README.md": None}
+        self.assertEqual(checks.packaging_reasons(changes), [])
+
+    def test_when_a_nested_package_manifest_changes_the_publish_checks_run(self) -> None:
+        reasons = checks.packaging_reasons({"packages/react/package.json": 800, "crates/wasm/Cargo.toml": 600})
+        self.assertEqual(len(reasons), 2, reasons)
+        self.assertIn("`package.json`", reasons[1])
+        self.assertIn("`Cargo.toml`", reasons[0])
+
+    def test_when_a_workflow_or_composite_action_changes_the_publish_checks_run(self) -> None:
+        for path in (".github/workflows/post-release.yml", ".github/actions/rust-cache/action.yml"):
+            with self.subTest(path=path):
+                self.assertNotEqual(checks.packaging_reasons({path: 100}), [])
+
+    def test_when_a_file_only_shares_a_directory_name_with_a_packaging_path_no_publish_check_runs(self) -> None:
+        changes = {"docs/packaging/notes.md": 100, "tests/scripts/helper.sh": 100, ".github/workflows/ci.yml": 100}
+        self.assertEqual(checks.packaging_reasons(changes), [])
+
+    def test_when_a_change_adds_a_file_over_the_large_file_limit_anywhere_the_publish_checks_run(self) -> None:
+        reasons = checks.packaging_reasons({"crates/render-pdf/tests/fixtures/big.pdf": 2 * MIB})
+        self.assertEqual(len(reasons), 1, reasons)
+        self.assertIn("2.0 MiB", reasons[0])
+
+    def test_when_a_change_deletes_a_file_outside_the_packaging_paths_no_publish_check_runs(self) -> None:
+        self.assertEqual(checks.packaging_reasons({"crates/render-pdf/tests/fixtures/big.pdf": None}), [])
+
+    def test_every_workflow_and_action_publishable_yml_reaches_is_a_packaging_path(self) -> None:
+        # Follow `uses: ./...` from publishable.yml through the workflows and
+        # composite actions it calls, so a job that starts using another local
+        # action cannot skip a pull request that changes that action.
+        pending, seen = [".github/workflows/publishable.yml"], set()
+        while pending:
+            path = pending.pop()
+            if path in seen:
+                continue
+            seen.add(path)
+            for used in re.findall(r"uses: \./(\S+)", (checks.REPO_ROOT / path).read_text()):
+                pending.append(used if used.endswith(".yml") else f"{used}/action.yml")
+        self.assertGreater(len(seen), 5, seen)
+        for path in sorted(seen):
+            with self.subTest(path=path):
+                self.assertNotEqual(checks.packaging_reasons({path: 0}), [], f"publishable.yml reaches {path}")
+
+    def test_every_packaging_path_matches_a_file_in_the_tree(self) -> None:
+        tracked = checks.subprocess.run(
+            ["git", "ls-files", "-z"], cwd=checks.REPO_ROOT, check=True, text=True, stdout=checks.subprocess.PIPE
+        ).stdout.split("\0")
+        for pattern in checks.PACKAGING_PATHS:
+            with self.subTest(pattern=pattern):
+                self.assertTrue(
+                    any(checks.packaging_path_matches(path, pattern) for path in tracked if path),
+                    f"no tracked file matches `{pattern}`",
+                )
+
+    def test_when_head_changes_and_deletes_files_changed_files_reports_each_with_its_new_size(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            repo = Path(scratch)
+
+            def git(*args: str) -> None:
+                checks.subprocess.run(
+                    ["git", "-c", "user.name=t", "-c", "user.email=t@invalid", *args], cwd=repo, check=True, stdout=checks.subprocess.DEVNULL
+                )
+
+            git("init", "-q")
+            (repo / "kept.txt").write_text("a")
+            (repo / "gone.txt").write_text("b")
+            git("add", ".")
+            git("commit", "-q", "-m", "base")
+            (repo / "kept.txt").write_text("abc")
+            (repo / "gone.txt").unlink()
+            (repo / "dir with space").mkdir()
+            (repo / "dir with space" / "new[1].bin").write_bytes(b"x" * 10)
+            git("add", "-A")
+            git("commit", "-q", "-m", "head")
+            self.assertEqual(
+                checks.changed_files("HEAD^", tree=repo),
+                {"kept.txt": 3, "gone.txt": None, "dir with space/new[1].bin": 10},
+            )
+
+    def test_when_the_base_revision_is_unknown_changed_files_raises_instead_of_reporting_no_change(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            checks.subprocess.run(["git", "init", "-q"], cwd=scratch, check=True)
+            with self.assertRaises(checks.subprocess.CalledProcessError):
+                checks.changed_files("no-such-revision", tree=Path(scratch))
+
+
 class NpmDryRunTest(unittest.TestCase):
     """Runs the real `npm publish --dry-run`; publishable.yml guarantees npm."""
 

@@ -8,13 +8,17 @@ name: Publishable
 #
 # The checks are defined once, in `scripts/_publish_checks.py`, and
 # `publish-registries.yml` runs the same definitions before it publishes
-# crates.io and npm, so a release is held to exactly what every pull
-# request was held to.
+# crates.io and npm, so a release is held to exactly what every merge was
+# held to.
 #
-# The `Publishable` job at the bottom is the required status check. It
-# has no `paths:` filter on purpose: a required check must report on every
-# pull request, and "this change cannot affect packaging" is the guess
-# that let v0.6.0 reach release day with a crate crates.io refused.
+# The `Publishable` job at the bottom is the required status check, and
+# every change reaches `main` through the merge queue, where every job runs
+# (ADR-0079). On a pull request the `scope` job runs them only when the
+# change touches something they read or adds a large file
+# (`packaging_reasons` in `scripts/_publish_checks.py`); otherwise they are
+# skipped and `Publishable` passes, so the author waits for them once, in
+# the queue, instead of on every push. There is no `paths:` filter: a
+# required check must report on every pull request and every merge group.
 on:
   push:
     branches: [main]
@@ -44,6 +48,30 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 jobs:
+  scope:
+    name: What the change reaches
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The pull request's merge commit and its first parent, the base:
+          # the diff between them is the change as it would land.
+          fetch-depth: 2
+
+      - name: Decide whether the publish checks run
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            python3 scripts/check-publishable.py scope --base HEAD^1 --output "$GITHUB_OUTPUT"
+          else
+            echo "A $EVENT run checks everything."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   self-test:
     name: Publish checks self-test
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
@@ -66,6 +94,8 @@ jobs:
 
   crates-io:
     name: crates.io
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,6 +115,8 @@ jobs:
 
   npm-matrix:
     name: npm package list
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     outputs:
       packages: ${{ steps.matrix.outputs.packages }}
@@ -138,6 +170,8 @@ jobs:
 
   napi:
     name: npm (@chordsketch/node)
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -200,6 +234,8 @@ jobs:
 
   vscode-extension:
     name: VS Code Marketplace and Open VSX
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -231,6 +267,8 @@ jobs:
 
   pypi:
     name: PyPI
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     # Stays on GitHub-hosted: maturin-action builds the wheels in a manylinux container (docker). See ADR-0076.
     runs-on: ubuntu-latest
     steps:
@@ -262,6 +300,8 @@ jobs:
 
   ffi-library:
     name: chordsketch-ffi library for the binding packages
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -398,6 +438,8 @@ jobs:
 
   container-image:
     name: GHCR and Docker Hub
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -450,6 +492,8 @@ jobs:
   # release, then lint the result with each channel's tool.
   homebrew:
     name: Homebrew formula and cask
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -461,6 +505,8 @@ jobs:
 
   manifests:
     name: Scoop, winget, nixpkgs and the desktop updater
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -479,6 +525,8 @@ jobs:
 
   flathub:
     name: Flathub (desktop app)
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -499,6 +547,8 @@ jobs:
 
   jetbrains:
     name: JetBrains Marketplace
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -513,14 +563,20 @@ jobs:
 
   macports:
     name: MacPorts
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     uses: ./.github/workflows/macports-smoke.yml
 
   nixpkgs-build:
     name: nixpkgs
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     uses: ./.github/workflows/nix.yml
 
   chocolatey:
     name: Chocolatey and the Windows release archive
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     # The release packs on Windows with the runner's choco.
     runs-on: windows-latest
     defaults:
@@ -561,6 +617,8 @@ jobs:
 
   aur:
     name: AUR
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     # Stays on GitHub-hosted: the AUR check runs makepkg in an Arch container (docker). See ADR-0076.
     runs-on: ubuntu-latest
     steps:
@@ -571,6 +629,8 @@ jobs:
 
   snap:
     name: GitHub Release archives and Snap Store
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -603,6 +663,8 @@ jobs:
 
   cocoapods-and-swift:
     name: CocoaPods and Swift Package
+    needs: [scope]
+    if: needs.scope.outputs.run == 'true'
     # Stays on GitHub-hosted: the Swift check needs the Swift toolchain the hosted image ships. See ADR-0076.
     runs-on: ubuntu-latest
     steps:
@@ -627,6 +689,7 @@ jobs:
     # job added later is covered by adding it to `needs` — branch
     # protection does not have to change.
     needs:
+      - scope
       - self-test
       - crates-io
       - npm-matrix
@@ -654,14 +717,24 @@ jobs:
       - name: Require every publish check to have passed
         env:
           NEEDS: ${{ toJSON(needs) }}
+          RUN: ${{ needs.scope.outputs.run }}
         run: |
           python3 - <<'EOF'
           import json, os, sys
           results = {job: need["result"] for job, need in json.loads(os.environ["NEEDS"]).items()}
           for job, result in sorted(results.items()):
               print(f"{job}: {result}")
-          failed = [job for job, result in results.items() if result != "success"]
+          # `scope` and `self-test` always run. The rest ran only if `scope`
+          # said so, and a skip counts only when it did not.
+          always = {"scope", "self-test"}
+          skipped_is_fine = os.environ["RUN"] == "false" and results["scope"] == "success"
+          failed = [
+              job for job, result in results.items()
+              if result != "success" and not (skipped_is_fine and job not in always and result == "skipped")
+          ]
           if failed:
-              print(f"::error::not publishable: {', '.join(failed)}")
+              print(f"::error::not publishable: {', '.join(sorted(failed))}")
               sys.exit(1)
+          if skipped_is_fine:
+              print("This pull request changes nothing the publish checks read; the merge queue runs them before it lands.")
           EOF
