@@ -588,8 +588,8 @@ def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
       its published release reported as missing.
 
     A FAIL therefore means the push did not land — typically a `choco push`
-    refused with 403 because an earlier version is still queued and blocks
-    every newer push (#1852), which the release fan-out downgrades to a
+    refused with 403 because the moderation queue refuses new versions
+    (#1852; conditions in docs/releasing.md), which the release fan-out downgrades to a
     warning so one stalled channel of eight cannot fail a release. This
     rollup is the only other place that miss shows up.
     """
@@ -607,9 +607,9 @@ def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
                 version,
                 (
                     f"the Chocolatey Community Repository does not hold {version}. "
-                    "A push refused with HTTP 403 leaves this state (an earlier "
-                    "version still queued for moderation blocks every newer push, "
-                    "#1852); publish it with `gh workflow run chocolatey-retry.yml "
+                    "A push refused with HTTP 403 leaves this state (the "
+                    "moderation queue refuses new versions while too many are "
+                    "queued, #1852); publish it with `gh workflow run chocolatey-retry.yml "
                     f"-R koedame/chordsketch -f tag=v{version}` once the queue "
                     f"clears. {page}"
                 ),

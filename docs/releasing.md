@@ -1247,6 +1247,49 @@ moderation queue that has not drained cannot fail a release that already
 published to the other seven registries. The retry workflow fails on both,
 because pushing is the only thing it does.
 
+#### When Chocolatey refuses a push with 403
+
+A green `update-chocolatey` job with a `403` warning is not a one-off to
+wave through: the version was not pushed. Chocolatey's
+[Common Errors](https://docs.chocolatey.org/en-us/community-repository/maintainers/common-errors/#error-403-unauthorized)
+page lists two moderation causes for a `403`:
+
+1. A version is in moderation **and no version of the package has been
+   approved yet.**
+2. **Too many versions** are in moderation at once. Chocolatey does not
+   publish the threshold.
+
+The first cause can no longer apply to `chordsketch`: 0.2.1 was approved
+on 2026-05-14, and an approval is never withdrawn. The remaining risk is
+the second one, which grows with every release pushed before the previous
+one clears moderation.
+
+What has been observed so far (the version's state is read from the v2
+feed, `Packages(Id='chordsketch',Version='<version>')`: `404` means the
+repository does not hold it):
+
+| Pushed | Approved versions at push time | Versions in moderation at push time | Result |
+|---|---|---|---|
+| 0.2.2 (2026-04-18), plus two retries on 2026-04-21 | none | 0.2.1 | `403` ×3 (#1852) |
+| 0.5.0 (2026-05-20) | 0.2.1 | none | pushed |
+| 0.6.0 (2026-09-13) | 0.2.1, 0.5.0 | none | pushed |
+| 0.7.0 (2026-09-17) | 0.2.1, 0.5.0 | 0.6.0 | pushed |
+
+Every recorded `403` fell inside the 2026-04-16 to 2026-05-14 window in
+which no version was approved. The 0.7.0 push shows that one version
+waiting in moderation does not block a newer push once an approved
+version exists, so releasing again before the previous version is
+approved is fine. Moderation took 28 days for 0.2.1 and 54 days for
+0.5.0; if a `403` comes back, the likely cause is the number of queued
+versions, and the way out is still to wait for the queue to drain and
+then run the retry below.
+
+Becoming a *trusted package*, which skips moderation, is not something
+the maintainer can ask for. Chocolatey's moderators switch it on at their
+own discretion, and the
+[FAQ](https://docs.chocolatey.org/en-us/faqs/#what-is-a-trusted-package)
+asks maintainers not to request it, so there is no contact to look for.
+
 #### Retrying a failed Chocolatey push
 
 Use the standalone `chocolatey-retry.yml` workflow whenever
@@ -1286,10 +1329,11 @@ the same way, so re-running it after a push that actually landed does
 not produce a red run.
 
 A failure on `chocolatey-retry.yml` itself names the HTTP status: `403
-Forbidden` means an earlier version is still queued for moderation and
-is blocking this one; wait for it to clear and dispatch again (this
-workflow, unlike `update-chocolatey`, fails rather than warns on a
-`403` — see above).
+Forbidden` means the moderation queue is refusing new versions (see
+[When Chocolatey refuses a push with 403](#when-chocolatey-refuses-a-push-with-403));
+wait for queued versions to clear and dispatch again (this workflow,
+unlike `update-chocolatey`, fails rather than warns on a `403` — see
+above).
 
 Read the queue state from
 `community.chocolatey.org/packages/chordsketch/<version>` under
