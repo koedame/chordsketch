@@ -127,10 +127,17 @@ for why condition (4) is the merge queue.
      -f oid=<HEAD checked by (2) and (3)>
    ```
 
-   `gh pr merge <N>` does not work here: on a queue-protected branch it
-   enqueues through auto-merge, which is disabled at the repository
-   level (`enablePullRequestAutoMerge: false`), and fails with
-   `Auto merge is not allowed for this repository`. Never pass
+   `gh pr merge <N>` is not a safe substitute here. Per its own
+   `--help` text, on a queue-protected branch it enqueues directly
+   only once GitHub already reports the PR's required checks as
+   passed; otherwise it falls back to enabling auto-merge instead —
+   which is disabled at the repository level
+   (`enablePullRequestAutoMerge: false`) and fails with
+   `Auto merge is not allowed for this repository`. Whether GitHub's
+   own required-check state matches what (2) just verified is a race
+   the explicit mutation avoids entirely: pinning `expectedHeadOid` to
+   the HEAD (2) and (3) were checked on enqueues that exact commit or
+   fails cleanly, never falling back to auto-merge. Never pass
    `--admin`: it merges past the queue and past the publish checks a
    pull request may have skipped. The
    merge is done when the PR is `MERGED`, not when the command

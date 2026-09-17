@@ -53,13 +53,17 @@ the pull request can skip.
 4. **Condition (4) of ADR-0013 and ADR-0024 becomes "merge through the
    queue".** The assistant enqueues the pull request with the
    `enqueuePullRequest` mutation at the HEAD conditions (2) and (3) were
-   checked on (the queue decides the method). `gh pr merge <N>` cannot
-   do this while auto-merge stays disabled at the repository level: it
-   enqueues through auto-merge and is refused. Never pass `--admin`,
-   which merges past the queue. A merge is done when the pull request
-   is `MERGED`, not when the command returns. If the queue removes the
-   pull request, fix the cause, push, meet conditions (2) and (3) on the
-   new HEAD again, and enqueue again. Conditions (1)–(3) are unchanged.
+   checked on (the queue decides the method), pinning `expectedHeadOid`
+   so the enqueue targets that exact commit or fails cleanly.
+   `gh pr merge <N>` does not give that guarantee: per its own
+   `--help` text it only enqueues directly once GitHub already reports
+   the pull request's required checks as passed, and otherwise falls
+   back to auto-merge, which stays disabled at the repository level
+   and is refused. Never pass `--admin`, which merges past the queue.
+   A merge is done when the pull request is `MERGED`, not when the
+   command returns. If the queue removes the pull request, fix the
+   cause, push, meet conditions (2) and (3) on the new HEAD again, and
+   enqueue again. Conditions (1)–(3) are unchanged.
 
 ## Rationale
 
