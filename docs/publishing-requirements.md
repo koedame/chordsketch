@@ -1,7 +1,7 @@
 # Publishing requirements
 
 What each distribution channel requires before it accepts an upload, and
-which check proves it on every pull request.
+which check proves it before every merge.
 
 A release reaches every channel in `ci/release-channels.toml`. Each of
 them can refuse an upload for a reason that was knowable long before the
@@ -9,14 +9,15 @@ release: crates.io refused `chordsketch-render-pdf` 0.6.0 for being over
 its size limit, and the VS Code Marketplace publish job failed on a build
 step no pull request ran. A package that cannot be published is treated
 as a defect of the same weight as a security issue, so these conditions
-are checked on every pull request, every push to `main` and nightly
-([ADR-0070](adr/0070-publishability-is-checked-on-every-pull-request.md)).
+are checked before every merge, on every push to `main` and nightly
+([ADR-0070](adr/0070-publishability-is-checked-on-every-pull-request.md),
+[ADR-0079](adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)).
 
 ## How the checks run
 
 | Where | What runs | When |
 |---|---|---|
-| [`publishable.yml`](../.github/workflows/publishable.yml) | `scripts/check-publishable.py` | every pull request, push to `main`, nightly. Its `Publishable` job is a required status check. |
+| [`publishable.yml`](../.github/workflows/publishable.yml) | `scripts/check-publishable.py` | the merge queue, every push to `main`, nightly, and pull requests that change a path in `PACKAGING_PATHS` or add a file over 1 MiB (`python3 scripts/check-publishable.py scope --base <rev>` says which). Its `Publishable` job is a required status check; on other pull requests it passes with the publish jobs skipped. |
 | [`scripts/release.py`](../scripts/release.py) preflight | the same functions, against the release commit | before the tag is pushed, and before crates.io / npm are published |
 | [`napi.yml`](../.github/workflows/napi.yml) `upload-release-tarballs` | `scripts/check-publishable.py napi` | at release time, against the real prebuilt addons, before the tarballs are uploaded |
 
@@ -51,7 +52,7 @@ These apply to every artifact any channel receives.
 |---|---|---|
 | No file matching `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `.npmrc`, `.pypirc`, `.git/`, `node_modules/`, `target/` | Credentials and build debris must never be published; nothing can be taken back from a registry | `content_problems` |
 | No file containing a private key or a GitHub, npm, crates.io, PyPI, RubyGems, AWS or Slack token | Same | `content_problems` |
-| No file over 1 MiB unless it is declared in the package's `large_files` | The 0.6.0 render-pdf crate carried test PDFs; an undeclared large file fails on the pull request that adds it, before any registry limit is reached. A declaration that matches no packed file also fails. | `content_problems` |
+| No file over 1 MiB unless it is declared in the package's `large_files` | The 0.6.0 render-pdf crate carried test PDFs; an undeclared large file fails on the pull request that adds it (adding a file over 1 MiB always runs the checks there), before any registry limit is reached. A declaration that matches no packed file also fails. | `content_problems` |
 | The publish dry run prints no unexpected warning | See above | `tool_warnings` |
 
 ## crates.io
@@ -84,7 +85,7 @@ with trusted publishing
 `@chordsketch/chordpro-lite`, all on the release tag, dispatched by
 `scripts/release.py`
 ([ADR-0073](adr/0073-packages-built-on-the-engine-release-with-it.md)). Every
-one of them is checked on every pull request.
+one of them is checked before every merge.
 
 | Condition | Source | Checked by |
 |---|---|---|

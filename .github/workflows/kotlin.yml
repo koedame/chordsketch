@@ -363,7 +363,7 @@ jobs:
           # `automaticRelease = true` set in build.gradle.kts, the
           # deployment will be promoted from VALIDATED to RELEASED
           # automatically after the upload completes.
-          # The checks publishable.yml runs on every pull request, against
+          # The checks publishable.yml runs before every merge, against
           # the real libraries of every platform, before anything is uploaded.
           python3 ../../scripts/check-publishable.py maven
           ./gradlew publishAllPublicationsToMavenCentralRepository --no-configuration-cache

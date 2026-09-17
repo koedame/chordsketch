@@ -1,6 +1,6 @@
 # 0070. Publishability is checked on every pull request, by the same definitions the release uses
 
-- **Status**: Accepted
+- **Status**: Accepted (on pull requests the checks run only when the change can reach a package, and the merge queue runs all of them, since ADR-0079 on 2026-09-17)
 - **Date**: 2026-09-15
 
 ## Context

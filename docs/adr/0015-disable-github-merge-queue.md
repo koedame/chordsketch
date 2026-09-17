@@ -1,6 +1,6 @@
 # 0015. Disable GitHub Merge Queue (supersedes ADR-0003)
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-0079](0079-merges-go-through-the-queue-which-runs-the-publish-checks.md) (2026-09-17)
 - **Date**: 2026-05-03
 
 ## Context

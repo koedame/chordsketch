@@ -5,12 +5,13 @@
     python3 scripts/check-publishable.py npm --package @chordsketch/wasm
     python3 scripts/check-publishable.py napi --tarballs release-staging
 
-Run by `.github/workflows/publishable.yml` on every pull request, every
-push to `main` and nightly. The conditions, and the reason each exists, are
+Run by `.github/workflows/publishable.yml` in the merge queue, on every
+push to `main`, nightly, and on each pull request that `scope` says can
+reach a package (ADR-0079). The conditions, and the reason each exists, are
 in `docs/publishing-requirements.md`; the checks themselves live in
 `scripts/_publish_checks.py`, which `scripts/publish-registries.py` runs
 too before crates.io and npm publish, so a release is held to exactly what
-every pull request was held to.
+every merge was held to.
 
 Subcommands:
 
@@ -56,6 +57,9 @@ Subcommands:
               Needs docker, and the Python packages aiohttp, tomlkit and PyYAML.
   jetbrains   Build the JetBrains plugin distribution and check it.
   nixpkgs     Check the nixpkgs derivation template's metadata.
+  scope       Say whether the change from `--base` to HEAD reaches anything
+              published, and why; with `--output`, append `run=true|false`
+              to that file (the workflow's `$GITHUB_OUTPUT`).
 
 Exits 1 and lists every problem when any check fails. Stdlib only.
 """
@@ -108,6 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     snap.add_argument("--binary", type=Path, required=True, help="a Linux x86_64 chordsketch to stage")
     chocolatey = sub.add_parser("chocolatey", help="pack and check the Chocolatey package")
     chocolatey.add_argument("--dir", type=Path, required=True, help="the workspace holding choco-pkg/")
+    scope = sub.add_parser("scope", help="say whether a change needs the publish checks")
+    scope.add_argument("--base", required=True, help="the revision the change is measured from")
+    scope.add_argument("--output", type=Path, help="file to append run=true|false to")
     args = parser.parse_args(argv)
 
     if args.command == "npm-matrix":
@@ -116,6 +123,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "vscode-matrix":
         print(json.dumps([vars(t) for t in checks.VSCODE_TARGETS]))
+        return 0
+
+    if args.command == "scope":
+        reasons = checks.packaging_reasons(checks.changed_files(args.base))
+        for reason in reasons:
+            print(reason)
+        if not reasons:
+            print("Nothing this change touches is read by the publish checks; the merge queue still runs them.")
+        if args.output:
+            with args.output.open("a") as output:
+                output.write(f"run={'true' if reasons else 'false'}\n")
         return 0
 
     tree = checks.REPO_ROOT

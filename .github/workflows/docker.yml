@@ -82,8 +82,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The same tagging and build publishable.yml runs without pushing on
-      # every pull request.
+      # The same tagging and build publishable.yml runs without pushing
+      # before every merge.
       - name: Build and push to GHCR
         uses: ./.github/actions/docker-release-image
         with:
