@@ -27,7 +27,7 @@ below.
    Claude posts a single summary comment stating "Ready for merge." If the
    four conditions in the "Bot-driven merge: conditional permission"
    section below are met — the first of them being maintainer authorization —
-   Claude adds the PR to the merge queue with `gh pr merge <N>`. Otherwise, a
+   Claude adds the PR to the merge queue (condition 4). Otherwise, a
    human inspects the full check rollup (not just the required checks
    listed in branch protection) and clicks "Merge when ready". The queue
    runs the required checks, including every publish check, on the commit
@@ -79,7 +79,7 @@ rots, and context is freshest while the code is still being edited.
 
 ### Bot-driven merge: conditional permission
 
-`gh pr merge` MAY be executed by an AI assistant when
+An AI assistant MAY add a PR to the merge queue when
 **all four** conditions hold. See
 [ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md) for
 the bot-merge rationale and
@@ -117,10 +117,22 @@ for why condition (4) is the merge queue.
    resulting auto-review iteration must have completed and
    converged.
 
-4. **Merge through the queue.** Run `gh pr merge <N>` (or the
-   `enqueuePullRequest` GraphQL mutation) once (1)–(3) hold; the queue
-   decides the squash. Never pass `--admin`: it merges past the queue
-   and past the publish checks a pull request may have skipped. The
+4. **Merge through the queue.** Once (1)–(3) hold, enqueue the PR at
+   the HEAD they were checked on; the queue decides the squash:
+
+   ```bash
+   gh api graphql \
+     -f query='mutation($id: ID!, $oid: GitObjectID!) { enqueuePullRequest(input: {pullRequestId: $id, expectedHeadOid: $oid}) { mergeQueueEntry { position } } }' \
+     -f id="$(gh pr view <N> --json id --jq .id)" \
+     -f oid=<HEAD checked by (2) and (3)>
+   ```
+
+   `gh pr merge <N>` does not work here: on a queue-protected branch it
+   enqueues through auto-merge, which is disabled at the repository
+   level (`enablePullRequestAutoMerge: false`), and fails with
+   `Auto merge is not allowed for this repository`. Never pass
+   `--admin`: it merges past the queue and past the publish checks a
+   pull request may have skipped. The
    merge is done when the PR is `MERGED`, not when the command
    returns. If the queue removes the PR, read the failing
    `merge_group` run, fix and push (a GitHub-side transient failure
@@ -217,8 +229,9 @@ For local review before pushing, or when the automated flow is not desired:
   on the commit that will land. A PR does not have to be up to date
   with `main`: the queue composes it with the current `main`, so a
   catch-up rebase is only needed for a conflict.
-- The merge action is `gh pr merge <N>` or the GitHub UI's
-  "Merge when ready" button, both of which add the PR to the queue
+- The merge action is the GitHub UI's "Merge when ready" button or
+  the `enqueuePullRequest` mutation in condition (4), both of which
+  add the PR to the queue
   ([ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)).
   `--admin` bypasses the queue and is not part of the flow.
 

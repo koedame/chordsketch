@@ -74,7 +74,7 @@ npm run dev
 
 5. **Open a PR.** Include `Closes #N` in the description when the PR
    resolves an issue. PRs are squash-merged.
-6. **Click "Merge when ready"** (or run `gh pr merge <N>`). This adds
+6. **Click "Merge when ready".** This adds
    the PR to the merge queue, which runs the required checks on your
    change combined with the current `main` and squash-merges it when
    they pass ([ADR-0079](docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)).

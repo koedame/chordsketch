@@ -187,7 +187,7 @@ a conditional carve-out for AI-assistant merges (see step 5 below and
    "Ready for merge" comment. A human inspects the **full check rollup** (not
    just the required checks listed in branch protection), verifies there are no
    review-bot-authored issues still open against the PR, and adds it to the
-   merge queue — *or* an AI assistant runs `gh pr merge <N>` when all
+   merge queue — *or* an AI assistant enqueues it when all
    four conditions in `.claude/rules/pr-workflow.md`'s "Bot-driven merge:
    conditional permission" section hold (maintainer authorization, full check
    rollup green, auto-review converged on HEAD, merge through the queue).
