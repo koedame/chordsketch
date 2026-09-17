@@ -138,8 +138,8 @@ keys it writes. See each `phases/*.md` "Output" section.
 
 ## Merge gate
 
-The workflow stops at `ready-for-merge`. The actual `gh pr merge --squash`
-is held for the maintainer per
+The workflow stops at `ready-for-merge`. The actual `gh pr merge`
+(which adds the PR to the merge queue) is held for the maintainer per
 [`.claude/rules/pr-workflow.md`](../../rules/pr-workflow.md) §"Bot-driven
 merge: conditional permission" and
 [ADR-0013](../../../docs/adr/0013-conditional-bot-driven-merge.md). The

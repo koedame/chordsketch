@@ -27,9 +27,12 @@ below.
    Claude posts a single summary comment stating "Ready for merge." If the
    four conditions in the "Bot-driven merge: conditional permission"
    section below are met — the first of them being maintainer authorization —
-   Claude squash-merges directly via `gh pr merge --squash`. Otherwise, a
+   Claude adds the PR to the merge queue with `gh pr merge <N>`. Otherwise, a
    human inspects the full check rollup (not just the required checks
-   listed in branch protection) and performs the squash merge.
+   listed in branch protection) and clicks "Merge when ready". The queue
+   runs the required checks, including every publish check, on the commit
+   that will become `main`, and squash-merges it
+   ([ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)).
 7. **Safety cap** — after 10 auto-review iterations, the process stops and waits for
    human intervention. The cap was raised from 3 to 10 because the
    typical convergence trajectory observed on real PRs (~10 → ~5 →
@@ -76,12 +79,12 @@ rots, and context is freshest while the code is still being edited.
 
 ### Bot-driven merge: conditional permission
 
-`gh pr merge --squash` MAY be executed by an AI assistant when
+`gh pr merge` MAY be executed by an AI assistant when
 **all four** conditions hold. See
 [ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md) for
 the bot-merge rationale and
-[ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md) for
-why condition (4) is a direct squash and not a merge-queue enqueue.
+[ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)
+for why condition (4) is the merge queue.
 
 1. **Authorization to merge.** The maintainer has authorized the
    merge in one of three forms:
@@ -114,14 +117,15 @@ why condition (4) is a direct squash and not a merge-queue enqueue.
    resulting auto-review iteration must have completed and
    converged.
 
-4. **Direct squash merge.** Use `gh pr merge <N> --squash` (or the
-   equivalent `mergePullRequest` GraphQL mutation with
-   `mergeMethod: SQUASH`). Auto-merge is disabled at the repo
-   level (`enablePullRequestAutoMerge: false`); the assistant's
-   `--squash` invocation runs synchronously against the PR's
-   current HEAD. The merge queue is no longer in use
-   ([ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md));
-   `enqueuePullRequest` / `--merge-queue` paths are not available.
+4. **Merge through the queue.** Run `gh pr merge <N>` (or the
+   `enqueuePullRequest` GraphQL mutation) once (1)–(3) hold; the queue
+   decides the squash. Never pass `--admin`: it merges past the queue
+   and past the publish checks a pull request may have skipped. The
+   merge is done when the PR is `MERGED`, not when the command
+   returns. If the queue removes the PR, read the failing
+   `merge_group` run, fix and push (a GitHub-side transient failure
+   may be re-queued as is), meet (2) and (3) on the new HEAD, and
+   enqueue again.
 
 If any of (1)–(4) is not satisfied, post the "Ready for merge"
 comment and wait for the human merger.
@@ -181,13 +185,13 @@ rather than a silent skip — eliminating the required-list drift
 class regardless of which merge mechanism is used.
 
 A second structural protection — the merge queue's speculative-merge
-CI re-run, originally from
+CI run, originally from
 [ADR-0003](../../docs/adr/0003-github-merge-queue.md) — was removed in
-[ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md). The
-queue's protection against red *required* checks landing on `main` is
-now policy-only via condition (2), not policy + structural. ADR-0015
-documents why the wall-clock cost of the queue's second CI pass no
-longer justified its defence-in-depth value at this repo's scale.
+[ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md) and
+restored in
+[ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md),
+which moved the publish checks into the queue so that pull requests
+that reach no package can skip them.
 
 The previous absolute ban on bot-driven merging traded condition (2)
 for a single property — "the assistant cannot enqueue at all" — at
@@ -208,29 +212,26 @@ For local review before pushing, or when the automated flow is not desired:
 
 - All changes enter `main` via pull request — no direct pushes.
 - All PRs are **squash-merged** (merge commits and rebase merging are disabled).
-- Branch protection enforces that status checks pass on the HEAD
-  commit before merging, and that the PR branch is up-to-date with
-  `main` before merging — the latter rule forces a rebase-and-rerun
-  whenever `main` has moved, which catches the content-conflict
-  class the merge queue used to detect.
-- The merge action is `gh pr merge <N> --squash` (or the GitHub UI's
-  "Squash and merge" button). The merge queue is no longer in use
-  ([ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md));
-  `gh pr merge --merge-queue` and the `enqueuePullRequest` GraphQL
-  mutation are not part of the flow.
+- Branch protection requires the status checks to pass on the HEAD
+  commit, and `main` requires the merge queue, which runs them again
+  on the commit that will land. A PR does not have to be up to date
+  with `main`: the queue composes it with the current `main`, so a
+  catch-up rebase is only needed for a conflict.
+- The merge action is `gh pr merge <N>` or the GitHub UI's
+  "Merge when ready" button, both of which add the PR to the queue
+  ([ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)).
+  `--admin` bypasses the queue and is not part of the flow.
 
 ### Workflow trigger expectations
 
-- Workflows that produce `required_status_checks` MUST include
-  `pull_request:` in their `on:` block. Required checks fire against
-  the PR's head commit; branch protection's "must be up to date"
-  rule forces re-run after rebase.
-- `merge_group:` triggers are obsolete under
-  [ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md).
-  Existing `merge_group:` lines may stay as cheap no-ops (they will
-  never fire) or be cleaned up in follow-up PRs; new workflows
-  SHOULD NOT add `merge_group:`. There is no `merge_group` event to
-  gate on.
+- Workflows that produce `required_status_checks` MUST include both
+  `pull_request:` and `merge_group:` in their `on:` block. A required
+  check that does not run on `merge_group` leaves every queued PR
+  waiting until the queue times out.
+- A required check that should not run in full on every PR still
+  reports on every PR: decide inside the workflow and let the
+  aggregate job pass, as `publishable.yml`'s `scope` job does. A
+  `paths:` filter would leave the check pending.
 - Non-required workflows (smoke jobs, language-binding builds, etc.)
   fire on `pull_request:` and `push:` to `main` as appropriate.
 

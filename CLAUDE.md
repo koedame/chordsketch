@@ -186,13 +186,16 @@ a conditional carve-out for AI-assistant merges (see step 5 below and
 5. **Ready for merge** — when the review converges, Claude posts a
    "Ready for merge" comment. A human inspects the **full check rollup** (not
    just the required checks listed in branch protection), verifies there are no
-   review-bot-authored issues still open against the PR, and performs the squash
-   merge — *or* an AI assistant runs `gh pr merge <N> --squash` when all
+   review-bot-authored issues still open against the PR, and adds it to the
+   merge queue — *or* an AI assistant runs `gh pr merge <N>` when all
    four conditions in `.claude/rules/pr-workflow.md`'s "Bot-driven merge:
    conditional permission" section hold (maintainer authorization, full check
-   rollup green, auto-review converged on HEAD, direct squash merge).
+   rollup green, auto-review converged on HEAD, merge through the queue).
+   The merge is done when the queue lands it.
 
-All PRs are **squash-merged**. Branch protection requires CI to pass on HEAD.
+All PRs are **squash-merged** by the merge queue, which runs the required
+checks — every publish check included — before anything reaches `main`
+(ADR-0079). Branch protection requires CI to pass on HEAD.
 Bot-driven merge is conditional on the four-clause check above — see
 `.claude/rules/pr-workflow.md` for the full rule.
 
