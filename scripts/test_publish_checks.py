@@ -831,7 +831,6 @@ class FlathubTest(unittest.TestCase):
         self.assertIn("'ChordSketch'", problems[0])
 
 
-@unittest.skipUnless(shutil.which("npm"), "npm is not on PATH")
 class PackagingScopeTest(unittest.TestCase):
     """Which pull requests run the publish checks before the merge queue does."""
 
@@ -922,6 +921,7 @@ class PackagingScopeTest(unittest.TestCase):
                 checks.changed_files("no-such-revision", tree=Path(scratch))
 
 
+@unittest.skipUnless(shutil.which("npm"), "npm is not on PATH")
 class NpmDryRunTest(unittest.TestCase):
     """Runs the real `npm publish --dry-run`; publishable.yml guarantees npm."""
 
