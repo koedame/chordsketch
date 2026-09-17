@@ -1,5 +1,5 @@
 PackageIdentifier: koedame.chordsketch
-PackageVersion: 0.6.0
+PackageVersion: 0.7.0
 InstallerType: zip
 Installers:
   - Architecture: x64

@@ -1,6 +1,6 @@
 {
   "name": "@chordsketch/vue",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Vue 3 components for embedding ChordPro previews, editors and chord diagrams, powered by @chordsketch/wasm",
   "license": "MIT",
   "type": "module",
@@ -55,7 +55,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@chordsketch/wasm-export": "^0.6.0",
+    "@chordsketch/wasm-export": "^0.7.0",
     "vue": ">=3.3"
   },
   "peerDependenciesMeta": {
@@ -64,7 +64,7 @@
     }
   },
   "dependencies": {
-    "@chordsketch/wasm": "^0.6.0"
+    "@chordsketch/wasm": "^0.7.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
