@@ -517,17 +517,24 @@ def _check_maven_central(channel: Channel, version: str) -> CheckResult:
 def _check_homebrew_tap(channel: Channel, version: str) -> CheckResult:
     # The tap is expected to live at koedame/homebrew-tap; the formula file
     # name matches the package name. This fetches the raw formula source
-    # directly from GitHub and greps for the version line.
+    # directly from GitHub. The generated formula has no `version` line —
+    # `brew audit --strict` rejects one Homebrew can scan from the URLs — so
+    # the version is the one every release download URL names, as it is for
+    # Homebrew. An explicit `version` line still wins.
     url = f"https://raw.githubusercontent.com/koedame/homebrew-tap/main/Formula/{channel.package}.rb"
     try:
         text = _http_get_text(url)
     except Exception as exc:  # noqa: BLE001
         return _error(channel, version, f"homebrew-tap fetch error: {exc}")
-    match = re.search(r'version\s+"([^"]+)"', text)
-    if not match:
-        return _error(channel, version, "no version line in formula")
-    observed = match.group(1)
-    return _compare(channel, version, observed)
+    match = re.search(r'^\s*version\s+"([^"]+)"', text, flags=re.MULTILINE)
+    if match:
+        return _compare(channel, version, match.group(1))
+    tagged = set(re.findall(r'url\s+"[^"]*/releases/download/v([^/"]+)/', text))
+    if not tagged:
+        return _error(channel, version, "no version line or release download URL in formula")
+    if len(tagged) > 1:
+        return _error(channel, version, f"formula download URLs name different versions: {', '.join(sorted(tagged))}")
+    return _compare(channel, version, tagged.pop())
 
 
 def _check_scoop_bucket(channel: Channel, version: str) -> CheckResult:
