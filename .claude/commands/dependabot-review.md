@@ -330,10 +330,12 @@ apply per merge:
    returned IS the converged review. If the subagent pushed a fix
    commit (verdict `FIXED`), CI will be re-running on the new HEAD;
    wait for it per (2) before merging.
-4. **Direct squash merge**:
-   ```bash
-   gh pr merge <PR> --squash
-   ```
+4. **Merge through the queue** (ADR-0079; never `--admin`, and not
+   `gh pr merge` — see `.claude/rules/pr-workflow.md` condition (4)
+   for why): run the `enqueuePullRequest` command there with the HEAD
+   verified in (2). Wait until `gh pr view <PR> --json state` reports
+   `MERGED`. If the queue removes the PR, read the failing
+   `merge_group` run and treat it as a failed check under (2).
 
 Mark the task `completed`. Move on to the next PR.
 
@@ -426,8 +428,8 @@ If any PR is in the BLOCKED bucket, end the summary with:
 
 ## Failure modes to watch for
 
-- **`gh pr merge --squash` fails with `Pull request is not mergeable`**:
-  the PR is behind `main` because Dependabot has not yet rebased it.
+- **Enqueueing fails because the PR is not mergeable**:
+  the PR conflicts with `main` because Dependabot has not yet rebased it.
   Post the `rebase` command comment exactly the way step 3 spells
   it out (`--body-file`, then read the posted comment back), wait
   for the rebase + CI, retry once.
