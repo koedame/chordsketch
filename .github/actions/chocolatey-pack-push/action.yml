@@ -36,10 +36,11 @@ inputs:
   on-forbidden:
     description: >
       Disposition when `choco push` is refused with HTTP 403 — for this
-      package a community moderation queue that refuses new versions
-      (#1852; the conditions are in docs/releasing.md, "When Chocolatey
-      refuses a push with 403"). `warn` reports the cause and exits 0; `fail` reports the
-      same text as an error and exits 1.
+      package, the cause is a community moderation queue that refuses
+      new versions (#1852; the conditions are in docs/releasing.md,
+      "When Chocolatey refuses a push with 403"). `warn` reports the
+      cause and exits 0; `fail` reports the same text as an error and
+      exits 1.
     required: false
     default: warn
 runs:

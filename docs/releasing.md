@@ -1272,7 +1272,7 @@ repository does not hold it):
 |---|---|---|---|
 | 0.2.2 (2026-04-18), plus two retries on 2026-04-21 | none | 0.2.1 | `403` ×3 (#1852) |
 | 0.5.0 (2026-05-20) | 0.2.1 | none | pushed |
-| 0.6.0 (2026-09-14) | 0.2.1, 0.5.0 | none | pushed |
+| 0.6.0 (2026-09-13) | 0.2.1, 0.5.0 | none | pushed |
 | 0.7.0 (2026-09-17) | 0.2.1, 0.5.0 | 0.6.0 | pushed |
 
 Every recorded `403` fell inside the 2026-04-16 to 2026-05-14 window in
