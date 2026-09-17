@@ -363,7 +363,7 @@ jobs:
           path: dist
 
       - name: Check the distributions before uploading
-        # The check publishable.yml runs on every pull request, now against
+        # The check publishable.yml runs before every merge, now against
         # every wheel the release built.
         if: steps.oidc.outputs.available == 'true'
         run: python3 scripts/check-publishable.py python --dist dist

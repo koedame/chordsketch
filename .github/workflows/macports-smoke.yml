@@ -1,10 +1,11 @@
 name: MacPorts smoke
 
 on:
-  # Called by publishable.yml on every pull request, push to `main` and
-  # nightly: `port lint --nitpick` is what MacPorts requires of a Portfile
-  # before it accepts a submission (ADR-0070). Before that it ran only on
-  # pull requests touching the paths below, so a Portfile could fall out of
+  # Called by publishable.yml in the merge queue, on pushes to `main`,
+  # nightly and on pull requests that touch packaging (ADR-0079):
+  # `port lint --nitpick` is what MacPorts requires of a Portfile before
+  # it accepts a submission (ADR-0070). Before that it ran only on pull
+  # requests touching the paths below, so a Portfile could fall out of
   # lint through a change elsewhere (a new dependency in Cargo.lock) unseen.
   workflow_call:
   workflow_dispatch:

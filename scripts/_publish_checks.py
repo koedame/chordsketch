@@ -6,7 +6,8 @@ executable definition of the conditions that can be checked without
 publishing, and it is imported by both places that check them:
 
   - `scripts/check-publishable.py`, which `.github/workflows/publishable.yml`
-    runs on every pull request, every push to `main` and nightly;
+    runs in the merge queue, on every push to `main`, nightly, and on the
+    pull requests `packaging_reasons` picks out (ADR-0079);
   - `scripts/publish-registries.py`, which `publish-registries.yml` runs
     before it publishes crates.io and npm — for the release commit in the
     release preflight, and again for the upload itself (ADR-0069).
@@ -2083,3 +2084,119 @@ def channel_check(channel_id: str, kind: str, package: str) -> str | None:
     if kind == "manual":
         return CHANNEL_CHECKS.get(channel_id)
     return CHANNEL_CHECKS.get(kind)
+
+
+# ------------------------------------------------ what a pull request reaches
+
+# `publishable.yml` runs every job above on a pull request only when the pull
+# request changes one of these paths or adds a file over LARGE_FILE_BYTES.
+# The merge queue, `main` and the nightly run always run every job
+# (ADR-0079), so a change this list misses is still stopped before it lands;
+# the list only decides whether the author hears about it while the pull
+# request is open. A pattern without a `/` matches a file name anywhere in
+# the tree; a pattern with one matches the whole path. Every pattern has to
+# match a file in the tree (`test_publish_checks.py`), so a rename that
+# orphans one fails rather than silently narrowing the list.
+PACKAGING_PATHS = (
+    # What a package declares: its manifest, lockfile, build and the files it
+    # ships or leaves out.
+    "Cargo.toml",
+    "Cargo.lock",
+    "build.rs",
+    "package.json",
+    "package-lock.json",
+    ".vscodeignore",
+    "tsconfig*.json",
+    "tsup.config.*",
+    "pyproject.toml",
+    "*.gemspec",
+    "Package.swift",
+    "*.gradle.kts",
+    "gradle.properties",
+    "plugin.xml",
+    "tauri.conf.json",
+    "Dockerfile*",
+    "flake.nix",
+    "flake.lock",
+    # The workflows whose release steps the checks lift and run, the
+    # workflows publishable.yml calls, and the composite actions its jobs use.
+    ".github/workflows/publishable.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/post-release.yml",
+    ".github/workflows/desktop-release.yml",
+    ".github/workflows/swift.yml",
+    ".github/workflows/nix.yml",
+    ".github/workflows/macports-smoke.yml",
+    ".github/actions/chocolatey-generate-package/*",
+    ".github/actions/chocolatey-pack-push/*",
+    ".github/actions/cli-render-smoke/*",
+    ".github/actions/docker-release-image/*",
+    ".github/actions/install-macports/*",
+    ".github/actions/install-wasm-pack/*",
+    ".github/actions/rust-cache/*",
+    ".github/actions/vscode-extension-build/*",
+    ".github/actions/vscode-extension-publish-setup/*",
+    "ci/release-channels.toml",
+    "packaging/*",
+    "crates/*/scripts/*",
+    "packages/*/scripts/*",
+    # The checks themselves.
+    "scripts/_action_yml.py",
+    "scripts/_publish_checks.py",
+    "scripts/_release_channels.py",
+    "scripts/check-publishable.py",
+    "scripts/macports-regen-cargo-crates.py",
+    "scripts/publish-registries.py",
+    "scripts/release.py",
+    "scripts/smoke-test-python.py",
+    "scripts/test_publish_checks.py",
+    "scripts/test_publish_registries.py",
+    "scripts/test_release.py",
+)
+
+
+def packaging_path_matches(path: str, pattern: str) -> bool:
+    """Whether `path` falls under one PACKAGING_PATHS pattern."""
+    return fnmatch.fnmatchcase(path if "/" in pattern else path.rsplit("/", 1)[-1], pattern)
+
+
+def packaging_reasons(changes: dict[str, int | None]) -> list[str]:
+    """Why a change needs the publish checks on its pull request; empty if nothing.
+
+    `changes` maps each changed path to its size after the change, or None
+    when the change deletes it.
+    """
+    reasons = []
+    for path, size in sorted(changes.items()):
+        pattern = next((p for p in PACKAGING_PATHS if packaging_path_matches(path, p)), None)
+        if pattern is not None:
+            reasons.append(f"`{path}` matches `{pattern}`")
+        elif size is not None and size > LARGE_FILE_BYTES:
+            # A large file can push a package over a registry's limit wherever
+            # it lives: v0.6.0's render-pdf crate grew through test fixtures.
+            reasons.append(f"`{path}` is {size / MIB:.1f} MiB, over the {LARGE_FILE_BYTES // MIB} MiB a package may carry undeclared")
+    return reasons
+
+
+def changed_files(base: str, head: str = "HEAD", tree: Path = REPO_ROOT) -> dict[str, int | None]:
+    """Every path `head` changes relative to `base`, with its size in `head`.
+
+    Raises `subprocess.CalledProcessError` when git cannot tell, so a caller
+    never mistakes an unreadable diff for an empty one.
+    """
+    def git(*args: str) -> str:
+        return subprocess.run(["git", *args], cwd=tree, check=True, text=True, stdout=subprocess.PIPE).stdout
+
+    changes: dict[str, int | None] = {
+        path: None for path in git("diff", "--name-only", "--no-renames", "-z", base, head).split("\0") if path
+    }
+    if not changes:
+        return changes
+    for entry in git("--literal-pathspecs", "ls-tree", "-r", "-l", "-z", head, "--", *changes).split("\0"):
+        if not entry:
+            continue
+        meta, path = entry.split("\t", 1)
+        size = meta.split()[3]
+        # A submodule has no size; it is not a file a package carries.
+        changes[path] = int(size) if size.isdigit() else 0
+    return changes

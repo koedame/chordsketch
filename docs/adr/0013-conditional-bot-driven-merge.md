@@ -1,6 +1,6 @@
 # 0013. Bot-driven merge is allowed under explicit session permission
 
-- **Status**: Accepted (condition 4 updated by ADR-0015 on 2026-05-03; clause 1 extended for unattended Dependabot merge by ADR-0024 on 2026-05-25; clause 1 generalized to authorization in any of three forms by ADR-0047 on 2026-09-02)
+- **Status**: Accepted (condition 4 updated by ADR-0015 on 2026-05-03; clause 1 extended for unattended Dependabot merge by ADR-0024 on 2026-05-25; clause 1 generalized to authorization in any of three forms by ADR-0047 on 2026-09-02; condition 4 returned to the merge queue by ADR-0079 on 2026-09-17)
 - **Date**: 2026-04-29
 
 > **Update (2026-05-03):** Condition (4) below ("Merge queue path

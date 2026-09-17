@@ -453,7 +453,7 @@ jobs:
     # build; a maintainer installs it and merges. The repository exists only
     # once the first submission is accepted, so until then the job generates
     # the files and stops, as it does for prerelease tags. `publishable.yml`
-    # runs the `Generate Flathub files` step on every pull request.
+    # runs the `Generate Flathub files` step before every merge.
     needs: [release]
     runs-on: ubuntu-latest
     steps:

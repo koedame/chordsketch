@@ -31,7 +31,7 @@ and only if every answer is yes does it push the tag (ADR-0068):
   * every CI publish credential is still accepted by its service
     (`.github/workflows/release-credentials.yml`);
   * `publish-registries.yml` in `check` mode passes for the release commit:
-    every pending crate and npm package passes the checks every pull request
+    every pending crate and npm package passes the checks every merge
     runs (`scripts/_publish_checks.py`), none of them is new to its
     registry, and crates.io and npm each mint a token for that workflow.
 

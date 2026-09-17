@@ -141,7 +141,7 @@ jobs:
     name: VSIX targets
     # The platform-specific VSIXes to build, read from `VSCODE_TARGETS` in
     # scripts/_publish_checks.py — the same list the publish jobs check the
-    # set against and publishable.yml packages on every pull request.
+    # set against and publishable.yml packages before every merge.
     # Alpine rows reuse the Linux `server_dir`: platform.ts reads
     # process.platform, which is "linux" on Alpine, so the musl binary must
     # land under server/linux-*; the alpine-* VSIX channel is what routes
@@ -198,7 +198,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The same build publishable.yml packages on every pull request.
+      # The same build publishable.yml packages before every merge.
       - uses: ./.github/actions/vscode-extension-build
         with:
           cache-key: vscode-extension-wasm-pack
@@ -256,7 +256,7 @@ jobs:
           awk -v a="$ARCHIVE" '$2 == a { print; found = 1 } END { exit !found }' \
             checksums.txt | sha256sum -c -
           # The next step places the binary under server/ and packages it,
-          # the way publishable.yml does on every pull request.
+          # the way publishable.yml does before every merge.
           mkdir -p lsp
           BIN="chordsketch-lsp${EXT}"
           if [[ "$ARCHIVE" == *.zip ]]; then
@@ -408,7 +408,7 @@ jobs:
 
       - name: Check the VSIXes before publishing
         # One universal plus one per target, each publishable: the same
-        # check publishable.yml runs on every pull request.
+        # check publishable.yml runs before every merge.
         run: python3 scripts/check-publishable.py vsix --dir packages/vscode-extension
 
       - name: Publish to Open VSX
