@@ -4,7 +4,7 @@ description: >
   the musl binaries staged at `./chordsketch-amd64` and
   `./chordsketch-arm64`. Shared by `docker.yml`, which pushes the image to
   GHCR on a release, and `publishable.yml`, which builds it without pushing
-  on every pull request (ADR-0070).
+  before every merge (ADR-0070, ADR-0079).
 inputs:
   tag:
     description: "Release tag the image is tagged from (e.g. v0.1.0). Format-validated by the caller."

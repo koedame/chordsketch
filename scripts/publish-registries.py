@@ -339,7 +339,7 @@ def napi_release_tarballs(packages: list[str], tag: str, out: Path, mode: str) -
         if mode == "publish":
             return ["publishing the napi packages needs `--tag`: their tarballs come from the tag's GitHub Release"]
         print("::notice::not tagged yet, so the napi tarballs are not on a Release to check; "
-              "publishable.yml checks their staging on every pull request", flush=True)
+              "publishable.yml checks their staging before every merge", flush=True)
         return []
     napi = [p for p in packages if checks.is_napi(p)]
     names = [checks.npm_tarball_name(p, npm_version(REPO_ROOT, p)) for p in napi]

@@ -339,7 +339,7 @@ jobs:
 
       - name: Stage and pack every package with its prebuilt binary
         # The staging lives in a script so `publishable.yml` runs exactly
-        # these steps on every pull request and checks the tarballs they
+        # these steps before every merge and checks the tarballs they
         # produce; a regression in the staging is caught there, not here
         # on release day. The script fails on a missing or empty `.node`
         # and on a committed version that is not the release version.
@@ -348,7 +348,7 @@ jobs:
         run: crates/napi/scripts/stage-release-tarballs.sh napi-artifacts "$VERSION" release-staging
 
       - name: Check the tarballs are publishable
-        # The same check `publishable.yml` runs on every pull request, now
+        # The same check `publishable.yml` runs before every merge, now
         # against the real release binaries.
         run: python3 scripts/check-publishable.py napi --tarballs release-staging
 
