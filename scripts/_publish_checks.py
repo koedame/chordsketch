@@ -1805,8 +1805,36 @@ FLATPAK_STARTED_TITLE = "Untitled — ChordSketch"
 FLATPAK_FAILED_TITLE = "ChordSketch failed to start"
 
 
-def flatpak_lint_problems(kind: str, output: str, returncode: int) -> list[str]:
+RUNTIME_UPDATE_WARNING = re.compile(r"^runtime-update-available-to-(?P<runtime>org\.gnome\.Platform)-(?P<version>[0-9.]+)$")
+
+
+def flatpak_sdk_extensions(manifest: str) -> list[str]:
+    """The `sdk-extensions` a Flatpak manifest lists."""
+    block = re.search(r"^sdk-extensions:\n((?:[ \t]+-[^\n]*\n)+)", manifest, flags=re.MULTILINE)
+    return re.findall(r"-\s*(\S+)", block.group(1)) if block else []
+
+
+def flatpak_runtime_update_blockers(output: str) -> dict[str, list[str]]:
+    """Read the probe that looks for every SDK extension on the newer runtime's branch.
+
+    Each line is `<runtime version> <extension ref>`, for an extension Flathub
+    does not serve on the branch that runtime's SDK extension point names.
+    """
+    blockers: dict[str, list[str]] = {}
+    for line in output.splitlines():
+        version, _, ref = line.strip().partition(" ")
+        if ref:
+            blockers.setdefault(version, []).append(ref)
+    return blockers
+
+
+def flatpak_lint_problems(kind: str, output: str, returncode: int, update_blockers: dict[str, list[str]] | None = None) -> list[str]:
     """Read `flatpak-builder-lint manifest|repo`, which prints a JSON report only when it finds something.
+
+    `runtime-update-available-to-org.gnome.Platform-N` is not a problem while
+    `update_blockers` names an SDK extension the manifest needs that Flathub does
+    not serve for runtime N yet: the manifest cannot move to N until it does.
+    It is reported, with what it waits for, in the check's output instead.
 
     https://docs.flathub.org/docs/for-app-authors/linter
     """
@@ -1826,7 +1854,13 @@ def flatpak_lint_problems(kind: str, output: str, returncode: int) -> list[str]:
         return " — ".join([finding, *details.get(finding, [])])
 
     problems = [f"flatpak-builder-lint {kind} error: {described(e)}" for e in report.get("errors", [])]
-    problems += [f"flatpak-builder-lint {kind} warning: {described(w)}" for w in report.get("warnings", [])]
+    for warning in report.get("warnings", []):
+        update = RUNTIME_UPDATE_WARNING.match(warning)
+        waiting = (update_blockers or {}).get(update.group("version"), []) if update else []
+        if waiting:
+            print(f"note: flatpak-builder-lint {kind} warning {warning} is not counted: Flathub does not serve {', '.join(waiting)} yet", flush=True)
+            continue
+        problems.append(f"flatpak-builder-lint {kind} warning: {described(warning)}")
     if returncode != 0 and not problems:
         problems.append(f"flatpak-builder-lint {kind} failed:\n{tail(output)}")
     return problems
@@ -1866,6 +1900,7 @@ def flathub_problems(version: str, runner: Runner = run) -> list[str]:
 
         manifest = f"{FLATPAK_APP_ID}.yml"
         flatpak = f"{REPO_ROOT}/packaging/flatpak"
+        extensions = " ".join(flatpak_sdk_extensions((REPO_ROOT / "packaging/flatpak" / manifest).read_text()))
         # The build runs in the container's own filesystem: the sandbox
         # flatpak-builder starts cannot read a bind-mounted directory owned by
         # the runner's user. Only reports are written back to /work.
@@ -1878,6 +1913,12 @@ def flathub_problems(version: str, runner: Runner = run) -> list[str]:
             "flatpak-builder --install-deps-from=flathub --disable-rofiles-fuse --mirror-screenshots-url=https://dl.flathub.org/media --compose-url-policy=full "
             f"--repo=repo build /work/local/{manifest} > /work/build.txt 2>&1 || exit 10; "
             "flatpak-builder-lint repo repo > /work/lint-repo.txt 2>&1; echo $? > /work/lint-repo.status; "
+            # For each newer GNOME runtime the lint points at, the SDK extensions Flathub does not serve on the
+            # branch that runtime's `org.freedesktop.Sdk.Extension` extension point names.
+            "for n in $(grep -ohE 'runtime-update-available-to-org\\.gnome\\.Platform-[0-9.]+' /work/lint-manifest.txt /work/lint-repo.txt | sed 's/.*-//' | sort -u); do "
+            "b=$(flatpak remote-info -m flathub org.gnome.Sdk//$n | awk '/^\\[/ {s = ($0 == \"[Extension org.freedesktop.Sdk.Extension]\")} s && $1 == \"version\" {print $3}'); "
+            f"[ -n \"$b\" ] && for e in {extensions}; do flatpak remote-info flathub $e//$b > /dev/null 2>&1 || echo \"$n $e//$b\"; done; "
+            "done > /work/runtime-update-blockers.txt; "
             f"{{ flatpak remote-add --no-gpg-verify built /var/tmp/flatpak/repo && flatpak install -y --noninteractive built {FLATPAK_APP_ID}; }} > /work/install.txt 2>&1 || exit 11; "
             # Xvfb directly: `xvfb-run` waits for a SIGUSR1 that can get lost when it runs under the container's init.
             "Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp > /work/xvfb.txt 2>&1 & "
@@ -1898,8 +1939,9 @@ def flathub_problems(version: str, runner: Runner = run) -> list[str]:
         def result(name: str) -> tuple[str, int]:
             return (directory / f"{name}.txt").read_text(), int((directory / f"{name}.status").read_text())
 
-        problems += flatpak_lint_problems("manifest", *result("lint-manifest"))
-        problems += flatpak_lint_problems("repo", *result("lint-repo"))
+        blockers = flatpak_runtime_update_blockers((directory / "runtime-update-blockers.txt").read_text())
+        problems += flatpak_lint_problems("manifest", *result("lint-manifest"), blockers)
+        problems += flatpak_lint_problems("repo", *result("lint-repo"), blockers)
         # `appstreamcli validate` counts warnings as failures; so does its exit status.
         appstream, status = result("lint-appstream")
         if status != 0:

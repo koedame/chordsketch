@@ -1,6 +1,6 @@
 [package]
 name = "chordsketch-render-pdf"
-version = "0.6.0"
+version = "0.7.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -18,7 +18,7 @@ readme = "README.md"
 exclude = ["/tests/fixtures/"]
 
 [dependencies]
-chordsketch-chordpro = { version = "0.6.0", path = "../chordpro" }
+chordsketch-chordpro = { version = "0.7.0", path = "../chordpro" }
 ttf-parser = { version = "0.25", default-features = false, features = ["std"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

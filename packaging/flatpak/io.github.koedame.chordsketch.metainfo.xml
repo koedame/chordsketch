@@ -55,6 +55,9 @@
   </supports>
 
   <releases>
+    <release version="0.7.0" date="2026-09-17">
+      <url type="details">https://github.com/koedame/chordsketch/releases/tag/desktop-v0.7.0</url>
+    </release>
     <release version="0.6.0" date="2026-09-13">
       <url type="details">https://github.com/koedame/chordsketch/releases/tag/desktop-v0.6.0</url>
     </release>

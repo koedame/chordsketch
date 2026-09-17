@@ -1,7 +1,7 @@
 {
   "name": "chordsketch-desktop-frontend",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "Vite frontend for the ChordSketch desktop app; mounts the React tree from @chordsketch/react inside the Tauri WebView.",
   "scripts": {
