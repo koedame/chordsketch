@@ -1,6 +1,6 @@
 {
   "name": "@chordsketch/node-win32-x64-msvc",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Prebuilt @chordsketch/node binary for Windows x86_64 (MSVC).",
   "license": "MIT",
   "repository": {

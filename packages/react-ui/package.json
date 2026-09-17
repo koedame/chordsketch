@@ -1,6 +1,6 @@
 {
   "name": "@chordsketch/react-ui",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Wasm-free React design-system primitives (buttons, cards, badges, form controls) for ChordSketch / ChordPro web surfaces",
   "license": "MIT",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@chordsketch/react",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "React components for embedding ChordPro and iReal Pro editors + previews, powered by @chordsketch/wasm",
   "license": "MIT AND OFL-1.1",
   "type": "module",
@@ -55,7 +55,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@chordsketch/wasm-export": "^0.6.0",
+    "@chordsketch/wasm-export": "^0.7.0",
     "react": ">=18",
     "react-dom": ">=18"
   },
@@ -65,7 +65,7 @@
     }
   },
   "dependencies": {
-    "@chordsketch/wasm": "^0.6.0",
+    "@chordsketch/wasm": "^0.7.0",
     "@codemirror/autocomplete": "^6.18.0",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",

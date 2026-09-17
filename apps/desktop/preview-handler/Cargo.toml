@@ -5,7 +5,7 @@ name = "chordsketch-preview-handler"
 # `scripts/check-version-consistency.py`. The DLL ships inside the
 # desktop installer, so a release PR bumps this line together with
 # `apps/desktop/src-tauri/Cargo.toml` and the other desktop manifests.
-version = "0.6.0"
+version = "0.7.0"
 edition.workspace = true
 rust-version.workspace = true
 # Application-layer license per CLAUDE.md §License Policy, matching
