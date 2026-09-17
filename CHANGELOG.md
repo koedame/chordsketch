@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-17
+
 ### Added
 
 - **The desktop app builds as a Flatpak for Flathub** (`io.github.koedame.chordsketch`),
