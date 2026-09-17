@@ -383,17 +383,9 @@ jobs:
   # The four framework bindings (#606). Unlike the two jobs above,
   # these install the `latest` dist-tag — the literal command
   # README ## Installation documents — rather than a pinned version.
-  # Two reasons:
-  #
-  #   1. They version independently of the Rust workspace (react is
-  #      at 0.4.0 while react-ui / vue / svelte are at 0.1.0 and the
-  #      workspace is at 0.6.0), so a pin here would be invisible to
-  #      scripts/check-version-consistency.py and would never be
-  #      bumped by a release cut. It would keep asserting one frozen
-  #      release while the advertised `latest` rotted unwatched.
-  #   2. No pin means no release-cut window to tolerate: there is no
-  #      version that can be ahead of the registry, so these jobs need
-  #      none of the probe-and-skip machinery above.
+  # No pin means no release-cut window to tolerate: there is no
+  # version that can be ahead of the registry, so these jobs need
+  # none of the probe-and-skip machinery above.
   #
   # What each asserts beyond `npm install` exiting 0: the published
   # tarball resolves and loads, its components server-render the
@@ -1066,7 +1058,7 @@ jobs:
             IREAL_DEP='chordsketch-ireal = "^0.7"'
             IREAL_RENDER_DEP='chordsketch-render-ireal = "^0.7"'
             INCLUDE_IREAL=1
-            MODE="crates.io published (ChordPro + iReal, ^0.6)"
+            MODE="crates.io published (ChordPro + iReal, ^0.7)"
           fi
           echo "library-smoke mode: $MODE"
           {
