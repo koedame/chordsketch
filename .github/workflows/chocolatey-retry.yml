@@ -3,16 +3,18 @@ name: Chocolatey Retry Push
 # Re-runs only the Chocolatey pack-and-push step from post-release.yml.
 #
 # Use this when post-release.yml's `update-chocolatey` job fails (e.g.
-# 403 Forbidden because the previous version is still in Chocolatey
-# community moderation) while the other 4 jobs succeeded. Re-dispatching
+# 403 Forbidden because the Chocolatey community moderation queue is
+# refusing new versions) while the other 4 jobs succeeded. Re-dispatching
 # the whole post-release.yml would duplicate non-idempotent side effects
 # in AUR, Snap, Homebrew, and Scoop.
 #
 # See #1852 (original v0.2.2 failure) and #2030 (this workflow).
 #
 # The two v0.2.2 dispatches on 2026-04-21 both failed, because 0.2.1 was
-# still queued for a human moderator and Chocolatey rejects a newer
-# version while that is true. The push path itself is sound: the
+# still queued for a human moderator and no version had been approved
+# yet, and Chocolatey rejects a newer version while that is true (0.7.0
+# was accepted on 2026-09-17 with 0.6.0 queued, because 0.2.1 and 0.5.0
+# were approved by then). The push path itself is sound: the
 # equivalent step in post-release.yml published 0.5.0 on 2026-05-20
 # once the queue had drained. What was missing is that neither run said
 # any of this - the job surfaced a bare "Process completed with exit

@@ -36,9 +36,9 @@ inputs:
   on-forbidden:
     description: >
       Disposition when `choco push` is refused with HTTP 403 — for this
-      package almost always an earlier version still queued for community
-      moderation, which blocks every newer push until a moderator clears
-      it (#1852). `warn` reports the cause and exits 0; `fail` reports the
+      package a community moderation queue that refuses new versions
+      (#1852; the conditions are in docs/releasing.md, "When Chocolatey
+      refuses a push with 403"). `warn` reports the cause and exits 0; `fail` reports the
       same text as an error and exits 1.
     required: false
     default: warn
@@ -180,7 +180,7 @@ runs:
         }
 
         if ($output -match '403 \(Forbidden\)') {
-          $diagnosis = "choco push was refused with HTTP 403. The usual cause is an earlier version still queued for community moderation, which blocks every newer push until a moderator clears it (#1852). Open $page and read 'Package Status': 'Submitted' means still queued, and the review-timeline badge reads 'Ready for review' in that state - only an approved package unblocks this push. Once it clears, publish this version with 'gh workflow run chocolatey-retry.yml -R koedame/chordsketch -f tag=v$env:VERSION'. If the earlier version is already approved, check the API key next: https://community.chocolatey.org/account"
+          $diagnosis = "choco push was refused with HTTP 403. Chocolatey's moderation refuses a push when too many versions are queued at once, or when none has been approved yet (#1852); a single queued version next to an approved one does not cause it. Open $page and read 'Package Status' on the queued versions: 'Submitted' means still queued, and the review-timeline badge reads 'Ready for review' in that state - it is not an approval. Once the queue drains, publish this version with 'gh workflow run chocolatey-retry.yml -R koedame/chordsketch -f tag=v$env:VERSION'. If only one version is queued, check the API key next: https://community.chocolatey.org/account"
           if ($env:ON_FORBIDDEN -eq 'fail') {
             Write-Host "::error::$diagnosis"
             exit 1
