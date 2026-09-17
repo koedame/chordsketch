@@ -349,6 +349,9 @@ jobs:
         # vsce reads VSCE_PAT from the environment natively (>= 3.x), so no --pat flag needed.
         # Loop per-VSIX so one platform failing does not block the others; each
         # platform-specific VSIX carries its own --target metadata from packaging.
+        # --skip-duplicate makes a re-run publish only what is missing: v0.7.0's
+        # Open VSX job published 2 of 8 before the registry answered 503, and a
+        # plain re-run fails on the 2 it already has.
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         working-directory: packages/vscode-extension
@@ -357,7 +360,7 @@ jobs:
           status=0
           for vsix in *.vsix; do
             echo "::group::Publishing $vsix"
-            ./node_modules/.bin/vsce publish --packagePath "$vsix" || status=1
+            ./node_modules/.bin/vsce publish --skip-duplicate --packagePath "$vsix" || status=1
             echo "::endgroup::"
           done
           exit "$status"
@@ -414,6 +417,7 @@ jobs:
       - name: Publish to Open VSX
         # ovsx reads OVSX_PAT from the environment natively (no --pat flag
         # needed), matching the pattern used for vsce + VSCE_PAT above.
+        # --skip-duplicate for the same reason as the Marketplace step.
         env:
           OVSX_PAT: ${{ secrets.OPEN_VSX_TOKEN }}
         working-directory: packages/vscode-extension
@@ -422,7 +426,7 @@ jobs:
           status=0
           for vsix in *.vsix; do
             echo "::group::Publishing $vsix"
-            ./node_modules/.bin/ovsx publish "$vsix" || status=1
+            ./node_modules/.bin/ovsx publish --skip-duplicate "$vsix" || status=1
             echo "::endgroup::"
           done
           exit "$status"
