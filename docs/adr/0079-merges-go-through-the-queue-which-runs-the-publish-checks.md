@@ -51,12 +51,17 @@ the pull request can skip.
    match a tracked file. Every workflow and composite action reachable
    from `publishable.yml` through `uses: ./…` has to be on the list.
 4. **Condition (4) of ADR-0013 and ADR-0024 becomes "merge through the
-   queue".** `gh pr merge <N>` adds the pull request to the queue (the
-   queue decides the method). Never pass `--admin`, which merges past the
-   queue. A merge is done when the pull request is `MERGED`, not when the
-   command returns. If the queue removes the pull request, fix the cause,
-   push, meet conditions (2) and (3) on the new HEAD again, and enqueue
-   again. Conditions (1)–(3) are unchanged.
+   queue".** The assistant enqueues the pull request with the
+   `enqueuePullRequest` mutation at the HEAD conditions (2) and (3) were
+   checked on (the queue decides the method), pinning `expectedHeadOid`
+   so the enqueue targets that exact commit or fails cleanly. `gh pr
+   merge <N>` was tried first. On #2940, with every check passed, gh
+   2.100.0 enqueued through auto-merge, which stays disabled at the
+   repository level, and was refused. Never pass `--admin`, which merges
+   past the queue. A merge is done when the pull request is `MERGED`, not
+   when the command returns. If the queue removes the pull request, fix
+   the cause, push, meet conditions (2) and (3) on the new HEAD again,
+   and enqueue again. Conditions (1)–(3) are unchanged.
 
 ## Rationale
 

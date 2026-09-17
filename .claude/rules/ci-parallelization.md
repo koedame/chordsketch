@@ -88,11 +88,10 @@ within ~24 hours and LRU starts evicting the `main` caches that PR runs
 restore from — producing the `No cache found.` reports that motivated
 #2308.
 
-(The historical `refs/heads/gh-readonly-queue/*` write path was
-retired together with the merge queue itself in
-[ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md). The
-`save-if` guard is preserved so the same eviction problem does not
-return through the PR-ref path.)
+(Merge-queue runs, on `refs/heads/gh-readonly-queue/*` since
+[ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md),
+are excluded by the same `save-if` guard: their refs are as
+unreadable to other runs as a PR's.)
 
 PR runs continue to **restore** cached entries via the `shared-key`
 prefix; they simply do not write back. Cargo.lock-changing PRs
@@ -274,17 +273,13 @@ block.
 **Why:** GitHub-hosted runners are capped at 5 concurrent macOS jobs
 on the Free / Pro / Team plans
 (https://docs.github.com/en/actions/reference/actions-limits). When a
-PR is rebased — required after `main` moves, since branch protection
-gates merging on the branch being up to date — the old run continues
-occupying macOS slots while the new run starts behind it in the 5-job
-queue. Without cancel-in-progress, N pushes to one PR produce N
-parallel macOS pipelines competing for the same ceiling. (Direct
-squash merges replaced the merge queue in
-[ADR-0015](../../docs/adr/0015-disable-github-merge-queue.md); the
-"speculative-merge failure pushes the author to re-queue" path that
-ADR-0003 contemplated is no longer reachable, but the
-rebase-after-`main`-moves path remains and motivates this section
-identically.)
+PR gets a new push, the old run continues occupying macOS slots while
+the new run starts behind it in the 5-job queue. Without
+cancel-in-progress, N pushes to one PR produce N parallel macOS
+pipelines competing for the same ceiling. Merge-queue groups add their
+own runs of the required checks; the queue builds at most two groups
+at a time
+([ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)).
 
 ### Release/tag-triggered workflows
 
