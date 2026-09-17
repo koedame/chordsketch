@@ -132,11 +132,10 @@ for why condition (4) is the merge queue.
    Its `--help` says it enqueues directly once the required checks
    have passed, but on #2940, with every check passed and
    `mergeStateStatus: CLEAN`, gh 2.100.0 called
-   `enablePullRequestAutoMerge` and failed with
-   `Auto merge is not allowed for this repository`, because
-   auto-merge is disabled at the repository level. Never pass
-   `--admin`: it merges past the queue and past the publish checks a
-   pull request may have skipped. The
+   `enablePullRequestAutoMerge` and failed with `Auto merge is not
+   allowed for this repository`, because auto-merge is disabled at the
+   repository level. Never pass `--admin`: it merges past the queue
+   and past the publish checks a pull request may have skipped. The
    merge is done when the PR is `MERGED`, not when the command
    returns. If the queue removes the PR, read the failing
    `merge_group` run, fix and push (a GitHub-side transient failure
