@@ -764,7 +764,50 @@ end
                 channel, "v0.2.0", force_stale=False
             )
         self.assertFalse(result.ok)
-        self.assertIn("no version line", result.detail)
+        self.assertIn("no version line or release download URL", result.detail)
+
+    def test_homebrew_tap_version_from_download_urls(self) -> None:
+        """The generated formula names its version only in the URLs (`brew audit --strict`)."""
+        channel = _fake_channel(kind="homebrew-tap", package="chordsketch")
+        formula = """class Chordsketch < Formula
+  desc "ChordPro tool"
+  on_macos do
+    url "https://github.com/koedame/chordsketch/releases/download/v0.2.0/chordsketch-v0.2.0-aarch64-apple-darwin.tar.gz"
+  end
+  on_linux do
+    url "https://github.com/koedame/chordsketch/releases/download/v0.2.0/chordsketch-v0.2.0-x86_64-unknown-linux-gnu.tar.gz"
+  end
+end
+"""
+        with patch("check_release_channels._http_get_text", return_value=formula):
+            result = check_release_channels.verify_channel(
+                channel, "v0.2.0", force_stale=False
+            )
+        self.assertTrue(result.ok, f"expected OK, got {result}")
+        self.assertEqual(result.observed, "0.2.0")
+
+    def test_homebrew_tap_stale_download_url(self) -> None:
+        channel = _fake_channel(kind="homebrew-tap", package="chordsketch")
+        formula = 'url "https://github.com/koedame/chordsketch/releases/download/v0.1.0/chordsketch-v0.1.0-x86_64-apple-darwin.tar.gz"\n'
+        with patch("check_release_channels._http_get_text", return_value=formula):
+            result = check_release_channels.verify_channel(
+                channel, "v0.2.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.observed, "0.1.0")
+
+    def test_homebrew_tap_download_urls_disagree(self) -> None:
+        channel = _fake_channel(kind="homebrew-tap", package="chordsketch")
+        formula = (
+            'url "https://github.com/koedame/chordsketch/releases/download/v0.2.0/a.tar.gz"\n'
+            'url "https://github.com/koedame/chordsketch/releases/download/v0.1.0/b.tar.gz"\n'
+        )
+        with patch("check_release_channels._http_get_text", return_value=formula):
+            result = check_release_channels.verify_channel(
+                channel, "v0.2.0", force_stale=False
+            )
+        self.assertFalse(result.ok)
+        self.assertIn("different versions: 0.1.0, 0.2.0", result.detail)
 
     def test_scoop_bucket_match(self) -> None:
         channel = _fake_channel(kind="scoop-bucket", package="chordsketch")
