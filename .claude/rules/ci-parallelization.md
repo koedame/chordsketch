@@ -277,7 +277,8 @@ PR gets a new push, the old run continues occupying macOS slots while
 the new run starts behind it in the 5-job queue. Without
 cancel-in-progress, N pushes to one PR produce N parallel macOS
 pipelines competing for the same ceiling. Merge-queue groups add their
-own runs of the required checks, building at most two groups at a time
+own runs of the required checks; the queue builds at most two groups
+at a time
 ([ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)).
 
 ### Release/tag-triggered workflows
