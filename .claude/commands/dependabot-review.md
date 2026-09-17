@@ -333,9 +333,9 @@ apply per merge:
 4. **Merge through the queue** (ADR-0079; never `--admin`, and not
    `gh pr merge` — see `.claude/rules/pr-workflow.md` condition (4)
    for why): run the `enqueuePullRequest` command there with the HEAD
-   verified in (2). Wait until `gh pr view <PR> --json state` reports `MERGED`. If the
-   queue removes the PR, read the failing `merge_group` run and treat
-   it as a failed check under (2).
+   verified in (2). Wait until `gh pr view <PR> --json state` reports
+   `MERGED`. If the queue removes the PR, read the failing
+   `merge_group` run and treat it as a failed check under (2).
 
 Mark the task `completed`. Move on to the next PR.
 
