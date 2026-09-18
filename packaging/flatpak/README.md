@@ -61,7 +61,7 @@ flatpak run --command=flatpak-builder-lint org.flatpak.Builder appstream packagi
 
 Each desktop release adds a `<release>` to the metainfo, newest first.
 `scripts/check-version-consistency.py` fails until the newest one is the
-desktop version.
+desktop version; its `--set`, which the release bump runs, adds it.
 
 Once the app is on Flathub, `desktop-release.yml`'s `update-flathub` job
 opens a pull request on `flathub/io.github.koedame.chordsketch` with the files

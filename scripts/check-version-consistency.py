@@ -29,13 +29,14 @@ Sources checked:
   8. `packages/tree-sitter-chordpro/package.json` `version`
   9. `packages/claude-code-plugin/.claude-plugin/plugin.json` `version` and
      the matching `.claude-plugin/marketplace.json` plugin entry
- 10. Consumer caret-pin constraints — `^<major>.<minor>.0` for
+ 10. Consumer caret-pin constraints — `^<major>.<minor>.<patch>` for
      `@chordsketch/wasm` / `@chordsketch/wasm-export` referenced by
      `packages/vscode-extension`, `packages/react`, `packages/vue`,
      `packages/svelte`, and `packages/ui-irealb-editor`. The constraint MUST cover the
      canonical workspace version; comparison runs at major.minor
      granularity (`_expected_for` strips the patch when the field
-     label ends with `(^major.minor)`).
+     label ends with `(^major.minor)`). `--set` writes the released
+     version itself, `^X.Y.Z` (ADR-0073).
  11. `.github/workflows/readme-smoke.yml` — three hardcoded pins:
        a. `npm-wasm` job's `env: WASM_VERSION: "<version>"`
        b. `npm-wasm-export` job's `env: WASM_EXPORT_VERSION: "<version>"`
@@ -57,6 +58,13 @@ Sources checked:
      cadence and now publish with every workspace release (ADR-0073)
  20. `packaging/flatpak/io.github.koedame.chordsketch.metainfo.xml` — the newest
      `<release version>` (the Flathub listing's release history, ADR-0074)
+ 21. The `version` of every path dependency on a workspace crate
+     (`chordsketch-chordpro = { version = "X.Y.Z", path = "../chordpro" }`)
+ 22. `Cargo.lock` — the `version` of every workspace crate
+ 23. `packaging/winget/*.installer.yaml` — the tag and the asset name in
+     `InstallerUrl`
+ 24. `packages/react/README.md` — the `^X.Y.Z` requirements its table gives
+     for `@chordsketch/wasm` and `@chordsketch/wasm-export`
 
 Beyond versions, the lockfile of every consumer in (10) that installs
 `@chordsketch/wasm` must install it from the in-tree `packages/npm` rather
@@ -69,6 +77,17 @@ the same (file, field, current_value) shape plus a mandatory `tracking_issue`
 field — an entry without `tracking_issue` fails validation, because skips
 must never be forgotten (see #1506 and the user's explicit requirement).
 
+`--set X.Y.Z` is the release bump (docs/releasing.md, Step 1). Every loader
+records where its value is written, so the same list of sources that is
+checked is the list that is rewritten; nothing else names a location.
+It writes X.Y.Z to every source the allowlist does not cover (the covered
+ones keep their declared value), adds a dated `<release>` to the Flatpak
+metainfo, brings the npm lockfiles' copies of the rewritten fields along,
+regenerates the MacPorts `cargo.crates` block from the working tree's
+`Cargo.lock` (the Portfile now names a tag that does not exist yet), dates
+the release in CHANGELOG.md, and then runs the check. Running it again with
+the same version changes nothing.
+
 Exit codes:
   0 — every source matches canonical (after allowlist suppression)
   1 — one or more unallowed drifts detected, OR the allowlist is structurally
@@ -80,16 +99,29 @@ stdlib only — no external deps.
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import importlib.util
 import json
 import posixpath
 import re
 import sys
 import tomllib
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
+from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ALLOWLIST_PATH = REPO_ROOT / "ci" / "version-skew-allowlist.toml"
+
+
+def _as_is(version: str, released: str) -> str:
+    return version
+
+
+def _major_minor(version: str) -> str:
+    major, minor, _patch = version.split(".")
+    return f"{major}.{minor}"
 
 
 @dataclass(frozen=True)
@@ -99,6 +131,15 @@ class Source:
     file: str  # repo-relative path
     field: str  # human-readable label within the file
     value: str  # literal string extracted from the file
+    # Where `--set` writes: the character offsets of the text carrying the
+    # value, and that text for a version released on a date (YYYY-MM-DD).
+    span: tuple[int, int] = dataclasses.field(compare=False, repr=False)
+    render: Callable[[str, str], str] = dataclasses.field(default=_as_is, compare=False, repr=False)
+
+
+def _found(file: str, field: str, match: re.Match[str], render: Callable[[str, str], str] = _as_is) -> Source:
+    """The source whose value is `match`'s first group."""
+    return Source(file=file, field=field, value=match.group(1), span=match.span(1), render=render)
 
 
 @dataclass(frozen=True)
@@ -121,22 +162,80 @@ class Drift:
 # ---------------------------------------------------------------- extract sources
 
 
+# The `version = "..."` line of the `[package]` table: the first one after
+# the header and before the next table.
+_CARGO_PACKAGE_VERSION_RE = re.compile(
+    r'^\[package\][ \t]*$(?:(?!^\[).)*?^version\s*=\s*"([^"]+)"',
+    re.MULTILINE | re.DOTALL,
+)
+
+# `chordsketch-chordpro = { version = "X.Y.Z", path = "../chordpro" }`: a
+# dependency on a workspace crate. The path builds it in-tree; the version is
+# what crates.io resolves once it is published.
+_CARGO_PATH_DEPENDENCY_RE = re.compile(
+    r'^(chordsketch[\w-]*)\s*=\s*\{[^}\n]*\bpath\s*=[^}\n]*\}',
+    re.MULTILINE,
+)
+_INLINE_VERSION_RE = re.compile(r'\bversion\s*=\s*"([^"]+)"')
+
+
+def load_cargo_toml_versions(repo_root: Path, relative: str) -> list[Source]:
+    """The `package.version` of a Cargo.toml and its workspace path dependencies."""
+    path = repo_root / relative
+    text = path.read_text(encoding="utf-8")
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise SystemExit(f"{path}: invalid TOML: {exc}")
+    if not isinstance(data.get("package", {}).get("version"), str):
+        raise SystemExit(f"{path}: package.version is missing or not a string")
+    match = _CARGO_PACKAGE_VERSION_RE.search(text)
+    if match is None:
+        raise SystemExit(
+            f"{relative}: package.version is not a `version = \"...\"` line in the "
+            f"[package] table. If the manifest was restructured, update "
+            f"_CARGO_PACKAGE_VERSION_RE."
+        )
+    sources = [_found(relative, "package.version", match)]
+    for dependency in _CARGO_PATH_DEPENDENCY_RE.finditer(text):
+        version = _INLINE_VERSION_RE.search(text, dependency.start(), dependency.end())
+        if version is not None:
+            sources.append(_found(relative, f"dependency {dependency.group(1)} version", version))
+    return sources
+
+
 def load_crate_versions(repo_root: Path) -> list[Source]:
-    """Collect `package.version` from every `crates/*/Cargo.toml`."""
+    """Collect `package.version` and the path dependency versions from every `crates/*/Cargo.toml`."""
     sources: list[Source] = []
     for cargo_toml in sorted((repo_root / "crates").glob("*/Cargo.toml")):
-        try:
-            data = tomllib.loads(cargo_toml.read_text(encoding="utf-8"))
-        except tomllib.TOMLDecodeError as exc:
-            raise SystemExit(f"{cargo_toml}: invalid TOML: {exc}")
-        version = data.get("package", {}).get("version")
-        if not isinstance(version, str):
-            raise SystemExit(f"{cargo_toml}: package.version is missing or not a string")
-        rel = cargo_toml.relative_to(repo_root).as_posix()
-        sources.append(Source(file=rel, field="package.version", value=version))
+        sources.extend(load_cargo_toml_versions(repo_root, cargo_toml.relative_to(repo_root).as_posix()))
     if not sources:
         raise SystemExit("no crates/*/Cargo.toml found — run from the repo root")
     return sources
+
+
+# A workspace crate in Cargo.lock. Registry packages carry a `source` line
+# after `version`; the workspace's own do not.
+_CARGO_LOCK_WORKSPACE_PACKAGE_RE = re.compile(
+    r'^\[\[package\]\]\nname = "(chordsketch[^"]*)"\nversion = "([^"]+)"\n(?!source = )',
+    re.MULTILINE,
+)
+
+
+def load_cargo_lock_versions(repo_root: Path) -> list[Source]:
+    """Collect the version `Cargo.lock` records for every workspace crate."""
+    path = repo_root / "Cargo.lock"
+    if not path.is_file():
+        return []
+    return [
+        Source(
+            file="Cargo.lock",
+            field=f"package {match.group(1)} version",
+            value=match.group(2),
+            span=match.span(2),
+        )
+        for match in _CARGO_LOCK_WORKSPACE_PACKAGE_RE.finditer(path.read_text(encoding="utf-8"))
+    ]
 
 
 def load_package_json_version(repo_root: Path, relative: str) -> Source:
@@ -155,7 +254,19 @@ def load_package_json_version(repo_root: Path, relative: str) -> Source:
     match = re.search(r'"version"\s*:\s*"([^"]+)"', text)
     if match is None:
         raise SystemExit(f"{relative}: no version field found")
-    return Source(file=relative, field="version", value=match.group(1))
+    return _found(relative, "version", match)
+
+
+def _json_object_entry(text: str, block: str, key: str) -> re.Match[str] | None:
+    """The `"key": "<value>"` entry of the flat JSON object `"block": {...}`.
+
+    The match's first group is the value, at its offsets in `text`.
+    """
+    object_match = re.search(rf'"{re.escape(block)}"\s*:\s*\{{([^{{}}]*)\}}', text)
+    if object_match is None:
+        return None
+    entry = re.compile(rf'"{re.escape(key)}"\s*:\s*"([^"]*)"')
+    return entry.search(text, object_match.start(1), object_match.end(1))
 
 
 # npm smoke pins: each smoke job exposes its pinned version via a
@@ -174,10 +285,10 @@ _SMOKE_NPM_PINS: list[tuple[str, str, str]] = [
         "npm install @chordsketch/wasm-export pin",
     ),
 ]
-# Line ~450 smoke-test caret constraint (matches the chordsketch-chordpro entry,
-# which is representative of the library-smoke mode's paired pins).
+# The library-smoke job's crates.io constraints, one per crate
+# (`chordsketch-chordpro = "^X.Y"` and its paired render / iReal pins).
 _SMOKE_CARET_RE = re.compile(
-    r"""chordsketch-chordpro\s*=\s*['"]\^([0-9]+\.[0-9]+)['"]"""
+    r"""(chordsketch-[\w-]+)\s*=\s*['"]\^([0-9]+\.[0-9]+)['"]"""
 )
 
 
@@ -215,26 +326,23 @@ def load_readme_smoke_pins(repo_root: Path) -> list[Source]:
                 f"{relative}: could not find `{job_marker} env: {env_var}: \"<version>\"`. "
                 f"If the smoke job was restructured, update _SMOKE_NPM_PINS in this script."
             )
-        sources.append(
-            Source(
-                file=relative,
-                field=field_label,
-                value=match.group(1),
-            )
-        )
+        sources.append(_found(relative, field_label, match))
 
-    caret_match = _SMOKE_CARET_RE.search(text)
-    if caret_match is None:
+    caret_matches = list(_SMOKE_CARET_RE.finditer(text))
+    if not caret_matches:
         raise SystemExit(
             f"{relative}: could not find `chordsketch-chordpro = \"^X.Y\"`. "
             f"If the library-smoke job was restructured, update _SMOKE_CARET_RE."
         )
-    sources.append(
+    sources.extend(
         Source(
             file=relative,
-            field="library-smoke caret constraint (^major.minor)",
-            value=caret_match.group(1),
+            field=f"library-smoke {match.group(1)} caret constraint {_CARET_FIELD_SUFFIX}",
+            value=match.group(2),
+            span=match.span(2),
+            render=lambda version, released: _major_minor(version),
         )
+        for match in caret_matches
     )
 
     return sources
@@ -271,6 +379,11 @@ _WINGET_VERSION_RE = re.compile(
     re.MULTILINE,
 )
 
+# packaging/winget/*.installer.yaml:
+# `InstallerUrl: .../releases/download/vX.Y.Z/chordsketch-vX.Y.Z-<target>.zip`
+_WINGET_URL_TAG_RE = re.compile(r"""^\s*InstallerUrl:\s*\S*/download/v([0-9]+\.[0-9]+\.[0-9]+)/""", re.MULTILINE)
+_WINGET_URL_ASSET_RE = re.compile(r"""^\s*InstallerUrl:\s*\S*/[^/\s]*-v([0-9]+\.[0-9]+\.[0-9]+)-[^/\s]*$""", re.MULTILINE)
+
 
 def load_macports_version(repo_root: Path) -> list[Source]:
     relative = "packaging/macports/Portfile"
@@ -284,7 +397,7 @@ def load_macports_version(repo_root: Path) -> list[Source]:
             f"{relative}: could not find `github.setup ... <version> v`. "
             f"If the Portfile was restructured, update _MACPORTS_VERSION_RE."
         )
-    return [Source(file=relative, field="github.setup version", value=match.group(1))]
+    return [_found(relative, "github.setup version", match)]
 
 
 def load_nix_version(repo_root: Path) -> list[Source]:
@@ -299,7 +412,7 @@ def load_nix_version(repo_root: Path) -> list[Source]:
             f"{relative}: could not find `version = \"X.Y.Z\";`. "
             f"If the derivation was restructured, update _NIX_VERSION_RE."
         )
-    return [Source(file=relative, field="version", value=match.group(1))]
+    return [_found(relative, "version", match)]
 
 
 def load_winget_versions(repo_root: Path) -> list[Source]:
@@ -328,7 +441,20 @@ def load_winget_versions(repo_root: Path) -> list[Source]:
                 f"If this file is not a manifest, move it outside "
                 f"`packaging/winget/`; otherwise add the field."
             )
-        sources.append(Source(file=rel, field="PackageVersion", value=match.group(1)))
+        sources.append(_found(rel, "PackageVersion", match))
+        # The URL has to name the release too: winget installs whatever it
+        # points at, under the PackageVersion above.
+        urls = re.findall(r"^\s*InstallerUrl:.*$", text, re.MULTILINE)
+        tags = list(_WINGET_URL_TAG_RE.finditer(text))
+        assets = list(_WINGET_URL_ASSET_RE.finditer(text))
+        if not len(urls) == len(tags) == len(assets):
+            raise SystemExit(
+                f"{rel}: an InstallerUrl is not `.../download/vX.Y.Z/<name>-vX.Y.Z-<target>`. "
+                f"If the release assets were renamed, update _WINGET_URL_TAG_RE and "
+                f"_WINGET_URL_ASSET_RE."
+            )
+        sources.extend(_found(rel, "InstallerUrl tag", match) for match in tags)
+        sources.extend(_found(rel, "InstallerUrl asset version", match) for match in assets)
     return sources
 
 
@@ -357,8 +483,9 @@ def load_napi_optional_deps(repo_root: Path) -> list[Source]:
         return sources
     import json as _json
 
+    text = meta.read_text(encoding="utf-8")
     try:
-        data = _json.loads(meta.read_text(encoding="utf-8"))
+        data = _json.loads(text)
     except _json.JSONDecodeError as exc:
         raise SystemExit(f"crates/napi/package.json: invalid JSON: {exc}")
     optional = data.get("optionalDependencies") or {}
@@ -372,19 +499,19 @@ def load_napi_optional_deps(repo_root: Path) -> list[Source]:
                 f"crates/napi/package.json: optionalDependencies[{name!r}] "
                 f"is not a string"
             )
-        sources.append(
-            Source(
-                file="crates/napi/package.json",
-                field=f"optionalDependencies[{name}]",
-                value=value,
+        match = _json_object_entry(text, "optionalDependencies", name)
+        if match is None:
+            raise SystemExit(
+                f"crates/napi/package.json: optionalDependencies[{name!r}] is not a "
+                f"`\"{name}\": \"<version>\"` line in a flat object"
             )
-        )
+        sources.append(_found("crates/napi/package.json", f"optionalDependencies[{name}]", match))
     return sources
 
 
 # Consumer-pin caret constraints. Each entry is a workspace-internal
 # package whose `package.json` constrains a published `@chordsketch/*`
-# sister package via `^X.Y.0`. The constraint MUST cover the current
+# sister package via `^X.Y.Z`. The constraint MUST cover the current
 # canonical version or the consumer will silently resolve to the prior
 # major-minor when the canonical's major-minor bumps. The
 # `.claude/rules/package-documentation.md` §"Version Consistency Rule"
@@ -405,7 +532,7 @@ _CONSUMER_PINS: list[tuple[str, str, str]] = [
 
 
 def load_consumer_pin_constraints(repo_root: Path) -> list[Source]:
-    """Collect `^X.Y.0`-style consumer pins for workspace sister packages.
+    """Collect `^X.Y.Z`-style consumer pins for workspace sister packages.
 
     Returns one Source per entry in `_CONSUMER_PINS`. The reported
     value is `X.Y` (the major.minor extracted from the leading caret
@@ -428,8 +555,9 @@ def load_consumer_pin_constraints(repo_root: Path) -> list[Source]:
             raise SystemExit(
                 f"{rel}: file not found (referenced by load_consumer_pin_constraints)"
             )
+        text = path.read_text(encoding="utf-8")
         try:
-            data = _json.loads(path.read_text(encoding="utf-8"))
+            data = _json.loads(text)
         except _json.JSONDecodeError as exc:
             raise SystemExit(f"{rel}: invalid JSON: {exc}")
         block_obj = data.get(block)
@@ -457,14 +585,52 @@ def load_consumer_pin_constraints(repo_root: Path) -> list[Source]:
                 f"load_consumer_pin_constraints if the constraint shape "
                 f"has changed intentionally."
             )
+        entry = _json_object_entry(text, block, dep)
+        if entry is None:
+            raise SystemExit(f"{rel}: {block}[{dep!r}] is not a `\"{dep}\": \"^X.Y.Z\"` line in a flat object")
         sources.append(
             Source(
                 file=rel,
                 field=f"{block}[{dep}] {_CARET_FIELD_SUFFIX}",
                 value=match.group(1),
+                span=entry.span(1),
+                render=_caret,
             )
         )
     return sources
+
+
+def _caret(version: str, released: str) -> str:
+    """The pins on the wasm packages name the version released with them (ADR-0073)."""
+    return f"^{version}"
+
+
+# packages/react/README.md's requirements table repeats the two pins of
+# packages/react/package.json: "| `@chordsketch/wasm` | `^X.Y.Z` (runtime dep) |".
+_README_PIN_RE = re.compile(r"^\| `(@chordsketch/wasm(?:-export)?)` \| `(\^([0-9]+\.[0-9]+)\.[0-9]+)`", re.MULTILINE)
+
+
+def load_readme_pins(repo_root: Path) -> list[Source]:
+    relative = "packages/react/README.md"
+    path = repo_root / relative
+    if not path.is_file():
+        return []
+    matches = list(_README_PIN_RE.finditer(path.read_text(encoding="utf-8")))
+    if not matches:
+        raise SystemExit(
+            f"{relative}: no \"| `@chordsketch/wasm` | `^X.Y.Z`\" row found. If the "
+            f"requirements table was restructured, update _README_PIN_RE."
+        )
+    return [
+        Source(
+            file=relative,
+            field=f"requirement on {match.group(1)} {_CARET_FIELD_SUFFIX}",
+            value=match.group(3),
+            span=match.span(2),
+            render=_caret,
+        )
+        for match in matches
+    ]
 
 
 # The in-tree directory each consumer's lockfile installs a pinned sister
@@ -547,24 +713,8 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
     """
     sources: list[Source] = []
 
-    cargo_toml = repo_root / "apps/desktop/src-tauri/Cargo.toml"
-    if cargo_toml.is_file():
-        try:
-            data = tomllib.loads(cargo_toml.read_text(encoding="utf-8"))
-        except tomllib.TOMLDecodeError as exc:
-            raise SystemExit(f"{cargo_toml}: invalid TOML: {exc}")
-        version = data.get("package", {}).get("version")
-        if not isinstance(version, str):
-            raise SystemExit(
-                f"{cargo_toml}: package.version is missing or not a string"
-            )
-        sources.append(
-            Source(
-                file="apps/desktop/src-tauri/Cargo.toml",
-                field="package.version",
-                value=version,
-            )
-        )
+    if (repo_root / "apps/desktop/src-tauri/Cargo.toml").is_file():
+        sources.extend(load_cargo_toml_versions(repo_root, "apps/desktop/src-tauri/Cargo.toml"))
 
     tauri_conf = repo_root / "apps/desktop/src-tauri/tauri.conf.json"
     if tauri_conf.is_file():
@@ -574,13 +724,7 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
             raise SystemExit(
                 f"{tauri_conf}: no version field found"
             )
-        sources.append(
-            Source(
-                file="apps/desktop/src-tauri/tauri.conf.json",
-                field="version",
-                value=match.group(1),
-            )
-        )
+        sources.append(_found("apps/desktop/src-tauri/tauri.conf.json", "version", match))
 
     package_json = repo_root / "apps/desktop/package.json"
     if package_json.is_file():
@@ -588,33 +732,40 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
             load_package_json_version(repo_root, "apps/desktop/package.json")
         )
 
-    preview_handler_toml = repo_root / "apps/desktop/preview-handler/Cargo.toml"
-    if preview_handler_toml.is_file():
-        try:
-            data = tomllib.loads(preview_handler_toml.read_text(encoding="utf-8"))
-        except tomllib.TOMLDecodeError as exc:
-            raise SystemExit(f"{preview_handler_toml}: invalid TOML: {exc}")
-        version = data.get("package", {}).get("version")
-        if not isinstance(version, str):
-            raise SystemExit(
-                f"{preview_handler_toml}: package.version is missing or not a string"
-            )
-        sources.append(
-            Source(
-                file="apps/desktop/preview-handler/Cargo.toml",
-                field="package.version",
-                value=version,
-            )
-        )
+    if (repo_root / "apps/desktop/preview-handler/Cargo.toml").is_file():
+        sources.extend(load_cargo_toml_versions(repo_root, "apps/desktop/preview-handler/Cargo.toml"))
 
     metainfo_rel = "packaging/flatpak/io.github.koedame.chordsketch.metainfo.xml"
     metainfo = repo_root / metainfo_rel
     if metainfo.is_file():
         # The first <release> is the newest; AppStream lists them newest first.
-        match = re.search(r'<release\b[^>]*\bversion="([^"]+)"', metainfo.read_text(encoding="utf-8"))
+        text = metainfo.read_text(encoding="utf-8")
+        match = re.search(r'<release\b[^>]*\bversion="([^"]+)"', text)
         if match is None:
             raise SystemExit(f"{metainfo}: no <release version=...> found")
-        sources.append(Source(file=metainfo_rel, field="releases/release[1]/@version", value=match.group(1)))
+        newest = match.group(1)
+        indent = text[text.rfind("\n", 0, match.start()) + 1 : match.start()]
+
+        def add_release(version: str, released: str) -> str:
+            # A release keeps the history: the new one goes in front of the
+            # newest, which stays.
+            if version == newest:
+                return ""
+            return (
+                f'<release version="{version}" date="{released}">\n'
+                f'{indent}  <url type="details">https://github.com/koedame/chordsketch/releases/tag/desktop-v{version}</url>\n'
+                f"{indent}</release>\n{indent}"
+            )
+
+        sources.append(
+            Source(
+                file=metainfo_rel,
+                field="releases/release[1]/@version",
+                value=newest,
+                span=(match.start(), match.start()),
+                render=add_release,
+            )
+        )
 
     return sources
 
@@ -666,6 +817,7 @@ FRAMEWORK_PACKAGE_DIRS = ("react-ui", "react", "vue", "svelte", "chordpro-lite")
 def load_all_sources(repo_root: Path) -> list[Source]:
     sources: list[Source] = []
     sources.extend(load_crate_versions(repo_root))
+    sources.extend(load_cargo_lock_versions(repo_root))
     sources.append(load_package_json_version(repo_root, "packages/npm/package.json"))
     # `@chordsketch/wasm-export` ships in lockstep with `@chordsketch/wasm`
     # per CLAUDE.md (#2466 added it as the heavy-bundle sister package).
@@ -692,6 +844,7 @@ def load_all_sources(repo_root: Path) -> list[Source]:
     sources.extend(load_napi_platform_package_versions(repo_root))
     sources.extend(load_napi_optional_deps(repo_root))
     sources.extend(load_consumer_pin_constraints(repo_root))
+    sources.extend(load_readme_pins(repo_root))
     sources.extend(load_readme_smoke_pins(repo_root))
     # Pinned version strings inside packaging/<channel>/ files. See #1864:
     # these silently went stale across v0.2.0 → v0.2.2 and were only
@@ -771,16 +924,12 @@ def _source_key(source: Source) -> tuple[str, str]:
 # ---------------------------------------------------------------- core check
 
 
-# The caret-constraint source stores a bare `<major>.<minor>` value (extracted
+# The caret-constraint sources store a bare `<major>.<minor>` value (extracted
 # from `^<major>.<minor>`), which cannot be compared against canonical
 # `<major>.<minor>.<patch>` directly. Every source has its own "expected value
 # given the canonical crate version" function. The default is identity.
-_CARET_FIELD_LABEL = "library-smoke caret constraint (^major.minor)"
-# Suffix used by every caret-pin field label across the script so
-# `_expected_for` can switch to `major.minor` comparison without
-# hardcoding one specific label. The library-smoke caret label
-# above is the seed example; the consumer-pin loader below appends
-# the same suffix to its per-dependency labels.
+# Every caret-pin field label ends in this suffix so `_expected_for` can
+# switch to `major.minor` comparison without hardcoding the labels.
 _CARET_FIELD_SUFFIX = "(^major.minor)"
 
 
@@ -791,6 +940,11 @@ def _expected_for(source: Source, canonical: str) -> str:
             return canonical
         return f"{parts[0]}.{parts[1]}"
     return canonical
+
+
+def crate_package_versions(sources: list[Source]) -> list[Source]:
+    """The `package.version` of every `crates/*/Cargo.toml`."""
+    return [s for s in sources if s.file.startswith("crates/") and s.file.endswith("/Cargo.toml") and s.field == "package.version"]
 
 
 def compute_canonical(crate_sources: list[Source]) -> str:
@@ -902,8 +1056,7 @@ def run(
     allowlist_path: Path,
 ) -> int:
     sources = load_all_sources(repo_root)
-    crate_sources = [s for s in sources if s.file.startswith("crates/") and s.file.endswith("/Cargo.toml")]
-    canonical = compute_canonical(crate_sources)
+    canonical = compute_canonical(crate_package_versions(sources))
     allowlist = load_allowlist(allowlist_path)
 
     drifts, stale_entries = check(sources, allowlist, canonical)
@@ -944,7 +1097,143 @@ def run(
     return 0
 
 
+# ---------------------------------------------------------------- set
+
+
+def _load_macports_regen():
+    spec = importlib.util.spec_from_file_location(
+        "macports_regen_cargo_crates", Path(__file__).resolve().parent / "macports-regen-cargo-crates.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# The fields of a package.json that a lockfile copies into its entry for
+# that package, and that `--set` rewrites.
+_LOCKFILE_DEPENDENCY_BLOCKS = ("dependencies", "peerDependencies")
+
+
+def sync_npm_lockfiles(repo_root: Path) -> list[str]:
+    """Bring each npm lockfile's copies of the rewritten package.json fields along.
+
+    A lockfile repeats, for its own package (`""`) and for every in-tree
+    package it links (`"../npm"`), the `version` and dependency ranges of that
+    package's package.json. `--set` rewrites the versions and the pins on the
+    wasm packages, so those copies, and nothing else, are updated here.
+    `npm install --package-lock-only` would do the same, and also rewrite
+    whatever the running npm lays out differently from the one that wrote
+    the lockfile.
+    """
+    pinned = {dep for _file, _block, dep in _CONSUMER_PINS}
+    changed: list[str] = []
+    lockfiles = sorted(repo_root.glob("packages/*/package-lock.json")) + sorted(
+        repo_root.glob("apps/*/package-lock.json")
+    )
+    for lockfile in lockfiles:
+        text = lockfile.read_text(encoding="utf-8")
+        data = json.loads(text)
+        for key, entry in data.get("packages", {}).items():
+            if key.startswith("node_modules/") or "version" not in entry:
+                continue
+            manifest_path = lockfile.parent / key / "package.json"
+            if not manifest_path.is_file():
+                continue
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            entry["version"] = manifest["version"]
+            if key == "" and "version" in data:
+                data["version"] = manifest["version"]
+            for block in _LOCKFILE_DEPENDENCY_BLOCKS:
+                for name in pinned & entry.get(block, {}).keys() & manifest.get(block, {}).keys():
+                    entry[block][name] = manifest[block][name]
+        # npm writes JSON.stringify(lockfile, null, 2) and a newline.
+        updated = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+        if updated != text:
+            lockfile.write_text(updated, encoding="utf-8")
+            changed.append(lockfile.relative_to(repo_root).as_posix())
+    return changed
+
+
+def dated_changelog(text: str, version: str, released: str) -> str:
+    """CHANGELOG.md with `## [Unreleased]`'s entries under a dated `## [X.Y.Z]` heading."""
+    heading = re.search(rf"^## \[{re.escape(version)}\].*$", text, re.MULTILINE)
+    if heading is not None:
+        if re.fullmatch(rf"## \[{re.escape(version)}\] - [0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}", heading.group(0)):
+            return text
+        raise SystemExit(f"CHANGELOG.md: `{heading.group(0)}` is not dated; its entries belong under `## [Unreleased]`")
+    unreleased = re.search(r"^## \[Unreleased\]\n(.*?)(?=^## \[|\Z)", text, re.MULTILINE | re.DOTALL)
+    if unreleased is None:
+        raise SystemExit("CHANGELOG.md: no `## [Unreleased]` heading to release")
+    if not unreleased.group(1).strip():
+        raise SystemExit("CHANGELOG.md: `## [Unreleased]` is empty, so the release would have no entries")
+    return text[: unreleased.start(1)] + f"\n## [{version}] - {released}\n" + text[unreleased.start(1) :]
+
+
+def set_version(repo_root: Path, allowlist_path: Path, version: str, released: str) -> list[str]:
+    """Rewrite every source to `version`; return the files that changed.
+
+    Everything that can refuse the bump is checked before anything is written.
+    """
+    allowlisted = {_key(entry) for entry in load_allowlist(allowlist_path)}
+    sources = load_all_sources(repo_root)
+    current = compute_canonical(crate_package_versions(sources))
+    if tuple(map(int, version.split("."))) < tuple(map(int, current.split("."))):
+        raise SystemExit(f"--set {version} is older than the workspace's {current}")
+    changelog = repo_root / "CHANGELOG.md"
+    changelog_text = changelog.read_text(encoding="utf-8")
+    dated = dated_changelog(changelog_text, version, released)
+
+    edits: dict[str, list[tuple[int, int, str]]] = {}
+    for source in sources:
+        if _source_key(source) not in allowlisted:
+            edits.setdefault(source.file, []).append((*source.span, source.render(version, released)))
+
+    changed: list[str] = []
+    for relative, file_edits in edits.items():
+        path = repo_root / relative
+        text = path.read_text(encoding="utf-8")
+        updated = text
+        # From the end, so an edit does not move the offsets of the ones before it.
+        for start, end, replacement in sorted(file_edits, reverse=True):
+            updated = updated[:start] + replacement + updated[end:]
+        if updated != text:
+            path.write_text(updated, encoding="utf-8")
+            changed.append(relative)
+
+    changed += sync_npm_lockfiles(repo_root)
+
+    portfile = repo_root / "packaging/macports/Portfile"
+    cargo_lock = repo_root / "Cargo.lock"
+    if portfile.is_file() and cargo_lock.is_file():
+        regen = _load_macports_regen()
+        text = portfile.read_text(encoding="utf-8")
+        block = regen.render_block(regen.parse_cargo_lock(cargo_lock.read_text(encoding="utf-8")))
+        updated = regen.replace_block_in_portfile(text, block)
+        if updated != text:
+            portfile.write_text(updated, encoding="utf-8")
+            changed.append("packaging/macports/Portfile")
+
+    if dated != changelog_text:
+        changelog.write_text(dated, encoding="utf-8")
+        changed.append("CHANGELOG.md")
+    return sorted(set(changed))
+
+
 # ---------------------------------------------------------------- CLI
+
+
+def _release_version(value: str) -> str:
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value) is None:
+        raise argparse.ArgumentTypeError(f"{value!r} is not X.Y.Z")
+    return value
+
+
+def _release_date(value: str) -> str:
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not YYYY-MM-DD")
 
 
 def main() -> int:
@@ -961,7 +1250,23 @@ def main() -> int:
         default=DEFAULT_ALLOWLIST_PATH,
         help="allowlist file path (defaults to ci/version-skew-allowlist.toml)",
     )
+    parser.add_argument(
+        "--set",
+        metavar="X.Y.Z",
+        type=_release_version,
+        help="bump every source to this version for a release, then run the check",
+    )
+    parser.add_argument(
+        "--date",
+        default=date.today().isoformat(),
+        type=_release_date,
+        help="the release date --set writes, as YYYY-MM-DD (defaults to today)",
+    )
     args = parser.parse_args()
+    if args.set:
+        for relative in set_version(args.repo_root, args.allowlist, args.set, args.date):
+            print(f"updated {relative}")
+        print()
     return run(args.repo_root, args.allowlist)
 
 
