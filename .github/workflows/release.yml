@@ -341,11 +341,11 @@ jobs:
   swift:
     name: Swift Package
     needs: [release]
-    # `publish` uploads the xcframework; `update-swift-package` opens its
-    # PR with CLAUDE_PAT, not this token, so `contents: write` is the
-    # whole union.
+    # `publish` uploads the xcframework the release branch pinned before
+    # the tag, and finds it among the Actions artifacts (ADR-0080).
     permissions:
       contents: write
+      actions: read
     uses: ./.github/workflows/swift.yml
     with:
       tag: ${{ needs.release.outputs.tag }}

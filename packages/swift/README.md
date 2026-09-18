@@ -31,7 +31,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/koedame/chordsketch",
-            from: "0.2.0"  // replace with the latest release tag
+            from: "0.8.0"  // replace with the latest release tag; releases up to 0.7.0 cannot be resolved by SwiftPM
         ),
     ],
     targets: [

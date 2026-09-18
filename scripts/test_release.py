@@ -147,6 +147,101 @@ class RegistryRefTest(unittest.TestCase):
         self.assertEqual(release.registry_ref(self.survey(), plan), "v1.2.0")
 
 
+class UnexpiredArtifactTest(unittest.TestCase):
+    def test_an_expired_artifact_is_not_offered(self) -> None:
+        payload = {"artifacts": [{"id": 1, "expired": True, "created_at": "2026-09-01T00:00:00Z"}]}
+        self.assertIsNone(release.unexpired_artifact(payload))
+
+    def test_no_artifact_at_all_gives_none(self) -> None:
+        self.assertIsNone(release.unexpired_artifact({"artifacts": []}))
+
+    def test_the_newest_of_several_live_artifacts_is_chosen(self) -> None:
+        payload = {
+            "artifacts": [
+                {"id": 1, "expired": False, "created_at": "2026-09-01T00:00:00Z"},
+                {"id": 2, "expired": False, "created_at": "2026-09-03T00:00:00Z"},
+                {"id": 3, "expired": True, "created_at": "2026-09-05T00:00:00Z"},
+            ]
+        }
+        self.assertEqual(release.unexpired_artifact(payload)["id"], 2)
+
+
+class PreflightSwiftTest(unittest.TestCase):
+    """What `preflight_swift` decides, with `gh` and `git` replaced by canned answers."""
+
+    SHA = "e" * 64
+    BUILT_FROM = "1" * 40
+    BINDINGS = b"// generated\n"
+
+    def manifest(self) -> str:
+        return (
+            "let package = Package(targets: [\n"
+            '.binaryTarget(name: "chordsketchFFI", '
+            'url: "https://github.com/koedame/chordsketch/releases/download/v0.8.0/chordsketch-xcframework.zip", '
+            f'checksum: "{self.SHA}"),\n])\n'
+        )
+
+    def findings(self, *, stored=("zip", "bindings"), changed: str = "", committed: bytes = BINDINGS, fetch_ok: bool = True):
+        import subprocess
+        import tempfile
+        import types
+
+        def gh_api(path: str) -> dict:
+            kind = "zip" if f"name=xcframework-{self.SHA}" in path else "bindings"
+            if kind not in stored:
+                return {"artifacts": []}
+            return {"artifacts": [{"expired": False, "created_at": "2026-09-18T00:00:00Z", "workflow_run": {"id": 7, "head_sha": self.BUILT_FROM}}]}
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["gh", "run", "download"]:
+                (Path(cmd[cmd.index("--dir") + 1]) / "chordsketch.swift").write_bytes(self.BINDINGS)
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            if cmd[:2] == ["git", "fetch"]:
+                return subprocess.CompletedProcess(cmd, 0 if fetch_ok else 1, "", "" if fetch_ok else "not our ref")
+            if cmd[:2] == ["git", "diff"]:
+                return subprocess.CompletedProcess(cmd, 0, changed, "")
+            raise AssertionError(cmd)
+
+        with tempfile.TemporaryDirectory() as scratch:
+            tree = Path(scratch)
+            (tree / "Package.swift").write_text(self.manifest())
+            bindings = tree / release.SWIFT_BINDINGS
+            bindings.parent.mkdir(parents=True)
+            bindings.write_bytes(committed)
+            state = types.SimpleNamespace(version="0.8.0", commit="2" * 40, tree=tree)
+            found = release.Findings()
+            with (
+                mock.patch.object(release, "gh_api", gh_api),
+                mock.patch.object(release, "run", run),
+                mock.patch.object(release, "section"),
+            ):
+                release.preflight_swift(state, found)
+            return found.problems
+
+    def test_a_pin_whose_zip_and_bindings_are_stored_and_whose_source_is_unchanged_passes(self) -> None:
+        self.assertEqual(self.findings(), [])
+
+    def test_when_the_pinned_zip_has_expired_the_pin_is_asked_for_again(self) -> None:
+        problems = self.findings(stored=("bindings",))
+        self.assertTrue(any("no unexpired artifact holds the XCFramework" in p and "-f pin=0.8.0" in p for p in problems), problems)
+
+    def test_when_the_crates_changed_since_the_zip_was_built_the_pin_is_asked_for_again(self) -> None:
+        problems = self.findings(changed="crates/ffi/src/lib.rs\n")
+        self.assertTrue(any("crates/ffi/src/lib.rs changed since" in p for p in problems), problems)
+
+    def test_when_the_committed_bindings_differ_from_the_pinned_build_the_pin_is_asked_for_again(self) -> None:
+        problems = self.findings(committed=b"// edited by hand\n")
+        self.assertTrue(any("is not the file the pinned build generated" in p for p in problems), problems)
+
+    def test_when_the_bindings_artifact_is_gone_the_pin_is_asked_for_again(self) -> None:
+        problems = self.findings(stored=("zip",))
+        self.assertTrue(any("Swift bindings generated with the pinned XCFramework" in p for p in problems), problems)
+
+    def test_when_the_commit_the_zip_was_built_from_cannot_be_fetched_it_is_a_problem_not_a_pass(self) -> None:
+        problems = self.findings(fetch_ok=False)
+        self.assertTrue(any("cannot fetch" in p for p in problems), problems)
+
+
 class AnnotationErrorsTest(unittest.TestCase):
     EXIT = {"annotation_level": "failure", "message": "Process completed with exit code 1."}
 
