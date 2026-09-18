@@ -958,5 +958,59 @@ class NpmDryRunTest(unittest.TestCase):
         self.assertEqual(self.problems("git+https://github.com/koedame/chordsketch.git"), [])
 
 
+class SwiftPackageProblemsTest(unittest.TestCase):
+    """The manifest a consumer resolves from the tag has to be pinned for the version being released."""
+
+    SHA = "c" * 64
+
+    def manifest(self, version: str, checksum: str | None = None) -> str:
+        return (
+            "let package = Package(targets: [\n"
+            '        .binaryTarget(\n            name: "chordsketchFFI",\n'
+            f'            url: "https://github.com/koedame/chordsketch/releases/download/v{version}/chordsketch-xcframework.zip",\n'
+            f'            checksum: "{checksum or self.SHA}"\n        ),\n])\n'
+        )
+
+    def problems(self, text: str, *, bindings: bool = True, dumped_checksum: str | None = None, dump_fails: bool = False) -> list[str]:
+        def runner(cmd, cwd, env=None):
+            if dump_fails:
+                return checks.subprocess.CompletedProcess(cmd, 1, "error: bad manifest")
+            manifest = {"targets": [{"type": "binary", "checksum": dumped_checksum or self.SHA}]}
+            return checks.subprocess.CompletedProcess(cmd, 0, json.dumps(manifest))
+
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            (root / "Package.swift").write_text(text)
+            if bindings:
+                sources = root / "packages/swift/Sources/ChordSketch"
+                sources.mkdir(parents=True)
+                (sources / "chordsketch.swift").write_text("// generated\n")
+            with mock.patch.object(checks, "REPO_ROOT", root):
+                return checks.swift_package_problems("0.8.0", runner)
+
+    def test_when_the_manifest_is_pinned_to_this_version_with_its_bindings_committed_there_is_no_problem(self) -> None:
+        self.assertEqual(self.problems(self.manifest("0.8.0")), [])
+
+    def test_when_the_manifest_still_names_the_previous_release_the_pin_is_asked_for(self) -> None:
+        problems = self.problems(self.manifest("0.7.0"))
+        self.assertTrue(any("-f pin=0.8.0" in p for p in problems), problems)
+
+    def test_when_the_checksum_is_not_a_sha256_it_is_a_problem(self) -> None:
+        problems = self.problems(self.manifest("0.8.0", "abc"), dumped_checksum="abc")
+        self.assertTrue(any("not a SHA-256" in p for p in problems), problems)
+
+    def test_when_the_bindings_are_not_committed_it_is_a_problem(self) -> None:
+        problems = self.problems(self.manifest("0.8.0"), bindings=False)
+        self.assertTrue(any("chordsketch.swift is missing" in p for p in problems), problems)
+
+    def test_when_swiftpm_cannot_read_the_manifest_it_is_a_problem(self) -> None:
+        problems = self.problems(self.manifest("0.8.0"), dump_fails=True)
+        self.assertTrue(any("cannot read Package.swift" in p for p in problems), problems)
+
+    def test_when_swiftpm_reads_another_checksum_than_the_one_pinned_it_is_a_problem(self) -> None:
+        problems = self.problems(self.manifest("0.8.0"), dumped_checksum="d" * 64)
+        self.assertTrue(any("pinned checksum" in p for p in problems), problems)
+
+
 if __name__ == "__main__":
     unittest.main()

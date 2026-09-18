@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Swift package installs from Swift Package Manager.** The manifest
+  was in `packages/swift/`, where Swift Package Manager does not look, so
+  `.package(url: "https://github.com/koedame/chordsketch", from: ...)`, the
+  documented way to add it, could not resolve. It is now `Package.swift` at
+  the repository root. A tag also pointed at the previous release's
+  XCFramework and shipped no Swift bindings; each release now carries the
+  XCFramework's checksum and the bindings generated for it. Tags up to
+  0.7.0 still cannot be resolved.
+
 ## [0.7.0] - 2026-09-17
 
 ### Added

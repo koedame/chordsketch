@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
+import swift_package
 from _action_yml import extract_job_step_run, extract_step_run
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1566,25 +1567,40 @@ def cocoapods_problems(version: str, runner: Runner = run) -> list[str]:
 
 
 def swift_package_problems(version: str, runner: Runner = run) -> list[str]:
-    """Rewrite Package.swift as the release does and check the manifest still parses."""
+    """The `Package.swift` a consumer resolves from the tag names this release's XCFramework.
+
+    SwiftPM reads the manifest from the tag's own checkout, so the release
+    commit has to carry the URL and checksum already: `swift.yml`'s `pin` job
+    commits them onto the release branch (ADR-0080).
+    """
+    manifest_path = REPO_ROOT / "Package.swift"
+    if not manifest_path.is_file():
+        return ["Package.swift is missing from the repository root: SwiftPM reads the manifest from the root of the tag"]
+    text = manifest_path.read_text()
+    try:
+        url, checksum = swift_package.read_pin(text)
+    except swift_package.SwiftPackageError as exc:
+        return [str(exc)]
+    problems = []
+    expected = swift_package.asset_url(f"v{version}")
+    if url != expected:
+        problems.append(
+            f"Package.swift pins {url}, not {expected}: run `gh workflow run swift.yml --ref <release branch> -f pin={version}` (docs/releasing.md step 3)"
+        )
+    if not re.fullmatch(r"[0-9a-f]{64}", checksum):
+        problems.append(f"Package.swift pins the checksum {checksum!r}, which is not a SHA-256")
+    if not (REPO_ROOT / "packages/swift/Sources/ChordSketch/chordsketch.swift").is_file():
+        problems.append("packages/swift/Sources/ChordSketch/chordsketch.swift is missing: the package would have no bindings")
     directory = Path(tempfile.mkdtemp(prefix="swift-package-"))
     try:
-        package = directory / "packages/swift"
-        shutil.copytree(REPO_ROOT / "packages/swift", package)
-        tag = f"v{version}"
-        sha = fake_sha256("chordsketch-xcframework.zip")
-        done = run_release_step("swift.yml", "update-swift-package", "Update Package.swift", directory, {"TAG": tag, "SHA256": sha}, runner)
-        if done.returncode != 0:
-            return [f"swift.yml `update-swift-package` / `Update Package.swift` failed:\n{tail(done.stdout)}"]
-        text = (package / "Package.swift").read_text()
-        problems = download_url_problems("Package.swift", text, version) + checksum_problems("Package.swift", text, version)
-        dumped = runner(["swift", "package", "dump-package"], package)
+        (directory / "Package.swift").write_text(text)
+        dumped = runner(["swift", "package", "dump-package"], directory)
         if dumped.returncode != 0:
-            return problems + [f"`swift package dump-package` cannot read the rewritten Package.swift:\n{tail(dumped.stdout)}"]
+            return problems + [f"`swift package dump-package` cannot read Package.swift:\n{tail(dumped.stdout)}"]
         manifest = json.loads(dumped.stdout[dumped.stdout.find("{") :])
         binaries = [t for t in manifest.get("targets", []) if t.get("type") == "binary"]
-        if len(binaries) != 1 or binaries[0].get("checksum") != sha:
-            problems.append("the rewritten Package.swift does not declare one binary target with the release checksum")
+        if len(binaries) != 1 or binaries[0].get("checksum") != checksum:
+            problems.append("Package.swift does not declare one binary target with the pinned checksum")
         return problems
     finally:
         shutil.rmtree(directory, ignore_errors=True)
@@ -2149,9 +2165,11 @@ PACKAGING_PATHS = (
     "scripts/publish-registries.py",
     "scripts/release.py",
     "scripts/smoke-test-python.py",
+    "scripts/swift_package.py",
     "scripts/test_publish_checks.py",
     "scripts/test_publish_registries.py",
     "scripts/test_release.py",
+    "scripts/test_swift_package.py",
 )
 
 

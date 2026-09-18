@@ -282,6 +282,7 @@ jobs:
             scripts/test_check_version_consistency.py \
             scripts/test_check_release_channels.py \
             scripts/test_release.py \
+            scripts/test_swift_package.py \
             scripts/test_check_msrv_consistency.py \
             scripts/test_check_fixture_counts.py \
             scripts/test_check_design_system_tertiary.py \
