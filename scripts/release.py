@@ -26,6 +26,9 @@ and only if every answer is yes does it push the tag (ADR-0068):
   * the release commit is at the requested version, with a dated CHANGELOG
     heading and consistent manifests;
   * `ci.yml` and `publishable.yml` passed on that commit;
+  * the XCFramework its `Package.swift` pins still exists as a workflow
+    artifact, was built from the Rust source the commit carries, and the
+    Swift bindings on the commit are the ones generated with it;
   * no registry has this version yet — or, when the tags are already out,
     what is still missing, so a re-run resumes instead of re-publishing;
   * every CI publish credential is still accepted by its service
@@ -75,6 +78,7 @@ REPO_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import _publish_checks as checks  # noqa: E402
+import swift_package  # noqa: E402
 from _release_channels import Channel, load_channels  # noqa: E402
 
 REPO = "koedame/chordsketch"
@@ -89,6 +93,10 @@ REGISTRY_KINDS = frozenset({"crates-io", "npm"})
 PUBLISH_WORKFLOW = "publish-registries.yml"
 # Workflows that must have passed on the release commit before it is tagged.
 REQUIRED_WORKFLOWS = ("ci.yml", "publishable.yml")
+# What the pinned XCFramework is compiled from: a change under any of these
+# since it was built means the tag would carry Rust source its zip lacks.
+XCFRAMEWORK_INPUTS = ("crates", "Cargo.toml", "Cargo.lock")
+SWIFT_BINDINGS = "packages/swift/Sources/ChordSketch/chordsketch.swift"
 
 
 def tags_for(version: str) -> tuple[str, str]:
@@ -171,6 +179,12 @@ def decide(
         pending_crates=pending_crates,
         pending_npm=pending_npm,
     )
+
+
+def unexpired_artifact(payload: dict) -> dict | None:
+    """The newest artifact in a `GET .../actions/artifacts` answer that has not expired."""
+    live = [a for a in payload.get("artifacts", []) if not a.get("expired")]
+    return max(live, key=lambda a: a["created_at"], default=None)
 
 
 def dated_changelog_heading(changelog: str, version: str) -> bool:
@@ -447,6 +461,9 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
                     f"{workflow} on the release commit is {latest['status']}/{latest['conclusion']}: {latest['html_url']}",
                 )
 
+    if fresh:
+        preflight_swift(state, findings)
+
     section("GitHub")
     push = run(["gh", "api", f"repos/{REPO}", "--jq", ".permissions.push"], check=False).stdout.strip()
     findings.check(push == "true", f"the gh login `{login}` cannot push to {REPO}")
@@ -480,6 +497,70 @@ def preflight(state: Survey, plan: Plan, login: str) -> Findings:
             findings.problems.extend(f"{label} failed: {reason}" for reason in failure_reasons(result))
 
     return findings
+
+
+def preflight_swift(state: Survey, findings: Findings) -> None:
+    """The XCFramework the release commit pins has to still exist, and be of this source.
+
+    `swift.yml` uploads that zip to the Release after the tag, and the tag's
+    `Package.swift` already names its checksum, so a zip that is gone or built
+    from other source cannot be fixed by re-running anything after the tag
+    (ADR-0080).
+    """
+    section("Swift XCFramework pinned in Package.swift")
+    try:
+        _, checksum = swift_package.read_pin((state.tree / "Package.swift").read_text())
+    except swift_package.SwiftPackageError as exc:
+        findings.problems.append(str(exc))
+        return
+    repin = f"gh workflow run swift.yml --ref <release branch> -f pin={state.version}"
+    preflight_swift_bindings(state, checksum, repin, findings)
+    artifact = unexpired_artifact(gh_api(f"repos/{REPO}/actions/artifacts?name=xcframework-{checksum}"))  # type: ignore[arg-type]
+    if artifact is None:
+        findings.problems.append(f"no unexpired artifact holds the XCFramework Package.swift pins ({checksum[:12]}…); pin it again: {repin}")
+        return
+    built_from = artifact["workflow_run"]["head_sha"]
+    fetched = run(["git", "fetch", "--quiet", "origin", built_from], check=False)
+    if fetched.returncode != 0:
+        findings.problems.append(f"cannot fetch {built_from[:12]}, the commit the pinned XCFramework was built from:\n{fetched.stderr}")
+        return
+    diff = run(["git", "diff", "--name-only", built_from, state.commit, "--", *XCFRAMEWORK_INPUTS], check=False)
+    if diff.returncode != 0:
+        findings.problems.append(f"cannot compare {built_from[:12]} with the release commit:\n{diff.stderr}")
+        return
+    changed = diff.stdout.split()
+    findings.check(
+        not changed,
+        f"the pinned XCFramework was built from {built_from[:12]}, and {', '.join(changed[:5])}"
+        f"{' and more' if len(changed) > 5 else ''} changed since; pin it again on the release commit's source: {repin}",
+    )
+
+
+def preflight_swift_bindings(state: Survey, checksum: str, repin: str, findings: Findings) -> None:
+    """The Swift bindings on the release commit are the ones the pinned build generated.
+
+    UniFFI checks them against the XCFramework at start-up, so a copy edited
+    or regenerated elsewhere after the pin fails on a consumer's first call.
+    """
+    name = f"swift-source-{checksum}"
+    artifact = unexpired_artifact(gh_api(f"repos/{REPO}/actions/artifacts?name={name}"))  # type: ignore[arg-type]
+    if artifact is None:
+        findings.problems.append(f"no unexpired artifact holds the Swift bindings generated with the pinned XCFramework; pin it again: {repin}")
+        return
+    with tempfile.TemporaryDirectory() as scratch:
+        downloaded = run(
+            ["gh", "run", "download", str(artifact["workflow_run"]["id"]), "--repo", REPO, "--name", name, "--dir", scratch],
+            check=False,
+        )
+        if downloaded.returncode != 0:
+            findings.problems.append(f"cannot download the pinned Swift bindings:\n{downloaded.stderr}")
+            return
+        pinned = (Path(scratch) / "chordsketch.swift").read_bytes()
+    committed = (state.tree / SWIFT_BINDINGS).read_bytes()
+    findings.check(
+        pinned == committed,
+        f"{SWIFT_BINDINGS} on the release commit is not the file the pinned build generated; pin it again: {repin}",
+    )
 
 
 def preflight_stalled_ci(state: Survey, plan: Plan, findings: Findings) -> None:
