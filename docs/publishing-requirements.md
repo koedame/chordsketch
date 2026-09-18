@@ -296,16 +296,19 @@ The pull-request check runs the same build with a debug Linux CLI staged.
 ## CocoaPods and the Swift package
 
 The podspec is generated and pushed with `pod trunk push` by
-[`swift.yml`](../.github/workflows/swift.yml), which also rewrites
-`Package.swift` to the new XCFramework zip and checksum and opens a pull
-request with it.
+[`swift.yml`](../.github/workflows/swift.yml). The Swift package is the
+repository itself at the tag: the root `Package.swift` names the
+XCFramework zip and checksum, which `swift.yml`'s `pin` job commits to the
+release branch before the tag, together with the generated Swift bindings
+([ADR-0080](adr/0080-swift-package-manifest-at-the-root-pins-the-xcframework-before-the-tag.md)).
+The tag-time job uploads that same zip to the Release.
 
 | Condition | Source | Checked by |
 |---|---|---|
 | The podspec has `name`, `version`, `summary` (at most 140 characters), `license`, `homepage`, `authors`, `source` | [Podspec syntax](https://guides.cocoapods.org/syntax/podspec.html) | `cocoapods_problems` via `pod ipc spec` |
 | The license can be found: the source zip holds no LICENSE file, so the text is inlined | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) (an open-source pod may have no lint warnings) | `cocoapods_problems` |
 | The source is the XCFramework asset the release uploads | — | `cocoapods_problems` |
-| `Package.swift`'s `binaryTarget` points at that asset with its checksum, and the manifest still parses | [SE-0272](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0272-swiftpm-binary-dependencies.md) | `swift_package_problems` via `swift package dump-package` |
+| The root `Package.swift`'s `binaryTarget` points at this version's asset with a SHA-256 checksum, the bindings file is committed, and the manifest still parses | [SE-0272](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0272-swiftpm-binary-dependencies.md) | `swift_package_problems` via `swift package dump-package` |
 | `pod spec lint` and `swift build` against the XCFramework | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) | need macOS and the built XCFramework: `swift.yml` builds and tests it on the pull requests that touch its inputs |
 
 ## Desktop updater manifest

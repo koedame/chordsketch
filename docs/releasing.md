@@ -58,7 +58,8 @@ with every release
 ### Running the release
 
 Steps 1-3 make the `Release vX.Y.Z` commit, whose version bump is one
-command (step 1), and land it on `main` through a PR. Everything after that — tagging, waiting for the CI publishes,
+command (step 1), pin the Swift XCFramework on the same branch (step 3),
+and land it on `main` through a PR. Everything after that — tagging, waiting for the CI publishes,
 crates.io, npm and the channel rollup — is one command, run from the
 maintainer's machine
 ([ADR-0068](adr/0068-releases-run-through-one-preflighted-script.md)).
@@ -84,6 +85,9 @@ publishing holds, and reports every failing one at once:
 - the release commit is at version `X.Y.Z`, with a dated CHANGELOG heading
   and a passing `check-version-consistency.py`;
 - `ci.yml` and `publishable.yml` passed on the commit;
+- the Swift XCFramework pinned in `Package.swift` (step 3) is still stored,
+  was built from the `crates/` source the commit carries, and the Swift
+  bindings on the commit are the ones generated with it;
 - no registry already serves `X.Y.Z`;
 - every CI publish credential is accepted by its service —
   `.github/workflows/release-credentials.yml`, which the script dispatches,
@@ -227,7 +231,31 @@ at post-release verification rather than before the tag is cut.
    winget's `InstallerSha256` and the MacPorts `checksums` stay on the
    previous release until its archives exist (Post-Release).
 
-3. **Commit** with message: `Release vX.Y.Z`
+3. **Commit** with message: `Release vX.Y.Z`, push the branch, open the
+   PR, and **pin the Swift XCFramework** on that branch:
+   ```bash
+   gh workflow run swift.yml -R koedame/chordsketch --ref <release-branch> -f pin=X.Y.Z
+   ```
+   SwiftPM reads `Package.swift` from the tag's own checkout, and its
+   `.binaryTarget` needs the checksum of the XCFramework zip the release
+   serves, which only exists once the zip is built
+   ([ADR-0080](adr/0080-swift-package-manifest-at-the-root-pins-the-xcframework-before-the-tag.md)).
+   The run builds and tests the XCFramework on macOS, keeps the zip as the
+   artifact `xcframework-<sha256>`, and pushes one commit,
+   `Pin the Swift XCFramework for vX.Y.Z`, to the branch: `Package.swift`'s
+   URL and checksum, and the Swift bindings generated in the same run
+   (`packages/swift/Sources/ChordSketch/chordsketch.swift`). `git pull` it.
+
+   The zip is kept for as long as the repository keeps artifacts, which is
+   at most 7 days: merge the PR and run `scripts/release.py` within that
+   window, or dispatch the pin again (`scripts/release.py` reports an expired
+   one before it tags).
+
+   The PR's `Publishable` check stays red until that commit exists, because
+   `Package.swift` still names the previous release; merge after it is green.
+   If anything under `crates/`, `Cargo.toml` or `Cargo.lock` changes after
+   the pin, dispatch it again: `scripts/release.py` refuses to tag a source
+   the pinned zip was not built from.
 
    Steps 4-7 below are what `scripts/release.py` runs. They stay here as
    the reference for what it does, and for re-running a single step by
@@ -271,8 +299,8 @@ at post-release verification rather than before the tag is cut.
 
 7. **Run the channel rollup.** Every CI-published channel has already
    run inside the release workflow (step 5) — Docker, VS Code / Open
-   VSX, napi tarballs, the Swift Package (with its CocoaPods and
-   `Package.swift` updates), and the whole `post-release.yml` fan-out are
+   VSX, napi tarballs, the Swift Package (its XCFramework upload and its
+   CocoaPods update), and the whole `post-release.yml` fan-out are
    `needs: [release]` jobs in that single run, per
    [ADR-0039](adr/0039-release-fan-out-is-an-explicit-call-graph.md).
    Nothing needs dispatching to make the release happen.
@@ -301,10 +329,11 @@ at post-release verification rather than before the tag is cut.
    tag unless you tick `promote-latest`, so re-running an older tag
    cannot regress it (#1064). The `napi.yml` dispatch only re-runs the
    build matrix and re-uploads platform tarballs to the Release; it does
-   not publish to npm (step 6 does that). A `swift.yml` dispatch rebuilds
-   the XCFramework and **replaces** the release asset, which changes its
-   SHA256; to retry only a failed CocoaPods or `Package.swift` update, re-run
-   that job inside the release run instead
+   not publish to npm (step 6 does that). A `swift.yml` dispatch with `tag`
+   uploads the XCFramework the tag's `Package.swift` pins to the release
+   again; it never rebuilds it, since a rebuilt zip would not match that
+   checksum. To retry only a failed CocoaPods update, re-run that job
+   inside the release run instead
    (`gh run rerun <run-id> --failed -R koedame/chordsketch`).
 
 8. **Verify each channel.** The release run from step 5 covers every
@@ -313,12 +342,9 @@ at post-release verification rather than before the tag is cut.
    gh run list -R koedame/chordsketch --workflow release.yml --limit 5
    ```
    Check that post-release.yml updates Homebrew, Scoop, AUR, Snap,
-   and Chocolatey, and that the Swift Package jobs push to
-   CocoaPods and open the `Package.swift` PR
-   (`swift-package-update-X.Y.Z`). Nothing merges that PR for you:
-   add it to the merge queue once its review posts "Ready for merge",
-   or `main` keeps pointing at the previous release's XCFramework.
-   Docker pushes to both
+   and Chocolatey, and that the Swift Package jobs upload the XCFramework
+   and push to CocoaPods. `Package.swift` needs no update after the tag: it
+   was pinned in step 3. Docker pushes to both
    GHCR and Docker Hub. VS Code publishes **8 VSIXes per release**
    (1 universal + 7 platform-specific: `linux-x64`, `linux-arm64`,
    `darwin-x64`, `darwin-arm64`, `win32-x64`, `alpine-x64`,

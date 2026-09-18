@@ -680,7 +680,7 @@ jobs:
       - name: Generate and read the podspec
         run: python3 scripts/check-publishable.py cocoapods
 
-      - name: Rewrite and parse Package.swift
+      - name: Check and parse Package.swift
         run: python3 scripts/check-publishable.py swift-package
 
   publishable:

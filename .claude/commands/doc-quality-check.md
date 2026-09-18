@@ -12,7 +12,7 @@ specific package name to check; if omitted, check all packages: `$ARGUMENTS`
 | `@chordsketch/node` | npm | `crates/napi/README.md` | `crates/napi/package.json` |
 | `chordsketch` | PyPI | `crates/ffi/README.md` | `crates/ffi/pyproject.toml` |
 | `chordsketch` | RubyGems | `packages/ruby/README.md` | `packages/ruby/chordsketch.gemspec` |
-| `ChordSketch` | Swift Package Index | `packages/swift/README.md` | `packages/swift/Package.swift` |
+| `ChordSketch` | Swift Package Index | `packages/swift/README.md` | `Package.swift` |
 | `me.koeda:chordsketch` | Maven Central | `packages/kotlin/README.md` | `packages/kotlin/lib/build.gradle.kts` |
 | `chordsketch` (CLI) | crates.io | `crates/cli/README.md` | `crates/cli/Cargo.toml` |
 | `chordsketch-chordpro` | crates.io | `crates/chordpro/README.md` | `crates/chordpro/Cargo.toml` |
