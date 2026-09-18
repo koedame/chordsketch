@@ -13,10 +13,9 @@ the next release-cut commit catches the drift.
 
 ## Required cross-reference checks
 
-Before changing `## [X.Y.Z] - Unreleased` to
-`## [X.Y.Z] - YYYY-MM-DD` in `CHANGELOG.md` (Step 2 of
-`docs/releasing.md`), the release maintainer MUST verify each of the
-following. Any drift found MUST be fixed in the same release PR;
+Before the release bump dates `## [Unreleased]` in `CHANGELOG.md` as
+`## [X.Y.Z] - YYYY-MM-DD` (Step 1 of `docs/releasing.md`), the release
+maintainer MUST verify each of the following. Any drift found MUST be fixed in the same release PR;
 deferring drift to a later release window is prohibited and reproduces
 this rule's documented failure mode.
 
@@ -44,7 +43,6 @@ directory (the repository's top level — the directory containing
 ### 2. `docs/releasing.md` crate references
 
 - `## Versioning Policy` crate count matches `ls -d crates/*/ | wc -l`.
-- Step 1 manifest list lists every `crates/*/Cargo.toml`.
 - `## crates.io Publishing Order` numbered list covers every published
   crate, in a topological order valid against each crate's
   `[dependencies]` block (NOT `[dev-dependencies]` — those do not gate

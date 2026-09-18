@@ -57,8 +57,8 @@ with every release
 
 ### Running the release
 
-Steps 1-3 (the `Release vX.Y.Z` commit) land on `main` through a PR as
-before. Everything after that — tagging, waiting for the CI publishes,
+Steps 1-3 make the `Release vX.Y.Z` commit, whose version bump is one
+command (step 1), and land it on `main` through a PR. Everything after that — tagging, waiting for the CI publishes,
 crates.io, npm and the channel rollup — is one command, run from the
 maintainer's machine
 ([ADR-0068](adr/0068-releases-run-through-one-preflighted-script.md)).
@@ -177,92 +177,55 @@ at post-release verification rather than before the tag is cut.
 
 ### Checklist
 
-1. **Update version** in every versioned manifest:
-
-   Workspace Cargo.toml files (all fourteen crates):
-   - `crates/chordpro/Cargo.toml`
-   - `crates/ireal/Cargo.toml`
-   - `crates/render-text/Cargo.toml`
-   - `crates/render-html/Cargo.toml`
-   - `crates/render-pdf/Cargo.toml`
-   - `crates/render-ireal/Cargo.toml`
-   - `crates/convert/Cargo.toml`
-   - `crates/convert-musicxml/Cargo.toml`
-   - `crates/cli/Cargo.toml`
-   - `crates/wasm/Cargo.toml`
-   - `crates/ffi/Cargo.toml`
-   - `crates/napi/Cargo.toml`
-   - `crates/lsp/Cargo.toml`
-   - `crates/mcp/Cargo.toml`
-   - Update inter-crate dependency `version = ` fields to match.
-
-   Non-Rust manifests:
-   - `packages/npm/package.json` (unless an allowlisted patch skew applies
-     — see `ci/version-skew-allowlist.toml`)
-   - `packages/vscode-extension/package.json` (once the first Marketplace
-     publish has succeeded and its allowlist entry has been retired)
-   - `crates/napi/package.json` — both the main package and the per-platform
-     manifests under `crates/napi/npm/<triple>/package.json`
-   - `packages/tree-sitter-chordpro/package.json`
-   - `packages/{react-ui,react,vue,svelte,chordpro-lite}/package.json` —
-     the packages built on the engine publish with every release
-     ([ADR-0073](adr/0073-packages-built-on-the-engine-release-with-it.md))
-   - `packages/claude-code-plugin/.claude-plugin/plugin.json` and the
-     matching entry in `.claude-plugin/marketplace.json` — Claude Code
-     caches plugins per version and will not re-fetch an unchanged one, so
-     this bump is what makes the release's skill reach installed clients
-     ([ADR-0059](adr/0059-claude-code-skill-ships-as-a-marketplace-plugin.md))
-
-   Desktop (CLI and GUI are always in lockstep — same version number):
-   - `apps/desktop/src-tauri/Cargo.toml` — `package.version`
-   - `apps/desktop/src-tauri/tauri.conf.json` — top-level `"version"`
-     (drives the installer metadata users see in Finder / Explorer)
-   - `apps/desktop/package.json` — `version`
-   - `apps/desktop/preview-handler/Cargo.toml` — `package.version`
-     (the Windows preview handler DLL ships inside the same installer)
-   - `packaging/flatpak/io.github.koedame.chordsketch.metainfo.xml` — a new
-     `<release version="X.Y.Z" date="YYYY-MM-DD">` at the top of
-     `<releases>` (the Flathub listing's release history)
-
-   Pins on the wasm packages, all `^X.Y.Z` of the version being released:
-   - `@chordsketch/wasm` in `dependencies` of
-     `packages/{vscode-extension,react,vue,svelte}/package.json` and in
-     `peerDependencies` of `packages/ui-irealb-editor/package.json`
-   - `@chordsketch/wasm-export` in `peerDependencies` of
-     `packages/{react,vue,svelte}/package.json`
-
-   Then refresh the lockfiles, after `packages/npm/package.json` carries the
-   new version:
+1. **Bump the version**, on a branch from an up-to-date `main`. If this
+   release re-syncs a drift, first remove the corresponding entries from
+   `ci/version-skew-allowlist.toml` and close their tracking issues in the
+   same commit: the command leaves allowlisted sources where they are.
    ```bash
-   for d in react-ui react vue svelte chordpro-lite ui-irealb-editor vscode-extension; do
-     (cd packages/$d && npm install --package-lock-only --ignore-scripts --no-audit --no-fund)
-   done
+   python3 scripts/check-version-consistency.py --set X.Y.Z
    ```
-   Those lockfiles install `@chordsketch/wasm` from `packages/npm`, not
-   from npm, so the release commit installs and tests against the version
-   it releases before npm serves it (ADR-0073). They keep that link while
-   `packages/npm`'s version satisfies the pin; `check-version-consistency.py`
-   fails if a lockfile resolves it from npm instead.
+   This writes `X.Y.Z` to every place `check-version-consistency.py`
+   checks — the crates and their path dependencies on each other,
+   `Cargo.lock`, the npm packages and their pins on the wasm packages
+   (`^X.Y.Z`), the napi packages, the desktop app, the Claude Code plugin
+   and its marketplace entry, the pins in `readme-smoke.yml`, the React
+   README's requirements table, and the winget, MacPorts and Nix
+   packaging — then runs the check and exits 0 only if it passes. Along
+   the way it:
 
-   Hardcoded pins in CI:
-   - `.github/workflows/readme-smoke.yml` ~line 204:
-     `npm install '@chordsketch/wasm@<version>'`
-   - `.github/workflows/readme-smoke.yml` ~lines 450–451:
-     `chordsketch-chordpro = "^<major>.<minor>"` and the matching
-     `chordsketch-render-text` pin
+   - keeps every source `ci/version-skew-allowlist.toml` covers at its
+     declared value;
+   - updates the npm lockfiles' copies of what it changed in each
+     package.json (the package's own version, the linked `packages/npm`,
+     the wasm pins) and nothing else. Running
+     `npm install --package-lock-only` instead rewrites whatever the local
+     npm lays out differently from the one that wrote the lockfile. The
+     lockfiles keep installing `@chordsketch/wasm` from `packages/npm`, so
+     the release commit installs and tests against the version it releases
+     before npm serves it (ADR-0073);
+   - regenerates the MacPorts `cargo.crates` block from the working tree's
+     `Cargo.lock`: the Portfile now names a tag that does not exist yet,
+     and until it does the `macports-portfile-sync` check compares against
+     `HEAD:Cargo.lock`;
+   - adds a `<release version="X.Y.Z" date="YYYY-MM-DD">` at the top of
+     the Flatpak metainfo's `<releases>` (the Flathub listing's release
+     history);
+   - moves the entries under `## [Unreleased]` in `CHANGELOG.md` under a
+     new `## [X.Y.Z] - YYYY-MM-DD` heading.
 
-   Allowlist (if applicable):
-   - If this release re-syncs any drift, remove the corresponding entries
-     from `ci/version-skew-allowlist.toml` **and close their tracking
-     issues in the same commit**. Leaving stale entries causes
-     `check-version-consistency.py` to fail (which is the point — you
-     can't forget).
+   The date is today's; pass `--date YYYY-MM-DD` for another. It refuses,
+   before writing anything, a version older than the workspace's and a
+   CHANGELOG with no entries under `## [Unreleased]`. Running the command
+   again with the same version changes nothing. A new place that carries
+   the version goes into the script's `load_all_sources()`, not into this
+   step.
 
-   Sanity: run `python3 scripts/check-version-consistency.py` after the
-   edit. It must exit 0 before you commit.
-
-2. **Update CHANGELOG.md**: change `## [X.Y.Z] - Unreleased` to
-   `## [X.Y.Z] - YYYY-MM-DD` and add a new `## [Unreleased]` section above.
+2. **Review the diff.** `git diff --stat` should list only files that
+   carry the version, and `CHANGELOG.md`. Read the new `## [X.Y.Z]`
+   section: it is what the release says it contains
+   ([`release-doc-sync.md`](../.claude/rules/release-doc-sync.md) §1).
+   winget's `InstallerSha256` and the MacPorts `checksums` stay on the
+   previous release until its archives exist (Post-Release).
 
 3. **Commit** with message: `Release vX.Y.Z`
 
@@ -469,8 +432,9 @@ After the release workflow completes and the GitHub Release is published:
    name requires the manual local fallback (see quirks).
 
 4. **winget submission** — submit a PR to `microsoft/winget-pkgs`:
-   1. The 3 manifest files live in `packaging/winget/`. Update
-      `PackageVersion` and `InstallerSha256` to match the new release. Get
+   1. The 3 manifest files live in `packaging/winget/`. The release commit
+      already set `PackageVersion` and `InstallerUrl` (Step 1); update
+      `InstallerSha256` to match the new release. Get
       the Windows zip directly from the GitHub Release (do **not** rely on a
       local copy that might have been tampered with), then compute the
       sha256:
@@ -809,8 +773,9 @@ packaging/winget/koedame.chordsketch.locale.en-US.yaml
 packaging/winget/koedame.chordsketch.yaml
 ```
 
-The release flow is to **update `PackageVersion` and `InstallerSha256` in
-these templates**, then copy them into the winget-pkgs PR. Do not re-author
+The release flow is to **update `InstallerSha256` in these templates**
+(the release commit already moved `PackageVersion` and `InstallerUrl`),
+then copy them into the winget-pkgs PR. Do not re-author
 the manifests from scratch — the templates are tuned (per-installer
 `NestedInstallerType: portable`, `PortableCommandAlias: chordsketch`, etc.)
 and easy to get subtly wrong.
@@ -1133,9 +1098,9 @@ first version goes out by hand and every later one from CI.
    Every package this repository publishes carries the tag's version
    (ADR-0073); `scripts/test_publish_registries.py` fails for one that
    does not.
-3. **Track its version.** A tag-versioned package goes into the Step 1
-   bump list and into `scripts/check-version-consistency.py`
-   (`load_all_sources()`) and the `_build_repo()` fixture of
+3. **Track its version.** A tag-versioned package goes into
+   `scripts/check-version-consistency.py` (`load_all_sources()`, which
+   the Step 1 bump also writes from) and the `_build_repo()` fixture of
    `scripts/test_check_version_consistency.py`; sync it with the workspace
    version or add a `ci/version-skew-allowlist.toml` entry. Regenerate any
    derived file that embeds the version (tree-sitter's `src/parser.c`).
