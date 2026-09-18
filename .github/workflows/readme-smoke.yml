@@ -1048,17 +1048,18 @@ jobs:
             INCLUDE_IREAL=1
             MODE="workspace path deps (PR, ChordPro + iReal)"
           else
-            # Cargo `^0.7` means `>=0.7.0, <0.8.0` (the caret rules treat
-            # the leftmost non-zero as the breaking-change boundary).
-            # Bump policy: when the workspace bumps to 0.8.x, update all
-            # four constraints below to `^0.8` in the same release PR.
-            # Otherwise, daily smoke tests will silently stop resolving.
+            # Cargo `^0.Y` means `>=0.Y.0, <0.(Y+1).0` (the caret rules treat
+            # the leftmost non-zero as the breaking-change boundary), so
+            # the four constraints below have to move with every minor
+            # release or the daily smoke silently stops resolving the new
+            # one. scripts/check-version-consistency.py holds them at the
+            # workspace's major.minor, and its --set moves them.
             CORE_DEP='chordsketch-chordpro = "^0.7"'
             RENDER_DEP='chordsketch-render-text = "^0.7"'
             IREAL_DEP='chordsketch-ireal = "^0.7"'
             IREAL_RENDER_DEP='chordsketch-render-ireal = "^0.7"'
             INCLUDE_IREAL=1
-            MODE="crates.io published (ChordPro + iReal, ^0.7)"
+            MODE="crates.io published (ChordPro + iReal, ${CORE_DEP##* = })"
           fi
           echo "library-smoke mode: $MODE"
           {

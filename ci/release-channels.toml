@@ -24,7 +24,9 @@
 #     `.claude/rules/readme-sync.md`. A channel that is NOT advertised there
 #     gets no smoke job, so give it `expected_version = "exists"` unless the
 #     tag-equality check already covers it.
-#   - Update `docs/releasing.md` Step 1 bump list if the channel has a manifest.
+#   - If the channel has a manifest that carries the version, add it to
+#     `scripts/check-version-consistency.py` (`load_all_sources()`), which
+#     both checks it and bumps it in the release commit.
 #
 # `expected_version` names the question the rollup asks of the registry, and
 # takes exactly three values. `scripts/_release_channels.py` rejects any other.
