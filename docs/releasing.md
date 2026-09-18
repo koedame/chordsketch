@@ -314,7 +314,11 @@ at post-release verification rather than before the tag is cut.
    ```
    Check that post-release.yml updates Homebrew, Scoop, AUR, Snap,
    and Chocolatey, and that the Swift Package jobs push to
-   CocoaPods and open the `Package.swift` PR. Docker pushes to both
+   CocoaPods and open the `Package.swift` PR
+   (`swift-package-update-X.Y.Z`). Nothing merges that PR for you:
+   add it to the merge queue once its review posts "Ready for merge",
+   or `main` keeps pointing at the previous release's XCFramework.
+   Docker pushes to both
    GHCR and Docker Hub. VS Code publishes **8 VSIXes per release**
    (1 universal + 7 platform-specific: `linux-x64`, `linux-arm64`,
    `darwin-x64`, `darwin-arm64`, `win32-x64`, `alpine-x64`,
