@@ -259,9 +259,11 @@ jobs:
   #
   #   gh workflow run swift.yml --ref <release-branch> -f pin=X.Y.Z
   #
-  # The zip is kept under a name that carries its checksum, for longer
-  # than a release takes, because `publish` uploads that exact file
-  # after the tag: a rebuild would not reproduce the checksum.
+  # The zip is kept under a name that carries its checksum, because
+  # `publish` uploads that exact file after the tag: a rebuild would not
+  # reproduce the checksum. `retention-days` asks for the most GitHub
+  # allows; the repository's own limit (7 days) is what applies, so a pin
+  # has to be used within a week.
   pin:
     name: Pin XCFramework in Package.swift
     needs: [assemble-xcframework]

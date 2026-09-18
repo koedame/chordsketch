@@ -241,10 +241,15 @@ at post-release verification rather than before the tag is cut.
    serves, which only exists once the zip is built
    ([ADR-0080](adr/0080-swift-package-manifest-at-the-root-pins-the-xcframework-before-the-tag.md)).
    The run builds and tests the XCFramework on macOS, keeps the zip as the
-   artifact `xcframework-<sha256>` for 90 days, and pushes one commit,
+   artifact `xcframework-<sha256>`, and pushes one commit,
    `Pin the Swift XCFramework for vX.Y.Z`, to the branch: `Package.swift`'s
    URL and checksum, and the Swift bindings generated in the same run
    (`packages/swift/Sources/ChordSketch/chordsketch.swift`). `git pull` it.
+
+   The zip is kept for as long as the repository keeps artifacts, which is
+   at most 7 days: merge the PR and run `scripts/release.py` within that
+   window, or dispatch the pin again (`scripts/release.py` reports an expired
+   one before it tags).
 
    The PR's `Publishable` check stays red until that commit exists, because
    `Package.swift` still names the previous release; merge after it is green.

@@ -48,7 +48,8 @@ the tag was cut before the parts the package needs existed.
    version bump is pushed to the release branch, the maintainer dispatches
    `swift.yml` with `pin=X.Y.Z` on that branch. It builds and tests the
    XCFramework as on any pull request, keeps the zip as the artifact
-   `xcframework-<sha256>` for 90 days, and pushes one commit to the branch
+   `xcframework-<sha256>` (and the bindings as `swift-source-<sha256>`),
+   and pushes one commit to the branch
    that sets the `.binaryTarget` URL (`…/releases/download/vX.Y.Z/…`) and
    checksum and commits the bindings generated in the same run. The pull
    request then merges as the release commit.
@@ -64,9 +65,10 @@ the tag was cut before the parts the package needs existed.
    release pull request and in the merge queue) fails while the manifest
    names any other version than the workspace's, which is what forces the
    pin before the merge. `scripts/release.py`'s preflight fails if the
-   pinned artifact has expired, or if anything under `crates/`,
+   pinned artifact has expired, if anything under `crates/`,
    `Cargo.toml` or `Cargo.lock` differs between the commit the zip was
-   built from and the release commit.
+   built from and the release commit, or if the committed bindings are not
+   the file the pinned build generated.
 
 ## Rationale
 
@@ -84,9 +86,10 @@ tag, because nothing after the tag can repair it.
 Committing the bindings from the pinning run, rather than by hand or from a
 separate generation, is what makes them match the zip. `uniffi-bindgen`
 formats its output with `swift-format` when it finds one, so a copy
-generated on another machine can differ in whitespace; a CI comparison
-against a committed copy would flap on that, so none is made. Between
-releases `main` carries the bindings of the last pin.
+generated on another machine can differ in whitespace. The first pin run
+produced the same file as a Linux generation, but that depends on the
+runner image, so CI does not compare the committed copy with a fresh one.
+Between releases `main` carries the bindings of the last pin.
 
 Failing in `Publishable` rather than only in `release.py` moves the
 reminder to the pull request that needs it, where the fix (dispatch the
@@ -103,10 +106,14 @@ pin) is one command, instead of to release day.
   works from the first release cut with this flow.
 - SwiftPM clones the whole repository for consumers. That is the price of
   serving the package from the main repository at all.
-- A pin older than 90 days has an expired zip and must be redone; a rebuilt
-  zip has a different checksum, so it is a new pin, never a re-upload of an
-  old one. A `swift.yml` dispatch with `tag` therefore re-uploads the pinned
-  zip and no longer rebuilds it.
+- The pin has to be used within the repository's artifact retention, which
+  is capped at 7 days (`retention-days: 90` is asked for and the cap wins;
+  measured on the first pin run). From the pin to the end of the tag's
+  release run, that is the window. An older pin has an expired zip and must
+  be redone: a rebuilt zip has a different checksum, so it is a new pin,
+  never a re-upload of an old one. A `swift.yml` dispatch with `tag`
+  therefore re-uploads the pinned zip and no longer rebuilds it.
+- Each pin stores a zip of about 240 MB as an artifact.
 - Any change under `crates/` after the pin needs the pin again. The preflight
   says so instead of tagging a source the zip lacks.
 
