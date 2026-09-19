@@ -28,6 +28,7 @@ Pod::Spec.new do |s|
       --output chordsketch-xcframework.zip \
       'https://github.com/koedame/chordsketch/releases/download/v{{VERSION}}/chordsketch-xcframework.zip'
     echo '{{SHA256}}  chordsketch-xcframework.zip' | shasum -a 256 -c -
+    rm -rf chordsketchFFI.xcframework
     unzip -q chordsketch-xcframework.zip
     rm chordsketch-xcframework.zip
   CMD
