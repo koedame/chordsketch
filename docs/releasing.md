@@ -344,7 +344,13 @@ at post-release verification rather than before the tag is cut.
    Check that post-release.yml updates Homebrew, Scoop, AUR, Snap,
    and Chocolatey, and that the Swift Package jobs upload the XCFramework
    and push to CocoaPods. `Package.swift` needs no update after the tag: it
-   was pinned in step 3. Docker pushes to both
+   was pinned in step 3. The pod's source is the tag itself, which holds the
+   Swift bindings, and it downloads the XCFramework the release uploaded,
+   refusing a zip that is not the one `Package.swift` pins. So the pod, like
+   the Swift package, is only as good as the pin of step 3. A pull request
+   runs `pod lib lint` with the pod's tests against the XCFramework it
+   built (`lint-podspec` in `swift.yml`), which is where a pod that does not
+   install shows up. Docker pushes to both
    GHCR and Docker Hub. VS Code publishes **8 VSIXes per release**
    (1 universal + 7 platform-specific: `linux-x64`, `linux-arm64`,
    `darwin-x64`, `darwin-arm64`, `win32-x64`, `alpine-x64`,
