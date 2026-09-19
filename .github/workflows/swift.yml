@@ -9,6 +9,7 @@ on:
       - "crates/render-*/**"
       - "packages/swift/**"
       - "Package.swift"
+      - "packaging/cocoapods/**"
       - "scripts/swift_package.py"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -21,6 +22,7 @@ on:
       - "crates/render-*/**"
       - "packages/swift/**"
       - "Package.swift"
+      - "packaging/cocoapods/**"
       - "scripts/swift_package.py"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -31,6 +33,8 @@ on:
   # `publish` uploads the XCFramework that was built and pinned in
   # `Package.swift` *before* the tag (ADR-0080), and CocoaPods follows the
   # upload with `needs:` instead of polling for it (ADR-0039, ADR-0067).
+  # The podspec's source is the tag itself, which holds the Swift bindings;
+  # it downloads the XCFramework that `publish` uploaded.
   # Nothing is built in release mode. On `push` / `pull_request` `tag` is
   # empty and only build + test run.
   workflow_call:
@@ -251,6 +255,60 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  # Install the pod the way a consumer would get it, against the XCFramework
+  # and bindings assembled above: `pod lib lint` builds it for iOS and macOS
+  # and runs the Swift tests through the pod, so `import ChordSketch` and a
+  # real call across the FFI are checked, not just the podspec's syntax.
+  # The only difference from the release is where the zip comes from: the
+  # download URL is rewritten to the local file, since the release asset
+  # does not exist yet. The checksum, unzip and layout steps run as released.
+  lint-podspec:
+    name: Lint podspec (${{ matrix.linkage }})
+    needs: [assemble-xcframework]
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - linkage: frameworks
+            flags: ""
+          - linkage: static libraries
+            flags: "--use-libraries"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: xcframework
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: swift-source
+          path: swift-source
+
+      - name: Use the generated Swift source
+        run: |
+          cp swift-source/chordsketch.swift packages/swift/Sources/ChordSketch/
+
+      - name: Generate podspec against the local zip
+        run: |
+          VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("crates/cli/Cargo.toml", "rb"))["package"]["version"])')
+          # Outside the checkout: `prepare_command` runs there and writes
+          # `chordsketch-xcframework.zip` in it, which would truncate the source.
+          mv chordsketch-xcframework.zip "$RUNNER_TEMP/"
+          LOCAL_ZIP="${RUNNER_TEMP}/chordsketch-xcframework.zip"
+          SHA256=$(shasum -a 256 "$LOCAL_ZIP" | awk '{print $1}')
+          RELEASE_URL="https://github.com/koedame/chordsketch/releases/download/v${VERSION}/chordsketch-xcframework.zip"
+          sed -e "s/{{VERSION}}/${VERSION}/g" -e "s/{{SHA256}}/${SHA256}/g" \
+            -e "s#${RELEASE_URL}#file://${LOCAL_ZIP}#" \
+            packaging/cocoapods/ChordSketch.podspec.template > ChordSketch.podspec
+          grep -q "file://${LOCAL_ZIP}" ChordSketch.podspec
+          cat ChordSketch.podspec
+
+      - name: Lint the pod
+        run: |
+          pod lib lint ChordSketch.podspec --verbose ${{ matrix.flags }}
+
   # Release step 3: pin the XCFramework this run built, and the Swift
   # bindings generated for it, into the release branch, so the version-bump
   # commit that lands on `main` already names the asset and checksum its
@@ -416,15 +474,19 @@ jobs:
 
   update-cocoapods:
     name: Update CocoaPods podspec
-    # `pod trunk push` validates the podspec by downloading its
-    # `:http` source — the xcframework zip on the release — so it can
-    # only run once `publish` has uploaded it. When this job lived in
-    # post-release.yml it raced the upload and failed on the 404
+    # `pod trunk push` validates the podspec by running its
+    # `prepare_command`, which downloads the xcframework zip from the
+    # release — so it can only run once `publish` has uploaded it. When this
+    # job lived in post-release.yml it raced the upload and failed on the 404
     # (v0.6.0; ADR-0067).
     needs: [publish]
     runs-on: macos-latest
     steps:
+      # The tag's own checkout, like `publish`: its Package.swift holds the
+      # checksum the podspec verifies the download against.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Determine version
         id: version
@@ -441,11 +503,19 @@ jobs:
         with:
           tag: ${{ steps.version.outputs.tag }}
 
+      - name: Read the pinned checksum
+        id: pin
+        run: |
+          PIN=$(python3 scripts/swift_package.py show)
+          read -r _ SHA <<< "$PIN"
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+
       - name: Generate podspec
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          SHA256: ${{ steps.pin.outputs.sha256 }}
         run: |
-          sed -e "s/{{VERSION}}/${VERSION}/g" \
+          sed -e "s/{{VERSION}}/${VERSION}/g" -e "s/{{SHA256}}/${SHA256}/g" \
             packaging/cocoapods/ChordSketch.podspec.template > ChordSketch.podspec
           cat ChordSketch.podspec
 
@@ -460,4 +530,7 @@ jobs:
             exit 0
           fi
 
-          pod trunk push ChordSketch.podspec --allow-warnings
+          # The pod's tests already ran against this build in `lint-podspec`
+          # on the pull request; trunk's own lint still builds the pod from
+          # the tag and the uploaded zip.
+          pod trunk push ChordSketch.podspec --allow-warnings --skip-tests
