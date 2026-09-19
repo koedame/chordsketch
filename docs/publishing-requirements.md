@@ -296,7 +296,10 @@ The pull-request check runs the same build with a debug Linux CLI staged.
 ## CocoaPods and the Swift package
 
 The podspec is generated and pushed with `pod trunk push` by
-[`swift.yml`](../.github/workflows/swift.yml). The Swift package is the
+[`swift.yml`](../.github/workflows/swift.yml). Its source is the tag, which
+holds the Swift bindings; its `prepare_command` downloads the release's
+XCFramework and checks it against the checksum in the tag's `Package.swift`.
+The Swift package is the
 repository itself at the tag: the root `Package.swift` names the
 XCFramework zip and checksum, which `swift.yml`'s `pin` job commits to the
 release branch before the tag, together with the generated Swift bindings
@@ -306,10 +309,11 @@ The tag-time job uploads that same zip to the Release.
 | Condition | Source | Checked by |
 |---|---|---|
 | The podspec has `name`, `version`, `summary` (at most 140 characters), `license`, `homepage`, `authors`, `source` | [Podspec syntax](https://guides.cocoapods.org/syntax/podspec.html) | `cocoapods_problems` via `pod ipc spec` |
-| The license can be found: the source zip holds no LICENSE file, so the text is inlined | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) (an open-source pod may have no lint warnings) | `cocoapods_problems` |
-| The source is the XCFramework asset the release uploads | — | `cocoapods_problems` |
+| The source is the git tag `vX.Y.Z` (the Swift bindings are a source file, so a pod built from the XCFramework zip alone has no `import ChordSketch`), and `source_files` match the committed bindings | [Podspec syntax](https://guides.cocoapods.org/syntax/podspec.html) | `cocoapods_problems` |
+| The XCFramework is downloaded from the asset the release uploads and verified against the checksum `Package.swift` pins | — | `cocoapods_problems` |
+| The license can be found: `LICENSE` is at the root of the tag | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) (an open-source pod may have no lint warnings) | `cocoapods_problems` |
 | The root `Package.swift`'s `binaryTarget` points at this version's asset with a SHA-256 checksum, the bindings file is committed, and the manifest still parses | [SE-0272](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0272-swiftpm-binary-dependencies.md) | `swift_package_problems` via `swift package dump-package` |
-| `pod spec lint` and `swift build` against the XCFramework | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) | need macOS and the built XCFramework: `swift.yml` builds and tests it on the pull requests that touch its inputs |
+| `pod lib lint` (with the pod's tests, for frameworks and for static libraries) and `swift build` against the XCFramework | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) | need macOS and the built XCFramework: `swift.yml` builds, tests and lints it on the pull requests that touch its inputs (`lint-podspec`) |
 
 ## Desktop updater manifest
 

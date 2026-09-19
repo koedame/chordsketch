@@ -3,6 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-09-19
 - **Amends**: [ADR-0067](0067-swift-package-joins-the-release-call-graph.md)
+- **Amended by**: [ADR-0081](0081-the-cocoapods-pod-builds-the-tags-swift-sources.md)
 
 ## Context
 
@@ -132,8 +133,9 @@ pin) is one command, instead of to release day.
    but adds a repository, a credential that can write to it, and a second
    tag that has to be kept in step with each release. Not chosen.
 2. **Distribute through CocoaPods only.** Drops SwiftPM, the ecosystem's
-   default. Not chosen. (The pod ships only the XCFramework, not the Swift
-   bindings; that is a separate gap.)
+   default. Not chosen. (The pod shipped only the XCFramework, not the Swift
+   bindings; [ADR-0081](0081-the-cocoapods-pod-builds-the-tags-swift-sources.md)
+   closes that gap.)
 3. **Keep the post-tag pull request and move the tag onto it.** Rewrites a
    published tag after other channels have already consumed it. Not chosen.
 4. **Rebuild at tag time and compare checksums.** Needs a reproducible

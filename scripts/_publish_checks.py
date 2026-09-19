@@ -1540,7 +1540,14 @@ REQUIRED_PODSPEC_ATTRIBUTES = ("name", "version", "summary", "license", "homepag
 
 
 def cocoapods_problems(version: str, runner: Runner = run) -> list[str]:
-    outputs, problems, directory = generated("swift.yml", "update-cocoapods", "Generate podspec", ("ChordSketch.podspec",), version, runner)
+    """The podspec is the tag's own source plus the XCFramework the release uploads.
+
+    A pod built from the XCFramework zip alone has no Swift API: the bindings
+    are a source file, so the podspec has to name the tag that holds them, and
+    fetch the binary that was pinned with them.
+    """
+    checksum = fake_sha256("chordsketch-xcframework.zip")
+    outputs, problems, directory = generated("swift.yml", "update-cocoapods", "Generate podspec", ("ChordSketch.podspec",), version, runner, extra_env={"SHA256": checksum})
     try:
         if not outputs:
             return problems
@@ -1553,14 +1560,19 @@ def cocoapods_problems(version: str, runner: Runner = run) -> list[str]:
             problems.append("the podspec summary is over 140 characters")
         if spec.get("version") != version:
             problems.append(f"the podspec version is {spec.get('version')!r}, not {version}")
-        source = (spec.get("source") or {}).get("http", "")
-        problems += download_url_problems("podspec source", source, version)
+        source = spec.get("source") or {}
+        if source.get("git") != "https://github.com/koedame/chordsketch.git" or source.get("tag") != f"v{version}":
+            problems.append(f"the podspec source is {source!r}, not the git tag v{version}: the Swift bindings are a source file the tag holds")
+        prepare = spec.get("prepare_command", "")
+        problems += download_url_problems("podspec prepare_command", prepare, version)
+        if checksum not in prepare:
+            problems.append("the podspec's prepare_command does not verify the XCFramework against the checksum Package.swift pins")
+        source_files = spec.get("source_files") or ""
+        if not source_files or not any(REPO_ROOT.glob(source_files)):
+            problems.append(f"the podspec's source_files {source_files!r} match nothing in the repository: the pod would have no Swift API")
         license_entry = spec.get("license") or {}
-        # The source is the XCFramework zip, which carries no LICENSE file, so a
-        # `:file` license cannot be found by `pod spec lint` — a warning, which
-        # trunk refuses for an open-source pod.
-        if isinstance(license_entry, dict) and license_entry.get("file") and not license_entry.get("text"):
-            problems.append(f"the podspec names license file `{license_entry['file']}`, which the XCFramework zip does not contain; inline the license `:text`")
+        if isinstance(license_entry, dict) and license_entry.get("file") and not (REPO_ROOT / license_entry["file"]).is_file():
+            problems.append(f"the podspec names license file `{license_entry['file']}`, which the tag does not contain")
         return problems
     finally:
         shutil.rmtree(directory, ignore_errors=True)
