@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   XCFramework and shipped no Swift bindings; each release now carries the
   XCFramework's checksum and the bindings generated for it. Tags up to
   0.7.0 still cannot be resolved.
+- **The CocoaPods pod has the Swift API.** `pod 'ChordSketch'` installed
+  only the C module `chordsketchFFI`, so `import ChordSketch` failed and
+  `parseAndRenderHtml` and the rest were not there. The pod now builds the
+  release tag's Swift sources on top of the XCFramework, which it downloads
+  and checks against the checksum the tag pins. Versions up to 0.7.0 on
+  CocoaPods still have no Swift API.
 
 ## [0.7.0] - 2026-09-17
 
