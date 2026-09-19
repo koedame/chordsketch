@@ -293,12 +293,16 @@ jobs:
       - name: Generate podspec against the local zip
         run: |
           VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("crates/cli/Cargo.toml", "rb"))["package"]["version"])')
-          SHA256=$(shasum -a 256 chordsketch-xcframework.zip | awk '{print $1}')
+          # Outside the checkout: `prepare_command` runs there and writes
+          # `chordsketch-xcframework.zip` in it, which would truncate the source.
+          mv chordsketch-xcframework.zip "$RUNNER_TEMP/"
+          LOCAL_ZIP="${RUNNER_TEMP}/chordsketch-xcframework.zip"
+          SHA256=$(shasum -a 256 "$LOCAL_ZIP" | awk '{print $1}')
           RELEASE_URL="https://github.com/koedame/chordsketch/releases/download/v${VERSION}/chordsketch-xcframework.zip"
           sed -e "s/{{VERSION}}/${VERSION}/g" -e "s/{{SHA256}}/${SHA256}/g" \
-            -e "s#${RELEASE_URL}#file://${PWD}/chordsketch-xcframework.zip#" \
+            -e "s#${RELEASE_URL}#file://${LOCAL_ZIP}#" \
             packaging/cocoapods/ChordSketch.podspec.template > ChordSketch.podspec
-          grep -q "file://${PWD}/chordsketch-xcframework.zip" ChordSketch.podspec
+          grep -q "file://${LOCAL_ZIP}" ChordSketch.podspec
           cat ChordSketch.podspec
 
       - name: Lint the pod
