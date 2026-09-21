@@ -6,8 +6,8 @@ name: Homebrew desktop formula smoke
 # formula promises: the app is on disk, carries no quarantine flag, has a
 # valid ad-hoc signature and starts.
 #
-# A source build takes 15-30 minutes on a runner, so this only runs when
-# the formula or this workflow changes, or on demand.
+# The build takes about ten minutes on a runner, so this only runs when the
+# formula or this workflow changes, or on demand.
 
 on:
   pull_request:
@@ -80,46 +80,9 @@ jobs:
 
       - name: The app opens the way Finder opens it
         run: |
-          # `open` goes through LaunchServices, where Gatekeeper decides. A
-          # quarantined, unnotarized app would stop at its dialog instead
-          # of starting.
-          spctl --status
+          # `open` goes through LaunchServices, the path a double-click
+          # takes; running the binary from a shell would skip it.
           open -n "$(brew --prefix chordsketch-desktop)/ChordSketch.app"
           sleep 20
           pgrep -fl 'ChordSketch.app/Contents/MacOS/chordsketch-desktop'
-          echo "--- what Gatekeeper logged"
-          /usr/bin/log show --last 3m --info \
-            --predicate 'process == "syspolicyd" OR process == "CoreServicesUIAgent"' 2>&1 \
-            | grep -i -E 'ChordSketch|quarantin|translocat|GK |assess' | tail -40 || true
           pkill -f 'ChordSketch.app/Contents/MacOS/chordsketch-desktop'
-
-  cask-baseline:
-    name: The cask's quarantine and signature state (macOS)
-    runs-on: macos-latest
-    timeout-minutes: 20
-    steps:
-      - name: Install the cask
-        run: brew install --cask koedame/tap/chordsketch
-
-      - name: Report what Homebrew did to the app
-        run: |
-          app=/Applications/ChordSketch.app
-          echo "--- extended attributes"
-          xattr -lr "$app" | head -20
-          echo "--- signature"
-          codesign -dv --verbose=4 "$app" 2>&1 || true
-          codesign --verify --deep --strict --verbose=2 "$app" 2>&1 || true
-          echo "--- Gatekeeper assessment"
-          spctl --assess --type execute --verbose=4 "$app" 2>&1 || true
-
-      - name: Open it the way Finder opens it
-        run: |
-          spctl --status
-          open -n /Applications/ChordSketch.app &
-          sleep 20
-          pgrep -fl 'ChordSketch.app/Contents/MacOS/chordsketch-desktop' || echo "not running"
-          echo "--- what Gatekeeper logged"
-          /usr/bin/log show --last 3m --info \
-            --predicate 'process == "syspolicyd" OR process == "CoreServicesUIAgent"' 2>&1 \
-            | grep -i -E 'ChordSketch|quarantin|translocat|GK |assess' | tail -40 || true
-          pkill -f 'ChordSketch.app/Contents/MacOS/chordsketch-desktop' || true
