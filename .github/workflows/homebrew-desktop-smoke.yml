@@ -78,17 +78,16 @@ jobs:
           echo "--- Gatekeeper assessment (informational)"
           spctl --assess --type execute --verbose=4 "$app" 2>&1 || true
 
-      - name: The app starts
+      - name: The app opens the way Finder opens it
         run: |
-          "$(brew --prefix)/bin/chordsketch-desktop" > "${RUNNER_TEMP}/app.log" 2>&1 &
-          pid=$!
+          # `open` goes through LaunchServices, where Gatekeeper decides. A
+          # quarantined, unnotarized app would stop at its dialog instead
+          # of starting.
+          spctl --status
+          open -n "$(brew --prefix chordsketch-desktop)/ChordSketch.app"
           sleep 20
-          if ! kill -0 "$pid" 2>/dev/null; then
-            echo "::error::chordsketch-desktop exited within 20 seconds" >&2
-            cat "${RUNNER_TEMP}/app.log"
-            exit 1
-          fi
-          kill "$pid"
+          pgrep -fl 'ChordSketch.app/Contents/MacOS/chordsketch-desktop'
+          pkill -f 'ChordSketch.app/Contents/MacOS/chordsketch-desktop'
 
   cask-baseline:
     name: The cask's quarantine and signature state (macOS)
@@ -108,3 +107,10 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app" 2>&1 || true
           echo "--- Gatekeeper assessment"
           spctl --assess --type execute --verbose=4 "$app" 2>&1 || true
+
+      - name: Open it the way Finder opens it
+        run: |
+          spctl --status
+          open -n /Applications/ChordSketch.app || true
+          sleep 20
+          pgrep -fl 'ChordSketch.app/Contents/MacOS/chordsketch-desktop' || echo "not running"
