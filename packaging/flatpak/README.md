@@ -28,8 +28,8 @@ Needs `flatpak`, `flatpak-builder`, Python 3.11+ and the Flathub remote.
 
 ```bash
 python3 -m pip install -r packaging/flatpak/requirements.txt
-flatpak install -y flathub org.gnome.Sdk//50 org.gnome.Platform//50 \
-  org.freedesktop.Sdk.Extension.node24//25.08 org.freedesktop.Sdk.Extension.llvm22//25.08 \
+flatpak install -y flathub org.gnome.Sdk//51 org.gnome.Platform//51 \
+  org.freedesktop.Sdk.Extension.node24//26.08 org.freedesktop.Sdk.Extension.llvm22//26.08 \
   org.flatpak.Builder
 packaging/flatpak/prepare.py --out build/flatpak
 flatpak-builder --user --install --force-clean build/flatpak/app build/flatpak/io.github.koedame.chordsketch.yml
