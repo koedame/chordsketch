@@ -87,6 +87,10 @@ jobs:
           open -n "$(brew --prefix chordsketch-desktop)/ChordSketch.app"
           sleep 20
           pgrep -fl 'ChordSketch.app/Contents/MacOS/chordsketch-desktop'
+          echo "--- what Gatekeeper logged"
+          /usr/bin/log show --last 3m --info \
+            --predicate 'process == "syspolicyd" OR process == "CoreServicesUIAgent"' 2>&1 \
+            | grep -i -E 'ChordSketch|quarantin|translocat|GK |assess' | tail -40 || true
           pkill -f 'ChordSketch.app/Contents/MacOS/chordsketch-desktop'
 
   cask-baseline:
@@ -111,6 +115,11 @@ jobs:
       - name: Open it the way Finder opens it
         run: |
           spctl --status
-          open -n /Applications/ChordSketch.app || true
+          open -n /Applications/ChordSketch.app &
           sleep 20
           pgrep -fl 'ChordSketch.app/Contents/MacOS/chordsketch-desktop' || echo "not running"
+          echo "--- what Gatekeeper logged"
+          /usr/bin/log show --last 3m --info \
+            --predicate 'process == "syspolicyd" OR process == "CoreServicesUIAgent"' 2>&1 \
+            | grep -i -E 'ChordSketch|quarantin|translocat|GK |assess' | tail -40 || true
+          pkill -f 'ChordSketch.app/Contents/MacOS/chordsketch-desktop' || true
