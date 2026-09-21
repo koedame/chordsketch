@@ -26,7 +26,7 @@ class ChordsketchDesktop < Formula
   def install
     ENV["RUSTUP_HOME"] = buildpath/".rustup"
     ENV["CARGO_HOME"] = buildpath/".cargo"
-    ENV.prepend_path "PATH", Formula["rustup"].opt_bin
+    ENV.prepend_path "PATH", formula_opt_bin("rustup")
     # Homebrew's CPU-specific flags must not leak into the wasm32 build.
     ENV.delete "RUSTFLAGS"
     ENV.delete "CARGO_ENCODED_RUSTFLAGS"
@@ -45,7 +45,7 @@ class ChordsketchDesktop < Formula
       system "npm", "ci"
     end
     cd "packages/react" do
-      system "npm", "install", "--no-audit", "--no-fund"
+      system "npm", "ci"
       system "npm", "run", "build"
     end
     cd "apps/desktop" do
@@ -58,10 +58,8 @@ class ChordsketchDesktop < Formula
     # "-" is Tauri's ad-hoc identity: the bundle gets a signature that
     # needs no certificate, which is all Apple silicon asks of local code.
     ENV["APPLE_SIGNING_IDENTITY"] = "-"
-    system "npm", "install", "--prefix", buildpath/"tauri-cli", "--no-audit", "--no-fund",
-           "@tauri-apps/cli@2.10.1"
     cd "apps/desktop/src-tauri" do
-      system buildpath/"tauri-cli/node_modules/.bin/tauri", "build", "--bundles", "app"
+      system "npx", "--yes", "@tauri-apps/cli@2.10.1", "build", "--bundles", "app"
     end
 
     prefix.install "target/release/bundle/macos/ChordSketch.app"
