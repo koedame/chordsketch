@@ -1343,41 +1343,71 @@ def expand_shell_variables(text: str, values: dict[str, str]) -> str:
     return text
 
 
-def homebrew_problems(version: str, runner: Runner = run) -> list[str]:
-    """The CLI formula and the desktop cask, as their release jobs generate them.
+def desktop_formula_source_url(version: str) -> str:
+    return f"https://github.com/koedame/chordsketch/archive/refs/tags/desktop-v{version}.tar.gz"
 
-    Both are audited and style-checked from a scratch tap, since `brew style`
+
+def homebrew_problems(version: str, runner: Runner = run) -> list[str]:
+    """The CLI formula, the desktop cask, and the desktop source-build formula, as their release jobs generate them.
+
+    All three are audited and style-checked from a scratch tap, since `brew style`
     outside a tap applies Homebrew's own repository rules rather than a tap's.
     """
     formula, problems, formula_dir = generated("post-release.yml", "update-homebrew", "Generate formula", ("chordsketch.rb",), version, runner)
     cask, cask_problems, cask_dir = generated("desktop-release.yml", "update-cask", "Generate cask", ("chordsketch.rb",), version, runner)
+
+    # The desktop formula downloads GitHub's archive of the tag, which is not
+    # a release asset (no entry in the fabricated release's `checksums.txt` /
+    # `SHA256SUMS`), so `git archive` of this checkout stands in for it —
+    # same approach as `aur_problems`' source package.
+    archive = f"chordsketch-{version}.tar.gz"
+
+    def source_archive(directory: Path) -> None:
+        runner(["git", "archive", f"--prefix=chordsketch-{version}/", "-o", str(directory / archive), "HEAD"], REPO_ROOT)
+
+    desktop_formula, desktop_formula_problems, desktop_formula_dir = generated(
+        "desktop-release.yml", "update-desktop-formula", "Generate formula", ("chordsketch-desktop.rb",), version, runner, prepare=source_archive
+    )
     try:
-        problems += cask_problems
+        problems += cask_problems + desktop_formula_problems
         repository = runner(["brew", "--repository"], REPO_ROOT)
         if repository.returncode != 0:
             return problems + [f"`brew` is not available:\n{tail(repository.stdout)}"]
         tap = Path(repository.stdout.strip().splitlines()[-1]) / "Library/Taps/publish-check/homebrew-local"
         env = {"HOMEBREW_NO_AUTO_UPDATE": "1"}
         # https://docs.brew.sh/Formula-Cookbook and https://docs.brew.sh/Cask-Cookbook
-        for kind, label, generated_files, required, folder in (
-            ("formula", "Homebrew formula", formula, ("desc", "homepage", "license"), "Formula"),
-            ("cask", "Homebrew cask", cask, ("name", "desc", "homepage"), "Casks"),
+        for kind, label, generated_files, filename, required, folder, package in (
+            ("formula", "Homebrew formula", formula, "chordsketch.rb", ("desc", "homepage", "license"), "Formula", "chordsketch"),
+            ("formula", "Homebrew desktop formula", desktop_formula, "chordsketch-desktop.rb", ("desc", "homepage", "license"), "Formula", "chordsketch-desktop"),
+            ("cask", "Homebrew cask", cask, "chordsketch.rb", ("name", "desc", "homepage"), "Casks", "chordsketch"),
         ):
             if not generated_files:
                 continue
-            text = generated_files["chordsketch.rb"]
-            problems += download_url_problems(label, text, version) + checksum_problems(label, text, version)
+            text = generated_files[filename]
+            if filename == "chordsketch-desktop.rb":
+                # Points at a tag archive, not a `/releases/download/` asset,
+                # so `download_url_problems`/`checksum_problems` do not apply;
+                # check the same two properties directly instead.
+                if "{{" in text:
+                    problems.append(f"{label} still has an unfilled `{{{{...}}}}` placeholder")
+                if f'url "{desktop_formula_source_url(version)}"' not in text:
+                    problems.append(f"{label} does not download the tag archive from {desktop_formula_source_url(version)}")
+                if hashlib.sha256((desktop_formula_dir / archive).read_bytes()).hexdigest() not in text:
+                    problems.append(f"{label} does not carry the tag archive's checksum")
+            else:
+                problems += download_url_problems(label, text, version) + checksum_problems(label, text, version)
             problems += [f"{label} has no `{field}`" for field in required if not re.search(rf"^\s+{field} \"", text, flags=re.MULTILINE)]
             (tap / folder).mkdir(parents=True, exist_ok=True)
-            (tap / folder / "chordsketch.rb").write_text(text)
+            (tap / folder / filename).write_text(text)
             for command in (["brew", "audit", "--strict", f"--{kind}"], ["brew", "style", f"--{kind}"]):
-                checked = runner([*command, "publish-check/local/chordsketch"], REPO_ROOT, env)
+                checked = runner([*command, f"publish-check/local/{package}"], REPO_ROOT, env)
                 if checked.returncode != 0:
                     problems.append(f"`{' '.join(command)}` refuses the {kind}:\n{tail(checked.stdout)}")
         return problems
     finally:
         shutil.rmtree(formula_dir, ignore_errors=True)
         shutil.rmtree(cask_dir, ignore_errors=True)
+        shutil.rmtree(desktop_formula_dir, ignore_errors=True)
 
 
 # https://github.com/ScoopInstaller/Scoop/wiki/App-Manifests
