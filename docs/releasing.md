@@ -1451,16 +1451,19 @@ Flathub's
 governs who may submit and what may be submitted:
 
 - AI tools must not open or automate the submission pull request, or write
-  its commit messages, description or replies, so a maintainer makes the
-  submission by hand.
+  its commit messages, description, review comments or replies, so a
+  maintainer makes the submission by hand.
 - AI-generated code, documentation and packaging must be disclosed in the
   submission, with the affected parts and their approximate extent.
 - Since 2026-09-21, manifests must contain no AI-generated or AI-assisted
   content at all, and disclosure does not exempt them. `packaging/flatpak/`
   is AI-assisted throughout, so **the steps below cannot be run against it
   as it stands**: the manifest, its generator and the metainfo have to be
-  written without AI first. Rejection, and a ban on repeated violations, is
-  what the policy states.
+  written without AI first.
+
+  Undisclosed or misrepresented AI material, or a violation of the
+  submission-PR restriction, can mean rejection; repeated violations can
+  mean a permanent ban from future submissions.
 
 1. Release a desktop version that contains `packaging/flatpak/`. Flathub
    builds a tag, and the metainfo and desktop file are installed from it.
