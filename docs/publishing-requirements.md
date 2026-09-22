@@ -373,6 +373,11 @@ stands: since 2026-09-21 Flathub's generative AI policy bars AI-generated or
 AI-assisted content from manifests, and `packaging/flatpak/` is AI-assisted
 throughout (last row of the table). Everything else below is met.
 
+The submission is on hold rather than rewritten by hand: the policy changed
+twice in September 2026 (a blanket ban, then disclosure-based, then the ban
+again), and Linux users have Snap and the AUR in the meantime. Revisit once
+the policy has held still.
+
 The first submission is made by
 hand ([releasing.md](releasing.md#flathub-desktop-app)), and from then on
 `desktop-release.yml`'s `update-flathub` job opens a pull request on
