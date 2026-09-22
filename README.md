@@ -201,8 +201,9 @@ brew install --formula koedame/tap/chordsketch
 brew install --cask koedame/tap/chordsketch
 ```
 
-The cask installs `ChordSketch.app` into `/Applications/`; Homebrew
-clears the Gatekeeper quarantine flag automatically on install.
+The cask installs `ChordSketch.app` into `/Applications/`. The app is
+not yet signed or notarized, so macOS blocks its first launch; see
+[Desktop application](#desktop-application) for how to open it.
 
 Both commands name the tap in full so that Homebrew taps `koedame/tap`
 on demand and trusts just that one formula or cask; Homebrew 6.0.0 and
@@ -283,16 +284,23 @@ On Windows the installer also registers a File Explorer preview
 handler, so `.cho` / `.chopro` / `.crd` / `.chordpro` files render
 in Explorer's preview pane.
 
-If you instead download the `.dmg` directly from a GitHub
-Release (bypassing Homebrew), macOS Gatekeeper will block the
-unsigned bundle on first open. Clear the flag manually:
+The macOS app is not yet signed or notarized by Apple, so Gatekeeper
+blocks its first launch whether you installed it with the Homebrew cask
+or downloaded the `.dmg` from a GitHub Release. Homebrew leaves the
+quarantine flag on cask downloads so that Gatekeeper still makes its
+own checks. Do one of the following once, after installing:
 
-```bash
-xattr -dr com.apple.quarantine /Applications/ChordSketch.app
-```
+- Clear the quarantine flag:
 
-Apple Developer ID signing + notarization (so the flag is not
-needed regardless of install path) is tracked in
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/ChordSketch.app
+  ```
+
+- Or try to open the app once, then go to System Settings → Privacy &
+  Security and choose "Open Anyway".
+
+Apple Developer ID signing + notarization (so neither step is needed
+regardless of install path) is tracked in
 [#2075](https://github.com/koedame/chordsketch/issues/2075).
 
 ### Linux requirements
