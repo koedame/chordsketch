@@ -26,6 +26,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 APP_ID = "io.github.koedame.chordsketch"
+# The newest tag flathub-infra publishes; it lags the newest GNOME runtime,
+# so the build installs the runtime the manifest names from Flathub instead.
 IMAGE = "ghcr.io/flathub-infra/flatpak-github-actions:gnome-50"
 # `apps/desktop/src-tauri/tauri.conf.json`'s window, and a screen with room
 # around it so the window is never resized to fit.

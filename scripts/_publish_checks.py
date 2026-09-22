@@ -1826,7 +1826,9 @@ def desktop_updater_problems(version: str, runner: Runner = run) -> list[str]:
 
 FLATPAK_APP_ID = "io.github.koedame.chordsketch"
 # The image flatpak/flatpak-github-actions builds in: flatpak-builder,
-# flatpak-builder-lint, Xvfb and the GNOME runtime the manifest names.
+# flatpak-builder-lint and Xvfb. Its newest tag lags the newest GNOME
+# runtime, so the runtime the manifest names is the one the build installs
+# from Flathub (`--install-deps-from=flathub`), not the one it ships.
 FLATPAK_IMAGE = "ghcr.io/flathub-infra/flatpak-github-actions:gnome-50"
 # The desktop app writes this title once its startup has finished (the menu
 # bar, the close prompt, then the title), and this one when startup failed.

@@ -368,7 +368,19 @@ Submitted by hand as a pull request to `microsoft/winget-pkgs` from
 
 ## Flathub (desktop app)
 
-The desktop app's channel. Not submitted yet; the first submission is made by
+The desktop app's channel. Not submitted yet, and not submittable as it
+stands: since 2026-09-21 Flathub's generative AI policy bars AI-generated or
+AI-assisted content from manifests, and `packaging/flatpak/` is AI-assisted
+throughout (last row of the table). Everything else below is met.
+
+The submission is on hold rather than rewritten by hand: the policy changed
+twice in September 2026 (a blanket ban, then disclosure-based, then the ban
+again), and the desktop app already reaches Linux users as the `.deb`,
+`.rpm` and `.AppImage` every desktop release attaches (Snap and the AUR
+carry the CLI, not the app). Flathub would add a store channel, not first
+access. Revisit once the policy has held still.
+
+The first submission is made by
 hand ([releasing.md](releasing.md#flathub-desktop-app)), and from then on
 `desktop-release.yml`'s `update-flathub` job opens a pull request on
 `flathub/io.github.koedame.chordsketch` with the files `packaging/flatpak/prepare.py`
@@ -389,7 +401,7 @@ unless another source is named. All automated ones run in the `flathub` job of
 | No network access during the build: every dependency is a source with a public URL and a checksum | Requirements: No network access during build | `flatpak-builder` offline build of the manifest `prepare.py` writes for the checkout; the tag form Flathub builds differs only in the application source and is linted |
 | The manifest passes `flatpak-builder-lint manifest`, and the built repository `flatpak-builder-lint repo`, with no error or warning | [Linter](https://docs.flathub.org/docs/for-app-authors/linter) | `flatpak_lint_problems` |
 | The application ID has 3 to 5 components, does not end in `.desktop` / `.app` / `.linux`, and, as a GitHub code-hosting ID, has the `io.github.` prefix, at least 4 components and names the repository (`github.com/koedame/chordsketch`) | Requirements: Application ID | `flatpak-builder-lint manifest` (including `appid-url-not-reachable`); ownership by hand at verification |
-| The runtime is hosted on Flathub, is its newest version at submission, and is not end-of-life | Requirements: Manifest; End-of-life dependency policy | `flatpak-builder-lint` (`runtime-is-eol-*`, `runtime-update-available-*`). `runtime-update-available-to-org.gnome.Platform-N` does not fail the check while Flathub does not serve one of the manifest's `sdk-extensions` on the branch GNOME N's SDK names (GNOME 51 and `node24//26.08` when this was written): the manifest cannot move until it does, and the check prints what it waits for. The newest version by hand at submission |
+| The runtime is hosted on Flathub, is its newest version at submission, and is not end-of-life | Requirements: Manifest; End-of-life dependency policy | `flatpak-builder-lint` (`runtime-is-eol-*`, `runtime-update-available-*`). `runtime-update-available-to-org.gnome.Platform-N` does not fail the check while Flathub does not serve one of the manifest's `sdk-extensions` on the branch GNOME N's SDK names: the manifest cannot move until it does, and the check prints what it waits for. The newest version by hand at submission |
 | The metainfo is `io.github.koedame.chordsketch.metainfo.xml`, its `id` is the application ID, and it passes `flatpak-builder-lint appstream` (which fails on warnings), with a license, developer, description, launchable, screenshots linked from a commit, OARS rating and releases | [MetaInfo guidelines](https://docs.flathub.org/docs/for-app-authors/metainfo-guidelines/) | `flatpak-builder-lint appstream` |
 | Screenshots are reachable and mirrored to `dl.flathub.org/media` | Linter: `appstream-external-screenshot-url` | the build uses Flathub's `--mirror-screenshots-url` and `--compose-url-policy=full`; `flatpak-builder-lint repo` |
 | The newest metainfo release is the desktop version | — | `scripts/check-version-consistency.py` |
@@ -397,4 +409,5 @@ unless another source is named. All automated ones run in the `flathub` job of
 | License files installed to `share/licenses/io.github.koedame.chordsketch` | Requirements: Installing license files | the manifest installs the AGPL, MIT and OFL texts and `NOTICE` |
 | Static permissions kept to a minimum, portals used where one covers the use case | Requirements: Permissions | the manifest (`ipc`, `wayland`, `fallback-x11`, `dri`, `pulseaudio`; files through the FileChooser portal); `flatpak-builder-lint` flags broad filesystem and session-bus access |
 | The application is fully functional, with no easily visible issues | Requirements: Non-functional submissions | the check launches the build under Xvfb and waits for the window title the app sets at the end of its startup; the rest by hand |
-| AI-generated code, documentation and packaging are disclosed; AI tools do not open or write the submission pull request | Requirements: Generative AI policy | by hand at submission |
+| AI-generated code, documentation and packaging are disclosed; AI tools do not open or automate the submission pull request, or write its commit messages, description, review comments or replies | Requirements: Generative AI policy | by hand at submission |
+| The manifest contains no AI-generated or AI-assisted content; disclosure does not exempt it | Requirements: Generative AI policy | **not met**: `packaging/flatpak/` is AI-assisted throughout. Submitting it needs the manifest, its generator and the metainfo written without AI |
