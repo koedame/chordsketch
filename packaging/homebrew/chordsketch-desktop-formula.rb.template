@@ -1,0 +1,85 @@
+# Homebrew formula that builds the ChordSketch desktop app from source.
+# Generated from this template with the release's source archive URL and
+# checksum. Do not edit the generated file manually.
+#
+# The cask installs a prebuilt, unsigned DMG, and Homebrew puts the
+# quarantine flag on everything a cask downloads, so Gatekeeper checks it
+# on first launch. This formula compiles ChordSketch.app on the user's
+# machine instead: no finished app is downloaded, so there is nothing to
+# quarantine and no Apple Developer ID certificate is involved.
+
+class ChordsketchDesktop < Formula
+  desc "ChordPro editor with live preview, transpose, and PDF export, built from source"
+  homepage "https://github.com/koedame/chordsketch"
+  url "{{SOURCE_URL}}"
+  sha256 "{{SHA256_SOURCE}}"
+  license "MIT"
+
+  depends_on "node" => :build
+  # Homebrew's `rust` ships no wasm32 standard library, and the app's
+  # WebAssembly core needs one. rustup gives the host toolchain and that
+  # target as one matching release.
+  depends_on "rustup" => :build
+  depends_on "wasm-pack" => :build
+  depends_on :macos
+
+  def install
+    ENV["RUSTUP_HOME"] = buildpath/".rustup"
+    ENV["CARGO_HOME"] = buildpath/".cargo"
+    ENV.prepend_path "PATH", formula_opt_bin("rustup")
+    # Homebrew's CPU-specific flags must not leak into the wasm32 build.
+    ENV.delete "RUSTFLAGS"
+    ENV.delete "CARGO_ENCODED_RUSTFLAGS"
+    system "rustup", "toolchain", "install", "stable", "--profile", "minimal",
+           "--target", "wasm32-unknown-unknown"
+    system "rustup", "default", "stable"
+
+    # The same steps as `.github/actions/desktop-build-steps`.
+    cd "packages/npm" do
+      system "npm", "run", "build"
+    end
+    cd "packages/npm-export" do
+      system "npm", "run", "build"
+    end
+    cd "packages/tree-sitter-chordpro" do
+      system "npm", "ci"
+    end
+    cd "packages/react" do
+      system "npm", "ci"
+      system "npm", "run", "build"
+    end
+    cd "apps/desktop" do
+      system "npm", "ci"
+    end
+
+    # Updates come through `brew upgrade`, so the app must not try to
+    # replace itself with the prebuilt release.
+    ENV["CHORDSKETCH_NO_SELF_UPDATE"] = "1"
+    # "-" is Tauri's ad-hoc identity: the bundle gets a signature that
+    # needs no certificate, which is all Apple silicon asks of local code.
+    ENV["APPLE_SIGNING_IDENTITY"] = "-"
+    cd "apps/desktop/src-tauri" do
+      system "npx", "--yes", "@tauri-apps/cli@2.10.1", "build", "--bundles", "app"
+    end
+
+    prefix.install "target/release/bundle/macos/ChordSketch.app"
+    bin.write_exec_script prefix/"ChordSketch.app/Contents/MacOS/chordsketch-desktop"
+  end
+
+  def caveats
+    <<~EOS
+      ChordSketch.app was built on this machine. Open it with:
+        open "#{opt_prefix}/ChordSketch.app"
+
+      To find it in Launchpad and Spotlight, copy it into Applications
+      (a copy is not touched by `brew upgrade`):
+        cp -R "#{opt_prefix}/ChordSketch.app" /Applications/
+    EOS
+  end
+
+  test do
+    app = prefix/"ChordSketch.app"
+    assert_path_exists app/"Contents/MacOS/chordsketch-desktop"
+    assert_match "me.koeda.chordsketch.desktop", (app/"Contents/Info.plist").read
+  end
+end

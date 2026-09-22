@@ -181,8 +181,20 @@ fn save_file(path: String, content: String) -> Result<(), String> {
 /// new version, so an in-app updater could neither install nor should
 /// it try. Flatpak writes `/.flatpak-info` into every sandbox
 /// (flatpak-metadata(5)).
+///
+/// Not in a build compiled by a package manager that upgrades it itself:
+/// the Homebrew formula sets `CHORDSKETCH_NO_SELF_UPDATE` while building,
+/// and an updater replacing that build with the prebuilt release would
+/// undo what `brew upgrade` manages.
 fn self_updates() -> bool {
-    !Path::new("/.flatpak-info").exists()
+    updates_itself(
+        option_env!("CHORDSKETCH_NO_SELF_UPDATE").is_some(),
+        Path::new("/.flatpak-info").exists(),
+    )
+}
+
+fn updates_itself(built_without_updater: bool, in_flatpak: bool) -> bool {
+    !built_without_updater && !in_flatpak
 }
 
 /// Tells the frontend whether to run the update check loop. See
@@ -227,4 +239,24 @@ fn main() {
         // runtime cannot start, there is no application to recover
         // into, so panicking out is the correct terminal behavior.
         .expect("error while running ChordSketch desktop application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::updates_itself;
+
+    #[test]
+    fn a_plain_build_outside_a_sandbox_updates_itself() {
+        assert!(updates_itself(false, false));
+    }
+
+    #[test]
+    fn a_build_made_without_the_updater_does_not_update_itself() {
+        assert!(!updates_itself(true, false));
+    }
+
+    #[test]
+    fn a_build_inside_a_flatpak_does_not_update_itself() {
+        assert!(!updates_itself(false, true));
+    }
 }
