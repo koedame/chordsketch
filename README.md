@@ -212,6 +212,21 @@ name, so `--formula` and `--cask` say which of the two to install;
 without either flag Homebrew picks the formula and warns that the name
 was ambiguous.
 
+[Desktop app](#desktop-application), built from source (macOS only):
+
+```bash
+brew install --formula koedame/tap/chordsketch-desktop
+cp -R "$(brew --prefix chordsketch-desktop)/ChordSketch.app" /Applications/
+```
+
+Compiles `ChordSketch.app` on your machine instead of downloading the
+cask's prebuilt DMG — takes about 10 minutes and needs the Xcode
+Command Line Tools (`xcode-select --install`). Nothing prebuilt is
+downloaded, so there is no quarantine flag to clear. `brew install`
+does not put the app in `/Applications/`, so Launchpad and Spotlight
+will not see it until you copy it there, as the second command above
+does.
+
 ### MacPorts (macOS)
 
 ```bash

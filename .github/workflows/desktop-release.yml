@@ -445,6 +445,96 @@ jobs:
           git commit --allow-empty -m "Update chordsketch desktop cask to ${VERSION}"
           git push
 
+  update-desktop-formula:
+    name: Update Homebrew Desktop Formula
+    # Fans out the `brew install --formula koedame/tap/chordsketch-desktop`
+    # path (#2953): a formula that builds the app from source instead of
+    # downloading the unsigned DMG the cask above installs, so there is
+    # nothing for Gatekeeper to quarantine. Clones the existing
+    # `koedame/homebrew-tap` (shared with the CLI formula and the cask),
+    # writes the generated formula to `Formula/chordsketch-desktop.rb`,
+    # and pushes. The token secret is shared with the other tap jobs.
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Same source-commit-drift reasoning as `update-cask` above.
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Determine version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # `desktop-v0.1.0` → `0.1.0`
+          echo "version=${TAG#desktop-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Re-validate tag format
+        # Same defense-in-depth as the `release` job — `needs:
+        # [release]` already serialises on a validated tag, but
+        # a future refactor could break that ordering.
+        uses: ./.github/actions/validate-release-tag
+        with:
+          tag: ${{ steps.version.outputs.tag }}
+          prefix: desktop-
+
+      - name: Download the source archive
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The formula downloads GitHub's archive of the tag, which is
+          # not a release asset and has no line in SHA256SUMS; its
+          # checksum is taken from the same bytes `brew install` fetches.
+          curl -fsSL --retry 3 -o "chordsketch-${VERSION}.tar.gz" \
+            "https://github.com/koedame/chordsketch/archive/refs/tags/${TAG}.tar.gz"
+
+      - name: Generate formula
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          SHA256_SOURCE=$(sha256sum "chordsketch-${VERSION}.tar.gz" | awk '{ print $1 }')
+          sed \
+            -e "s|{{SOURCE_URL}}|https://github.com/koedame/chordsketch/archive/refs/tags/desktop-v${VERSION}.tar.gz|g" \
+            -e "s/{{SHA256_SOURCE}}/${SHA256_SOURCE}/g" \
+            packaging/homebrew/chordsketch-desktop-formula.rb.template > chordsketch-desktop.rb
+          cat chordsketch-desktop.rb
+
+      - name: Push to homebrew-tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Same credential-persistence trade-off as
+          # `post-release.yml` (#1086 comment there): the token
+          # embeds into `tap/.git/config`. Do NOT
+          # `actions/upload-artifact` the `tap/` directory.
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/koedame/homebrew-tap.git" tap
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p Formula
+          cp ../chordsketch-desktop.rb Formula/chordsketch-desktop.rb
+          git add Formula/chordsketch-desktop.rb
+          # `--allow-empty` tolerates the already-identical case
+          # (a re-run on the same tag), which keeps the
+          # workflow_dispatch idempotent.
+          git commit --allow-empty -m "Update chordsketch-desktop formula to ${VERSION}"
+          git push
+
   update-flathub:
     name: Update Flathub
     # Opens a pull request on `flathub/io.github.koedame.chordsketch` with the
