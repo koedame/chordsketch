@@ -368,7 +368,12 @@ Submitted by hand as a pull request to `microsoft/winget-pkgs` from
 
 ## Flathub (desktop app)
 
-The desktop app's channel. Not submitted yet; the first submission is made by
+The desktop app's channel. Not submitted yet, and not submittable as it
+stands: since 2026-09-21 Flathub's generative AI policy bars AI-generated or
+AI-assisted content from manifests, and `packaging/flatpak/` is AI-assisted
+throughout (last row of the table). Everything else below is met.
+
+The first submission is made by
 hand ([releasing.md](releasing.md#flathub-desktop-app)), and from then on
 `desktop-release.yml`'s `update-flathub` job opens a pull request on
 `flathub/io.github.koedame.chordsketch` with the files `packaging/flatpak/prepare.py`
@@ -397,4 +402,5 @@ unless another source is named. All automated ones run in the `flathub` job of
 | License files installed to `share/licenses/io.github.koedame.chordsketch` | Requirements: Installing license files | the manifest installs the AGPL, MIT and OFL texts and `NOTICE` |
 | Static permissions kept to a minimum, portals used where one covers the use case | Requirements: Permissions | the manifest (`ipc`, `wayland`, `fallback-x11`, `dri`, `pulseaudio`; files through the FileChooser portal); `flatpak-builder-lint` flags broad filesystem and session-bus access |
 | The application is fully functional, with no easily visible issues | Requirements: Non-functional submissions | the check launches the build under Xvfb and waits for the window title the app sets at the end of its startup; the rest by hand |
-| AI-generated code, documentation and packaging are disclosed; AI tools do not open or write the submission pull request | Requirements: Generative AI policy | by hand at submission |
+| AI-generated code, documentation and packaging are disclosed; AI tools do not open or automate the submission pull request, or write its commit messages, description or replies | Requirements: Generative AI policy | by hand at submission |
+| The manifest contains no AI-generated or AI-assisted content; disclosure does not exempt it | Requirements: Generative AI policy | **not met**: `packaging/flatpak/` is AI-assisted throughout. Submitting it needs the manifest, its generator and the metainfo written without AI |
