@@ -1,0 +1,88 @@
+name: Homebrew desktop formula smoke
+
+# Builds the desktop app through the source-build Homebrew formula
+# (`packaging/homebrew/chordsketch-desktop-formula.rb.template`) on a real
+# macOS host, exactly as a user's `brew install` would, and checks what the
+# formula promises: the app is on disk, carries no quarantine flag, has a
+# valid ad-hoc signature and starts.
+#
+# The build takes about ten minutes on a runner, so this only runs when the
+# formula or this workflow changes, or on demand.
+
+on:
+  pull_request:
+    paths:
+      - "packaging/homebrew/chordsketch-desktop-formula.rb.template"
+      - ".github/workflows/homebrew-desktop-smoke.yml"
+  workflow_dispatch:
+
+# Cancel stale PR runs so a rebase does not leave two source builds
+# competing for the macOS concurrency cap. `workflow_dispatch` runs to
+# completion. Per `.claude/rules/ci-parallelization.md` §5.
+concurrency:
+  group: homebrew-desktop-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  source-build:
+    name: brew install --build-from-source (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Put the formula in a local tap, sourced from this checkout
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('apps/desktop/src-tauri/tauri.conf.json'))['version'])")
+          archive="${RUNNER_TEMP}/desktop-v${version}.tar.gz"
+          git archive --format=tar.gz --prefix="chordsketch-${version}/" -o "$archive" HEAD
+          sha256=$(shasum -a 256 "$archive" | cut -d' ' -f1)
+          tap="$(brew --repository)/Library/Taps/local/homebrew-desktop"
+          mkdir -p "${tap}/Formula"
+          sed -e "s|{{SOURCE_URL}}|file://${archive}|" \
+              -e "s|{{SHA256_SOURCE}}|${sha256}|" \
+              packaging/homebrew/chordsketch-desktop-formula.rb.template \
+              > "${tap}/Formula/chordsketch-desktop.rb"
+          cat "${tap}/Formula/chordsketch-desktop.rb"
+
+      - name: Audit the formula
+        run: brew audit --strict --formula local/desktop/chordsketch-desktop
+
+      - name: Build from source
+        run: |
+          brew install --build-from-source --verbose local/desktop/chordsketch-desktop 2>&1 \
+            | tee "${RUNNER_TEMP}/install.log"
+
+      - name: Run the formula's own test
+        run: brew test local/desktop/chordsketch-desktop
+
+      - name: Check the built app
+        run: |
+          app="$(brew --prefix chordsketch-desktop)/ChordSketch.app"
+          test -d "$app"
+          echo "--- quarantine flag (none expected)"
+          if xattr -lr "$app" | grep -q com.apple.quarantine; then
+            echo "::error::the source-built app carries a quarantine flag" >&2
+            exit 1
+          fi
+          echo "--- signature"
+          codesign -dv --verbose=4 "$app" 2>&1 || true
+          codesign --verify --deep --strict --verbose=2 "$app"
+          echo "--- Gatekeeper assessment (informational)"
+          spctl --assess --type execute --verbose=4 "$app" 2>&1 || true
+
+      - name: The app opens the way Finder opens it
+        run: |
+          # `open` goes through LaunchServices, the path a double-click
+          # takes; running the binary from a shell would skip it.
+          open -n "$(brew --prefix chordsketch-desktop)/ChordSketch.app"
+          sleep 20
+          pgrep -fl 'ChordSketch.app/Contents/MacOS/chordsketch-desktop'
+          pkill -f 'ChordSketch.app/Contents/MacOS/chordsketch-desktop'
