@@ -1445,10 +1445,25 @@ the Open VSX Registry. Open VSX requires a separate account and token.
 Not submitted yet. The manifest, metainfo and checks are in
 `packaging/flatpak/`
 ([ADR-0074](adr/0074-the-desktop-app-is-built-for-flathub-from-source.md)).
-The submission has to be made by a maintainer: Flathub's
+
+Flathub's
 [generative AI policy](https://docs.flathub.org/docs/for-app-authors/requirements#generative-ai-policy)
-does not allow AI tools to open or write submission pull requests, and
-requires disclosing AI-generated code and packaging in the submission.
+governs who may submit and what may be submitted:
+
+- AI tools must not open or automate the submission pull request, or write
+  its commit messages, description, review comments or replies, so a
+  maintainer makes the submission by hand.
+- AI-generated code, documentation and packaging must be disclosed in the
+  submission, with the affected parts and their approximate extent.
+- Since 2026-09-21, manifests must contain no AI-generated or AI-assisted
+  content at all, and disclosure does not exempt them. `packaging/flatpak/`
+  is AI-assisted throughout, so **the steps below cannot be run against it
+  as it stands**: the manifest, its generator and the metainfo have to be
+  written without AI first.
+
+  Undisclosed or materially misrepresented AI material, or a violation of
+  the submission-PR restriction, can mean rejection; repeated violations
+  can mean a permanent ban from future submissions and activities.
 
 1. Release a desktop version that contains `packaging/flatpak/`. Flathub
    builds a tag, and the metainfo and desktop file are installed from it.
