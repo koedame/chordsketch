@@ -1459,7 +1459,9 @@ governs who may submit and what may be submitted:
   content at all, and disclosure does not exempt them. `packaging/flatpak/`
   is AI-assisted throughout, so **the steps below cannot be run against it
   as it stands**: the manifest, its generator and the metainfo have to be
-  written without AI first.
+  written without AI first. Rewriting them is on hold while the policy is
+  in flux; the steps stay here for when the submission happens
+  ([publishing-requirements.md](publishing-requirements.md#flathub-desktop-app)).
 
   Undisclosed or materially misrepresented AI material, or a violation of
   the submission-PR restriction, can mean rejection; repeated violations
