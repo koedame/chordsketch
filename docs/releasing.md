@@ -1461,9 +1461,9 @@ governs who may submit and what may be submitted:
   as it stands**: the manifest, its generator and the metainfo have to be
   written without AI first.
 
-  Undisclosed or misrepresented AI material, or a violation of the
-  submission-PR restriction, can mean rejection; repeated violations can
-  mean a permanent ban from future submissions.
+  Undisclosed or materially misrepresented AI material, or a violation of
+  the submission-PR restriction, can mean rejection; repeated violations
+  can mean a permanent ban from future submissions and activities.
 
 1. Release a desktop version that contains `packaging/flatpak/`. Flathub
    builds a tag, and the metainfo and desktop file are installed from it.
