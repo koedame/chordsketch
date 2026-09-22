@@ -375,8 +375,10 @@ throughout (last row of the table). Everything else below is met.
 
 The submission is on hold rather than rewritten by hand: the policy changed
 twice in September 2026 (a blanket ban, then disclosure-based, then the ban
-again), and Linux users have Snap and the AUR in the meantime. Revisit once
-the policy has held still.
+again), and the CLI already reaches Linux users through Snap and the AUR in
+the meantime — neither ships the desktop app itself, but the gap Flathub
+would close is the desktop app's *packaging*, not a total absence on Linux.
+Revisit once the policy has held still.
 
 The first submission is made by
 hand ([releasing.md](releasing.md#flathub-desktop-app)), and from then on
