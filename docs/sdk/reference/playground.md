@@ -39,6 +39,9 @@ Standard `HTMLAttributes<HTMLDivElement>` (e.g. `className`,
 `style`, `id`) are forwarded to the wrapper. `onChange` and
 `title` are omitted from the spread because both have
 semantically loaded uses on `<ChordProEditor>` itself.
+`defaultValue` is omitted too: the initial source is
+`defaultSource`, so passing `defaultValue` is a type error rather
+than a silently empty editor.
 
 ## Controlled vs uncontrolled
 

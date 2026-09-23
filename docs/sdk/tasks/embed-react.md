@@ -3,13 +3,15 @@
 `@chordsketch/react` ships the same parser + renderer pipeline that
 powers <https://chordsketch.koeda.me> as a published React component
 library. This page is the recipe collection for the most common
-embedding scenarios; copy-paste into a fresh Vite + React 18 app
+embedding scenarios; copy-paste into a fresh Vite + React app
 (or Next.js, see [§Server-side rendering / Next.js](#recipe-10-server-side-rendering-nextjs)
 below) and it works.
 
 > **Prerequisite.** `npm install @chordsketch/react react react-dom`.
 > The PDF / PNG export bundle is a separate optional peer — see
 > [§Export to PDF](#recipe-5-export-to-pdf) for when to install it.
+> Next.js apps need it installed regardless; see
+> [§Server-side rendering / Next.js](#recipe-10-server-side-rendering-nextjs).
 
 ## Recipe 1 — Drop in a ChordPro playground in 30 seconds
 
@@ -21,12 +23,13 @@ import { ChordProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 export default function App() {
-  return <ChordProEditor defaultValue={"{title: My Song}\n[G]Hello [D]world"} />;
+  return <ChordProEditor defaultSource={"{title: My Song}\n[G]Hello [D]world"} />;
 }
 ```
 
-`<ChordProEditor>` accepts `source` + `onChange` to drive the value from
-the host (controlled mode) instead of letting the component own it.
+`<ChordProEditor>` accepts `source` + `onSourceChange` to drive the
+value from the host (controlled mode) instead of letting the component
+own it.
 
 > Renamed from `<Playground>` in `@chordsketch/react` v0.3.0 per
 > [ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md).
@@ -87,10 +90,10 @@ two-pane ratio and falls back to a stacked layout under 768 px.
 
 ## Recipe 4 — Add transposition controls
 
-`<Transpose>` is an accessible ± / reset control (announces value
-changes via `aria-live="polite"`, supports `+` / `-` / `0`
-keyboard shortcuts while focus is inside, clamps to `[min, max]`).
-Pair it with the `transpose` prop on `<ChordSheet>`:
+`<Transpose>` is a native `<select>` listing every semitone offset
+between `min` and `max` — keyboard and screen-reader support come
+from the browser's own control. Pair it with the `transpose` prop on
+`<ChordSheet>`:
 
 ```tsx
 import { ChordSheet, Transpose, useTranspose } from '@chordsketch/react';
@@ -99,7 +102,7 @@ import '@chordsketch/react/styles.css';
 const source = `{title: Hello}\n[Am]hello [F]world`;
 
 export function Sheet() {
-  const { value, setValue } = useTranspose({ min: -11, max: 11 });
+  const { value, setValue } = useTranspose();
   return (
     <div>
       <Transpose value={value} onChange={setValue} />
@@ -109,8 +112,16 @@ export function Sheet() {
 }
 ```
 
-`useTranspose()` clamps every update; `reset()` returns to the
-initial value (not necessarily zero).
+The two defaults differ on purpose: `useTranspose()` clamps to the
+feature limit `±11` (a full octave is the identity, so `±12` renders
+the written chords), while the select offers the narrower `±6` that
+is useful in practice. Pass `min` / `max` to `<Transpose>` to widen
+the option list to whatever range the hook is clamping to.
+
+`useTranspose()` also returns `increment` / `decrement` / `reset`
+for hosts that build their own control (slider, number input,
+keyboard shortcut). Every update clamps, and `reset()` returns to
+the initial value — not necessarily zero.
 
 ## Recipe 5 — Export to PDF
 
@@ -193,14 +204,13 @@ export function CustomRender({ source }: { source: string }) {
   if (ast === null) return null;
   return (
     <article>
-      <h1>{ast.metadata.title ?? 'Untitled'}</h1>
       <div>{renderChordproAst(ast)}</div>
       {warnings.length > 0 ? (
         <details>
           <summary>Warnings ({warnings.length})</summary>
           <ul>
             {warnings.map((w, i) => (
-              <li key={i}>{w.message}</li>
+              <li key={i}>{w}</li>
             ))}
           </ul>
         </details>
@@ -212,7 +222,11 @@ export function CustomRender({ source }: { source: string }) {
 
 `renderChordproAst` is also the function `<ChordSheet format="html">`
 uses internally — driving it directly gives identical output you
-can place anywhere in your tree.
+can place anywhere in your tree, song title included. Read
+`ast.metadata` (`title`, `artists`, `key`, …) when the host wants
+those fields for its own chrome — a page `<title>`, a setlist row —
+rather than for the sheet itself. `warnings` is a list of
+human-readable strings.
 
 ## Recipe 8 — Drop in an iReal Pro playground
 
@@ -224,7 +238,9 @@ import { IrealProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 const URL =
-  'irealb://Autumn%20Leaves%3D%5BT44Cm7%20%7C%20F7%20%7C%20BbMaj7%20%7C%20EbMaj7%20%5D%3DJoseph%20Kosma%3DJazz%20Ballad%3DC';
+  'irealb://Autumn%20Leaves%3DKosma%20Joseph%3D%3DMedium%20Swing%3DG%2D%3D%3D' +
+  '1r34LbKcu7T44%2AA%5BC%2D7%7CF7%7CBb%5E7%7CEb%5E7%7CAh7%7CD7%7CG%2D6%7CG%2D6Z' +
+  '%3D%3D0%3D0';
 
 export default function App() {
   return <IrealProEditor defaultValue={URL} />;
@@ -275,24 +291,24 @@ edits `song.transpose` and re-serialises via `useIrealSerialize`.
 
 ## Recipe 10 — Server-side rendering / Next.js
 
-`@chordsketch/react`'s render hooks load `@chordsketch/wasm` lazily;
-on the Node side this means initialising the wasm runtime once per
-process. The editor and preview components touch `window` /
-`document` on mount, so mark consuming files with `'use client'` in
-Next.js's App Router:
+Install the optional PDF peer alongside the library, even if the app
+never exports a PDF:
 
-```tsx
-// app/song/[id]/page.tsx
-import { ChordSheet } from '@chordsketch/react';
-import '@chordsketch/react/styles.css';
-
-export default function Page({ params }: { params: { id: string } }) {
-  // The component is a Client Component (see below); SSR streams
-  // its skeleton from the server but the wasm-backed render runs
-  // on the client where the binary can be cached by the browser.
-  return <ChordSheet source={`{title: ${params.id}}`} />;
-}
+```bash
+npm install @chordsketch/react @chordsketch/wasm-export
 ```
+
+Next.js's bundler resolves every `import()` at build time, including
+the lazy import `<PdfExport>` uses for `@chordsketch/wasm-export`.
+Without the package installed, `next build` stops with
+`Module not found: Can't resolve '@chordsketch/wasm-export'`. The
+bundle is still only fetched on the first export, so installing it
+does not grow the page.
+
+The components hold state and touch `window` / `document` on mount,
+so they are Client Components, and `@chordsketch/react` does not mark
+its entry point with `'use client'`. Re-export what you need from a
+file that does:
 
 ```tsx
 // app/song/[id]/sheet.tsx
@@ -302,15 +318,38 @@ import { ChordSheet } from '@chordsketch/react';
 export { ChordSheet };
 ```
 
+Then import from that file — not from `@chordsketch/react` — in the
+Server Component. Importing the library directly into a Server
+Component fails at request time with
+`useState is not a function or its return value is not iterable`.
+
+```tsx
+// app/song/[id]/page.tsx
+import { ChordSheet } from './sheet';
+import '@chordsketch/react/styles.css';
+
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  // The server renders the component's loading state; the
+  // wasm-backed render runs on the client, where the browser
+  // caches the binary.
+  return <ChordSheet source={`{title: ${id}}\n[G]Hello [D]world`} />;
+}
+```
+
+`params` is a `Promise` from Next.js 15 on; on Next.js 14, type it as
+`{ params: { id: string } }` and read `params.id` directly.
+
 In practice, prefer rendering the preview on the client even for
 static content — the browser's HTTP cache stores
 `chordsketch_wasm_bg.wasm` once and reuses it across navigations,
 which the Node `require` cache cannot do across deployments.
 
-For pure SSR (e.g. generating an OG image, emailing a PDF), drive
-`@chordsketch/wasm` directly from a Node module and call
-`render_html_with_options` / `render_pdf` synchronously — the React
-components are the wrong layer for non-React server rendering.
+For pure SSR (e.g. generating an OG image, emailing a PDF), drive the
+wasm packages directly from a Node module — `render_html_with_options`
+from `@chordsketch/wasm`, `render_pdf` from `@chordsketch/wasm-export`
+— and call them synchronously. The React components are the wrong
+layer for non-React server rendering.
 
 ## See also
 

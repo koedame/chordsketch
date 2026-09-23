@@ -19,7 +19,9 @@ import { IrealProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 const URL =
-  'irealb://Autumn%20Leaves%3D%5BT44Cm7%20%7C%20F7%20%7C%20BbMaj7%20%7C%20EbMaj7%20%5D%3DJoseph%20Kosma%3DJazz%20Ballad%3DC';
+  'irealb://Autumn%20Leaves%3DKosma%20Joseph%3D%3DMedium%20Swing%3DG%2D%3D%3D' +
+  '1r34LbKcu7T44%2AA%5BC%2D7%7CF7%7CBb%5E7%7CEb%5E7%7CAh7%7CD7%7CG%2D6%7CG%2D6Z' +
+  '%3D%3D0%3D0';
 
 <IrealProEditor defaultValue={URL} />
 ```
