@@ -57,13 +57,19 @@ export default defineConfig({
     // classic "Invalid hook call" symptom.
     dedupe: ['react', 'react-dom'],
     alias: {
-      // Match-longer-first ordering: the `/styles.css` alias must be
-      // listed before the bare package alias so Vite matches the
-      // specific path first.
+      // Match-longer-first ordering: the `/styles.css` and `/pdf`
+      // aliases must be listed before the bare package alias so Vite
+      // matches the specific path first.
       '@chordsketch/react/styles.css': resolve(
         here,
         '../../packages/react/src/styles.css',
       ),
+      // `<PdfExport>` / `usePdfExport` live behind this subpath (see
+      // `packages/react/src/pdf.ts`) so the main entry point's build
+      // graph never references the lazy `import('@chordsketch/wasm-export')`
+      // inside `use-pdf-export.ts`. Same alias pattern as
+      // `packages/playground/vite.config.ts`.
+      '@chordsketch/react/pdf': resolve(here, '../../packages/react/src/pdf.ts'),
       '@chordsketch/react': resolve(
         here,
         '../../packages/react/src/index.ts',

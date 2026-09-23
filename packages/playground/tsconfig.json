@@ -16,6 +16,7 @@
       "@chordsketch/wasm": ["../npm/web/chordsketch_wasm"],
       "@chordsketch/react": ["../react/src/index.ts"],
       "@chordsketch/react/styles.css": ["../react/src/styles.css"],
+      "@chordsketch/react/pdf": ["../react/src/pdf.ts"],
       "@chordsketch/react-ui": ["../react-ui/src/index.ts"],
       "@chordsketch/react-ui/styles.css": ["../react-ui/src/styles.css"],
       "@chordsketch/ui-irealb-editor": ["../ui-irealb-editor/src/index.ts"],

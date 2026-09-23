@@ -1,7 +1,8 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import type { ComponentType, HTMLAttributes, ReactNode } from 'react';
 
 import { Capo } from './capo';
-import { PDF_EXPORT_DEFAULT_LABEL, PdfExport } from './pdf-export';
+import { PDF_EXPORT_DEFAULT_LABEL } from './pdf-export-label';
+import type { PdfExportProps } from './pdf-export';
 import {
   TRANSPOSE_DEFAULT_MAX,
   TRANSPOSE_DEFAULT_MIN,
@@ -50,8 +51,26 @@ export interface PreviewToolbarProps
    * override the auto-default.
    */
   showCapo?: boolean;
-  /** Show the Export group. Defaults to `true`. */
+  /**
+   * Show the Export group. Defaults to `true`, but the group only
+   * renders when {@link pdfExportComponent} is also supplied — pass
+   * `false` explicitly to suppress a "PDF export not configured"
+   * state instead of just omitting the component prop.
+   */
   showExport?: boolean;
+  /**
+   * The `PdfExport` component from `@chordsketch/react/pdf`, injected
+   * so the Export group can render a working button without this
+   * package statically importing that entry point (which lazy-loads
+   * the heavy `@chordsketch/wasm-export` peer). Omit to hide the
+   * Export group regardless of {@link showExport}.
+   *
+   * ```tsx
+   * import { PdfExport } from '@chordsketch/react/pdf';
+   * <PreviewToolbar pdfExportComponent={PdfExport} ... />
+   * ```
+   */
+  pdfExportComponent?: ComponentType<PdfExportProps>;
   /**
    * Current chord-diagram orientation (#2572). Enables the Diagrams
    * group when paired with `onChordDiagramsOrientationChange`. Omit
@@ -208,6 +227,7 @@ export function PreviewToolbar({
   showTranspose = true,
   showCapo,
   showExport = true,
+  pdfExportComponent: PdfExportComponent,
   exportFilename = 'chordsketch-output.pdf',
   wasmLoader,
   chordDiagramsOrientation,
@@ -340,7 +360,7 @@ export function PreviewToolbar({
           </button>
         </div>
       ) : null}
-      {showExport ? (
+      {showExport && PdfExportComponent ? (
         <div
           className="chordsketch-preview-toolbar__group tool-group chordsketch-preview-toolbar__group--export"
           role="group"
@@ -352,7 +372,7 @@ export function PreviewToolbar({
           >
             Export
           </span>
-          <PdfExport
+          <PdfExportComponent
             source={source}
             options={{ transpose }}
             filename={exportFilename}
@@ -361,7 +381,7 @@ export function PreviewToolbar({
           >
             {EXPORT_ICON}
             {PDF_EXPORT_DEFAULT_LABEL}
-          </PdfExport>
+          </PdfExportComponent>
         </div>
       ) : null}
       {trailing ? (
