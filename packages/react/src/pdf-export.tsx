@@ -7,6 +7,10 @@ import {
   usePdfExport,
 } from './use-pdf-export';
 
+// Re-export so `import { PDF_EXPORT_DEFAULT_LABEL } from './pdf-export'`
+// keeps working for existing call sites, plus a separate local import
+// — a re-export alone does not create a local binding — so the
+// default `children` value below can reference it.
 export { PDF_EXPORT_DEFAULT_LABEL } from './pdf-export-label';
 import { PDF_EXPORT_DEFAULT_LABEL } from './pdf-export-label';
 
