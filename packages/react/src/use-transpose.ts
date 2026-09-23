@@ -49,8 +49,8 @@ export interface UseTransposeOptions {
 /**
  * State helper for transposition controls. Use when you want to
  * wire your own UI (slider, number input, etc.). The sibling
- * {@link Transpose} component builds a button + indicator pair on
- * top of the same helper.
+ * {@link Transpose} component is a native `<select>` that pairs
+ * with it through `value` / `setValue`.
  *
  * ```ts
  * const { value, increment, decrement, reset } = useTranspose({ initial: 2 });
