@@ -83,7 +83,7 @@ merges into the app's, declares the UTI with the four extensions and
 entitlement and the hardened runtime, plus a secure timestamp for a
 real identity. The bundler then seals the app around it. PR builds of
 the macOS cells sign ad hoc, and the arm64 cell installs the bundle,
-checks `pluginkit` and renders a `.cho` through `qlmanage`.
+checks `pluginkit`, and previews a `.cho` in a Quick Look view.
 
 The extension's bundle identifier is
 `me.koeda.chordsketch.desktop.quicklook`.

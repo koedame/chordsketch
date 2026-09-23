@@ -245,7 +245,12 @@ apps/desktop/scripts/quicklook-smoke.sh target/release/bundle/macos/ChordSketch.
 It copies the app into `~/Applications`, checks the signatures and the
 sandbox entitlement, registers the app with LaunchServices and the
 extension with `pluginkit`, checks that `.cho` resolves to the ChordPro
-UTI, and renders a sample file through `qlmanage`. Then select a `.cho`
+UTI, and opens a sample file in a Quick Look preview view
+(`scripts/quicklook-render.swift`), failing unless the extension's
+process runs. Pass a directory as a second argument to keep the
+screenshot of that view. `qlmanage -p` cannot do this check: it aborts
+with an ExtensionFoundation "key cannot be nil" exception for any
+app-extension preview. Then select a `.cho`
 file in Finder and press Space.
 
 If Finder shows the file's source text instead of the rendered song,

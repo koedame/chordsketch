@@ -2,9 +2,13 @@
 # End-to-end check of the Quick Look preview extension in a built
 # ChordSketch.app: the bundle is signed the way macOS needs, the
 # ChordPro type resolves, `pluginkit` registers the extension, and
-# Quick Look renders a `.cho` file through it.
+# a Quick Look preview view runs it on a `.cho` file.
 #
-# Usage: quicklook-smoke.sh <path to ChordSketch.app>
+# Usage: quicklook-smoke.sh <path to ChordSketch.app> [screenshot directory]
+#
+# The screenshot of the preview is written to the second argument when
+# given; look at it to confirm the song is rendered (chords above the
+# lyrics) rather than shown as source text.
 #
 # Installs the app into ~/Applications (replacing any copy there) so
 # LaunchServices registers it. Run by the macOS cell of
@@ -12,10 +16,11 @@
 # build — see `apps/desktop/preview-handler/README.md`.
 set -euo pipefail
 
-if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
-  echo "usage: $0 <path to ChordSketch.app>" >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ] || [ ! -d "$1" ]; then
+  echo "usage: $0 <path to ChordSketch.app> [screenshot directory]" >&2
   exit 2
 fi
+here="$(cd "$(dirname "$0")" && pwd)"
 
 # Must match `apps/desktop/preview-handler/src/quicklook.rs`.
 EXTENSION_NAME=ChordSketchQuickLook
@@ -77,14 +82,30 @@ echo "UTType for .cho: $uti"
 [ "$uti" = "$CHORDPRO_UTI" ] || fail ".cho resolves to $uti, not $CHORDPRO_UTI"
 
 step "Render through Quick Look"
+# Not `qlmanage -p`: it aborts on every app-extension preview on current
+# macOS. quicklook-render.swift hosts the view Finder's panel uses.
+shots="${2:-$work}"
+mkdir -p "$shots"
 qlmanage -r >/dev/null 2>&1 || true
-qlmanage -p -o "$work/out" "$work/smoke.cho" 2>&1 | tee "$work/qlmanage.txt"
-find "$work/out" -type f -print
-html="$(find "$work/out" -type f -name '*.html' | head -n 1)"
-[ -n "$html" ] || fail "Quick Look wrote no HTML preview"
-grep -q 'Quick Look Smoke' "$html" || fail "the preview does not carry the song title"
-grep -q 'Hello' "$html" || fail "the preview does not carry the lyrics"
-grep -q 'Content-Security-Policy' "$html" \
-  || fail "the preview is not the extension's document (no CSP) — Quick Look fell back to another previewer"
+xcrun swift "$here/quicklook-render.swift" "$work/smoke.cho" "$shots/quicklook-preview.png" 20 &
+render=$!
+seen=""
+for _ in $(seq 1 80); do
+  if pgrep -x "$EXTENSION_NAME" >/dev/null; then
+    seen=yes
+    break
+  fi
+  sleep 0.5
+done
+wait "$render" || fail "the preview window could not be captured"
+echo "Screenshot: $shots/quicklook-preview.png"
+if [ -z "$seen" ]; then
+  log show --last 3m --style compact \
+    --predicate "process == \"$EXTENSION_NAME\" OR eventMessage CONTAINS \"$EXTENSION_BUNDLE_ID\"" 2>/dev/null | tail -n 40 || true
+  fail "Quick Look never started $EXTENSION_NAME for the .cho file"
+fi
+echo "$EXTENSION_NAME ran for the preview"
+crashes="$(find "$HOME/Library/Logs/DiagnosticReports" -name "$EXTENSION_NAME*" 2>/dev/null || true)"
+[ -z "$crashes" ] || fail "$EXTENSION_NAME crashed: $crashes"
 
 step "OK"
