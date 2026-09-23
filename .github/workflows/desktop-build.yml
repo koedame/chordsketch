@@ -144,6 +144,14 @@ jobs:
           - label: macos-aarch64
             runner: macos-latest
             target: aarch64-apple-darwin
+            # Ad hoc, so the bundle is sealed the way a signed one is
+            # and the Quick Look extension can be loaded by the smoke
+            # step below. The release workflow passes the Developer ID
+            # identity through the same input.
+            signing-identity: "-"
+            # The runner is Apple Silicon, so only this cell can run
+            # what it built.
+            quicklook-smoke: true
           - label: macos-x86_64
             # Cross-compile x86_64 from the Apple Silicon
             # `macos-latest` runner rather than pinning to the
@@ -158,6 +166,7 @@ jobs:
             # the dedicated Intel runner.
             runner: macos-latest
             target: x86_64-apple-darwin
+            signing-identity: "-"
           - label: windows-x86_64
             runner: windows-latest
             target: x86_64-pc-windows-msvc
@@ -177,6 +186,17 @@ jobs:
           # desktop-touching PR so the cache is warm.
           enable-cache: "true"
           cache-key-prefix: desktop-build
+          apple-signing-identity: ${{ matrix.platform.signing-identity || '' }}
+
+      - name: Quick Look extension smoke
+        # Installs the bundle, registers the embedded extension with
+        # pluginkit and renders a `.cho` through `qlmanage`, so a
+        # bundle that would silently show no preview fails here.
+        if: matrix.platform.quicklook-smoke
+        shell: bash
+        run: >-
+          apps/desktop/scripts/quicklook-smoke.sh
+          "target/${{ matrix.platform.target }}/release/bundle/macos/ChordSketch.app"
 
       - name: List bundle outputs
         # Debug aid — when #2078 (Releases upload) wires the

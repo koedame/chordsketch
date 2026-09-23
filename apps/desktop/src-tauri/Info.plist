@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged by the Tauri bundler into ChordSketch.app/Contents/Info.plist.
+
+  Declares the ChordPro type so the Quick Look extension embedded at
+  Contents/PlugIns/ChordSketchQuickLook.appex has a type to preview.
+  It only declares the type: there is no CFBundleDocumentTypes entry,
+  so installing ChordSketch does not make it the default app for
+  ChordPro files (the same line the Windows preview handler draws; see
+  docs/adr/0050-windows-preview-handler-is-installer-registered.md).
+
+  Identifiers are asserted against apps/desktop/preview-handler/src/quicklook.rs.
+-->
+<plist version="1.0">
+<dict>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>me.koeda.chordsketch.chordpro</string>
+			<key>UTTypeDescription</key>
+			<string>ChordPro Song</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cho</string>
+					<string>chopro</string>
+					<string>crd</string>
+					<string>chordpro</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>text/x-chordpro</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>
