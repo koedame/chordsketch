@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist of ChordSketch.app/Contents/PlugIns/ChordSketchQuickLook.appex.
+
+  apps/desktop/scripts/build-quicklook-extension.mjs copies it into the
+  bundle and adds CFBundleShortVersionString / CFBundleVersion from
+  tauri.conf.json, so the version lives in one place.
+
+  Identifiers are asserted against apps/desktop/preview-handler/src/quicklook.rs.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>ChordSketch</string>
+	<key>CFBundleExecutable</key>
+	<string>ChordSketchQuickLook</string>
+	<key>CFBundleIdentifier</key>
+	<string>me.koeda.chordsketch.desktop.quicklook</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>ChordSketchQuickLook</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>QLIsDataBasedPreview</key>
+			<true/>
+			<key>QLSupportedContentTypes</key>
+			<array>
+				<string>me.koeda.chordsketch.chordpro</string>
+			</array>
+			<key>QLSupportsSearchableItems</key>
+			<false/>
+		</dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.quicklook.preview</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>ChordSketchPreviewProvider</string>
+	</dict>
+</dict>
+</plist>

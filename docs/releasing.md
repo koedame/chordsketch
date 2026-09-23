@@ -699,6 +699,54 @@ If a token must be rotated out-of-band (e.g., suspected leak), do steps 1-3
 in the order listed — do **not** revoke before updating the secret, or the
 next release will fail until you set the new value.
 
+## The macOS Quick Look extension and signing
+
+The macOS desktop bundle embeds a Quick Look preview extension at
+`ChordSketch.app/Contents/PlugIns/ChordSketchQuickLook.appex`
+([ADR-0083](adr/0083-the-macos-quick-look-extension-is-a-data-based-preview-signed-before-the-bundler.md),
+[`apps/desktop/preview-handler/README.md`](../apps/desktop/preview-handler/README.md#macos-quick-look-extension)).
+macOS loads it only if it is signed, sandboxed, and sealed into a signed
+app, so it has its own place in the signing order:
+
+| Step | Who | Signs with |
+|---|---|---|
+| 1. `prebuild` (`apps/desktop/scripts/build-quicklook-extension.mjs`) | npm, before the Rust build | `APPLE_SIGNING_IDENTITY`, or ad hoc when unset; App Sandbox entitlement, hardened runtime, secure timestamp for a real identity |
+| 2. `cargo tauri build` | the Tauri bundler | `APPLE_SIGNING_IDENTITY` — signs the app's binaries, then the app bundle around the already-signed extension (no `--deep`, so the extension keeps its own entitlements) |
+| 3. notarization | the Tauri bundler, when `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` are set | submits the whole `.app` — the extension included — and staples the ticket |
+
+**Today** the release workflow has no Developer ID: `desktop-release.yml`
+passes the `APPLE_*` secrets through `desktop-build-steps`, they are
+empty, and the bundler leaves the app unsigned. The extension inside it
+is signed ad hoc by step 1. Whether macOS loads an ad-hoc extension
+from an otherwise unsigned app, after the user has cleared the
+quarantine flag, has not been verified. PR builds (`desktop-build.yml`)
+and the Homebrew source build (ADR-0082) sign the whole bundle ad hoc,
+and the arm64 PR cell checks that the extension registers and renders
+(`apps/desktop/scripts/quicklook-smoke.sh`).
+
+**When the Developer ID is added**
+([signing and notarization](https://github.com/koedame/chordsketch/issues/2075)):
+
+1. Set `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
+   `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` and
+   `APPLE_TEAM_ID` as repository secrets. `desktop-release.yml` already
+   passes all six.
+2. Import the certificate into a keychain on the macOS release cells
+   **before** the `Desktop bundle build steps` step. The bundler imports
+   `APPLE_CERTIFICATE` only when it reaches its own signing step, which
+   is after the `prebuild` hook has signed the extension; without an
+   earlier import, that hook's `codesign` call fails because the
+   identity is not in any keychain yet.
+3. Check a release bundle before publishing it:
+
+   ```sh
+   codesign --verify --deep --strict --verbose=2 ChordSketch.app
+   codesign --display --entitlements - ChordSketch.app/Contents/PlugIns/ChordSketchQuickLook.appex   # app-sandbox = true
+   spctl --assess --type execute --verbose=2 ChordSketch.app                                     # "source=Notarized Developer ID"
+   xcrun stapler validate ChordSketch.app
+   apps/desktop/scripts/quicklook-smoke.sh ChordSketch.app
+   ```
+
 ## Known Operational Quirks
 
 These are non-obvious gotchas discovered during real publishing. They are not

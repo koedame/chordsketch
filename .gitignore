@@ -55,6 +55,11 @@ apps/desktop/src-tauri/gen/
 # `tauri.windows.conf.json`'s `bundle.resources`. Rebuilt from
 # `apps/desktop/preview-handler/` on every Windows bundle.
 apps/desktop/src-tauri/windows/bin/
+# Quick Look extension assembled and signed by
+# `apps/desktop/scripts/build-quicklook-extension.mjs` for
+# `tauri.macos.conf.json`'s `bundle.macOS.files`. Rebuilt from
+# `apps/desktop/src-tauri/macos/quicklook/` on every macOS bundle.
+apps/desktop/src-tauri/macos/build/
 
 # Tools
 .serena/
