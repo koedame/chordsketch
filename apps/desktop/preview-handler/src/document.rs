@@ -2,10 +2,12 @@
 //! preview pane displays.
 //!
 //! This module is deliberately platform-independent: it is the whole
-//! rendering contract of the preview handler, and keeping it off the
-//! `cfg(windows)` path is what lets every CI runner compile and test
-//! it. The COM plumbing in the sibling modules only moves bytes into
-//! [`decode_source`] and the resulting string into a WebView2 control.
+//! rendering contract of both OS previews, and keeping it off the
+//! platform-gated paths is what lets every CI runner compile and test
+//! it. The Windows COM plumbing only moves bytes into [`decode_source`]
+//! and the resulting string into a WebView2 control; the macOS Quick
+//! Look extension hands bytes to [`render_preview`] through the C ABI
+//! in `quicklook` and shows the HTML that comes back.
 
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::escape::escape_xml;
@@ -128,7 +130,42 @@ pub fn render_document(source: &str) -> String {
         .filter(|t| !t.trim().is_empty())
         .unwrap_or(FALLBACK_TITLE);
     let body = render_songs_body_with_transpose(&songs, 0, &config);
+    envelope(title, &body)
+}
 
+/// Render a plain message — "this file is too large", for example — as
+/// a preview document.
+///
+/// For preview surfaces that can only show a document. The Windows
+/// handler draws its messages as native window text instead; the macOS
+/// Quick Look extension has no such surface, so its messages travel
+/// through the same envelope, stylesheet, and
+/// [`CONTENT_SECURITY_POLICY`] as a rendered song.
+#[must_use]
+pub fn render_message_document(message: &str) -> String {
+    envelope(
+        FALLBACK_TITLE,
+        &format!("<p class=\"preview-message\">{}</p>\n", escape_xml(message)),
+    )
+}
+
+/// Turn the raw bytes of a ChordPro file into the document a preview
+/// surface shows: the rendered song, or — when [`decode_source`]
+/// rejects the bytes — a [`render_message_document`] saying why.
+///
+/// This is the whole contract of the macOS Quick Look extension, which
+/// hands it the file's bytes and displays whatever comes back.
+#[must_use]
+pub fn render_preview(bytes: &[u8]) -> String {
+    match decode_source(bytes) {
+        Ok(source) => render_document(&source),
+        Err(error) => render_message_document(&error.to_string()),
+    }
+}
+
+/// Wrap a body fragment in the self-contained HTML envelope every
+/// preview document shares.
+fn envelope(title: &str, body: &str) -> String {
     format!(
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n\
          <meta charset=\"utf-8\">\n\
@@ -252,6 +289,37 @@ mod tests {
         let html = render_document("");
         assert!(html.starts_with("<!DOCTYPE html>"));
         assert!(html.contains(&format!("<title>{FALLBACK_TITLE}</title>")));
+    }
+
+    #[test]
+    fn test_render_message_document_carries_the_content_security_policy() {
+        let html = render_message_document("Nothing to show");
+        assert!(html.starts_with("<!DOCTYPE html>"));
+        assert!(html.contains(CONTENT_SECURITY_POLICY));
+        assert!(html.contains("Nothing to show"));
+    }
+
+    #[test]
+    fn test_render_message_document_escapes_the_message() {
+        let html = render_message_document("<script>alert(1)</script>");
+        assert!(!html.contains("<script>"));
+        assert!(html.contains("&lt;script&gt;"));
+    }
+
+    #[test]
+    fn test_render_preview_renders_the_song_for_a_file_within_the_limit() {
+        let html = render_preview(b"\xef\xbb\xbf{title: Hey}\n[Am]Hello\n");
+        assert!(html.contains("<title>Hey</title>"));
+        assert!(html.contains("Hello"));
+    }
+
+    #[test]
+    fn test_render_preview_explains_instead_of_rendering_a_file_over_the_limit() {
+        let oversized = vec![b'x'; MAX_PREVIEW_SOURCE_BYTES + 1];
+        let html = render_preview(&oversized);
+        assert!(html.contains("too large to preview"));
+        assert!(html.contains(&MAX_PREVIEW_SOURCE_BYTES.to_string()));
+        assert!(html.contains(CONTENT_SECURITY_POLICY));
     }
 
     #[test]

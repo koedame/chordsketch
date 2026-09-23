@@ -23,15 +23,18 @@ apps/desktop/
 │   ├── ChordProDesktopEditor.tsx # CodeMirror 6 + tree-sitter-chordpro editor (React)
 │   └── IrealGridEditor.tsx      # React wrapper around createIrealbEditor
 ├── dist/                        # gitignored; Vite build output
-├── preview-handler/             # Windows Explorer preview handler (its own crate)
+├── preview-handler/             # OS previews: Windows preview handler + macOS Quick Look (its own crate)
 └── src-tauri/                   # Rust / Tauri app shell
     ├── Cargo.toml
     ├── tauri.conf.json          # beforeDev/beforeBuild = npm run dev|build
     ├── tauri.windows.conf.json  # Windows-only: preview handler build + bundling
+    ├── tauri.macos.conf.json    # macOS-only: embeds the Quick Look extension
+    ├── Info.plist               # macOS: exports the ChordPro UTI (merged by the bundler)
     ├── build.rs
     ├── capabilities/
     ├── icons/
     ├── windows/                 # WiX fragment + NSIS hooks for the preview handler
+    ├── macos/quicklook/         # Swift source, Info.plist and entitlements of the Quick Look extension
     └── src/main.rs
 ```
 
@@ -246,11 +249,39 @@ the script logs that it skipped and exits.
   ([ADR-0050](../../docs/adr/0050-windows-preview-handler-is-installer-registered.md)).
 
 macOS and Linux bundles are unaffected: the platform config is not
-merged there, and the crate compiles to an empty library off Windows.
+merged there, and none of the COM code compiles off Windows.
 
 The registry layout, the build wiring, and how to verify the handler on
 a real machine are in
 [`preview-handler/README.md`](preview-handler/README.md).
+
+## macOS Quick Look extension
+
+A macOS bundle embeds `ChordSketchQuickLook.appex` at
+`Contents/PlugIns/`, so pressing Space on a `.cho` / `.chopro` /
+`.crd` / `.chordpro` file in Finder shows the rendered song (macOS 12
+and later). It is a data-based Quick Look preview: a small Swift
+executable that hands the file's bytes to the same `preview-handler`
+crate — built as a static library — and returns the HTML it renders.
+
+`scripts/build-quicklook-extension.mjs`, from the `prebuild` npm hook,
+builds the static library, compiles
+`src-tauri/macos/quicklook/PreviewProvider.swift` against it with
+`swiftc`, assembles the bundle in `src-tauri/macos/build/`
+(gitignored), and signs it — sandboxed, hardened runtime — with
+`APPLE_SIGNING_IDENTITY` or ad hoc. `tauri.macos.conf.json` copies it
+into the app. Off macOS the script logs that it skipped and exits.
+Building needs `swiftc` (Xcode or the Command Line Tools).
+
+`src-tauri/Info.plist` exports the `me.koeda.chordsketch.chordpro`
+type the extension previews. It declares no document types, so the
+app does not become the default app for ChordPro files
+([ADR-0083](../../docs/adr/0083-the-macos-quick-look-extension-is-a-data-based-preview-signed-before-the-bundler.md)).
+
+The bundle layout and how to verify the extension on a Mac are in
+[`preview-handler/README.md`](preview-handler/README.md#macos-quick-look-extension);
+how it goes through signing and notarization is in
+[`docs/releasing.md`](../../docs/releasing.md#the-macos-quick-look-extension-and-signing).
 
 ## Workspace integration
 
