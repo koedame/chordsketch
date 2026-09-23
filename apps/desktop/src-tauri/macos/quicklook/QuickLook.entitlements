@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements the Quick Look extension is signed with.
+
+  macOS refuses to load an app extension that is not sandboxed. The
+  sandbox needs no further exceptions: Quick Look grants the extension
+  read access to the one file it is asked to preview, and the extension
+  opens nothing else and makes no network requests.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+</dict>
+</plist>
