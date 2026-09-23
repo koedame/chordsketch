@@ -44,6 +44,7 @@ import { RendererPreview } from '@chordsketch/react';
 | `transpose` | `number` | Semitone offset. |
 | `config` | `string` | Renderer config preset name or inline RRJSON. |
 | `pdfFilename` | `string` | Filename for the PDF download (PDF format only). Defaults to `"chordsketch-output.pdf"`. |
+| `pdfExportComponent` | `ComponentType<PdfExportProps>` | The `PdfExport` component from [`@chordsketch/react/pdf`](#/reference/pdf-export), injected. Required for `format="pdf"` to render an export button — omitted, it renders a hint instead. |
 | `chordDiagramsInstrument` | `'guitar' \| ...` | See [`<ChordSheet>`](#/reference/chord-sheet). |
 | `activeSourceLine`, `caretColumn`, `caretLineLength` | numbers | Caret-tracking for editor/preview sync. |
 | `onChordReposition` | callback | Drag-to-reposition support. See [chord source-edit helpers](#/reference/chord-source-edit). |

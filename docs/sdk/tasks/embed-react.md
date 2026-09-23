@@ -8,10 +8,11 @@ embedding scenarios; copy-paste into a fresh Vite + React app
 below) and it works.
 
 > **Prerequisite.** `npm install @chordsketch/react react react-dom`.
-> The PDF / PNG export bundle is a separate optional peer — see
+> The PDF / PNG export bundle is a separate optional peer, imported
+> from a separate `@chordsketch/react/pdf` subpath — see
 > [§Export to PDF](#recipe-5-export-to-pdf) for when to install it.
-> Next.js apps need it installed regardless; see
-> [§Server-side rendering / Next.js](#recipe-10-server-side-rendering-nextjs).
+> This applies to Next.js too; unlike the main entry point, only
+> apps that import `@chordsketch/react/pdf` need the peer.
 
 ## Recipe 1 — Drop in a ChordPro playground in 30 seconds
 
@@ -171,7 +172,9 @@ prop to enable PDF export in those surfaces:
 import { ChordProEditor } from '@chordsketch/react';
 import { PdfExport } from '@chordsketch/react/pdf';
 
-<ChordProEditor pdfExportComponent={PdfExport} defaultSource="{title: Hello}" />
+export function EditorWithPdf() {
+  return <ChordProEditor pdfExportComponent={PdfExport} defaultSource="{title: Hello}" />;
+}
 ```
 
 This split keeps `@chordsketch/react`'s main entry point free of the
@@ -310,19 +313,20 @@ edits `song.transpose` and re-serialises via `useIrealSerialize`.
 
 ## Recipe 10 — Server-side rendering / Next.js
 
-Install the optional PDF peer alongside the library, even if the app
-never exports a PDF:
-
 ```bash
-npm install @chordsketch/react @chordsketch/wasm-export
+npm install @chordsketch/react
 ```
 
-Next.js's bundler resolves every `import()` at build time, including
-the lazy import `<PdfExport>` uses for `@chordsketch/wasm-export`.
-Without the package installed, `next build` stops with
-`Module not found: Can't resolve '@chordsketch/wasm-export'`. The
-bundle is still only fetched on the first export, so installing it
-does not grow the page.
+Next.js's bundler (webpack / Turbopack) resolves every `import()` at
+build time, including dynamic imports inside packages it never
+executes on the server. `@chordsketch/react`'s main entry point does
+not reference `@chordsketch/wasm-export` at all — that lazy import
+lives behind the separate `@chordsketch/react/pdf` subpath (see
+[§Export to PDF](#recipe-5-export-to-pdf)) — so `next build` succeeds
+without installing the heavy peer unless your app actually imports
+`@chordsketch/react/pdf`. If it does, install
+`@chordsketch/wasm-export` alongside it; the bundle is still only
+fetched on the first export, so installing it does not grow the page.
 
 The components hold state and touch `window` / `document` on mount,
 so they are Client Components, and `@chordsketch/react` does not mark
