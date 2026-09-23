@@ -178,8 +178,16 @@ mod tests {
     /// Bundle config that places the `.appex` inside the app.
     const TAURI_MACOS_CONFIG: &str = include_str!("../../src-tauri/tauri.macos.conf.json");
 
+    /// The property list with the whitespace between elements removed,
+    /// so a key can be matched against the value that follows it
+    /// regardless of indentation or line endings (a Windows checkout
+    /// has CRLF).
+    fn compact(plist: &str) -> String {
+        plist.lines().map(str::trim).collect()
+    }
+
     fn plist_string(key: &str, value: &str) -> String {
-        format!("<key>{key}</key>\n\t<string>{value}</string>")
+        format!("<key>{key}</key><string>{value}</string>")
     }
 
     #[test]
@@ -209,8 +217,12 @@ mod tests {
 
     #[test]
     fn test_the_extension_is_a_data_based_quick_look_preview() {
-        assert!(EXTENSION_PLIST.contains("<string>com.apple.quicklook.preview</string>"));
-        assert!(EXTENSION_PLIST.contains("<key>QLIsDataBasedPreview</key>\n\t\t\t<true/>"));
+        let plist = compact(EXTENSION_PLIST);
+        assert!(plist.contains(&plist_string(
+            "NSExtensionPointIdentifier",
+            "com.apple.quicklook.preview"
+        )));
+        assert!(plist.contains("<key>QLIsDataBasedPreview</key><true/>"));
     }
 
     #[test]
@@ -221,18 +233,26 @@ mod tests {
                 .contains(&format!("\"identifier\": \"{app_id}\""))
         );
         assert!(EXTENSION_BUNDLE_ID.starts_with(&format!("{app_id}.")));
-        assert!(EXTENSION_PLIST.contains(&plist_string("CFBundleIdentifier", EXTENSION_BUNDLE_ID)));
+        assert!(
+            compact(EXTENSION_PLIST)
+                .contains(&plist_string("CFBundleIdentifier", EXTENSION_BUNDLE_ID))
+        );
     }
 
     #[test]
     fn test_the_principal_class_is_the_one_the_swift_source_declares() {
-        assert!(EXTENSION_PLIST.contains(&format!("<string>{PRINCIPAL_CLASS}</string>")));
+        assert!(
+            compact(EXTENSION_PLIST)
+                .contains(&plist_string("NSExtensionPrincipalClass", PRINCIPAL_CLASS))
+        );
         assert!(SWIFT_SOURCE.contains(&format!("@objc({PRINCIPAL_CLASS})")));
     }
 
     #[test]
     fn test_the_bundle_places_the_extension_under_plugins_with_its_executable_name() {
-        assert!(EXTENSION_PLIST.contains(&plist_string("CFBundleExecutable", EXTENSION_NAME)));
+        assert!(
+            compact(EXTENSION_PLIST).contains(&plist_string("CFBundleExecutable", EXTENSION_NAME))
+        );
         assert!(TAURI_MACOS_CONFIG.contains(&format!("\"PlugIns/{EXTENSION_NAME}.appex\"")));
     }
 
