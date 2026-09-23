@@ -20,7 +20,7 @@ prop / parameter contract for a specific export.
 | [`<ChordProPreview>`](#/reference/chord-pro-preview) | Preview pane + format toggle + transpose controls, no source editor (new in v0.3.0) |
 | [Editors](#/reference/editors) | `<ChordTextarea>` (textarea baseline, was `<ChordEditor>`), `<ChordSourceArea>` (CodeMirror, was `<SourceEditor>`), `chordProLanguage`, `chordProTagTable` |
 | [Layout primitives](#/reference/layout) | `<SplitLayout>`, `<RendererPreview>` |
-| [`<Transpose>` + `useTranspose`](#/reference/transpose) | Accessible ± / reset control and its standalone hook |
+| [`<Transpose>` + `useTranspose`](#/reference/transpose) | Native `<select>` transposition control and its standalone hook |
 | [`<ChordDiagram>` + `useChordDiagram`](#/reference/chord-diagram) | Chord-voicing SVG renderer |
 | [`<PdfExport>` + `usePdfExport`](#/reference/pdf-export) | Lazy-loaded PDF export button + hook |
 | [Chord source-edit helpers](#/reference/chord-source-edit) | `applyChordReposition`, `lyricsOffsetToSourceColumn` |

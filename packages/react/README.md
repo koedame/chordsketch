@@ -451,7 +451,9 @@ import { IrealProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 const URL =
-  'irealb://Autumn%20Leaves%3D%5BT44Cm7%20%7C%20F7%20%7C%20BbMaj7%20%7C%20EbMaj7%20%5D%3DJoseph%20Kosma%3DJazz%20Ballad%3DC';
+  'irealb://Autumn%20Leaves%3DKosma%20Joseph%3D%3DMedium%20Swing%3DG%2D%3D%3D' +
+  '1r34LbKcu7T44%2AA%5BC%2D7%7CF7%7CBb%5E7%7CEb%5E7%7CAh7%7CD7%7CG%2D6%7CG%2D6Z' +
+  '%3D%3D0%3D0';
 
 export function Chart() {
   return <IrealProEditor defaultValue={URL} />;
@@ -574,7 +576,7 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 | `<ChordSourceArea>` | Atom | Component | CodeMirror 6 source editor with ChordPro syntax highlight. |
 | `<ChordDiagram>` | Atom | Component | Guitar / ukulele / piano voicing SVG from the built-in database. |
 | `useChordDiagram` | Atom | Hook | Raw SVG string for the chord-instrument pair. |
-| `<Transpose>` | Atom | Component | Accessible ± / reset transposition control. |
+| `<Transpose>` | Atom | Component | Native `<select>` transposition control. |
 | `useTranspose` | Atom | Hook | Clamped state helper for transposition values. |
 | `<PdfExport>` | Atom | Component | One-click export button; lazy-loads `@chordsketch/wasm-export`. |
 | `usePdfExport` | Atom | Hook | Same export pipeline for custom UIs. |

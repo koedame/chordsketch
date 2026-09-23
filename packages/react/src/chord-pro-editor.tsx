@@ -18,9 +18,16 @@ import type { ChordWasmLoader } from './use-chord-render';
 // still carry the warning code path.
 declare const process: { env: { NODE_ENV?: string } };
 
-/** Props accepted by {@link ChordProEditor}. */
+/**
+ * Props accepted by {@link ChordProEditor}.
+ *
+ * `defaultValue` is omitted from the forwarded div attributes: the
+ * initial source is `defaultSource`, and an inherited `defaultValue`
+ * type-checked but did nothing, so the sibling `<IrealProEditor>`'s
+ * prop name silently produced an empty editor.
+ */
 export interface ChordProEditorProps
-  extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'title'> {
+  extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'title' | 'defaultValue'> {
   /**
    * Initial ChordPro source to seed the editor with. Ignored when
    * `source` is supplied (controlled mode). Defaults to an empty

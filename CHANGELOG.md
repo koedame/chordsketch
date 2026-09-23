@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   release tag's Swift sources on top of the XCFramework, which it downloads
   and checks against the checksum the tag pins. Versions up to 0.7.0 on
   CocoaPods still have no Swift API.
+- **`<ChordProEditor defaultValue="…">` is a type error instead of an empty
+  editor.** The component takes its initial source as `defaultSource`, but
+  its props also accepted the div attribute `defaultValue`, which
+  type-checked and did nothing. The React embedding guide itself used it,
+  along with an iReal Pro URL that did not parse and a Next.js setup that
+  failed on every request; every recipe on that page now compiles in the
+  test suite and was run in a fresh Vite app and a fresh Next.js app.
 
 ## [0.7.0] - 2026-09-17
 
