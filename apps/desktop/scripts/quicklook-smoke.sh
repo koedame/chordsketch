@@ -43,8 +43,10 @@ step "Signatures"
 codesign --verify --deep --strict --verbose=2 "$app"
 codesign --display --verbose=2 "$appex" 2>&1 | grep -E '^(Identifier|Signature|CodeDirectory)'
 codesign --display --entitlements - --xml "$appex" 2>/dev/null >"$work/entitlements.plist"
-plutil -extract com.apple.security.app-sandbox raw "$work/entitlements.plist" | grep -qx true \
-  || fail "the extension is not signed with the App Sandbox entitlement"
+# PlistBuddy, not `plutil -extract`: plutil reads the dots in the key
+# as a key path.
+/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$work/entitlements.plist" \
+  | grep -qx true || fail "the extension is not signed with the App Sandbox entitlement"
 
 step "Register with LaunchServices and pluginkit"
 "$LSREGISTER" -f -R "$app"
@@ -66,7 +68,11 @@ cat >"$work/smoke.cho" <<'EOF'
 {artist: ChordSketch}
 [Am]Hello [G]world
 EOF
-uti="$(swift -e 'import UniformTypeIdentifiers; print(UTType(filenameExtension: "cho")?.identifier ?? "none")')"
+cat >"$work/uti.swift" <<'EOF'
+import UniformTypeIdentifiers
+print(UTType(filenameExtension: "cho")?.identifier ?? "none")
+EOF
+uti="$(xcrun swift "$work/uti.swift")"
 echo "UTType for .cho: $uti"
 [ "$uti" = "$CHORDPRO_UTI" ] || fail ".cho resolves to $uti, not $CHORDPRO_UTI"
 
