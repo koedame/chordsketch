@@ -5,7 +5,7 @@
 # gap (`chordsketch-ireal`, `chordsketch-convert`,
 # `chordsketch-convert-musicxml`, `chordsketch-render-ireal`,
 # `chordsketch-lsp`, `chordsketch` CLI). `chordsketch-mcp` closes the
-# same gap for a crate added after that pass (#2857, 2026-09-06):
+# same gap for a crate added after that pass (#2857, 2026-09-05):
 #
 #   core              standalone floor 85%
 #   Renderers (group) floor 80%, intra-group skew <= 5%
