@@ -1,20 +1,29 @@
 # `<PdfExport>` + `usePdfExport`
 
 PDF export ships in a separate heavy bundle (`@chordsketch/wasm-export`,
-~6 MB gzipped). Install the optional peer alongside
-`@chordsketch/react` if you intend to use PDF export:
+~6 MB gzipped), behind the `@chordsketch/react/pdf` subpath — not the
+package root. Import from there and install the optional peer
+alongside `@chordsketch/react` if you intend to use PDF export:
 
 ```bash
 npm install @chordsketch/wasm-export
 ```
 
 The heavy bundle is **lazy-loaded** on first export — the initial
-page load does not pay for it.
+page load does not pay for it. Keeping the lazy `import()` behind a
+separate entry point also means bundlers that resolve dynamic imports
+at build time (webpack, Turbopack — notably Next.js) never require
+the peer unless the app imports `@chordsketch/react/pdf`.
+
+To wire PDF export into `<RendererPreview format="pdf">`,
+`<PreviewToolbar>`, `<ChordProPreview>`, or `<ChordProEditor>`, pass
+`<PdfExport>` through their `pdfExportComponent` prop — those
+components no longer import it themselves.
 
 ## `<PdfExport>`
 
 ```tsx
-import { PdfExport } from '@chordsketch/react';
+import { PdfExport } from '@chordsketch/react/pdf';
 
 <PdfExport source={chordproSource} filename="amazing-grace.pdf">
   Export PDF

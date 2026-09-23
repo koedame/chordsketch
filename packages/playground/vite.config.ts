@@ -60,9 +60,16 @@ export default defineConfig({
       '@chordsketch/wasm-export': resolve(here, '../npm-export/web/chordsketch_wasm.js'),
       // React component library (#2454). Same alias pattern as the
       // wasm package — Vite consumes the TS sources directly. Longer
-      // specifier (`/styles.css`) is listed before the bare package
-      // alias so Vite resolves it correctly.
+      // specifiers (`/styles.css`, `/pdf`) are listed before the bare
+      // package alias so Vite resolves them correctly (first-match).
       '@chordsketch/react/styles.css': resolve(here, '../react/src/styles.css'),
+      // `<PdfExport>` / `usePdfExport` live behind this subpath so the
+      // main entry point's build graph never references the lazy
+      // `import('@chordsketch/wasm-export')` inside `use-pdf-export.ts`
+      // — bundlers that resolve dynamic imports at build time
+      // (webpack, Turbopack) would otherwise force every consumer to
+      // install the heavy peer.
+      '@chordsketch/react/pdf': resolve(here, '../react/src/pdf.ts'),
       '@chordsketch/react': resolve(here, '../react/src/index.ts'),
       // Wasm-free design-system primitives (#2587, ADR-0029). Same
       // alias pattern; longer specifier first (Vite first-match).

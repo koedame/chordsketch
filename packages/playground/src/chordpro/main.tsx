@@ -14,9 +14,9 @@ if (import.meta.env.DEV) {
 
 import init, { validate, version as wasmVersion } from '@chordsketch/wasm';
 import { SAMPLE_CHORDPRO } from '../sample';
+import { PdfExport } from '@chordsketch/react/pdf';
 import {
   PreviewToolbar,
-  PdfExport,
   RendererPreview,
   ChordSourceArea,
   ChordInspector,

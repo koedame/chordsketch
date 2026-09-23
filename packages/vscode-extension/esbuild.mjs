@@ -163,10 +163,17 @@ const wasmJsSrc = fs.existsSync(wasmJsLocal)
 const reactPkgDir = path.resolve(repoRoot, 'packages', 'react');
 const reactSrcEntry = path.join(reactPkgDir, 'src', 'index.ts');
 const reactSrcCss = path.join(reactPkgDir, 'src', 'styles.css');
+const reactSrcPdf = path.join(reactPkgDir, 'src', 'pdf.ts');
 const reactDistEntry = path.join(reactPkgDir, 'dist', 'index.js');
 const reactDistCss = path.join(reactPkgDir, 'dist', 'styles.css');
+const reactDistPdf = path.join(reactPkgDir, 'dist', 'pdf.js');
 const reactEntry = fs.existsSync(reactSrcEntry) ? reactSrcEntry : reactDistEntry;
 const reactCss = fs.existsSync(reactSrcCss) ? reactSrcCss : reactDistCss;
+// `<PdfExport>` lives behind the `@chordsketch/react/pdf` subpath
+// (#2960) — the WebView opts in here so the performance toolbar's
+// Export group keeps rendering a button, matching pre-#2960
+// behaviour.
+const reactPdf = fs.existsSync(reactSrcPdf) ? reactSrcPdf : reactDistPdf;
 
 // `@chordsketch/react`'s source files import from bare specifiers like
 // `react`, `react/jsx-runtime`, and `react-dom/client`. When esbuild
@@ -227,6 +234,7 @@ const webviewBuild = {
     // emit an unresolvable `import('@chordsketch/wasm-export')`.
     '@chordsketch/wasm-export': wasmJsSrc,
     '@chordsketch/react/styles.css': reactCss,
+    '@chordsketch/react/pdf': reactPdf,
     '@chordsketch/react': reactEntry,
     // React + ReactDOM specifier aliases. The in-tree
     // `@chordsketch/react` source imports bare `react`,

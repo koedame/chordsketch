@@ -1,9 +1,10 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import type { ComponentType, HTMLAttributes, ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ChordInspector } from './chord-inspector';
 import { ChordProPreview } from './chord-pro-preview';
 import { ChordSourceArea, type ChordSourceAreaHandle } from './chord-source-area';
+import type { PdfExportProps } from './pdf-export';
 import type { PreviewFormat } from './renderer-preview';
 import { SplitLayout } from './split-layout';
 import { useChordEditor } from './use-chord-editor';
@@ -77,6 +78,20 @@ export interface ChordProEditorProps
   /** Filename used for the PDF download. Defaults to `"chordsketch-output.pdf"`. */
   pdfFilename?: string;
   /**
+   * The `PdfExport` component from `@chordsketch/react/pdf`, forwarded
+   * to the underlying {@link ChordProPreview}. Omit to hide PDF
+   * export — the format `<select>` still offers "PDF", but selecting
+   * it renders a hint instead of an export button. See
+   * `@chordsketch/react/pdf`'s module doc for why this is injected
+   * rather than statically imported.
+   *
+   * ```tsx
+   * import { PdfExport } from '@chordsketch/react/pdf';
+   * <ChordProEditor pdfExportComponent={PdfExport} ... />
+   * ```
+   */
+  pdfExportComponent?: ComponentType<PdfExportProps>;
+  /**
    * Optional render prop appended to the right of the header — useful
    * for hosts that want to add their own controls (e.g. an
    * input-format toggle, a save button) without fully replacing the
@@ -125,6 +140,7 @@ export function ChordProEditor({
   onTransposeChange,
   title = 'ChordSketch',
   pdfFilename,
+  pdfExportComponent,
   headerExtras,
   wasmLoader,
   className,
@@ -273,6 +289,7 @@ export function ChordProEditor({
             transpose={transpose}
             onTransposeChange={handleTransposeChange}
             pdfFilename={pdfFilename}
+            pdfExportComponent={pdfExportComponent}
             chordSelection={chordEditor.chordSelection}
             onChordSelectionChange={chordEditor.onChordSelectionChange}
             onChordReposition={chordEditor.onChordReposition}

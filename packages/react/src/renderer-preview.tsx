@@ -1,9 +1,11 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
+import type { ComponentType } from 'react';
+
 import { ChordSheet } from './chord-sheet';
 import type { ChordAudioConfig, ChordSelection } from './chordpro-jsx';
 import type { ChordAudioWasmLoader } from './use-chord-audio';
-import { PdfExport } from './pdf-export';
+import type { PdfExportProps } from './pdf-export';
 import type {
   ChordDeleteTarget,
   ChordEditEvent,
@@ -37,6 +39,22 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
   format: PreviewFormat;
   /** Filename used for the PDF download. Defaults to `"chordsketch-output.pdf"`. */
   pdfFilename?: string;
+  /**
+   * The `PdfExport` component from `@chordsketch/react/pdf`, injected
+   * so `format="pdf"` can render an export button without this
+   * package statically importing that entry point (which lazy-loads
+   * the heavy `@chordsketch/wasm-export` peer — see
+   * `@chordsketch/react/pdf`'s module doc). Only consumed when
+   * `format === "pdf"`; omit it for hosts that never offer PDF
+   * export. When `format === "pdf"` and this prop is omitted, a
+   * `role="alert"` hint renders instead of the export button.
+   *
+   * ```tsx
+   * import { PdfExport } from '@chordsketch/react/pdf';
+   * <RendererPreview format="pdf" pdfExportComponent={PdfExport} ... />
+   * ```
+   */
+  pdfExportComponent?: ComponentType<PdfExportProps>;
   /**
    * Opt-in: render the auto-injected chord-diagrams grid at the end
    * of the song for the given instrument. The grid is then gated by
@@ -117,7 +135,7 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    *
    * Only honoured by the inline `html` / `text` branches — the
    * `pdf` branch is an export button (rendered by
-   * {@link PdfExport}), not a streaming surface, so it has no
+   * `PdfExport`), not a streaming surface, so it has no
    * "loading" state to show before the user clicks. PDF in-flight
    * state is communicated via the button's `aria-busy` attribute
    * instead.
@@ -131,13 +149,13 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    *
    * Honoured by every branch: the `html` / `text` branches forward
    * to {@link ChordSheet}, and the `pdf` branch wraps
-   * {@link PdfExport}'s default inline error rendering.
+   * `PdfExport`'s default inline error rendering.
    */
   errorFallback?: ((error: Error) => ReactNode) | null;
   /**
    * Test-only WASM loader override for the inline (`html` / `text`)
    * formats. The PDF branch uses its own default loader via
-   * {@link PdfExport}; production callers never need to supply
+   * `PdfExport`; production callers never need to supply
    * this.
    *
    * @internal
@@ -152,7 +170,7 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
  * — see ADR-0017 for the architectural split between the React
  * surface (AST → JSX) and the Rust surface (`chordsketch-render-html`,
  * which still backs the CLI / FFI / GitHub Action). PDF stays a
- * download action via {@link PdfExport} because PDF generation is
+ * download action via `PdfExport` because PDF generation is
  * binary and remains owned by `chordsketch-render-pdf`.
  *
  * The previous iframe-sandbox HTML branch was retired in #2475 —
@@ -170,6 +188,7 @@ export function RendererPreview({
   config,
   format,
   pdfFilename = 'chordsketch-output.pdf',
+  pdfExportComponent: PdfExportComponent,
   chordDiagramsInstrument,
   chordDiagramsOrientation,
   activeSourceLine,
@@ -193,15 +212,25 @@ export function RendererPreview({
   if (format === 'pdf') {
     return (
       <div {...divProps} className={`${wrapperClass} chordsketch-preview--pdf`}>
-        <p className="chordsketch-preview__hint">
-          Click the button to generate and download a PDF.
-        </p>
-        <PdfExport
-          source={source}
-          options={{ transpose, config }}
-          filename={pdfFilename}
-          className="chordsketch-pdf-export"
-        />
+        {PdfExportComponent ? (
+          <>
+            <p className="chordsketch-preview__hint">
+              Click the button to generate and download a PDF.
+            </p>
+            <PdfExportComponent
+              source={source}
+              options={{ transpose, config }}
+              filename={pdfFilename}
+              className="chordsketch-pdf-export"
+            />
+          </>
+        ) : (
+          <p role="alert" className="chordsketch-preview__hint">
+            PDF export requires the <code>@chordsketch/react/pdf</code> entry
+            point — import its <code>PdfExport</code> component and pass it
+            via the <code>pdfExportComponent</code> prop.
+          </p>
+        )}
       </div>
     );
   }

@@ -7,14 +7,12 @@ import {
   usePdfExport,
 } from './use-pdf-export';
 
-/**
- * Default label rendered when a {@link PdfExport} consumer passes no
- * `children`. Exported so sister sites that compose their own export
- * button (notably `<PreviewToolbar>`'s Export group) can render the
- * same string without restating the literal — keeping every call site
- * in lockstep with this default through a single source of truth.
- */
-export const PDF_EXPORT_DEFAULT_LABEL = 'Export PDF';
+// Re-export so `import { PDF_EXPORT_DEFAULT_LABEL } from './pdf-export'`
+// keeps working for existing call sites, plus a separate local import
+// — a re-export alone does not create a local binding — so the
+// default `children` value below can reference it.
+export { PDF_EXPORT_DEFAULT_LABEL } from './pdf-export-label';
+import { PDF_EXPORT_DEFAULT_LABEL } from './pdf-export-label';
 
 /** Props accepted by the {@link PdfExport} button. */
 export interface PdfExportProps

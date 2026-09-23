@@ -33,6 +33,14 @@ import {
   SplitLayout,
 } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
+// `<PdfExport>` lives behind the `@chordsketch/react/pdf` subpath so
+// bundlers that resolve dynamic imports at build time (webpack,
+// Turbopack) don't force every `@chordsketch/react` consumer to
+// install `@chordsketch/wasm-export`. The desktop app opts in here to
+// keep the in-preview "pdf" format's export button working, matching
+// pre-#2960 behaviour — see the `@chordsketch/react/pdf` alias in
+// `vite.config.ts`.
+import { PdfExport } from '@chordsketch/react/pdf';
 
 import {
   ChordProDesktopEditor,
@@ -255,6 +263,7 @@ export function App(): JSX.Element {
                 transposeMin={TRANSPOSE_MIN}
                 transposeMax={TRANSPOSE_MAX}
                 pdfFilename="chordsketch.pdf"
+                pdfExportComponent={PdfExport}
                 className="chordsketch-desktop__chordpro-preview"
               />
             )}
