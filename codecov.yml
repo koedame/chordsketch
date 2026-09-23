@@ -4,7 +4,8 @@
 # per-crate gates added in #2350 to close the "ungated crate" governance
 # gap (`chordsketch-ireal`, `chordsketch-convert`,
 # `chordsketch-convert-musicxml`, `chordsketch-render-ireal`,
-# `chordsketch-lsp`, `chordsketch` CLI):
+# `chordsketch-lsp`, `chordsketch` CLI). `chordsketch-mcp` closes the
+# same gap for a crate that gap-closure pass missed:
 #
 #   core              standalone floor 85%
 #   Renderers (group) floor 80%, intra-group skew <= 5%
@@ -19,6 +20,7 @@
 #   render-ireal      floor 85%
 #   lsp               floor 85%
 #   cli               floor 70%
+#   mcp               floor 85%
 #   Patch target      70% on new lines
 #
 # §Bindings note: each binding crate now keeps every
@@ -195,6 +197,18 @@ coverage:
         paths:
           - crates/cli/
         target: 70%
+        threshold: 1%
+        informational: false
+
+      # MCP server. The stdio serving loop in `lib.rs` cannot be
+      # exercised under `cargo test` (it blocks on a real stdin/stdout
+      # pipe, the shape an MCP client actually launches); the tool
+      # implementations in `ops.rs` and the protocol adapter in
+      # `server.rs` are driven directly and sit above 85%.
+      mcp:
+        paths:
+          - crates/mcp/
+        target: 85%
         threshold: 1%
         informational: false
 
