@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
 
-import { ChordProEditor, PDF_EXPORT_DEFAULT_LABEL } from '../src/index';
+import { ChordProEditor } from '../src/index';
+import { PDF_EXPORT_DEFAULT_LABEL, PdfExport } from '../src/pdf';
 import type { ChordWasmLoader } from '../src/use-chord-render';
 
 // `<SplitLayout>` (used by `<ChordProEditor>` to lay out source +
@@ -130,7 +131,12 @@ describe('<ChordProEditor>', () => {
   });
 
   test('format toggle swaps the rendered preview branch', () => {
-    render(<ChordProEditor wasmLoader={makeLoader(makeStub())} />);
+    render(
+      <ChordProEditor
+        wasmLoader={makeLoader(makeStub())}
+        pdfExportComponent={PdfExport}
+      />,
+    );
     const select = screen.getByLabelText('Format') as HTMLSelectElement;
     fireEvent.change(select, { target: { value: 'pdf' } });
     // PDF branch renders an export button using the shared default label.

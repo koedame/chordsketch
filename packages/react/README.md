@@ -21,7 +21,7 @@ choose the surface that matches their host.
 
 | Tier | Purpose | ChordPro | iReal Pro |
 |------|---------|----------|-----------|
-| **Tier 1 atoms** | Single-responsibility primitives | `<ChordSheet>`, `<ChordTextarea>`, `<ChordSourceArea>`, `<ChordDiagram>`, `<Transpose>`, `<PdfExport>`, `<SplitLayout>`, `<RendererPreview>` | `<IrealBarGrid>`, `<IrealPreview>` |
+| **Tier 1 atoms** | Single-responsibility primitives | `<ChordSheet>`, `<ChordTextarea>`, `<ChordSourceArea>`, `<ChordDiagram>`, `<Transpose>`, `<PdfExport>` (`@chordsketch/react/pdf`), `<SplitLayout>`, `<RendererPreview>` | `<IrealBarGrid>`, `<IrealPreview>` |
 | **Tier 2 preview-with-controls** | Preview surface with built-in format / transpose controls — host owns the source | `<ChordProPreview>` | — (use `<IrealPreview>` directly) |
 | **Tier 3 composed editor** | Opinionated all-in-one editor + preview shell | `<ChordProEditor>` | `<IrealProEditor>` |
 
@@ -74,13 +74,17 @@ render. Hosts do not install it separately and do not need to call
 or newer).
 
 The PDF / PNG export bundle ships separately as the heavy
-`@chordsketch/wasm-export` peer (~6 MB gzipped). Install it
-alongside this package **only** if you use the `<PdfExport>` /
-`usePdfExport` surface; it is lazy-loaded the first time you call
-the export.
+`@chordsketch/wasm-export` peer (~6 MB gzipped), behind the
+`@chordsketch/react/pdf` subpath. Import `<PdfExport>` /
+`usePdfExport` from there — not from the package root — **only** if
+you use PDF export; it is lazy-loaded the first time you call the
+export. The main entry point never references `@chordsketch/wasm-export`,
+so consumers who never import `@chordsketch/react/pdf` do not need
+to install it, even with bundlers (webpack, Turbopack) that resolve
+dynamic `import()` calls at build time.
 
 ```bash
-# Optional — only needed for <PdfExport> / usePdfExport.
+# Optional — only needed for @chordsketch/react/pdf.
 npm install @chordsketch/wasm-export
 ```
 
@@ -91,7 +95,7 @@ npm install @chordsketch/wasm-export
 | `react` | `>=18` | Both 18.x and 19.x are supported. |
 | `react-dom` | `>=18` | Track the `react` major. |
 | `@chordsketch/wasm` | `^0.7.0` (runtime dep) | Bundled as a regular dependency; hosts can override at hoist time if they want a specific minor. |
-| `@chordsketch/wasm-export` | `^0.7.0` (optional peer) | Required for `<PdfExport>` / `usePdfExport`. Lazy-loaded on first export. |
+| `@chordsketch/wasm-export` | `^0.7.0` (optional peer) | Required only when importing `@chordsketch/react/pdf` (`<PdfExport>` / `usePdfExport`). Lazy-loaded on first export. |
 
 ### Platform compatibility
 
@@ -269,7 +273,10 @@ component (same for `transpose` / `onTransposeChange`).
 
 Pass `formats={['html', 'text']}` to restrict the format menu;
 useful for hosts that do not ship `@chordsketch/wasm-export` and
-should not let users pick PDF.
+should not let users pick PDF. Alternatively, keep `'pdf'` in
+`formats` but omit `pdfExportComponent` (see below) — selecting PDF
+then renders a hint instead of an export button rather than being
+unreachable.
 
 ### `<ChordProEditor>` — composed editor + preview (Tier 3)
 
@@ -348,8 +355,16 @@ the diagram inside custom markup (tooltip, popover, etc.).
 
 ### `<PdfExport>` — one-click PDF export
 
+`<PdfExport>` and `usePdfExport` live behind the `@chordsketch/react/pdf`
+subpath, not the package root — install `@chordsketch/wasm-export`
+(see [Installation](#installation)) and import from `/pdf` only if
+you use them. This keeps the heavy WASM bundle's dynamic `import()`
+out of the main entry point's build graph, so bundlers that resolve
+dynamic imports at build time (webpack, Turbopack — notably Next.js)
+never require the peer for hosts that skip PDF export.
+
 ```tsx
-import { PdfExport } from '@chordsketch/react';
+import { PdfExport } from '@chordsketch/react/pdf';
 
 const source = `{title: Amazing Grace}
 {key: G}
@@ -372,10 +387,25 @@ for imperative handlers (analytics, toasts). All the standard
 `<button>` attributes (`className`, `style`, `type` override,
 `id`, …) are forwarded.
 
+`<RendererPreview format="pdf">`, `<PreviewToolbar>`'s Export group,
+`<ChordProPreview>`, and `<ChordProEditor>` no longer render
+`<PdfExport>` on their own — pass it in via their `pdfExportComponent`
+prop:
+
+```tsx
+import { ChordProEditor } from '@chordsketch/react';
+import { PdfExport } from '@chordsketch/react/pdf';
+
+<ChordProEditor pdfExportComponent={PdfExport} defaultSource="{title: Hello}" />
+```
+
+Omitting `pdfExportComponent` hides the Export group / renders a hint
+instead of an export button — it never silently renders nothing.
+
 ### `usePdfExport` — hook for bespoke UIs
 
 ```tsx
-import { usePdfExport } from '@chordsketch/react';
+import { usePdfExport } from '@chordsketch/react/pdf';
 
 export function SaveDropdownItem({ source }: { source: string }) {
   const { exportPdf, loading, error } = usePdfExport();
@@ -578,8 +608,8 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 | `useChordDiagram` | Atom | Hook | Raw SVG string for the chord-instrument pair. |
 | `<Transpose>` | Atom | Component | Native `<select>` transposition control. |
 | `useTranspose` | Atom | Hook | Clamped state helper for transposition values. |
-| `<PdfExport>` | Atom | Component | One-click export button; lazy-loads `@chordsketch/wasm-export`. |
-| `usePdfExport` | Atom | Hook | Same export pipeline for custom UIs. |
+| `<PdfExport>` | Atom | Component | One-click export button; lazy-loads `@chordsketch/wasm-export`. Import from `@chordsketch/react/pdf`. |
+| `usePdfExport` | Atom | Hook | Same export pipeline for custom UIs. Import from `@chordsketch/react/pdf`. |
 | `<SplitLayout>` | Atom | Component | Layout container with resizable splitter. |
 | `<RendererPreview>` | Atom | Component | Format-switcher preview pane. |
 | `<ChordProPreview>` | Preview-with-controls | Component | `<RendererPreview>` + format select + transpose, for hosts that own the source. |

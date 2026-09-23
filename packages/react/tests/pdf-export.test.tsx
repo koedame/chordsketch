@@ -12,8 +12,8 @@ import {
   PDF_EXPORT_DEFAULT_LABEL,
   PdfExport,
   usePdfExport,
-} from '../src/index';
-import type { WasmLoader } from '../src/use-pdf-export';
+  type WasmLoader,
+} from '../src/pdf';
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF" magic bytes
 

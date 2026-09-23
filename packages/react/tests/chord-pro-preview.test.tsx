@@ -2,7 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { ChordProPreview, PDF_EXPORT_DEFAULT_LABEL } from '../src/index';
+import { ChordProPreview } from '../src/index';
+import { PDF_EXPORT_DEFAULT_LABEL, PdfExport } from '../src/pdf';
 import type { ChordWasmLoader } from '../src/use-chord-render';
 
 function emptyAst(marker?: string): string {
@@ -165,12 +166,29 @@ describe('<ChordProPreview>', () => {
       <ChordProPreview
         source="src"
         defaultFormat="pdf"
+        pdfExportComponent={PdfExport}
         wasmLoader={makeLoader(makeStub())}
       />,
     );
     expect(
       screen.getByRole('button', { name: PDF_EXPORT_DEFAULT_LABEL }),
     ).toBeTruthy();
+  });
+
+  test('PDF branch renders a hint instead of a button when pdfExportComponent is omitted', () => {
+    // `<ChordProPreview>` no longer statically imports `<PdfExport>` —
+    // consumers opt in by importing it from `@chordsketch/react/pdf`
+    // and passing it through this prop. Omitting the prop must not
+    // silently render nothing; it renders an actionable hint instead.
+    render(
+      <ChordProPreview
+        source="src"
+        defaultFormat="pdf"
+        wasmLoader={makeLoader(makeStub())}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: PDF_EXPORT_DEFAULT_LABEL })).toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain('@chordsketch/react/pdf');
   });
 
   test('transposeMin / transposeMax bound the transpose select option range', () => {
@@ -374,6 +392,7 @@ describe('<ChordProPreview>', () => {
         toolbar="performance"
         onSourceChange={vi.fn()}
         formats={['html']}
+        pdfExportComponent={PdfExport}
         wasmLoader={makeLoader(makeStub())}
       />,
     );

@@ -126,7 +126,8 @@ the initial value — not necessarily zero.
 ## Recipe 5 — Export to PDF
 
 PDF export ships in a separate heavy bundle so the lean
-`@chordsketch/wasm` core stays small. Install the optional peer
+`@chordsketch/wasm` core stays small, behind the `@chordsketch/react/pdf`
+subpath rather than the package root. Install the optional peer
 alongside `@chordsketch/react`:
 
 ```bash
@@ -136,7 +137,7 @@ npm install @chordsketch/wasm-export
 Then drop in `<PdfExport>`:
 
 ```tsx
-import { PdfExport } from '@chordsketch/react';
+import { PdfExport } from '@chordsketch/react/pdf';
 
 const source = `{title: Amazing Grace}
 {key: G}
@@ -160,6 +161,24 @@ or toasts.
 
 `usePdfExport()` returns the same `exportPdf` pipeline as state for
 custom UIs (dropdown items, command palettes, etc.).
+
+`<RendererPreview format="pdf">`, `<PreviewToolbar>`, `<ChordProPreview>`,
+and `<ChordProEditor>` do not import `@chordsketch/react/pdf` on
+their own — pass `<PdfExport>` through their `pdfExportComponent`
+prop to enable PDF export in those surfaces:
+
+```tsx
+import { ChordProEditor } from '@chordsketch/react';
+import { PdfExport } from '@chordsketch/react/pdf';
+
+<ChordProEditor pdfExportComponent={PdfExport} defaultSource="{title: Hello}" />
+```
+
+This split keeps `@chordsketch/react`'s main entry point free of the
+`import('@chordsketch/wasm-export')` call — bundlers that resolve
+dynamic imports at build time (webpack, Turbopack, and so Next.js —
+see [Recipe 10](#recipe-10-server-side-rendering-nextjs)) never
+require the peer for apps that do not import `@chordsketch/react/pdf`.
 
 ## Recipe 6 — Render chord diagrams
 
