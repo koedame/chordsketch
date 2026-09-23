@@ -32,6 +32,7 @@ import '@chordsketch/react/styles.css';
 | `onTransposeChange` | `(next: number) => void` | — | Fires when the user commits a new offset. |
 | `title` | `string \| null` | `"ChordSketch"` | Heading shown in the header bar. Pass `null` or `""` to omit the heading entirely. |
 | `pdfFilename` | `string` | `"chordsketch-output.pdf"` | Filename for the PDF download. |
+| `pdfExportComponent` | `ComponentType<PdfExportProps>` | — | The `PdfExport` component from [`@chordsketch/react/pdf`](#/reference/pdf-export), forwarded to `<ChordProPreview>`. Omit to hide PDF export. |
 | `headerExtras` | `ReactNode` | — | Slot for host-supplied controls in the header bar (e.g. a "Save to library" button). |
 | `wasmLoader` | loader callable | — | Test-only override. |
 

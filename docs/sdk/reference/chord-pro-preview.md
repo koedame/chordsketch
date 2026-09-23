@@ -38,6 +38,7 @@ import '@chordsketch/react/styles.css';
 | `transposeMin` | `number` | `-11` | Minimum transpose offset emitted by the control. |
 | `transposeMax` | `number` | `11` | Maximum transpose offset emitted by the control. |
 | `pdfFilename` | `string` | — | Filename for the PDF download when `format === 'pdf'`. Forwarded to `<RendererPreview>`. |
+| `pdfExportComponent` | `ComponentType<PdfExportProps>` | — | The `PdfExport` component from [`@chordsketch/react/pdf`](#/reference/pdf-export), forwarded to `<RendererPreview>` and, in `toolbar="performance"` mode, to `<PreviewToolbar>`. Omit to hide PDF export. |
 | `chordDiagramsInstrument` | `ChordDiagramInstrument` | — | Forwarded to the underlying [`<RendererPreview>`](#/reference/layout). |
 | `loadingFallback` | `ReactNode` | — | Optional content rendered while the wasm runtime is initialising. |
 | `errorFallback` | `((error: Error) => ReactNode) \| null` | — | Optional render prop that takes over when a parse or render error occurs. Pass `null` to suppress the error UI. |

@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { PDF_EXPORT_DEFAULT_LABEL, PreviewToolbar } from '../src/index';
-import type { WasmLoader } from '../src/use-pdf-export';
+import { PreviewToolbar } from '../src/index';
+import { PDF_EXPORT_DEFAULT_LABEL, PdfExport, type WasmLoader } from '../src/pdf';
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF"
 
@@ -32,6 +32,7 @@ describe('<PreviewToolbar>', () => {
         onSourceChange={vi.fn()}
         transpose={0}
         onTransposeChange={vi.fn()}
+        pdfExportComponent={PdfExport}
       />,
     );
     expect(
@@ -77,6 +78,7 @@ describe('<PreviewToolbar>', () => {
           onTransposeChange={vi.fn()}
           exportFilename="my-song.pdf"
           wasmLoader={makePdfLoader(stub)}
+          pdfExportComponent={PdfExport}
         />,
       );
       const exportGroup = screen.getByRole('group', { name: 'Export' });
@@ -121,6 +123,7 @@ describe('<PreviewToolbar>', () => {
         onSourceChange={vi.fn()}
         transpose={0}
         onTransposeChange={vi.fn()}
+        pdfExportComponent={PdfExport}
       />,
     );
     const exportGroup = screen.getByRole('group', { name: 'Export' });
@@ -242,11 +245,31 @@ describe('<PreviewToolbar>', () => {
         onTransposeChange={vi.fn()}
         showTranspose={false}
         showExport={false}
+        pdfExportComponent={PdfExport}
       />,
     );
     expect(screen.queryByRole('group', { name: 'Transpose' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Export' })).toBeNull();
     expect(screen.getByRole('group', { name: 'Capo' })).toBeTruthy();
+  });
+
+  test('Export group is hidden when pdfExportComponent is omitted, even with showExport=true', () => {
+    // `<PreviewToolbar>` no longer statically imports `<PdfExport>` (it
+    // lives behind the `@chordsketch/react/pdf` subpath so bundlers that
+    // resolve dynamic imports at build time — webpack, Turbopack — do
+    // not force every consumer to install `@chordsketch/wasm-export`).
+    // A host that renders the toolbar without importing that subpath
+    // must not see a broken or absent-looking Export group silently —
+    // omitting the prop hides the whole group instead.
+    render(
+      <PreviewToolbar
+        source={SAMPLE}
+        onSourceChange={vi.fn()}
+        transpose={0}
+        onTransposeChange={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('group', { name: 'Export' })).toBeNull();
   });
 
   test('Transpose select reflects the host value and uses the ±6 default range', () => {

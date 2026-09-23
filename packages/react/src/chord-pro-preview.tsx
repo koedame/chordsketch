@@ -1,4 +1,4 @@
-import type { ChangeEvent, HTMLAttributes, ReactNode } from 'react';
+import type { ChangeEvent, ComponentType, HTMLAttributes, ReactNode } from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import type { ChordSelection } from './chordpro-jsx';
@@ -7,6 +7,7 @@ import type {
   ChordEditEvent,
   ChordRepositionEvent,
 } from './chord-source-edit';
+import type { PdfExportProps } from './pdf-export';
 import { PreviewToolbar } from './preview-toolbar';
 import { RendererPreview, type PreviewFormat } from './renderer-preview';
 import { Transpose } from './transpose';
@@ -65,6 +66,15 @@ export interface ChordProPreviewProps
   transposeMax?: number;
   /** Filename used for the PDF download. */
   pdfFilename?: string;
+  /**
+   * The `PdfExport` component from `@chordsketch/react/pdf`, forwarded
+   * to the underlying {@link RendererPreview} (`format="pdf"`) and,
+   * in `toolbar="performance"` mode, to {@link PreviewToolbar}'s
+   * Export group. Omit to hide PDF export entirely — see
+   * `@chordsketch/react/pdf`'s module doc for why this is injected
+   * rather than statically imported.
+   */
+  pdfExportComponent?: ComponentType<PdfExportProps>;
   /** Optional content rendered while the wasm runtime is initialising. */
   loadingFallback?: ReactNode;
   /**
@@ -164,6 +174,7 @@ export function ChordProPreview({
   transposeMin = -11,
   transposeMax = 11,
   pdfFilename,
+  pdfExportComponent,
   loadingFallback,
   errorFallback,
   chordDiagramsInstrument,
@@ -365,6 +376,7 @@ export function ChordProPreview({
           transposeMin={effectiveTransposeMin}
           transposeMax={effectiveTransposeMax}
           exportFilename={pdfExportFilename}
+          pdfExportComponent={pdfExportComponent}
         />
       ) : null}
       <div className="chordsketch-chord-pro-preview__body">
@@ -374,6 +386,7 @@ export function ChordProPreview({
           transpose={transposeValue}
           format={format}
           pdfFilename={pdfFilename}
+          pdfExportComponent={pdfExportComponent}
           loadingFallback={loadingFallback}
           errorFallback={errorFallback}
           chordDiagramsInstrument={chordDiagramsInstrument}

@@ -27,6 +27,14 @@ import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import init from '@chordsketch/wasm';
 import { ChordProPreview, readCapo } from '@chordsketch/react';
+// `<PdfExport>` lives behind the `@chordsketch/react/pdf` subpath so
+// bundlers that resolve dynamic imports at build time don't force
+// every `@chordsketch/react` consumer to install
+// `@chordsketch/wasm-export`. The WebView opts in here to keep the
+// performance toolbar's Export group rendering a button, matching
+// pre-#2960 behaviour — see the `@chordsketch/react/pdf` alias in
+// `esbuild.mjs`.
+import { PdfExport } from '@chordsketch/react/pdf';
 // The component library's stylesheet is bundled as a text asset
 // (see `esbuild.mjs`'s `.css` loader) and injected at runtime into a
 // `<style>` element. The WebView CSP allows `'unsafe-inline'` on
@@ -238,6 +246,7 @@ function App(): JSX.Element {
       onTransposeChange={handleTransposeChange}
       formats={['html']}
       toolbar="performance"
+      pdfExportComponent={PdfExport}
       onSourceChange={handleSourceChange}
       errorFallback={(err) => (
         <div className="cs-vscode-render-error" role="alert">

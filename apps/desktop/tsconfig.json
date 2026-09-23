@@ -38,6 +38,7 @@
       // `vite.config.ts`) so the dev server still picks up live edits.
       "@chordsketch/react": ["../../packages/react/dist/index.d.ts"],
       "@chordsketch/react/styles.css": ["../../packages/react/src/styles.css"],
+      "@chordsketch/react/pdf": ["../../packages/react/dist/pdf.d.ts"],
       "@chordsketch/ui-irealb-editor": ["../../packages/ui-irealb-editor/src/index.ts"],
       "@chordsketch/ui-irealb-editor/style.css": ["../../packages/ui-irealb-editor/src/style.css"],
       "@chordsketch/playground-sample": ["../../packages/playground/src/sample.ts"]

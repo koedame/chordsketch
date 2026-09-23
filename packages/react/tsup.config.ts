@@ -8,8 +8,16 @@ import { defineConfig } from 'tsup';
 // the consumer's bundler). The component CSS that upcoming
 // component PRs (#2041–#2045) add lands at `dist/styles.css` via
 // the package's `./styles.css` export.
+//
+// Two entry points: `index` is the main surface, `pdf` is the
+// `./pdf` subpath that owns `<PdfExport>` / `usePdfExport` and their
+// lazy `import('@chordsketch/wasm-export')`. Splitting them keeps
+// that dynamic import out of `index`'s build graph entirely, so
+// bundlers that resolve dynamic imports at build time (webpack,
+// Turbopack) never need the heavy peer unless a consumer actually
+// imports `./pdf`.
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: { index: 'src/index.ts', pdf: 'src/pdf.ts' },
   format: ['esm', 'cjs'],
   dts: true,
   sourcemap: true,

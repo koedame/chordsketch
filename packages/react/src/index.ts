@@ -26,16 +26,6 @@ export {
   type ChordRenderOptions,
   type ChordRenderResult,
 } from './use-chord-render';
-export {
-  PdfExport,
-  type PdfExportProps,
-  PDF_EXPORT_DEFAULT_LABEL,
-} from './pdf-export';
-export {
-  usePdfExport,
-  type PdfExportOptions,
-  type UsePdfExportResult,
-} from './use-pdf-export';
 export { Transpose, type TransposeProps } from './transpose';
 export { Capo, type CapoProps } from './capo';
 export {
