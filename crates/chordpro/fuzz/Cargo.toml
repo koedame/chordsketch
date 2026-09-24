@@ -1,0 +1,26 @@
+[package]
+name = "chordsketch-chordpro-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "cargo-fuzz targets for the ChordPro parser"
+
+[package.metadata]
+cargo-fuzz = true
+
+# The fuzz crate is its own workspace root: it needs a nightly toolchain and
+# `libfuzzer-sys`, neither of which belongs in the SDK workspace. It is also
+# outside `chordsketch-chordpro`'s zero-dependency contract, which covers
+# only that crate's own manifest (`scripts/check-zero-deps.py`).
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+chordsketch-chordpro = { path = ".." }
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
