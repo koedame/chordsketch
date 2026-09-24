@@ -1,0 +1,16 @@
+{title: Greensleeves}
+{artist: Traditional}
+{composer: Traditional}
+{lyricist: Traditional}
+{copyright: Public domain}
+{key: Am}
+{time: 6/8}
+{tempo: 100}
+
+{start_of_verse: Verse}
+[Am]Alas my love [Am]you do me wrong [G]to cast me off [E]discourteously
+{end_of_verse}
+
+{start_of_chorus: Refrain}
+[C]Greensleeves was all [G]my joy [E]Greensleeves [F]was my [E]delight [Am]
+{end_of_chorus}
