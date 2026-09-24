@@ -1,0 +1,102 @@
+name: Fuzz
+
+# Feeds random and mutated input to the ChordPro parser (`crates/chordpro`)
+# with cargo-fuzz, looking for a panic, an out-of-memory abort, or an input
+# that never finishes. The parser reads `.cho` files from strangers (the
+# playground, the CLI, the editor extensions), so a crash on hostile input is
+# a denial of service for whatever embeds it.
+#
+# Cadence: nightly, plus a 30 s smoke on pull requests that touch the fuzz
+# harness itself. A pull request that only changes parser code does not run
+# it: cargo-fuzz needs a nightly toolchain, which this repository's PR jobs do
+# not otherwise compile with, and 30 s of fuzzing rarely finds what a
+# 15-minute nightly run does. The nightly run reads whatever `main` holds the
+# next morning, so a regression waits at most a day. The corpus is not carried
+# between runs; every run starts from the golden fixtures, which reach the
+# interesting parser states within seconds.
+#
+# The fuzz crate lives in `crates/chordpro/fuzz/` as its own workspace root, so
+# `libfuzzer-sys` never enters the SDK workspace or the zero-dependency
+# contract of `chordsketch-chordpro` (`scripts/check-zero-deps.py`).
+
+on:
+  schedule:
+    # Daily at 18:17 UTC (03:17 JST), off the hour to stay clear of the
+    # other scheduled workflows.
+    - cron: "17 18 * * *"
+  pull_request:
+    paths:
+      - "crates/chordpro/fuzz/**"
+      - ".github/workflows/fuzz.yml"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Seconds to fuzz each target"
+        required: false
+        default: "900"
+
+concurrency:
+  group: fuzz-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  parse:
+    name: Fuzz the ChordPro parser
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 40
+    env:
+      FUZZ_DIR: crates/chordpro/fuzz
+      FUZZ_SECONDS: ${{ github.event_name == 'pull_request' && '30' || inputs.seconds || '900' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          # Sanitizer instrumentation is nightly-only.
+          toolchain: nightly
+
+      - uses: ./.github/actions/rust-cache
+        with:
+          shared-key: fuzz-chordpro
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install cargo-fuzz
+        # Pinned: `taiki-e/install-action` has no manifest for cargo-fuzz, and
+        # an unpinned install would let a new release change what this job
+        # runs without a commit here.
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+
+      - name: Seed the corpus from the parser's fixtures
+        run: |
+          set -euo pipefail
+          mkdir -p "$FUZZ_DIR/corpus/parse"
+          find crates/chordpro/tests -name '*.cho' -type f | while read -r f; do
+            cp "$f" "$FUZZ_DIR/corpus/parse/$(printf '%s' "$f" | tr '/' '_')"
+          done
+          echo "seeded $(find "$FUZZ_DIR/corpus/parse" -type f | wc -l) inputs"
+
+      - name: Fuzz parse
+        # -timeout: an input that runs longer than 10 s counts as a hang.
+        # -rss_limit_mb: an input that needs more than 2 GiB counts as an
+        # out-of-memory crash. The parser's own input cap is 10 MiB, so
+        # neither is reachable by legitimate input.
+        run: |
+          cargo +nightly fuzz run parse \
+            --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz \
+            -- \
+            -dict="$FUZZ_DIR/chordpro.dict" \
+            -max_total_time="$FUZZ_SECONDS" \
+            -timeout=10 \
+            -rss_limit_mb=2048
+
+      - name: Keep the crashing input
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-parse-crash
+          path: crates/chordpro/fuzz/artifacts/parse/
+          if-no-files-found: ignore
