@@ -188,6 +188,10 @@ function containsWasmImport(sf: ts.SourceFile): boolean {
   return found;
 }
 
+// Each compile below type-checks the whole `src/` tree, which takes
+// 4-6 s — too close to vitest's 5 s default to be stable.
+const COMPILE_TIMEOUT_MS = 30_000;
+
 describe('@chordsketch/wasm shim resolution', () => {
   test('src typechecks cleanly when the shim is present and every other peer-resolution path is hidden', () => {
     // The positive test compiles the entire `src/` tree because the
@@ -200,7 +204,7 @@ describe('@chordsketch/wasm shim resolution', () => {
       ts.flattenDiagnosticMessageText(d.messageText, '\n'),
     );
     expect(diagnostics).toEqual([]);
-  });
+  }, COMPILE_TIMEOUT_MS);
 
   test('every src file dynamically importing @chordsketch/wasm emits a missing-types diagnostic when the shim is absent', () => {
     // Negative control. The filter accepts TS2307 (no module found
@@ -234,7 +238,7 @@ describe('@chordsketch/wasm shim resolution', () => {
     // a future refactor that drops the shim and silently leaves
     // some sites failing is the regression class we want to catch.
     expect(filesWithErrors.size).toBeGreaterThanOrEqual(expectedSites.length);
-  });
+  }, COMPILE_TIMEOUT_MS);
 
   test('src files importing @chordsketch/wasm carry no suppression directive or wasm-targeting triple-slash reference', () => {
     // Sibling-test symmetry with #2541's wasm-export shim policy
