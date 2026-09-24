@@ -293,7 +293,8 @@ jobs:
             scripts/test_generate_bare_directives.py \
             scripts/test_chocolatey_pack_push.py \
             scripts/test_chocolatey_generate_package.py \
-            scripts/test_release_checksum_guards.py
+            scripts/test_release_checksum_guards.py \
+            scripts/test_desktop_security_config.py
 
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})

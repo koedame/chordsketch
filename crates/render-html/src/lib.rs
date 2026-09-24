@@ -6068,6 +6068,54 @@ mod delegate_tests {
         assert!(!has_dangerous_uri_scheme("https://example.com"));
     }
 
+    /// Decodes the `\u{HEX}` escapes the shared corpus uses for control and
+    /// invisible characters.
+    fn decode_corpus_href(raw: &str) -> String {
+        let mut out = String::new();
+        let mut rest = raw;
+        while let Some(start) = rest.find("\\u{") {
+            out.push_str(&rest[..start]);
+            let after = &rest[start + 3..];
+            let end = after.find('}').expect("unterminated \\u{ escape in corpus");
+            let code = u32::from_str_radix(&after[..end], 16).expect("hex digits in corpus");
+            out.push(char::from_u32(code).expect("valid code point in corpus"));
+            rest = &after[end + 1..];
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// Every entry of the corpus shared with the React walker and the
+    /// playground's docs pipeline gets the same verdict here. Adding a case
+    /// to the file fails whichever implementation does not handle it yet.
+    #[test]
+    fn test_dangerous_uri_scheme_agrees_with_shared_corpus() {
+        let corpus = include_str!("../../../tests/fixtures/uri-scheme-corpus.txt");
+        let mut checked = 0;
+        for line in corpus.lines() {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let mut columns = line.splitn(3, '\t');
+            let (verdict, label, href) = match (columns.next(), columns.next(), columns.next()) {
+                (Some(v), Some(l), Some(h)) => (v, l, decode_corpus_href(h)),
+                _ => panic!("corpus line does not have three tab-separated columns: {line:?}"),
+            };
+            let expect_blocked = match verdict {
+                "blocked" => true,
+                "allowed" => false,
+                other => panic!("unknown corpus verdict {other:?} in line {line:?}"),
+            };
+            assert_eq!(
+                has_dangerous_uri_scheme(&href),
+                expect_blocked,
+                "corpus entry {label:?} ({verdict}): {href:?}"
+            );
+            checked += 1;
+        }
+        assert!(checked >= 40, "corpus looks truncated: {checked} entries");
+    }
+
     #[test]
     fn test_dangerous_uri_scheme_with_many_embedded_whitespace() {
         // 1 tab between each letter: colon at raw position 20, within the 30-char window.
