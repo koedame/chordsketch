@@ -101,4 +101,49 @@ mod tests {
             "not a Guitar Pro 5 file (no version header)"
         );
     }
+
+    #[test]
+    fn when_the_version_header_names_an_unsupported_version_it_is_quoted() {
+        let err = GpError::UnsupportedVersion {
+            version: "FICHIER GUITAR PRO v4.06".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "unsupported Guitar Pro version \"FICHIER GUITAR PRO v4.06\" \
+             (only Guitar Pro 5 files are supported)"
+        );
+    }
+
+    #[test]
+    fn when_the_input_is_too_large_the_message_names_the_limit() {
+        let err = GpError::TooLarge {
+            size: crate::MAX_INPUT_BYTES + 1,
+        };
+        assert_eq!(
+            err.to_string(),
+            format!(
+                "Guitar Pro input is {} bytes; the limit is {} bytes",
+                crate::MAX_INPUT_BYTES + 1,
+                crate::MAX_INPUT_BYTES
+            )
+        );
+    }
+
+    #[test]
+    fn when_the_input_is_truncated_the_message_names_the_offset() {
+        let err = GpError::Truncated { offset: 42 };
+        assert_eq!(err.to_string(), "Guitar Pro file is truncated at byte 42");
+    }
+
+    #[test]
+    fn when_a_value_is_invalid_the_message_names_the_offset_and_reason() {
+        let err = GpError::InvalidData {
+            offset: 7,
+            message: "negative measure count (-1)".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "invalid Guitar Pro data at byte 7: negative measure count (-1)"
+        );
+    }
 }
