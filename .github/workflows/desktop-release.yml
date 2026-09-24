@@ -14,10 +14,11 @@ name: Desktop Release
 #
 # Signing: this workflow ships **unsigned** bundles today. When
 # #2075 lands (Apple Developer ID + Windows Authenticode
-# certificates in repository secrets), Tauri's build step picks
-# up the signing env vars automatically and the same cargo tauri
-# build invocation below starts producing signed artefacts
-# without a workflow change. The `TAURI_SIGNING_PRIVATE_KEY` /
+# certificates in repository secrets), the shared build steps
+# import the Apple certificate into a keychain before the build
+# and Tauri's build step picks up the signing env vars, so the
+# same cargo tauri build invocation below starts producing
+# signed artefacts without a workflow change. The `TAURI_SIGNING_PRIVATE_KEY` /
 # `APPLE_SIGNING_IDENTITY` / `WINDOWS_CERTIFICATE_*` env vars are
 # reserved here so the plumbing is already in place.
 
