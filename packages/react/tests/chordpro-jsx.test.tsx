@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { fireEvent, render } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, test, vi } from 'vitest';
@@ -3044,6 +3048,41 @@ describe('renderChordproAst', () => {
     const container = renderImageWithSrc(src);
     expect(container.querySelector('img')).toBeNull();
   });
+
+  // The corpus shared with `crates/render-html`'s `has_dangerous_uri_scheme`
+  // and the playground's docs pipeline. Adding a case to the file fails
+  // whichever of the three does not handle it.
+  const corpusPath = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../tests/fixtures/uri-scheme-corpus.txt',
+  );
+  const corpus = readFileSync(corpusPath, 'utf8')
+    .split('\n')
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .map((line) => {
+      const [verdict, label, raw] = line.split('\t');
+      const href = raw.replace(/\\u\{([0-9A-Fa-f]+)\}/g, (_, hex) =>
+        String.fromCodePoint(parseInt(hex, 16)),
+      );
+      return { verdict, label, href };
+    });
+
+  test('shared URI corpus is loaded', () => {
+    expect(corpus.length).toBeGreaterThanOrEqual(40);
+  });
+
+  test.each(corpus.map((entry) => [entry.label, entry] as const))(
+    'agrees with the shared corpus: %s',
+    (_label, { verdict, href }) => {
+      const img = renderImageWithSrc(href).querySelector('img');
+      if (verdict === 'blocked') {
+        expect(img).toBeNull();
+      } else {
+        expect(verdict).toBe('allowed');
+        expect(img).not.toBeNull();
+      }
+    },
+  );
 
   test('lets safe URI schemes through (https, relative, fragment)', () => {
     for (const src of ['https://example.com/cover.png', 'photo.jpg', '#chord-diagrams']) {

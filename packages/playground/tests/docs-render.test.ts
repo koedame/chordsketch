@@ -7,6 +7,10 @@
 // URIs and rewriter rules per
 // `.claude/rules/sanitizer-security.md` §"Testing completeness".
 
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -453,52 +457,48 @@ describe('resolveRelative escape detection', () => {
 });
 
 describe('isSafeHref — adversarial parity with the Rust suite', () => {
-  // Mirrors the corpus in `crates/render-html/src/lib.rs`'s
-  // sanitiser tests. Each entry MUST be rejected. Sister-site
-  // parity per `.claude/rules/sanitizer-security.md` §"Testing
-  // completeness" and `.claude/rules/fix-propagation.md`.
-  const blocked: { label: string; href: string }[] = [
-    // Uppercase / mixed-case scheme prefixes.
-    { label: 'uppercase JAVASCRIPT:', href: 'JAVASCRIPT:alert(1)' },
-    { label: 'mixed-case JavaScript:', href: 'JavaScript:alert(1)' },
-    { label: 'uppercase VBSCRIPT:', href: 'VBSCRIPT:foo' },
-    { label: 'uppercase DATA:', href: 'DATA:text/html,foo' },
-    { label: 'uppercase FILE:', href: 'FILE:///etc/passwd' },
-    { label: 'uppercase BLOB:', href: 'BLOB:https://example.com/abc' },
-    { label: 'uppercase MHTML:', href: 'MHTML:!foo' },
-    // Leading-whitespace variants — `trim_start` strips ASCII +
-    // Unicode whitespace so `javascript:` ends up at index 0.
-    { label: 'leading ASCII spaces', href: '  javascript:alert(1)' },
-    { label: 'leading tab', href: '\tjavascript:alert(1)' },
-    { label: 'leading newline', href: '\njavascript:alert(1)' },
-    { label: 'leading NBSP (U+00A0)', href: '\u00a0javascript:alert(1)' },
-    { label: 'leading ideographic space (U+3000)', href: '\u3000javascript:alert(1)' },
-    { label: 'leading NEL (U+0085)', href: '\u0085javascript:alert(1)' },
-    // ASCII control / whitespace / invisible-format characters in
-    // the middle of the scheme — filtered by the body's predicate
-    // before the prefix check.
-    { label: 'NUL split', href: 'java\u0000script:alert(1)' },
-    { label: 'tab split', href: 'java\tscript:alert(1)' },
-    { label: 'newline split', href: 'java\nscript:alert(1)' },
-    { label: 'CR split', href: 'java\rscript:alert(1)' },
-    { label: 'space split', href: 'java\u0020script:alert(1)' },
-    { label: 'ZWSP split', href: 'java\u200bscript:alert(1)' },
-    { label: 'soft-hyphen split', href: 'java\u00adscript:alert(1)' },
-    { label: 'RTL-override split', href: 'java\u202escript:alert(1)' },
-    { label: 'BOM split', href: 'java\ufeffscript:alert(1)' },
+  // The corpus shared with `crates/render-html`'s `has_dangerous_uri_scheme`
+  // and the React walker's `isSafeHref`. Adding a case to the file fails
+  // whichever of the three does not handle it. Sister-site parity per
+  // `.claude/rules/sanitizer-security.md` §"Testing completeness" and
+  // `.claude/rules/fix-propagation.md`.
+  const corpusPath = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../tests/fixtures/uri-scheme-corpus.txt',
+  );
+  const corpus = readFileSync(corpusPath, 'utf8')
+    .split('\n')
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .map((line) => {
+      const [verdict, label, raw] = line.split('\t');
+      const href = raw.replace(/\\u\{([0-9A-Fa-f]+)\}/g, (_, hex) =>
+        String.fromCodePoint(parseInt(hex, 16)),
+      );
+      return { verdict, label, href };
+    });
+
+  it('loads the shared corpus', () => {
+    expect(corpus.length).toBeGreaterThanOrEqual(40);
+  });
+
+  for (const { verdict, label, href } of corpus) {
+    it(`${verdict === 'blocked' ? 'rejects' : 'accepts'} ${label}`, () => {
+      expect(verdict === 'blocked' || verdict === 'allowed').toBe(true);
+      expect(isSafeHref(href)).toBe(verdict === 'allowed');
+    });
+  }
+
+  // Not in the shared corpus: the docs pipeline also drops variation
+  // selectors and language tags (steganography vectors), which the Rust
+  // and React filters leave alone. Browsers do not strip these from a
+  // scheme either, so the stricter behaviour here is a safe superset.
+  const docsOnlyBlocked: { label: string; href: string }[] = [
     { label: 'Mongolian VS split', href: 'java\u180bscript:alert(1)' },
     { label: 'variation-selector split', href: 'java\ufe0fscript:alert(1)' },
     { label: 'lang-tag split', href: `java\u{E0041}script:alert(1)` },
-    // The 30-char filter cap MUST apply to filtered characters, not
-    // raw input — 50 invisible-format chars must not push
-    // `javascript:` past the cap.
-    {
-      label: '50x ZWSP padding then javascript:',
-      href: `${'\u200b'.repeat(50)}javascript:alert(1)`,
-    },
   ];
-  for (const { label, href } of blocked) {
-    it(`rejects ${label}`, () => {
+  for (const { label, href } of docsOnlyBlocked) {
+    it(`rejects ${label} (docs pipeline only)`, () => {
       expect(isSafeHref(href)).toBe(false);
     });
   }

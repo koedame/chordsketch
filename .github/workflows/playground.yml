@@ -18,10 +18,18 @@ on:
     paths:
       - 'packages/playground/**'
       - '.github/workflows/playground.yml'
+      # The URI-scheme corpus this suite is checked against, shared with
+      # `crates/render-html` and the other copy of the check. A case added
+      # there must fail here until this copy handles it.
+      - 'tests/fixtures/uri-scheme-corpus.txt'
   pull_request:
     paths:
       - 'packages/playground/**'
       - '.github/workflows/playground.yml'
+      # The URI-scheme corpus this suite is checked against, shared with
+      # `crates/render-html` and the other copy of the check. A case added
+      # there must fail here until this copy handles it.
+      - 'tests/fixtures/uri-scheme-corpus.txt'
 
 # Cancel stale PR runs on force-push / rebase. Main / workflow_dispatch
 # runs always go to completion (gated on pull_request event).

@@ -12,6 +12,10 @@ on:
     paths:
       - 'packages/react/**'
       - '.github/workflows/react.yml'
+      # The URI-scheme corpus this suite is checked against, shared with
+      # `crates/render-html` and the other copy of the check. A case added
+      # there must fail here until this copy handles it.
+      - 'tests/fixtures/uri-scheme-corpus.txt'
       - '.github/actions/rust-cache/action.yml'
       # The `wasm-pack` pin this workflow consumes through the
       # composite action (#2225). Without this entry a pin bump
@@ -21,6 +25,10 @@ on:
     paths:
       - 'packages/react/**'
       - '.github/workflows/react.yml'
+      # The URI-scheme corpus this suite is checked against, shared with
+      # `crates/render-html` and the other copy of the check. A case added
+      # there must fail here until this copy handles it.
+      - 'tests/fixtures/uri-scheme-corpus.txt'
       - '.github/actions/rust-cache/action.yml'
       # The `wasm-pack` pin this workflow consumes through the
       # composite action (#2225). Without this entry a pin bump
