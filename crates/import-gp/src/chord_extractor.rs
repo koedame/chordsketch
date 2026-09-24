@@ -641,4 +641,55 @@ mod tests {
         assert_eq!(section_directives("Bridge").0, "start_of_bridge");
         assert_eq!(section_directives("Intro").0, "start_of_verse");
     }
+
+    #[test]
+    fn when_a_diagram_reads_as_neither_a_name_nor_a_spelling_it_is_dropped_with_a_warning() {
+        use crate::gp5::structs::{
+            Beat, ChordDiagram, Info, Lyrics, Measure, MeasureHeader, Track,
+        };
+
+        let mut measure = Measure::default();
+        measure.voices[0].push(Beat {
+            ticks: TICKS_PER_QUARTER,
+            sounds: true,
+            // No stored name and no spelling: `chord_name::resolve` cannot
+            // produce a chord at all (see chord_name.rs's own coverage of
+            // `Resolved::Unknown`), so `collect_chords` must drop it.
+            chord: Some(ChordDiagram {
+                name: String::new(),
+                spelling: None,
+            }),
+            tempo: None,
+        });
+        let gp = Gp5Song {
+            info: Info::default(),
+            lyrics: Lyrics::default(),
+            tempo: 120,
+            key_fifths: 0,
+            measure_headers: vec![MeasureHeader {
+                numerator: 4,
+                denominator: 4,
+                marker: None,
+                key: None,
+            }],
+            tracks: vec![Track {
+                name: "Guitar".to_string(),
+                capo: 0,
+                measures: vec![measure],
+            }],
+        };
+
+        let mut events = BTreeMap::new();
+        let mut warnings = Vec::new();
+        collect_chords(&gp, 0, &[0], 0, false, &mut events, &mut warnings);
+
+        assert!(
+            events.is_empty(),
+            "a diagram that resolves to nothing must not produce a chord event"
+        );
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].kind, WarningKind::LossyDrop);
+        assert!(warnings[0].message.contains("measure 1"));
+        assert!(warnings[0].message.contains("is not a chord name"));
+    }
 }
