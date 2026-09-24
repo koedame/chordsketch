@@ -14,6 +14,7 @@ members = [
     "crates/ffi",
     "crates/convert",
     "crates/convert-musicxml",
+    "crates/import-gp",
     "apps/desktop/src-tauri",
     "apps/desktop/preview-handler",
 ]
@@ -49,6 +50,7 @@ default-members = [
     "crates/ffi",
     "crates/convert",
     "crates/convert-musicxml",
+    "crates/import-gp",
 ]
 resolver = "3"
 

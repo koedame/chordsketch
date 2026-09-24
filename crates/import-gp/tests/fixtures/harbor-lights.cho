@@ -1,0 +1,27 @@
+{title: Harbor Lights}
+{artist: ChordSketch Test Band}
+{subtitle: A test song}
+{album: Fixtures}
+{composer: ChordSketch contributors}
+{lyricist: ChordSketch contributors}
+{copyright: MIT}
+{key: Em}
+{time: 4/4}
+{tempo: 96}
+{capo: 2}
+
+{start_of_verse: Intro}
+[F#m] [D] [E]
+{end_of_verse}
+
+{start_of_verse: Verse}
+[F#m]Lanterns on [D]the [A]water
+[Bm7]Guide me home tonight [E][F#m]
+{end_of_verse}
+
+{start_of_chorus: Chorus}
+{tempo: 104}
+[A]Harbor lights are [E]calling
+Bring [F#m]me back [D]again to shore
+[Amaj7]Home [Bm7][E][F#m]
+{end_of_chorus}
