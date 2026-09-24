@@ -1,0 +1,15 @@
+{title: Amazing Grace}
+{artist: Traditional}
+{composer: Traditional}
+{lyricist: John Newton}
+{copyright: Public domain}
+{key: G}
+{time: 3/4}
+{tempo: 72}
+
+{start_of_verse: Verse 1}
+A[G]mazing [G7]grace how [C]sweet the [G]sound
+[G]That saved a [Em]wretch like [D]me
+[D7]I [G]once was [G7]lost but [C]now am [G]found
+[G]Was [Em]blind but [D]now I [G]see
+{end_of_verse}
