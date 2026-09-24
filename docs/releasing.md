@@ -384,13 +384,14 @@ Publishing order:
 6. `chordsketch-render-ireal` (depends on `chordsketch-ireal`)
 7. `chordsketch-convert-musicxml` (depends on `chordsketch-chordpro`)
 8. `chordsketch-convert` (depends on `chordsketch-chordpro` + `chordsketch-ireal`)
-9. `chordsketch-mcp` (depends on `chordsketch-chordpro` +
-   `chordsketch-render-text` + `chordsketch-render-html`)
-10. `chordsketch` (depends on 1–7 and 9; does not depend on `chordsketch-convert`)
+9. `chordsketch-import-gp` (depends on `chordsketch-chordpro` + `chordsketch-convert`)
+10. `chordsketch-mcp` (depends on `chordsketch-chordpro` +
+    `chordsketch-render-text` + `chordsketch-render-html`)
+11. `chordsketch` (depends on every crate above)
 
-Steps 3-7 can be published in any order among themselves. All of steps 1-7 and
-step 9 must complete before step 10. Step 8 only requires steps 1-2 and is
-independent of step 10.
+Steps 3-7 can be published in any order among themselves. Step 8 only
+requires steps 1-2, and step 9 requires steps 1 and 8. Every other step must
+complete before step 11.
 
 ## Distribution Channels
 
@@ -409,7 +410,7 @@ together with the check in `scripts/_publish_checks.py`.
 
 | Channel | Identifier | Trigger | Required secret(s) | Verified by |
 |---|---|---|---|---|
-| crates.io | `chordsketch` (CLI) + 9 lib crates | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6) | none (OIDC trusted publisher, environment `crates-io`) | `cargo-install` job |
+| crates.io | `chordsketch` (CLI) + 10 lib crates | `publish-registries.yml`, dispatched by `scripts/release.py` (Step 6) | none (OIDC trusted publisher, environment `crates-io`) | `cargo-install` job |
 | GitHub Releases | binary archives | `release.yml` on tag push | `GITHUB_TOKEN` | `source-build` job |
 | GHCR | `ghcr.io/koedame/chordsketch` | `docker.yml`, called by `release.yml` on tag push | `GITHUB_TOKEN` (push), org policy must allow public packages | `docker-ghcr` job |
 | Docker Hub | `docker.io/koedame/chordsketch` | `docker.yml`, called by `release.yml` on tag push | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `docker-hub` job |
@@ -1087,7 +1088,7 @@ Done once, when moving from the maintainer-local publish (ADR-0008) to CI.
    read -rs CRATES_IO_TOKEN
    for crate in chordsketch-chordpro chordsketch-ireal chordsketch-render-text chordsketch-render-html \
        chordsketch-render-pdf chordsketch-render-ireal chordsketch-convert chordsketch-convert-musicxml \
-       chordsketch-mcp chordsketch; do
+       chordsketch-import-gp chordsketch-mcp chordsketch; do
      curl -fsS -X POST https://crates.io/api/v1/trusted_publishing/github_configs \
        -H "Authorization: $CRATES_IO_TOKEN" -H 'Content-Type: application/json' \
        -H 'User-Agent: chordsketch-maintainer (+https://github.com/koedame/chordsketch)' \
@@ -1128,7 +1129,7 @@ Done once, when moving from the maintainer-local publish (ADR-0008) to CI.
      read -rs CRATES_IO_TOKEN
      for crate in chordsketch-chordpro chordsketch-ireal chordsketch-render-text chordsketch-render-html \
          chordsketch-render-pdf chordsketch-render-ireal chordsketch-convert chordsketch-convert-musicxml \
-         chordsketch-mcp chordsketch; do
+         chordsketch-import-gp chordsketch-mcp chordsketch; do
        curl -sS -o /dev/null -w "$crate %{http_code}\n" -X PATCH "https://crates.io/api/v1/crates/$crate" \
          -H "Authorization: $CRATES_IO_TOKEN" -H 'Content-Type: application/json' \
          -H 'User-Agent: chordsketch-maintainer (+https://github.com/koedame/chordsketch)' \

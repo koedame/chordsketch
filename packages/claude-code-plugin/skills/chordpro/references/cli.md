@@ -6,7 +6,7 @@ config file, the `fmt` / `convert` subcommands, or iReal Pro input.
 ```
 chordsketch [OPTIONS] [FILES]...
 chordsketch fmt [--check] <FILES>...
-chordsketch convert [--from FMT] [--to musicxml] [-o FILE] <FILES>...
+chordsketch convert [--from FMT] [--track N] [--to musicxml] [-o FILE] <FILES>...
 ```
 
 ## Render options
@@ -58,13 +58,21 @@ Import into ChordPro, or export out of it.
 chordsketch convert sheet.txt -o song.cho          # detect the input format
 chordsketch convert --from abc tune.abc -o song.cho
 chordsketch convert --from musicxml score.xml -o song.cho
+chordsketch convert song.gp5 --track 2 -o song.cho   # Guitar Pro 5, chords from track 2
 chordsketch convert --to musicxml song.cho -o score.xml
 ```
 
-`--from` is `auto` (default), `plaintext`, `abc`, or `musicxml`. `plaintext`
-means a chords-over-lyrics sheet — chord lines interleaved with lyric lines,
-the way chord sites publish them. `--to` currently accepts only `musicxml`;
-without it the output is ChordPro.
+`--from` is `auto` (default), `plaintext`, `abc`, `musicxml`, or `gp5`.
+`plaintext` means a chords-over-lyrics sheet — chord lines interleaved with
+lyric lines, the way chord sites publish them. `--to` currently accepts only
+`musicxml`; without it the output is ChordPro.
+
+A Guitar Pro 5 file (`.gp5`, or any file starting with the Guitar Pro
+header) gives the chords of one track — the first with chord diagrams unless
+`--track N` names another — over its lyrics, with the section markers,
+key, time signature, tempo and capo. Under a capo the chords are written at
+sounding pitch with `{capo}`. What could not be carried over is reported as
+`warning:` lines on stderr. Guitar Pro 3, 4, 6 and 7 files are rejected.
 
 Use `-` as a file name to read stdin.
 
