@@ -16,3 +16,11 @@
 crates/*/tests/fixtures/**/input.cho text eol=lf
 crates/*/tests/fixtures/**/expected.txt text eol=lf
 crates/*/tests/fixtures/**/expected.svg text eol=lf
+
+# Guitar Pro files are binary; the importer's golden ChordPro output is
+# compared byte for byte, so it stays LF on every runner.
+*.gp3 binary
+*.gp4 binary
+*.gp5 binary
+*.gpx binary
+crates/import-gp/tests/fixtures/*.cho text eol=lf
