@@ -717,27 +717,43 @@ app, so it has its own place in the signing order:
 **Today** the release workflow has no Developer ID: `desktop-release.yml`
 passes the `APPLE_*` secrets through `desktop-build-steps`, they are
 empty, and the bundler leaves the app unsigned. The extension inside it
-is signed ad hoc by step 1. Whether macOS loads an ad-hoc extension
-from an otherwise unsigned app, after the user has cleared the
-quarantine flag, has not been verified. PR builds (`desktop-build.yml`)
-and the Homebrew source build (ADR-0082) sign the whole bundle ad hoc,
-and the arm64 PR cell checks that the extension registers and renders
-(`apps/desktop/scripts/quicklook-smoke.sh`).
+is signed ad hoc by step 1, and that is enough for Quick Look once the
+quarantine flag is cleared: on a `macos-latest` runner, a bundle built
+this way, quarantined like a download and then cleared with
+`xattr -dr com.apple.quarantine` (what the README asks users to do),
+was registered by `pluginkit` and rendered a `.cho` with the chords
+above the lyrics ([run](https://github.com/koedame/chordsketch/actions/runs/36030556937)). Approving the app
+through System Settings → "Open Anyway" without clearing the flag was
+not tested. The app's own seal is broken in this shape
+(`codesign --verify --deep --strict` reports "code has no resources but
+signature indicates they must be present"), so `quicklook-smoke.sh`,
+which checks the seal first, fails on a release bundle until it is
+signed. PR builds (`desktop-build.yml`) and the Homebrew source build
+(ADR-0082) sign the whole bundle ad hoc, and the arm64 PR cell runs the
+smoke on that.
 
 **When the Developer ID is added**
 ([signing and notarization](https://github.com/koedame/chordsketch/issues/2075)):
 
-1. Set `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
-   `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` and
-   `APPLE_TEAM_ID` as repository secrets. `desktop-release.yml` already
-   passes all six.
-2. Import the certificate into a keychain on the macOS release cells
-   **before** the `Desktop bundle build steps` step. The bundler imports
-   `APPLE_CERTIFICATE` only when it reaches its own signing step, which
-   is after the `prebuild` hook has signed the extension; without an
-   earlier import, that hook's `codesign` call fails because the
-   identity is not in any keychain yet.
-3. Check a release bundle before publishing it:
+1. Set `APPLE_CERTIFICATE` (the Developer ID Application certificate
+   and its private key as a `.p12`, base64-encoded:
+   `base64 -i certificate.p12`), `APPLE_CERTIFICATE_PASSWORD` (the
+   `.p12` password), `APPLE_SIGNING_IDENTITY` (the certificate's name,
+   `Developer ID Application: <name> (<team id>)`), `APPLE_ID`,
+   `APPLE_PASSWORD` and `APPLE_TEAM_ID` as repository secrets.
+   Nothing else has to change. `desktop-release.yml` passes all six to
+   `desktop-build-steps`, whose macOS step `Import the Apple signing
+   certificate` puts the certificate into a keychain **before** the
+   build. The `prebuild` hook signs the extension before the bundler
+   reaches its own signing step, so the bundler's import would come too
+   late; the step is the only import, and the bundler finds the
+   identity by name in the same keychain. It fails the build when the
+   certificate is set without `APPLE_SIGNING_IDENTITY`, or when that
+   name is not the identity in the certificate. The step was exercised
+   with a throwaway self-signed identity in the same run: the
+   extension, the app and the DMG were signed with it and the smoke
+   passed.
+2. Check a release bundle before publishing it:
 
    ```sh
    codesign --verify --deep --strict --verbose=2 ChordSketch.app
