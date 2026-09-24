@@ -732,6 +732,7 @@ dependencies = [
  "assert_cmd",
  "chordsketch-chordpro",
  "chordsketch-convert-musicxml",
+ "chordsketch-import-gp",
  "chordsketch-ireal",
  "chordsketch-mcp",
  "chordsketch-render-html",
@@ -794,6 +795,14 @@ dependencies = [
  "chordsketch-render-text",
  "thiserror 2.0.20",
  "uniffi",
+]
+
+[[package]]
+name = "chordsketch-import-gp"
+version = "0.7.0"
+dependencies = [
+ "chordsketch-chordpro",
+ "chordsketch-convert",
 ]
 
 [[package]]

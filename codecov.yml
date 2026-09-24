@@ -5,7 +5,8 @@
 # gap (`chordsketch-ireal`, `chordsketch-convert`,
 # `chordsketch-convert-musicxml`, `chordsketch-render-ireal`,
 # `chordsketch-lsp`, `chordsketch` CLI). `chordsketch-mcp` closes the
-# same gap for a crate added after that pass (#2857, 2026-09-05):
+# same gap for a crate added after that pass (#2857, 2026-09-05), and
+# `chordsketch-import-gp` for the Guitar Pro importer (#1142):
 #
 #   core              standalone floor 85%
 #   Renderers (group) floor 80%, intra-group skew <= 5%
@@ -17,6 +18,7 @@
 #   ireal             floor 85%
 #   convert           floor 80%
 #   convert-musicxml  floor 80%
+#   import-gp         floor 80%
 #   render-ireal      floor 85%
 #   lsp               floor 85%
 #   cli               floor 70%
@@ -168,6 +170,14 @@ coverage:
       convert-musicxml:
         paths:
           - crates/convert-musicxml/
+        target: 80%
+        threshold: 1%
+        informational: false
+
+      # Guitar Pro 5 → ChordPro importer.
+      import-gp:
+        paths:
+          - crates/import-gp/
         target: 80%
         threshold: 1%
         informational: false

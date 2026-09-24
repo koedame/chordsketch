@@ -17,12 +17,19 @@ use tempfile::NamedTempFile;
 const MAX_INPUT_BYTES: u64 = 52_428_800;
 
 /// Reads `path` into a [`String`], returning an error string if the file is
+/// larger than [`MAX_INPUT_BYTES`], is not UTF-8, or if any I/O error occurs.
+#[must_use = "I/O errors from reading the file must be handled"]
+fn read_file_clamped(path: &str) -> Result<String, String> {
+    read_file_clamped_bytes(path).and_then(utf8)
+}
+
+/// Reads `path` as raw bytes, returning an error string if the file is
 /// larger than [`MAX_INPUT_BYTES`] or if any I/O error occurs.
 ///
 /// [`fs::metadata`] is used for an early, cheap size check that avoids
 /// loading oversized files into memory at all.
 #[must_use = "I/O errors from reading the file must be handled"]
-fn read_file_clamped(path: &str) -> Result<String, String> {
+fn read_file_clamped_bytes(path: &str) -> Result<Vec<u8>, String> {
     match fs::metadata(path) {
         Ok(meta) if meta.len() > MAX_INPUT_BYTES => {
             return Err(format!(
@@ -33,21 +40,28 @@ fn read_file_clamped(path: &str) -> Result<String, String> {
         Err(e) => return Err(e.to_string()),
         Ok(_) => {}
     }
-    fs::read_to_string(path).map_err(|e| e.to_string())
+    fs::read(path).map_err(|e| e.to_string())
 }
 
 /// Reads stdin into a [`String`], rejecting streams that exceed
+/// [`MAX_INPUT_BYTES`] or are not UTF-8.
+#[must_use = "I/O errors from reading stdin must be handled"]
+fn read_stdin_clamped() -> Result<String, String> {
+    read_stdin_clamped_bytes().and_then(utf8)
+}
+
+/// Reads stdin as raw bytes, rejecting streams that exceed
 /// [`MAX_INPUT_BYTES`].
 ///
 /// Uses [`Read::take`] to avoid buffering more than `MAX_INPUT_BYTES + 1`
 /// bytes; if the read fills the cap the stream is rejected without consuming
 /// the remainder.
 #[must_use = "I/O errors from reading stdin must be handled"]
-fn read_stdin_clamped() -> Result<String, String> {
-    let mut buf = String::new();
+fn read_stdin_clamped_bytes() -> Result<Vec<u8>, String> {
+    let mut buf = Vec::new();
     io::stdin()
         .take(MAX_INPUT_BYTES + 1)
-        .read_to_string(&mut buf)
+        .read_to_end(&mut buf)
         .map_err(|e| e.to_string())?;
     if buf.len() as u64 > MAX_INPUT_BYTES {
         return Err(format!(
@@ -56,6 +70,11 @@ fn read_stdin_clamped() -> Result<String, String> {
         ));
     }
     Ok(buf)
+}
+
+/// Decodes input bytes as UTF-8, with the message `read_to_string` gives.
+fn utf8(bytes: Vec<u8>) -> Result<String, String> {
+    String::from_utf8(bytes).map_err(|_| "stream did not contain valid UTF-8".to_string())
 }
 
 /// Minimal JSON string escape for the `--warnings-json` output stream.
@@ -212,14 +231,16 @@ enum Commands {
 
     /// Convert between ChordPro and other music notation formats.
     ///
-    /// Import: reads plain-text, ABC notation (`.abc`), or MusicXML (`.xml`)
-    /// files and converts them to ChordPro (`.cho`) format.
+    /// Import: reads plain-text, ABC notation (`.abc`), MusicXML (`.xml`), or
+    /// Guitar Pro 5 (`.gp5`) files and converts them to ChordPro (`.cho`)
+    /// format.
     ///
     /// Export: reads ChordPro files and converts them to MusicXML (`.xml`)
     /// using `--to musicxml`.
     ///
     /// Auto-detection is used by default for import.  Pass `--from plaintext`,
-    /// `--from abc`, or `--from musicxml` to force a specific input format.
+    /// `--from abc`, `--from musicxml`, or `--from gp5` to force a specific
+    /// input format.
     Convert {
         /// Input file(s) to convert. Use '-' to read from stdin.
         #[arg(required = true)]
@@ -228,9 +249,15 @@ enum Commands {
         /// Input format. `auto` detects the format automatically;
         /// `plaintext` forces plain chord+lyrics conversion;
         /// `abc` forces ABC notation conversion;
-        /// `musicxml` forces MusicXML import.
+        /// `musicxml` forces MusicXML import;
+        /// `gp5` forces Guitar Pro 5 import.
         #[arg(long, default_value = "auto")]
         from: ConvertFrom,
+
+        /// Guitar Pro only: take chords from track N (1-based). By default
+        /// the first track with chord diagrams is used.
+        #[arg(long, value_name = "N")]
+        track: Option<usize>,
 
         /// Output format for export. `musicxml` converts ChordPro → MusicXML.
         /// When omitted, the output is ChordPro (`.cho`) format.
@@ -254,6 +281,8 @@ enum ConvertFrom {
     Abc,
     /// Force MusicXML import.
     Musicxml,
+    /// Force Guitar Pro 5 import.
+    Gp5,
 }
 
 /// Output format for the `convert --to` flag.
@@ -312,11 +341,12 @@ fn main() -> ExitCode {
     if let Some(Commands::Convert {
         files,
         from,
+        track,
         to,
         output,
     }) = cli.command
     {
-        return run_convert(&files, from, to, output.as_deref());
+        return run_convert(&files, from, track, to, output.as_deref());
     }
 
     // Render mode: require at least one file (unless generating completions).
@@ -826,6 +856,7 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
 fn run_convert(
     files: &[String],
     from: ConvertFrom,
+    track: Option<usize>,
     to: Option<ConvertTo>,
     output_path: Option<&str>,
 ) -> ExitCode {
@@ -834,9 +865,14 @@ fn run_convert(
         song_to_chordpro,
     };
     use chordsketch_convert_musicxml::{from_musicxml, to_musicxml};
+    use chordsketch_import_gp::{ImportOptions, import_gp5};
 
     // --- Export path: ChordPro → MusicXML -----------------------------------
     if let Some(ConvertTo::Musicxml) = to {
+        if track.is_some() {
+            eprintln!("error: --track applies only to Guitar Pro input");
+            return ExitCode::FAILURE;
+        }
         if files.len() > 1 {
             eprintln!("error: --to musicxml supports only a single input file");
             return ExitCode::FAILURE;
@@ -873,9 +909,14 @@ fn run_convert(
     let mut combined = String::new();
 
     for file in files {
-        let input = if file == "-" {
-            match read_stdin_clamped() {
-                Ok(s) => s,
+        let label = if file == "-" {
+            "<stdin>"
+        } else {
+            file.as_str()
+        };
+        let bytes = if file == "-" {
+            match read_stdin_clamped_bytes() {
+                Ok(b) => b,
                 Err(e) => {
                     eprintln!("error: reading stdin: {e}");
                     had_error = true;
@@ -883,13 +924,70 @@ fn run_convert(
                 }
             }
         } else {
-            match read_file_clamped(file) {
-                Ok(s) => s,
+            match read_file_clamped_bytes(file) {
+                Ok(b) => b,
                 Err(e) => {
                     eprintln!("error: {file}: {e}");
                     had_error = true;
                     continue;
                 }
+            }
+        };
+
+        // Guitar Pro files are binary, so they are recognised before the
+        // input is decoded as text: by extension (every Guitar Pro version,
+        // so an unsupported one gets the importer's error rather than a
+        // UTF-8 one), or by the "FICHIER GUITAR PRO" version header that
+        // GP3–GP5 files start with.
+        let ext = Path::new(file.as_str())
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase);
+        let guitar_pro = match from {
+            ConvertFrom::Gp5 => true,
+            ConvertFrom::Auto => {
+                matches!(ext.as_deref(), Some("gp3" | "gp4" | "gp5" | "gpx" | "gp"))
+                    || bytes.get(1..19) == Some(b"FICHIER GUITAR PRO".as_slice())
+            }
+            _ => false,
+        };
+        if guitar_pro {
+            let mut options = ImportOptions::new();
+            if let Some(n) = track {
+                options = options.with_track(n);
+            }
+            match import_gp5(&bytes, &options) {
+                Ok(result) => {
+                    for warning in &result.warnings {
+                        eprintln!("warning: {label}: {}", warning.message);
+                    }
+                    if !combined.is_empty() {
+                        combined.push_str("{new_song}\n");
+                    }
+                    combined.push_str(&song_to_chordpro(&result.output));
+                }
+                Err(e) => {
+                    eprintln!("error: {label}: {e}");
+                    had_error = true;
+                }
+            }
+            continue;
+        }
+        if track.is_some() {
+            eprintln!("error: {label}: --track applies only to Guitar Pro input");
+            had_error = true;
+            continue;
+        }
+        let input = match utf8(bytes) {
+            Ok(s) => s,
+            Err(e) => {
+                if file == "-" {
+                    eprintln!("error: reading stdin: {e}");
+                } else {
+                    eprintln!("error: {file}: {e}");
+                }
+                had_error = true;
+                continue;
             }
         };
 
@@ -906,12 +1004,8 @@ fn run_convert(
             ConvertFrom::Plaintext => Action::Plaintext,
             ConvertFrom::Abc => Action::Abc,
             ConvertFrom::Musicxml => Action::MusicXml,
+            ConvertFrom::Gp5 => unreachable!("Guitar Pro input is handled above"),
             ConvertFrom::Auto => {
-                // Check file extension first
-                let ext = Path::new(file.as_str())
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(str::to_ascii_lowercase);
                 if ext.as_deref() == Some("xml") || ext.as_deref() == Some("musicxml") {
                     Action::MusicXml
                 } else {
@@ -947,11 +1041,6 @@ fn run_convert(
                 match from_musicxml(&input) {
                     Ok(song) => combined.push_str(&song_to_chordpro(&song)),
                     Err(e) => {
-                        let label = if file == "-" {
-                            "<stdin>"
-                        } else {
-                            file.as_str()
-                        };
                         eprintln!("error: {label}: {e}");
                         had_error = true;
                     }
@@ -965,14 +1054,10 @@ fn run_convert(
                 combined.push_str(&input);
             }
             Action::Skip => {
-                let label = if file == "-" {
-                    "<stdin>"
-                } else {
-                    file.as_str()
-                };
                 eprintln!(
                     "warning: {label}: format could not be detected; \
-                     use --from plaintext, --from abc, or --from musicxml to force conversion"
+                     use --from plaintext, --from abc, --from musicxml, or --from gp5 \
+                     to force conversion"
                 );
                 had_error = true;
             }
