@@ -1,6 +1,6 @@
 import { act, render, waitFor } from '@testing-library/react';
 import { useRef, useState } from 'react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import type { ChordSourceAreaHandle } from '../src/chord-source-area';
 import { useChordEditor, type UseChordEditor } from '../src/use-chord-editor';
@@ -18,8 +18,8 @@ const SOURCE = '[G]Almost [Bbm7]heaven';
 
 let latest: UseChordEditor;
 let currentSource: string;
-let setCaretSpy: ReturnType<typeof vi.fn>;
-let blurSpy: ReturnType<typeof vi.fn>;
+let setCaretSpy: Mock<(offset: number) => void>;
+let blurSpy: Mock<() => void>;
 
 function Harness({
   initial,
@@ -36,8 +36,8 @@ function Harness({
   currentSource = source;
   const ref = useRef<ChordSourceAreaHandle | null>(null);
   if (ref.current === null) {
-    setCaretSpy = vi.fn();
-    blurSpy = vi.fn();
+    setCaretSpy = vi.fn<(offset: number) => void>();
+    blurSpy = vi.fn<() => void>();
     ref.current = {
       focus: vi.fn(),
       blur: blurSpy,
@@ -59,7 +59,7 @@ function Harness({
 }
 
 function mount(initial = SOURCE, transpose?: number) {
-  setCaretSpy = vi.fn();
+  setCaretSpy = vi.fn<(offset: number) => void>();
   return render(<Harness initial={initial} transpose={transpose} />);
 }
 
@@ -342,7 +342,7 @@ describe('useChordEditor chord-audio', () => {
   /** Mount with audio on and wait for the wasm preload to resolve so a
    * synchronous `play` inside an edit can read the pitch module. */
   async function mountWithAudioLoaded() {
-    setCaretSpy = vi.fn();
+    setCaretSpy = vi.fn<(offset: number) => void>();
     const loader = makeLoader();
     render(<Harness initial={SOURCE} chordAudio chordAudioLoader={loader} />);
     await waitFor(() => expect(loadCalls).toHaveBeenCalled());
@@ -352,7 +352,7 @@ describe('useChordEditor chord-audio', () => {
   }
 
   test('exposes a non-null chordAudio config when audio is on and supported', () => {
-    setCaretSpy = vi.fn();
+    setCaretSpy = vi.fn<(offset: number) => void>();
     render(<Harness initial={SOURCE} chordAudio chordAudioLoader={makeLoader()} />);
     expect(latest.chordAudio).not.toBeNull();
     expect(latest.chordAudio?.enabled).toBe(true);
@@ -360,7 +360,7 @@ describe('useChordEditor chord-audio', () => {
   });
 
   test('chordAudio config is null when the feature is off', () => {
-    setCaretSpy = vi.fn();
+    setCaretSpy = vi.fn<(offset: number) => void>();
     render(<Harness initial={SOURCE} chordAudioLoader={makeLoader()} />);
     expect(latest.chordAudio).toBeNull();
   });
