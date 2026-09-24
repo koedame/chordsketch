@@ -20,11 +20,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TAURI_DIR = REPO_ROOT / "apps" / "desktop" / "src-tauri"
 CAPABILITIES_DIR = TAURI_DIR / "capabilities"
-CONF_FILES = [
-    TAURI_DIR / "tauri.conf.json",
-    TAURI_DIR / "tauri.macos.conf.json",
-    TAURI_DIR / "tauri.windows.conf.json",
-]
+TAURI_MAIN_CONF = TAURI_DIR / "tauri.conf.json"
+# Discovered, not hard-coded: a new `tauri.<platform>.conf.json` override
+# (e.g. for a future Linux cell) is picked up automatically, the same way
+# `test_capability_files_are_only_default_json` enumerates the capabilities
+# directory instead of naming files. A static list would let a new platform
+# override skip every ConfigTests check silently.
+PLATFORM_OVERRIDE_CONF_FILES = sorted(TAURI_DIR.glob("tauri.*.conf.json"))
+CONF_FILES = [TAURI_MAIN_CONF, *PLATFORM_OVERRIDE_CONF_FILES]
 
 # Every permission the main window holds. A plain string is granted without a
 # scope; a dict is a scoped grant and must match exactly.
@@ -183,15 +186,26 @@ class ContentSecurityPolicyTests(unittest.TestCase):
         )
 
     def test_csp_allows_no_remote_origin_anywhere(self):
+        # Local, non-URL scheme tokens the reviewed policy uses on purpose:
+        # `data:` for inline image sources, `ipc:` for the Tauri IPC bridge.
+        local_scheme_tokens = {"data:", "ipc:"}
         for directive, sources in self.csp.items():
             for source in sources:
                 self.assertNotIn(source, ("*", "https:", "http:", "ws:", "wss:"), directive)
+                if source.startswith("'") or source in local_scheme_tokens:
+                    continue
                 if "://" in source:
                     self.assertEqual(
                         source,
                         "http://ipc.localhost",
                         f"{directive} names a remote origin: {source}",
                     )
+                    continue
+                # CSP treats a bare host (`evil.example`) or host+path
+                # (`evil.example/x`) as a source matching that host under
+                # any scheme — the same hazard as a full URL, just without
+                # the `://` this loop otherwise keys on.
+                self.fail(f"{directive} names a bare host source: {source!r}")
 
     def test_csp_script_src_has_no_inline_scripts(self):
         self.assertNotIn("'unsafe-inline'", self.csp["script-src"])
@@ -201,6 +215,16 @@ class ContentSecurityPolicyTests(unittest.TestCase):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_platform_override_set_is_the_reviewed_set(self):
+        self.assertEqual(
+            sorted(p.name for p in PLATFORM_OVERRIDE_CONF_FILES),
+            ["tauri.macos.conf.json", "tauri.windows.conf.json"],
+            "a new tauri.<platform>.conf.json override exists; the rest of "
+            "ConfigTests now covers its contents automatically, but its "
+            "name still needs adding to the expected set checked here so "
+            "the addition gets a review point instead of passing silently",
+        )
+
     def test_no_config_file_loads_a_remote_page_into_a_window(self):
         for path in CONF_FILES:
             for window in load(path).get("app", {}).get("windows", []):
@@ -228,7 +252,7 @@ class ConfigTests(unittest.TestCase):
             )
 
     def test_platform_overrides_do_not_replace_the_csp(self):
-        for path in CONF_FILES[1:]:
+        for path in PLATFORM_OVERRIDE_CONF_FILES:
             security = load(path).get("app", {}).get("security", {})
             self.assertNotIn("csp", security, path.name)
 
