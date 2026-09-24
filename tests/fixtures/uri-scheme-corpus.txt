@@ -1,0 +1,81 @@
+# URI-scheme sanitiser corpus, shared by every implementation of the check.
+#
+# Three copies of the same denylist exist and must agree on every entry here:
+#   - Rust:       `has_dangerous_uri_scheme` in crates/render-html/src/lib.rs
+#   - React:      `isSafeHref` in packages/react/src/chordpro-jsx.tsx
+#   - Playground: `isSafeHref` in packages/playground/scripts/lib/docs-render.mjs
+# Each has a test that reads this file, so adding a case here fails whichever
+# copy does not yet handle it (`.claude/rules/sanitizer-security.md`,
+# `.claude/rules/fix-propagation.md`).
+#
+# Format: <verdict><TAB><label><TAB><href>
+#   verdict  `blocked` = the href must be rejected, `allowed` = it must pass.
+#   href     Literal text, except `\u{HEX}` stands for that code point. Every
+#            tab, newline and other control character MUST be written that
+#            way so a line never breaks or gains a stray column.
+# Blank lines and lines starting with `#` are ignored.
+
+# Canonical dangerous schemes.
+blocked	javascript:	javascript:alert(1)
+blocked	vbscript:	vbscript:msgbox(1)
+blocked	data:	data:text/html,<script>alert(1)</script>
+blocked	file:	file:///etc/passwd
+blocked	blob:	blob:http://evil.example/abc
+blocked	mhtml:	mhtml:file://C:/page.mhtml
+
+# Uppercase and mixed-case scheme prefixes.
+blocked	uppercase JAVASCRIPT:	JAVASCRIPT:alert(1)
+blocked	mixed-case JavaScript:	JavaScript:alert(1)
+blocked	uppercase VBSCRIPT:	VBSCRIPT:foo
+blocked	uppercase DATA:	DATA:text/html,foo
+blocked	uppercase FILE:	FILE:///etc/passwd
+blocked	uppercase BLOB:	BLOB:https://example.com/abc
+blocked	uppercase MHTML:	MHTML:!foo
+
+# Leading whitespace: `trim_start` strips ASCII and Unicode whitespace, so the
+# scheme ends up at index 0.
+blocked	leading ASCII spaces	  javascript:alert(1)
+blocked	leading tab	\u{9}javascript:alert(1)
+blocked	leading newline	\u{A}javascript:alert(1)
+blocked	leading vertical tab (not ASCII whitespace, is Unicode whitespace)	\u{B}javascript:alert(1)
+blocked	leading NBSP (U+00A0)	\u{A0}javascript:alert(1)
+blocked	leading NEL (U+0085)	\u{85}javascript:alert(1)
+blocked	leading line separator (U+2028)	\u{2028}vbscript:msgbox(1)
+blocked	leading ideographic space (U+3000)	\u{3000}javascript:alert(1)
+blocked	leading ideographic space before data:	\u{3000}data:text/html,<script>x</script>
+blocked	leading BOM (U+FEFF)	\u{FEFF}javascript:alert(1)
+
+# Characters in the middle of the scheme that the check must drop before the
+# prefix comparison.
+blocked	NUL split	java\u{0}script:alert(1)
+blocked	tab split	java\u{9}script:alert(1)
+blocked	newline split	java\u{A}script:alert(1)
+blocked	CR split	java\u{D}script:alert(1)
+blocked	space split	java script:alert(1)
+blocked	ZWSP split	java\u{200B}script:alert(1)
+blocked	ZWJ split in vbscript	vb\u{200D}script:alert(1)
+blocked	LRM split	java\u{200E}script:alert(1)
+blocked	RLM split in vbscript	vb\u{200F}script:alert(1)
+blocked	soft-hyphen split	java\u{AD}script:alert(1)
+blocked	soft-hyphen before the colon	data\u{AD}:text/html,xss
+blocked	LRE split	java\u{202A}script:alert(1)
+blocked	RLO split	java\u{202E}script:alert(1)
+blocked	leading RLO	\u{202E}javascript:alert(1)
+blocked	BOM split	java\u{FEFF}script:alert(1)
+blocked	tabs between every letter	j\u{9}a\u{9}v\u{9}a\u{9}s\u{9}c\u{9}r\u{9}i\u{9}p\u{9}t\u{9}:\u{9}a\u{9}l\u{9}e\u{9}r\u{9}t\u{9}(\u{9}1\u{9})\u{9}
+
+# The 30-character cap counts characters that survive the filter, not raw
+# input, so padding must not push the colon past it.
+blocked	three tabs between every letter (colon at raw index 40)	j\u{9}\u{9}\u{9}a\u{9}\u{9}\u{9}v\u{9}\u{9}\u{9}a\u{9}\u{9}\u{9}s\u{9}\u{9}\u{9}c\u{9}\u{9}\u{9}r\u{9}\u{9}\u{9}i\u{9}\u{9}\u{9}p\u{9}\u{9}\u{9}t\u{9}\u{9}\u{9}:
+blocked	50 ZWSP then javascript:	\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}javascript:alert(1)
+
+# Ordinary references that must keep working.
+allowed	https URL	https://example.com/cover.png
+allowed	http URL	http://example.com/
+allowed	mailto:	mailto:someone@example.com
+allowed	relative path	photo.jpg
+allowed	absolute path	/assets/photo.jpg
+allowed	fragment	#chord-diagrams
+allowed	zero-width space inside a path is not a scheme	https://example.com/a\u{200B}b
+allowed	scheme-like word without a colon	javascript
+allowed	hyphen is not dropped, so this is not javascript:	java-script:alert(1)
