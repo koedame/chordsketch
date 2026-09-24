@@ -396,6 +396,7 @@ println!("{svg}");
 | [`chordsketch-render-ireal`](crates/render-ireal) | iReal Pro chart renderer (SVG / PNG / PDF) |
 | [`chordsketch-convert`](crates/convert) | Bidirectional ChordPro ↔ iReal Pro converter |
 | [`chordsketch-convert-musicxml`](crates/convert-musicxml) | MusicXML ↔ ChordPro bidirectional converter |
+| [`chordsketch-import-gp`](crates/import-gp) | Guitar Pro 5 (`.gp5`) → ChordPro importer |
 | [`chordsketch-wasm`](crates/wasm) | WebAssembly bindings via wasm-bindgen |
 | [`chordsketch-ffi`](crates/ffi) | UniFFI bindings for Python, Ruby, Swift, and Kotlin |
 | [`chordsketch-napi`](crates/napi) | Native Node.js addon via napi-rs |

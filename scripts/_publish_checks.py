@@ -254,6 +254,7 @@ CRATES: dict[str, Crate] = {
         Crate("chordsketch-render-ireal"),
         Crate("chordsketch-convert"),
         Crate("chordsketch-convert-musicxml"),
+        Crate("chordsketch-import-gp"),
         Crate("chordsketch-mcp"),
         Crate("chordsketch"),
     )

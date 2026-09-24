@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`chordsketch convert` imports Guitar Pro 5 files.** `chordsketch
+  convert song.gp5` writes ChordPro with the chord names from one track's
+  chord diagrams, the lyrics laid out as Guitar Pro places them (also when
+  they belong to another track), the section markers as verse / chorus /
+  bridge sections, and the title, artist, key, time signature, tempo and
+  capo. `--track N` picks the chord track; by default it is the first track
+  with chord diagrams. Chord shapes under a capo are written at sounding
+  pitch next to `{capo}`, so ChordSketch shows the shapes again. The
+  importer is the new `chordsketch-import-gp` crate. Guitar Pro 6 / 7
+  (`.gpx`, `.gp`) files are not supported yet.
+
 ### Fixed
 
 - **The Swift package installs from Swift Package Manager.** The manifest
