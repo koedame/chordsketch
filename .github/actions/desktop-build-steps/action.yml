@@ -291,7 +291,13 @@ runs:
           line="${line#"${line%%[![:space:]]*}"}"
           existing+=("${line//\"/}")
         done < <(security list-keychains -d user)
-        security list-keychains -d user -s "$keychain" "${existing[@]}"
+        # `${existing[@]+"${existing[@]}"}`, not `"${existing[@]}"`:
+        # `shell: bash` on macOS runners is the system `/bin/bash`
+        # (3.2.57), which predates bash 4.4's fix for expanding an
+        # empty array under `set -u` — a bare `"${existing[@]}"`
+        # would abort with "unbound variable" if the user keychain
+        # search list were ever empty.
+        security list-keychains -d user -s "$keychain" ${existing[@]+"${existing[@]}"}
 
         security find-identity -p codesigning "$keychain"
         if ! security find-identity -p codesigning "$keychain" | grep -qF "\"$APPLE_SIGNING_IDENTITY\""; then
@@ -358,7 +364,7 @@ runs:
         # empty-string is the right password. Leaving the env var
         # set to the empty string (its `inputs.*` default) lets
         # Tauri match "empty string password supplied" ↔
-        # "empty string password used at generate". The other six
+        # "empty string password used at generate". The other seven
         # vars stay in the unset list because their consumers (Apple
         # `security import`, Windows Authenticode, Tauri's Apple
         # notary flow) all interpret empty-string as "configured but
