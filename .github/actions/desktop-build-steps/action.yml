@@ -241,6 +241,63 @@ runs:
       run: npm ci
       working-directory: apps/desktop
 
+    - name: Import the Apple signing certificate (macOS)
+      # The `prebuild` hook signs the Quick Look extension with
+      # `APPLE_SIGNING_IDENTITY` before the bundler starts, so the
+      # identity has to be in a keychain by then. The bundler's own
+      # import of `APPLE_CERTIFICATE` happens at its signing step, which
+      # is too late for the hook (ADR-0083). This step is therefore the
+      # only import: the build step below does not pass the certificate
+      # on, and the bundler finds the identity through the keychain
+      # search list, as does the hook. Without the secret the step does
+      # not run and the bundles are built exactly as before.
+      if: runner.os == 'macOS' && inputs.apple-certificate != ''
+      shell: bash
+      env:
+        APPLE_CERTIFICATE: ${{ inputs.apple-certificate }}
+        APPLE_CERTIFICATE_PASSWORD: ${{ inputs.apple-certificate-password }}
+        APPLE_SIGNING_IDENTITY: ${{ inputs.apple-signing-identity }}
+      run: |
+        set -euo pipefail
+        # With a certificate but no identity, the hook would sign the
+        # extension ad hoc and the bundler would sign nothing, so the
+        # release would ship unsigned while looking configured.
+        if [ -z "$APPLE_SIGNING_IDENTITY" ] || [ "$APPLE_SIGNING_IDENTITY" = "-" ]; then
+          echo "::error::APPLE_CERTIFICATE is set but APPLE_SIGNING_IDENTITY is not; set it to the certificate's name, e.g. \"Developer ID Application: <name> (<team id>)\"."
+          exit 1
+        fi
+
+        keychain="${RUNNER_TEMP}/signing.keychain-db"
+        certificate="${RUNNER_TEMP}/signing.p12"
+        keychain_password="$(openssl rand -base64 32)"
+        printf '%s' "$APPLE_CERTIFICATE" | base64 --decode >"$certificate"
+        security create-keychain -p "$keychain_password" "$keychain"
+        # Stay unlocked for the whole build (6 h, the job limit) rather
+        # than the default 5 min, which a Rust release build outlasts.
+        security set-keychain-settings -lut 21600 "$keychain"
+        security unlock-keychain -p "$keychain_password" "$keychain"
+        security import "$certificate" -k "$keychain" -f pkcs12 \
+          -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+        rm -f "$certificate"
+        # Lets codesign use the private key without the access prompt a
+        # headless runner cannot answer.
+        security set-key-partition-list -S apple-tool:,apple:,codesign: \
+          -s -k "$keychain_password" "$keychain" >/dev/null
+        # Add to the user search list, keeping the keychains already on
+        # it, so `codesign --sign "<name>"` finds the identity by name.
+        existing=()
+        while IFS= read -r line; do
+          line="${line#"${line%%[![:space:]]*}"}"
+          existing+=("${line//\"/}")
+        done < <(security list-keychains -d user)
+        security list-keychains -d user -s "$keychain" "${existing[@]}"
+
+        security find-identity -p codesigning "$keychain"
+        if ! security find-identity -p codesigning "$keychain" | grep -qF "\"$APPLE_SIGNING_IDENTITY\""; then
+          echo "::error::APPLE_SIGNING_IDENTITY does not name the identity in APPLE_CERTIFICATE (listed above)."
+          exit 1
+        fi
+
     - name: Build Tauri bundle
       # `cargo tauri build` fires `beforeBuildCommand: "npm run
       # build"` from `tauri.conf.json`, which in turn runs the
@@ -261,10 +318,11 @@ runs:
         TARGET: ${{ inputs.target }}
         # Tauri's build step reads these env vars when present;
         # empty defaults produce unsigned bundles (the pre-#2075
-        # state).
+        # state). `APPLE_CERTIFICATE` is deliberately absent: the
+        # import step above has already put it in a keychain, and
+        # handing it to the bundler as well would import it a second
+        # time, leaving `codesign` with two matching identities.
         APPLE_SIGNING_IDENTITY: ${{ inputs.apple-signing-identity }}
-        APPLE_CERTIFICATE: ${{ inputs.apple-certificate }}
-        APPLE_CERTIFICATE_PASSWORD: ${{ inputs.apple-certificate-password }}
         APPLE_ID: ${{ inputs.apple-id }}
         APPLE_PASSWORD: ${{ inputs.apple-password }}
         APPLE_TEAM_ID: ${{ inputs.apple-team-id }}
@@ -276,14 +334,14 @@ runs:
         # Unset any signing-related env vars that the caller passed
         # as empty strings. GitHub Actions YAML has no way to
         # conditionally drop a key from a step's `env:` block, so
-        # passing `APPLE_CERTIFICATE: ""` (the default when the
+        # passing `WINDOWS_CERTIFICATE: ""` (the default when the
         # PR-smoke caller does not wire up the secret) still puts
         # the variable into `cargo tauri build`'s environment — at
         # which point Tauri's bundler treats the empty value as
-        # "certificate supplied, import it" and calls
-        # `security import`, which fails with "One or more
-        # parameters passed to a function were not valid; failed to
-        # import keychain certificate". Unsetting empty values here
+        # "certificate supplied, import it" and fails. (It did so
+        # with "failed to import keychain certificate" for an empty
+        # `APPLE_CERTIFICATE`, before that variable stopped reaching
+        # this step.) Unsetting empty values here
         # restores the pre-composite behaviour where those env vars
         # were simply absent on the PR-smoke path, letting Tauri
         # fall back to unsigned bundles.
@@ -299,13 +357,12 @@ runs:
         # empty-string is the right password. Leaving the env var
         # set to the empty string (its `inputs.*` default) lets
         # Tauri match "empty string password supplied" ↔
-        # "empty string password used at generate". The other eight
+        # "empty string password used at generate". The other six
         # vars stay in the unset list because their consumers (Apple
         # `security import`, Windows Authenticode, Tauri's Apple
         # notary flow) all interpret empty-string as "configured but
         # invalid", not as "intentionally blank".
-        for v in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE \
-                 APPLE_CERTIFICATE_PASSWORD APPLE_ID \
+        for v in APPLE_SIGNING_IDENTITY APPLE_ID \
                  APPLE_PASSWORD APPLE_TEAM_ID \
                  WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD \
                  TAURI_SIGNING_PRIVATE_KEY; do
