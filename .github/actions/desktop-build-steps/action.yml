@@ -47,8 +47,9 @@ inputs:
     default: ""
   # --- Signing pass-throughs (populated from repo secrets at the
   # caller level). All default to empty so the PR-smoke caller
-  # doesn't need to enumerate them. Tauri's build step reads these
-  # env vars directly when present; absent values produce unsigned
+  # doesn't need to enumerate them. The Apple certificate is imported
+  # into a keychain by its own step; Tauri's build step reads the
+  # rest as env vars when present. Absent values produce unsigned
   # bundles, matching the pre-#2075 state.
   apple-signing-identity:
     required: false
