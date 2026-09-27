@@ -136,7 +136,7 @@ runs:
       # error "install-action does not support semver operators:
       # '^2'". Bump this line when Tauri CLI cuts a new release
       # we want to pick up.
-      uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2
+      uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
       with:
         tool: tauri-cli@2.10.1
 
