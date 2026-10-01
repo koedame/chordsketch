@@ -30,7 +30,9 @@ recomputed from the files in the checkout: the first covers everything the
 notice is built from, the second the body, so the check also catches a
 hand edit. Only third-party packages count, so a release that bumps the
 workspace version, or a dependency update that touches only the build
-tooling, does not invalidate the file.
+tooling, does not invalidate the file. The text of this script is part of
+the first hash (a change to how the file is rendered must regenerate it),
+so editing even this docstring means regenerating.
 
 Regenerating needs `cargo-about` (`cargo install cargo-about --locked`),
 network access for `cargo fetch`, and `npm ci --ignore-scripts` in each
