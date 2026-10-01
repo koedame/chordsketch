@@ -1,3 +1,6 @@
+<!-- ChordSketch does not accept outside pull requests (see CONTRIBUTING.md).
+     A PR from anyone other than the maintainers is not reviewed or merged. -->
+
 ## What
 
 <!-- What does this PR change? -->
