@@ -10,7 +10,7 @@ Pod::Spec.new do |s|
     pre-built chordsketchFFI XCFramework, for iOS and macOS.
   DESC
   s.homepage     = 'https://github.com/koedame/chordsketch'
-  s.license      = { :type => 'MIT', :file => 'LICENSE' }
+  s.license      = { :type => 'MIT AND OFL-1.1', :file => 'LICENSE' }
   s.author       = { 'koedame' => 'koedame@users.noreply.github.com' }
 
   # The tag holds the UniFFI-generated Swift bindings (committed by the

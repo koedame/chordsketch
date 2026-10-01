@@ -8,7 +8,10 @@ neither cargo-about nor `npm ci`. One smoke test asserts that the real
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -201,6 +204,63 @@ class NpmAuthorTest(unittest.TestCase):
 
     def test_author_object_uses_its_name(self):
         self.assertEqual(tpl.npm_author({"author": {"name": "Rich Harris"}}), "Rich Harris")
+
+
+REPO = SCRIPTS_DIR.parent
+# Everything that ships a compiled build of the renderers, and so the Noto
+# Sans CJK subset (PDF) and the Bravura outlines (HTML, iReal), with the OFL
+# those fonts are under named beside the MIT of the source.
+OFL_JSON_MANIFESTS = [
+    "packages/npm/package.json",
+    "packages/npm-export/package.json",
+    "packages/vscode-extension/package.json",
+    "crates/napi/package.json",
+    *(f"crates/napi/npm/{target}/package.json" for target in (
+        "darwin-arm64", "darwin-x64", "linux-arm64-gnu", "linux-x64-gnu", "win32-x64-msvc")),
+]
+
+
+class FontNoticeTest(unittest.TestCase):
+    def test_the_only_font_file_in_the_tree_is_the_one_the_notice_generator_reproduces_the_license_of(self):
+        listed = subprocess.run(
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            cwd=REPO, check=True, stdout=subprocess.PIPE, text=True,
+        ).stdout.split("\0")
+        fonts = {p for p in listed if p.lower().endswith((".otf", ".ttf", ".woff", ".woff2"))}
+        self.assertEqual(
+            fonts, {"crates/render-pdf/assets/NotoSansCJK-subset.otf"},
+            "a font file was added or removed: update BUNDLED in third-party-licenses.py (with its OFL) and NOTICE",
+        )
+
+    def test_the_committed_notice_reproduces_the_license_text_of_every_bundled_font(self):
+        notice = (REPO / "THIRD_PARTY_LICENSES.md").read_text()
+        for name, _, _, licence in tpl.BUNDLED:
+            text = (REPO / licence).read_text().strip()
+            self.assertIn(text, notice, name)
+
+    def test_the_noto_subset_does_not_claim_a_reserved_font_name_the_upstream_font_does_not_declare(self):
+        text = (REPO / "crates/render-pdf/assets/OFL.txt").read_text()
+        first = text.split("\n", 1)[0]
+        self.assertTrue(first.startswith("Copyright 2014-2021 Adobe"), first)
+        self.assertNotIn("Reserved Font Name", first)
+
+    def test_the_crate_that_embeds_the_font_declares_the_ofl_beside_the_mit(self):
+        manifest = tomllib.loads((REPO / "crates/render-pdf/Cargo.toml").read_text())
+        self.assertEqual(manifest["package"]["license"], "MIT AND OFL-1.1")
+
+    def test_a_package_that_ships_the_compiled_renderers_declares_the_ofl_beside_the_mit(self):
+        for path in OFL_JSON_MANIFESTS:
+            self.assertEqual(json.loads((REPO / path).read_text())["license"], "MIT AND OFL-1.1", path)
+        pyproject = tomllib.loads((REPO / "crates/ffi/pyproject.toml").read_text())
+        self.assertEqual(pyproject["project"]["license"], {"text": "MIT AND OFL-1.1"})
+        self.assertIn('["MIT", "OFL-1.1"]', (REPO / "packages/ruby/chordsketch.gemspec").read_text())
+
+    def test_a_package_definition_that_installs_the_prebuilt_binary_installs_the_notices_with_it(self):
+        for path in ("packaging/aur/chordsketch-bin/PKGBUILD.template", "packaging/aur/chordsketch/PKGBUILD.template",
+                     "packaging/homebrew/chordsketch.rb.template", "packaging/snap/snapcraft.yaml.template"):
+            text = (REPO / path).read_text()
+            self.assertIn("NOTICE", text, path)
+            self.assertIn("THIRD_PARTY_LICENSES.md", text, path)
 
 
 class PolicyTest(unittest.TestCase):

@@ -53,6 +53,10 @@ def packed(path: str, data: bytes = b"", size: int | None = None) -> checks.Pack
     return checks.PackedFile(path, len(data) if size is None else size, data)
 
 
+# A third-party notice as far as the checks look: it reproduces the OFL the fonts are under.
+NOTICE_WITH_OFL = b"# Third-Party Licenses\n\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n"
+
+
 def write_tarball(path: Path, top: str, files: dict[str, bytes]) -> None:
     with tarfile.open(path, "w:gz") as archive:
         for name, data in files.items():
@@ -208,6 +212,20 @@ class ToolWarningTest(unittest.TestCase):
         self.assertEqual(len(checks.tool_warnings("npm", output, prefix=checks.NPM_WARNING)), 1)
 
 
+class CrateOflTest(unittest.TestCase):
+    def test_when_a_crate_declares_the_ofl_and_packages_its_text_it_passes(self) -> None:
+        files = [packed("assets/OFL.txt", NOTICE_WITH_OFL)]
+        self.assertEqual(checks.crate_ofl_problems("chordsketch-render-pdf", "MIT AND OFL-1.1", files), [])
+
+    def test_when_a_crate_declares_the_ofl_but_packages_no_text_it_is_reported(self) -> None:
+        problems = checks.crate_ofl_problems("chordsketch-render-pdf", "MIT AND OFL-1.1", [packed("src/lib.rs", b"//")])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("holds no copy of the SIL Open Font License", problems[0])
+
+    def test_when_a_crate_is_plain_mit_no_ofl_text_is_required(self) -> None:
+        self.assertEqual(checks.crate_ofl_problems("chordsketch-chordpro", "MIT", [packed("src/lib.rs", b"//")]), [])
+
+
 class NpmManifestTest(unittest.TestCase):
     MANIFEST = {
         "name": "@chordsketch/example",
@@ -242,8 +260,14 @@ class NpmManifestTest(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("THIRD_PARTY_LICENSES.md", problems[0])
 
+    def test_when_the_third_party_notice_lacks_the_ofl_text_it_is_reported(self) -> None:
+        files = [*self.FILES, packed("web/chordsketch_wasm_bg.wasm"), packed("THIRD_PARTY_LICENSES.md", b"# Third-Party Licenses\n")]
+        problems = checks.npm_manifest_problems(self.MANIFEST, files)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("without the SIL Open Font License text", problems[0])
+
     def test_when_the_package_ships_a_native_addon_with_the_third_party_notice_it_passes(self) -> None:
-        files = [*self.FILES, packed("chordsketch-napi.linux-x64-gnu.node"), packed("THIRD_PARTY_LICENSES.md")]
+        files = [*self.FILES, packed("chordsketch-napi.linux-x64-gnu.node"), packed("THIRD_PARTY_LICENSES.md", NOTICE_WITH_OFL)]
         self.assertEqual(checks.npm_manifest_problems(self.MANIFEST, files), [])
 
     def test_when_the_package_has_no_repository_it_is_reported(self) -> None:
@@ -378,7 +402,7 @@ class VsixTest(unittest.TestCase):
         path = scratch / name
         vsixmanifest = f'<Identity Id="chordsketch" TargetPlatform="{target}" />'.encode() if target else b"<Identity />"
         engine = {glob: b"\0asm" for glob in checks.VSIX_LARGE_FILES}
-        write_zip(path, {"extension.vsixmanifest": vsixmanifest, "extension/package.json": json.dumps(manifest).encode(), "extension/icon.png": png(256, 256), "extension/THIRD_PARTY_LICENSES.md": b"#", **engine, **extra})
+        write_zip(path, {"extension.vsixmanifest": vsixmanifest, "extension/package.json": json.dumps(manifest).encode(), "extension/icon.png": png(256, 256), "extension/THIRD_PARTY_LICENSES.md": NOTICE_WITH_OFL, **engine, **extra})
         return path
 
     def test_when_the_manifest_is_complete_and_the_icon_is_a_large_png_the_universal_vsix_passes(self) -> None:
@@ -630,12 +654,18 @@ class CliArchiveTest(unittest.TestCase):
             return checks.cli_archive_problems("1.2.0", "x86_64-pc-windows-msvc", binaries, self.package_with(entries))
 
     def test_when_the_windows_zip_has_the_executables_at_its_root_it_passes(self) -> None:
-        entries = {"chordsketch.exe": b"MZ", "chordsketch-lsp.exe": b"MZ", "LICENSE": b"MIT", "NOTICE": b"n", "THIRD_PARTY_LICENSES.md": b"#", "README.md": b"#"}
+        entries = {"chordsketch.exe": b"MZ", "chordsketch-lsp.exe": b"MZ", "LICENSE": b"MIT", "NOTICE": b"n", "THIRD_PARTY_LICENSES.md": NOTICE_WITH_OFL, "README.md": b"#"}
         self.assertEqual(self.check(entries), [])
+
+    def test_when_the_windows_zip_ships_a_notice_without_the_ofl_text_it_is_reported(self) -> None:
+        entries = {"chordsketch.exe": b"MZ", "chordsketch-lsp.exe": b"MZ", "LICENSE": b"MIT", "NOTICE": b"n", "THIRD_PARTY_LICENSES.md": b"#", "README.md": b"#"}
+        problems = self.check(entries)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("THIRD_PARTY_LICENSES.md` without the SIL Open Font License text", problems[0])
 
     def test_when_the_windows_zip_wraps_the_executables_in_a_directory_scoop_cannot_find_them(self) -> None:
         top = "chordsketch-v1.2.0-x86_64-pc-windows-msvc"
-        entries = {f"{top}/chordsketch.exe": b"MZ", f"{top}/chordsketch-lsp.exe": b"MZ", f"{top}/LICENSE": b"MIT", f"{top}/NOTICE": b"n", f"{top}/THIRD_PARTY_LICENSES.md": b"#", f"{top}/README.md": b"#"}
+        entries = {f"{top}/chordsketch.exe": b"MZ", f"{top}/chordsketch-lsp.exe": b"MZ", f"{top}/LICENSE": b"MIT", f"{top}/NOTICE": b"n", f"{top}/THIRD_PARTY_LICENSES.md": NOTICE_WITH_OFL, f"{top}/README.md": b"#"}
         problems = self.check(entries)
         self.assertEqual(problems, ["chordsketch-v1.2.0-x86_64-pc-windows-msvc.zip lacks LICENSE, NOTICE, README.md, THIRD_PARTY_LICENSES.md, chordsketch-lsp.exe, chordsketch.exe"])
 

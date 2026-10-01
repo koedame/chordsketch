@@ -2,7 +2,7 @@
   "name": "@chordsketch/node-darwin-arm64",
   "version": "0.7.0",
   "description": "Prebuilt @chordsketch/node binary for macOS aarch64 (Apple Silicon).",
-  "license": "MIT",
+  "license": "MIT AND OFL-1.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/koedame/chordsketch.git",

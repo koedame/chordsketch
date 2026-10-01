@@ -95,6 +95,11 @@ mavenPublishing {
                 url.set("https://github.com/koedame/chordsketch/blob/main/LICENSE")
                 distribution.set("repo")
             }
+            license {
+                name.set("SIL Open Font License 1.1")
+                url.set("https://github.com/koedame/chordsketch/blob/main/NOTICE")
+                distribution.set("repo")
+            }
         }
 
         developers {

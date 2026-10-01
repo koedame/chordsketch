@@ -76,12 +76,18 @@ JP (https://github.com/notofonts/noto-cjk), embedded in `chordsketch-render-pdf`
 and so in every binary that renders a PDF. Characters outside Latin-1 (CJK,
 Greek, Cyrillic) are drawn with it.
 
-Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name
-'Noto'.
+Copyright 2014-2021 Adobe (http://www.adobe.com/).
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 The license is copied in `crates/render-pdf/assets/OFL.txt` and is available
 with a FAQ at: https://openfontlicense.org
+
+The file is a subset of the upstream font, which makes it a Modified Version
+in the license's terms. It keeps the upstream family name, "Noto Sans CJK JP",
+and the upstream copyright notice. Neither the upstream license text
+(https://github.com/notofonts/noto-cjk/blob/main/Sans/LICENSE) nor the notice
+in the font's own name table declares a Reserved Font Name, so the OFL's
+restriction on reusing one does not apply.
 
 ChordSketch's redistribution complies by retaining this NOTICE entry and by
 shipping the OFL text in `crates/render-pdf/assets/OFL.txt` (inside the

@@ -45,7 +45,7 @@ rustPlatform.buildRustPackage rec {
     description = "ChordPro file format renderer and CLI (text, HTML, PDF)";
     homepage = "https://github.com/koedame/chordsketch";
     changelog = "https://github.com/koedame/chordsketch/blob/main/CHANGELOG.md";
-    license = lib.licenses.mit;
+    license = with lib.licenses; [ mit ofl ];
     maintainers = [ ]; # TODO: add your nixpkgs maintainer handle
     mainProgram = "chordsketch";
     platforms = [
