@@ -476,8 +476,11 @@ SDK crates (core, renderers, CLI): [MIT](LICENSE)
 Future application layer (Forum, Playground, Desktop): AGPL-3.0-only
 
 Third-party dependency notices are in [NOTICE](NOTICE) and
-[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md), which ship with every
-binary distribution.
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). They ship with the CLI
+archives, container images, the desktop app, the VS Code extension, and
+the wasm and napi npm packages; the PyPI, RubyGem, Maven, and Swift /
+CocoaPods packages don't carry them yet — see
+[ADR-0085](docs/adr/0085-binaries-ship-a-generated-third-party-license-notice.md#consequences).
 
 ## Trademark
 
