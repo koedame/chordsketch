@@ -1,0 +1,42 @@
+# Dependency license policy (cargo-deny). `scripts/third-party-licenses.py`
+# builds THIRD_PARTY_LICENSES.md from the same graph and refuses to run when
+# `about.toml` accepts a different list than the one below.
+#
+# Run from the repository root:
+#   cargo deny --all-features check licenses
+#
+# The graph is not narrowed to a target: the CLI, the desktop app, the wasm
+# package and the native bindings are built for different platforms, and a
+# platform-specific crate has to be covered for the platform it ships on.
+#
+# A dependency under GPL, AGPL or LGPL alone is not allowed. A crate that
+# offers a permissive choice (`MIT OR Apache-2.0 OR LGPL-2.1-or-later`) passes
+# through that choice.
+
+[licenses]
+unused-allowed-license = "allow"
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+exceptions = [
+    # The application layer is AGPL-3.0-only (CLAUDE.md, License Policy).
+    { crate = "chordsketch-desktop", allow = ["AGPL-3.0-only"] },
+    { crate = "chordsketch-preview-handler", allow = ["AGPL-3.0-only"] },
+    # The Bravura glyph outlines (NOTICE).
+    { crate = "chordsketch-render-html", allow = ["OFL-1.1"] },
+    { crate = "chordsketch-render-ireal", allow = ["OFL-1.1"] },
+]

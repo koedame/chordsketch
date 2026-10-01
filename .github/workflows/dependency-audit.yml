@@ -31,6 +31,7 @@ on:
       - "crates/*/Cargo.toml"
       - "apps/desktop/src-tauri/Cargo.toml"
       - ".cargo/audit.toml"
+      - "deny.toml"
       - ".github/workflows/dependency-audit.yml"
       - "scripts/audit-advisories.py"
       - "scripts/test_audit_advisories.py"
@@ -39,6 +40,13 @@ on:
 concurrency:
   group: dependency-audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# The `licenses` job holds every dependency to the allow list in `deny.toml`
+# (ADR-0085): a crate under GPL, AGPL or LGPL alone, or under a license nobody
+# decided to accept, fails the pull request that adds it. It does not run on
+# the schedule: an advisory arrives against a version this repo already uses,
+# but a license is fixed by the version, so a lock file that passed once
+# cannot start failing.
 
 # Fail-closed default per #1839; the job opts into `issues: write` for the
 # scheduled reporting path.
@@ -211,3 +219,31 @@ jobs:
           else
             gh issue comment "$number" --body "The advisory list changed ([run]($RUN_URL))."
           fi
+
+  licenses:
+    name: Dependency licenses
+    if: github.event_name != 'schedule'
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust toolchain
+        # `cargo deny` reads the dependency graph through `cargo metadata`.
+        # Nothing is compiled, so no `Swatinem/rust-cache` entry.
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2
+        with:
+          tool: cargo-deny
+
+      - name: Check the licenses of the dependency graph
+        # `--all-features` and no `--target`: the CLI, the desktop app, the
+        # wasm package and the native bindings ship for different platforms,
+        # and a platform-specific crate has to be covered for the one it
+        # ships on.
+        run: cargo deny --all-features check licenses

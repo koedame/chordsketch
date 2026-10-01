@@ -6,4 +6,5 @@ target/
 docs/
 scripts/
 *.md
-LICENSE
+# Shipped in the image (Dockerfile, Dockerfile.release).
+!THIRD_PARTY_LICENSES.md

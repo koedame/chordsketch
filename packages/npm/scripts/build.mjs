@@ -32,7 +32,7 @@
 // both.
 
 import { spawnSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -84,5 +84,14 @@ buildTarget("nodejs", nodeDir);
 
 writeSubPackageJson(webDir, "module");
 writeSubPackageJson(nodeDir, "commonjs");
+
+// The third-party notice that every copy of the wasm binary has to carry
+// (generated at the repository root by scripts/third-party-licenses.py).
+// `npm pack` takes files from the package directory only, so it is copied in;
+// the copy is gitignored.
+copyFileSync(
+  resolve(PKG_DIR, "../../THIRD_PARTY_LICENSES.md"),
+  resolve(PKG_DIR, "THIRD_PARTY_LICENSES.md"),
+);
 
 console.log("@chordsketch/wasm (lean) build complete.");

@@ -236,6 +236,16 @@ class NpmManifestTest(unittest.TestCase):
         files = [f for f in self.FILES if f.path != "README.md"]
         self.assertIn("@chordsketch/example would publish without a README", checks.npm_manifest_problems(self.MANIFEST, files))
 
+    def test_when_the_package_ships_wasm_without_the_third_party_notice_it_is_reported(self) -> None:
+        files = [*self.FILES, packed("web/chordsketch_wasm_bg.wasm")]
+        problems = checks.npm_manifest_problems(self.MANIFEST, files)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("THIRD_PARTY_LICENSES.md", problems[0])
+
+    def test_when_the_package_ships_a_native_addon_with_the_third_party_notice_it_passes(self) -> None:
+        files = [*self.FILES, packed("chordsketch-napi.linux-x64-gnu.node"), packed("THIRD_PARTY_LICENSES.md")]
+        self.assertEqual(checks.npm_manifest_problems(self.MANIFEST, files), [])
+
     def test_when_the_package_has_no_repository_it_is_reported(self) -> None:
         manifest = {k: v for k, v in self.MANIFEST.items() if k != "repository"}
         self.assertIn("@chordsketch/example has no `repository` in its package.json", checks.npm_manifest_problems(manifest, self.FILES))
@@ -368,12 +378,21 @@ class VsixTest(unittest.TestCase):
         path = scratch / name
         vsixmanifest = f'<Identity Id="chordsketch" TargetPlatform="{target}" />'.encode() if target else b"<Identity />"
         engine = {glob: b"\0asm" for glob in checks.VSIX_LARGE_FILES}
-        write_zip(path, {"extension.vsixmanifest": vsixmanifest, "extension/package.json": json.dumps(manifest).encode(), "extension/icon.png": png(256, 256), **engine, **extra})
+        write_zip(path, {"extension.vsixmanifest": vsixmanifest, "extension/package.json": json.dumps(manifest).encode(), "extension/icon.png": png(256, 256), "extension/THIRD_PARTY_LICENSES.md": b"#", **engine, **extra})
         return path
 
     def test_when_the_manifest_is_complete_and_the_icon_is_a_large_png_the_universal_vsix_passes(self) -> None:
         with tempfile.TemporaryDirectory() as scratch:
             self.assertEqual(checks.vsix_problems(self.vsix(Path(scratch), "chordsketch-1.2.0.vsix", self.MANIFEST, {}), None), [])
+
+    def test_when_the_vsix_lacks_the_third_party_notice_it_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            path = Path(scratch) / "chordsketch-1.2.0.vsix"
+            engine = {glob: b"\0asm" for glob in checks.VSIX_LARGE_FILES}
+            write_zip(path, {"extension.vsixmanifest": b"<Identity />", "extension/package.json": json.dumps(self.MANIFEST).encode(), "extension/icon.png": png(256, 256), **engine})
+            problems = checks.vsix_problems(path, None)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("extension/THIRD_PARTY_LICENSES.md", problems[0])
 
     def test_when_the_version_carries_a_prerelease_suffix_the_marketplace_would_refuse_it(self) -> None:
         problems = checks.vsix_manifest_problems("x", {**self.MANIFEST, "version": "1.2.0-beta.1"}, [packed("extension/icon.png", png(256, 256))])
@@ -611,14 +630,14 @@ class CliArchiveTest(unittest.TestCase):
             return checks.cli_archive_problems("1.2.0", "x86_64-pc-windows-msvc", binaries, self.package_with(entries))
 
     def test_when_the_windows_zip_has_the_executables_at_its_root_it_passes(self) -> None:
-        entries = {"chordsketch.exe": b"MZ", "chordsketch-lsp.exe": b"MZ", "LICENSE": b"MIT", "README.md": b"#"}
+        entries = {"chordsketch.exe": b"MZ", "chordsketch-lsp.exe": b"MZ", "LICENSE": b"MIT", "NOTICE": b"n", "THIRD_PARTY_LICENSES.md": b"#", "README.md": b"#"}
         self.assertEqual(self.check(entries), [])
 
     def test_when_the_windows_zip_wraps_the_executables_in_a_directory_scoop_cannot_find_them(self) -> None:
         top = "chordsketch-v1.2.0-x86_64-pc-windows-msvc"
-        entries = {f"{top}/chordsketch.exe": b"MZ", f"{top}/chordsketch-lsp.exe": b"MZ", f"{top}/LICENSE": b"MIT", f"{top}/README.md": b"#"}
+        entries = {f"{top}/chordsketch.exe": b"MZ", f"{top}/chordsketch-lsp.exe": b"MZ", f"{top}/LICENSE": b"MIT", f"{top}/NOTICE": b"n", f"{top}/THIRD_PARTY_LICENSES.md": b"#", f"{top}/README.md": b"#"}
         problems = self.check(entries)
-        self.assertEqual(problems, ["chordsketch-v1.2.0-x86_64-pc-windows-msvc.zip lacks LICENSE, README.md, chordsketch-lsp.exe, chordsketch.exe"])
+        self.assertEqual(problems, ["chordsketch-v1.2.0-x86_64-pc-windows-msvc.zip lacks LICENSE, NOTICE, README.md, THIRD_PARTY_LICENSES.md, chordsketch-lsp.exe, chordsketch.exe"])
 
 
 class ShippedManifestTest(unittest.TestCase):

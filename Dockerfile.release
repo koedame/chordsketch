@@ -15,6 +15,7 @@ RUN adduser -D -u 1000 chordsketch
 ARG TARGETARCH
 COPY chordsketch-${TARGETARCH} /usr/local/bin/chordsketch
 RUN chmod +x /usr/local/bin/chordsketch
+COPY LICENSE NOTICE THIRD_PARTY_LICENSES.md /usr/share/licenses/chordsketch/
 USER chordsketch
 
 ENTRYPOINT ["/usr/local/bin/chordsketch"]

@@ -11,7 +11,8 @@
   "homepage": "https://github.com/koedame/chordsketch",
   "main": "chordsketch-napi.linux-x64-gnu.node",
   "files": [
-    "chordsketch-napi.linux-x64-gnu.node"
+    "chordsketch-napi.linux-x64-gnu.node",
+    "THIRD_PARTY_LICENSES.md"
   ],
   "os": [
     "linux"

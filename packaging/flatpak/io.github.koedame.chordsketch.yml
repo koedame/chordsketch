@@ -68,7 +68,7 @@ modules:
       - install -Dm644 assets/logo.svg $FLATPAK_DEST/share/icons/hicolor/scalable/apps/$FLATPAK_ID.svg
       - install -Dm644 apps/desktop/LICENSE $FLATPAK_DEST/share/licenses/$FLATPAK_ID/LICENSE
       - install -Dm644 LICENSE $FLATPAK_DEST/share/licenses/$FLATPAK_ID/LICENSE-MIT
-      - install -Dm644 crates/render-ireal/LICENSE-OFL.txt NOTICE -t $FLATPAK_DEST/share/licenses/$FLATPAK_ID
+      - install -Dm644 crates/render-ireal/LICENSE-OFL.txt NOTICE THIRD_PARTY_LICENSES.md -t $FLATPAK_DEST/share/licenses/$FLATPAK_ID
     sources:
       - chordsketch-source.json
       - type: git
