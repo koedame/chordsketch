@@ -296,6 +296,7 @@ jobs:
             scripts/test_release_checksum_guards.py \
             scripts/test_desktop_security_config.py
             scripts/test_appimage_bundled_libraries.py
+            scripts/test_desktop_bundle_licenses.py
 
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})
