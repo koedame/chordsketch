@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""Pins the license texts every desktop bundle carries.
+
+Uses only `unittest` from stdlib. The desktop app is AGPL-3.0-only, links the
+MIT-licensed SDK crates, and draws Bravura glyph outlines (SIL OFL 1.1). Each
+license asks for its text to travel with the copies, so `bundle.resources`
+puts them beside the executable in the `.app`, the Windows installers, the
+`.deb`, the `.rpm` and the AppImage.
+
+Each resource keeps its source file name. The WiX installer names an installed
+file after its source, not after the target given here, so two sources called
+`LICENSE` (the AGPL text under `apps/desktop` and the MIT text at the root)
+under one directory fail `light.exe`; they go to separate directories instead.
+"""
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+TAURI_DIR = REPO_ROOT / "apps" / "desktop" / "src-tauri"
+
+# What each bundle must hold, by the name it has inside the bundle.
+EXPECTED = {
+    "licenses/AGPL-3.0-only/LICENSE": REPO_ROOT / "apps" / "desktop" / "LICENSE",
+    "licenses/MIT/LICENSE": REPO_ROOT / "LICENSE",
+    "licenses/OFL-1.1/LICENSE-OFL.txt": REPO_ROOT / "crates" / "render-ireal" / "LICENSE-OFL.txt",
+    "NOTICE": REPO_ROOT / "NOTICE",
+    "THIRD_PARTY_LICENSES.md": REPO_ROOT / "THIRD_PARTY_LICENSES.md",
+}
+
+
+class DesktopBundleLicensesTest(unittest.TestCase):
+    def setUp(self) -> None:
+        conf = json.loads((TAURI_DIR / "tauri.conf.json").read_text(encoding="utf-8"))
+        self.resources = conf["bundle"]["resources"]
+
+    def test_when_the_bundle_is_built_the_license_texts_are_among_its_resources(self) -> None:
+        by_name = {name: (TAURI_DIR / source).resolve() for source, name in self.resources.items()}
+        for name, source in EXPECTED.items():
+            self.assertEqual(by_name.get(name), source.resolve(), f"{name} is not bundled from {source}")
+
+    def test_when_a_resource_is_listed_it_keeps_its_source_file_name(self) -> None:
+        for source, target in self.resources.items():
+            self.assertEqual(Path(target).name, Path(source).name, f"{source} is bundled as {target}")
+
+    def test_when_a_resource_is_listed_its_source_file_exists(self) -> None:
+        for source in self.resources:
+            self.assertTrue((TAURI_DIR / source).is_file(), f"bundle.resources names a missing file: {source}")
+
+
+if __name__ == "__main__":
+    unittest.main()
