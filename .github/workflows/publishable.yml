@@ -274,6 +274,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # maturin takes the license-files named in pyproject.toml from the crate
+      # directory only; the copy is gitignored.
+      - name: Copy the third-party license notice into the package
+        shell: bash
+        run: cp THIRD_PARTY_LICENSES.md crates/ffi/
+
       # The sdist and Linux x86_64 wheel builds of python.yml, with its
       # arguments. The wheel is a release build because PyPI's file size
       # limit is part of what is checked.

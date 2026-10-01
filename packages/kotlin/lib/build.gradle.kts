@@ -56,6 +56,14 @@ tasks.test {
     useJUnitPlatform()
 }
 
+// The licenses of the Rust crates linked into the native libraries the jar
+// bundles; their terms require the notices to travel with every copy.
+tasks.jar {
+    from("${rootDir}/../../THIRD_PARTY_LICENSES.md") {
+        into("META-INF")
+    }
+}
+
 mavenPublishing {
     // Override coordinates so the published artifactId is `chordsketch`
     // rather than the Gradle module name (`lib`).
