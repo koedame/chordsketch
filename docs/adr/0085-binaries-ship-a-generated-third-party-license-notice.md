@@ -66,7 +66,16 @@ a template with no copyright holder for them.
    `.wasm` or `.node` file, and of the VSIX, copies the file into the
    package directory, because `npm pack` and `vsce` take files from there
    only. `notice_problems` in `scripts/_publish_checks.py` fails a package
-   that ships such a file without the notice.
+   that ships such a file without the notice. The same holds for the
+   registries that carry the native library: the PyPI wheel and sdist
+   (`license-files` in `crates/ffi/pyproject.toml`; `python.yml` and
+   `publishable.yml` copy the file next to it before `maturin` runs, because
+   `maturin` rejects a path outside the crate), the RubyGems gem (the
+   gemspec lists the file and `stage-native-libs.sh` copies it in), the Maven
+   jar (`META-INF/`, from the Gradle `jar` task) and the XCFramework zip
+   (the file beside `chordsketchFFI.xcframework`; the podspec's
+   `prepare_command` extracts only the framework, so the zip's copy does not
+   replace the one the tag holds).
 
 ## Rationale
 
@@ -100,7 +109,8 @@ a template with no copyright holder for them.
   build and test tooling listed in `TOOLING`. That errs towards listing too
   much; a new tool that is never bundled but is not in `TOOLING` is listed
   until it is added there.
-- Not yet covered: the PyPI wheel, the RubyGem, the Maven artifact and the
-  Swift and CocoaPods XCFramework, which link the same Rust crates. Their
-  build steps do not copy the file in yet, and `notice_problems` does not
-  cover their formats.
+- A new distribution that ships compiled Rust code has to carry the file and
+  get a check in `scripts/_publish_checks.py`; `notice_problems` takes the
+  directory the file sits in and, for an archive that holds the source or a
+  framework the extension list does not know (an sdist, the XCFramework zip),
+  `always=True`.

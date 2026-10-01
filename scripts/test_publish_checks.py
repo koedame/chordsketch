@@ -47,6 +47,7 @@ import _publish_checks as checks  # noqa: E402
 from _release_channels import load_channels  # noqa: E402
 
 MIB = checks.MIB
+MIT_TEXT = (checks.REPO_ROOT / "LICENSE").read_bytes()
 
 
 def packed(path: str, data: bytes = b"", size: int | None = None) -> checks.PackedFile:
@@ -527,6 +528,40 @@ class PythonDistributionTest(unittest.TestCase):
         self.assertIn("chordsketch-1.2.0-py3-none-linux_x86_64.whl has a bare linux platform tag, which PyPI refuses; build it manylinux-compliant", problems)
         self.assertIn(f"no sdist in {dist}", problems)
 
+    NOTICE = checks.THIRD_PARTY_NOTICE
+    QUIET = staticmethod(lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
+
+    def dist(self, dist: Path, *, wheel_notice: bool = True, sdist_notice: bool = True) -> None:
+        wheel_files = {"chordsketch-1.2.0.dist-info/METADATA": self.METADATA.encode(), "chordsketch/_native/libchordsketch_ffi.so": b"elf"}
+        if wheel_notice:
+            wheel_files[f"chordsketch-1.2.0.dist-info/licenses/{self.NOTICE}"] = b"#"
+        wheel_files["chordsketch-1.2.0.dist-info/licenses/LICENSE"] = MIT_TEXT
+        write_zip(dist / "chordsketch-1.2.0-cp38-abi3-manylinux_2_17_x86_64.whl", wheel_files)
+        sdist_files = {"PKG-INFO": self.METADATA.encode(), "crates/render-pdf/assets/NotoSansCJK-subset.otf": b"otf"}
+        if sdist_notice:
+            sdist_files[self.NOTICE] = b"#"
+        sdist_files["LICENSE"] = MIT_TEXT
+        write_tarball(dist / "chordsketch-1.2.0.tar.gz", "chordsketch-1.2.0", sdist_files)
+
+    def test_when_the_wheel_and_the_sdist_carry_the_third_party_notice_it_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            self.dist(Path(scratch))
+            self.assertEqual(checks.python_dist_problems(Path(scratch), runner=self.QUIET), [])
+
+    def test_when_the_wheel_lacks_the_third_party_notice_it_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            self.dist(Path(scratch), wheel_notice=False)
+            problems = checks.python_dist_problems(Path(scratch), runner=self.QUIET)
+        self.assertEqual(len(problems), 1)
+        self.assertIn(f"chordsketch-1.2.0.dist-info/licenses/{self.NOTICE}", problems[0])
+
+    def test_when_the_sdist_lacks_the_third_party_notice_it_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            self.dist(Path(scratch), sdist_notice=False)
+            problems = checks.python_dist_problems(Path(scratch), runner=self.QUIET)
+        self.assertEqual(len(problems), 1)
+        self.assertIn(f"chordsketch-1.2.0/{self.NOTICE}", problems[0])
+
 
 class PythonLicenseTest(unittest.TestCase):
     """The sdist and the wheel each have to carry the license where installers look for it."""
@@ -540,7 +575,7 @@ class PythonLicenseTest(unittest.TestCase):
             write_zip(dist / "chordsketch-1.2.0-py3-none-manylinux2014_x86_64.whl", wheel_files)
             write_tarball(dist / "chordsketch-1.2.0.tar.gz", "chordsketch-1.2.0", sdist_files)
             problems = checks.python_dist_problems(dist, runner=lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
-        return [p for p in problems if "LICENSE" in p]
+        return [p for p in problems if "MIT terms" in p or "differs from the repository" in p]
 
     WHEEL = {"chordsketch-1.2.0.dist-info/METADATA": METADATA.encode(), "chordsketch/_native/libchordsketch_ffi.so": b"elf"}
 
@@ -586,6 +621,45 @@ class GemTest(unittest.TestCase):
     def test_when_the_gemspec_has_no_license_it_is_reported(self) -> None:
         self.assertEqual(checks.gem_spec_problems("g", {**self.SPEC, "licenses": []}), ["g has no `licenses` in its gemspec"])
 
+    def build_gem(self, directory: Path, *, notice: bool, license: bool = True) -> None:
+        files = {path: b"lib" for path in ["lib/chordsketch.rb", *checks.GEM_PLATFORM_LIBRARIES]}
+        if license:
+            files["LICENSE"] = MIT_TEXT
+        if notice:
+            files[checks.THIRD_PARTY_NOTICE] = b"#"
+        with tarfile.open(directory / "data.tar.gz", "w:gz") as data:
+            for name, content in files.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(content)
+                data.addfile(info, io.BytesIO(content))
+        with tarfile.open(directory / "chordsketch-1.2.0.gem", "w") as gem:
+            gem.add(directory / "data.tar.gz", arcname="data.tar.gz")
+
+    def gem_problems(self, *, notice: bool, license: bool = True) -> list[str]:
+        spec = {**self.SPEC, "files": [*self.SPEC["files"], *([checks.THIRD_PARTY_NOTICE] if notice else [])]}
+
+        def runner(cmd, cwd, env=None):
+            if cmd[:2] == ["gem", "build"]:
+                self.build_gem(cwd, notice=notice, license=license)
+                return checks.subprocess.CompletedProcess(cmd, 0, "")
+            return checks.subprocess.CompletedProcess(cmd, 0, json.dumps(spec))
+
+        with tempfile.TemporaryDirectory() as scratch:
+            return checks.gem_problems(Path(scratch), runner=runner)
+
+    def test_when_the_gem_carries_the_third_party_notice_it_passes(self) -> None:
+        self.assertEqual(self.gem_problems(notice=True), [])
+
+    def test_when_the_gem_lacks_the_license_it_is_reported(self) -> None:
+        problems = self.gem_problems(notice=True, license=False)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("would publish without `LICENSE`", problems[0])
+
+    def test_when_the_gem_lacks_the_third_party_notice_it_is_reported(self) -> None:
+        problems = self.gem_problems(notice=False)
+        self.assertEqual(len(problems), 1)
+        self.assertIn(checks.THIRD_PARTY_NOTICE, problems[0])
+
 
 class MavenTest(unittest.TestCase):
     POM = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -630,6 +704,32 @@ class MavenTest(unittest.TestCase):
             problems = checks.maven_repository_problems(repository, "1.2.0", runner=lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
         missing = [p for p in problems if "where JNA looks" in p]
         self.assertEqual(len(missing), len(checks.JAR_NATIVE_LIBRARIES))
+
+
+    def jar_problems(self, *, notice: bool) -> list[str]:
+        pom = re.sub(rb"<dependencies>.*</dependencies>", b"", self.POM, flags=re.DOTALL)
+        with tempfile.TemporaryDirectory() as scratch:
+            repository = Path(scratch)
+            directory = repository / "me/koeda/chordsketch/1.2.0"
+            directory.mkdir(parents=True)
+            for name in ("chordsketch-1.2.0.pom", "chordsketch-1.2.0-sources.jar", "chordsketch-1.2.0-javadoc.jar", "chordsketch-1.2.0.jar"):
+                (directory / f"{name}.asc").write_text("sig")
+            (directory / "chordsketch-1.2.0.pom").write_bytes(pom)
+            for name in ("chordsketch-1.2.0-sources.jar", "chordsketch-1.2.0-javadoc.jar"):
+                write_zip(directory / name, {"README": b""})
+            files = {path: b"lib" for path in checks.JAR_NATIVE_LIBRARIES}
+            if notice:
+                files[f"META-INF/{checks.THIRD_PARTY_NOTICE}"] = b"#"
+            write_zip(directory / "chordsketch-1.2.0.jar", files)
+            return checks.maven_repository_problems(repository, "1.2.0", runner=lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
+
+    def test_when_the_jar_carries_the_third_party_notice_it_passes(self) -> None:
+        self.assertEqual(self.jar_problems(notice=True), [])
+
+    def test_when_the_jar_lacks_the_third_party_notice_it_is_reported(self) -> None:
+        problems = self.jar_problems(notice=False)
+        self.assertEqual(len(problems), 1)
+        self.assertIn(f"META-INF/{checks.THIRD_PARTY_NOTICE}", problems[0])
 
 
 class ContainerImageTest(unittest.TestCase):
@@ -1081,7 +1181,7 @@ class NpmDryRunTest(unittest.TestCase):
 class CocoapodsProblemsTest(unittest.TestCase):
     """The pod has to carry the Swift bindings the tag holds, and the binary pinned with them."""
 
-    def problems(self, *, source: dict | None = None, drop_checksum: bool = False, source_files: str = "packages/swift/Sources/ChordSketch/*.swift") -> list[str]:
+    def problems(self, *, source: dict | None = None, drop_checksum: bool = False, unzip_everything: bool = False, source_files: str = "packages/swift/Sources/ChordSketch/*.swift") -> list[str]:
         def runner(cmd, cwd, env=None):
             if cmd[0] != "pod":
                 return checks.run(cmd, cwd, env)
@@ -1089,6 +1189,8 @@ class CocoapodsProblemsTest(unittest.TestCase):
             prepare = podspec.split("<<-'CMD'\n", 1)[1].split("  CMD\n", 1)[0]
             if drop_checksum:
                 prepare = "\n".join(line for line in prepare.splitlines() if "shasum" not in line)
+            if unzip_everything:
+                prepare = prepare.replace(checks.XCFRAMEWORK_UNZIP, "unzip -q chordsketch-xcframework.zip")
             spec = {
                 "name": "ChordSketch",
                 "version": "0.8.0",
@@ -1115,6 +1217,11 @@ class CocoapodsProblemsTest(unittest.TestCase):
     def test_when_the_download_is_not_checked_against_the_pinned_checksum_it_is_a_problem(self) -> None:
         problems = self.problems(drop_checksum=True)
         self.assertTrue(any("does not verify the XCFramework" in p for p in problems), problems)
+
+    def test_when_the_prepare_command_unzips_the_whole_zip_over_the_tags_notice_it_is_a_problem(self) -> None:
+        problems = self.problems(unzip_everything=True)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("unzipping the whole zip", problems[0])
 
     def test_when_source_files_match_nothing_it_is_a_problem(self) -> None:
         problems = self.problems(source_files="packages/swift/Nothing/*.swift")
@@ -1173,6 +1280,33 @@ class SwiftPackageProblemsTest(unittest.TestCase):
     def test_when_swiftpm_reads_another_checksum_than_the_one_pinned_it_is_a_problem(self) -> None:
         problems = self.problems(self.manifest("0.8.0"), dumped_checksum="d" * 64)
         self.assertTrue(any("pinned checksum" in p for p in problems), problems)
+
+
+@unittest.skipUnless(shutil.which("zip"), "the release step zips with `zip`")
+class XcframeworkArchiveTest(unittest.TestCase):
+    """The XCFramework zip is the binary SwiftPM and the pod download, so it carries the notice."""
+
+    def test_when_the_release_step_zips_the_framework_with_the_third_party_notice_there_is_no_problem(self) -> None:
+        self.assertEqual(checks.xcframework_archive_problems(), [])
+
+    def test_when_the_release_step_leaves_the_third_party_notice_out_it_is_a_problem(self) -> None:
+        def runner(cmd, cwd, env=None):
+            script = Path(cmd[-1])
+            script.write_text(script.read_text().replace(f" {checks.THIRD_PARTY_NOTICE}", ""))
+            return checks.run(cmd, cwd, env)
+
+        problems = checks.xcframework_archive_problems(runner)
+        self.assertEqual(len(problems), 1)
+        self.assertIn(checks.THIRD_PARTY_NOTICE, problems[0])
+
+    def test_when_the_release_step_leaves_the_framework_out_it_is_a_problem(self) -> None:
+        def runner(cmd, cwd, env=None):
+            script = Path(cmd[-1])
+            script.write_text(script.read_text().replace(" chordsketchFFI.xcframework", ""))
+            return checks.run(cmd, cwd, env)
+
+        problems = checks.xcframework_archive_problems(runner)
+        self.assertTrue(any("no chordsketchFFI.xcframework at its root" in p for p in problems), problems)
 
 
 if __name__ == "__main__":
