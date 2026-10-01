@@ -1,6 +1,6 @@
 //! Golden-snapshot test for the SVG skeleton.
 //!
-//! Builds the same `IrealSong` every run (an "Autumn Leaves" stub
+//! Builds the same `IrealSong` every run (a "Sample Chart" stub
 //! with one bar) and asserts the renderer's output is byte-identical
 //! to `tests/fixtures/basic/expected.svg`.
 //!
@@ -44,8 +44,8 @@ fn build_basic_song() -> IrealSong {
         beat_grouping_override: None,
     };
     IrealSong {
-        title: "Autumn Leaves".into(),
-        composer: Some("Joseph Kosma".into()),
+        title: "Sample Chart".into(),
+        composer: Some("Sample Composer".into()),
         style: Some("Medium Swing".into()),
         key_signature: KeySignature {
             root: ChordRoot {
