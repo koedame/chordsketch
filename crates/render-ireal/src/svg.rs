@@ -61,7 +61,7 @@ mod tests {
 
     #[test]
     fn passes_plain_text_through() {
-        assert_eq!(escape_xml("Autumn Leaves"), "Autumn Leaves");
+        assert_eq!(escape_xml("Sample Chart"), "Sample Chart");
     }
 
     #[test]

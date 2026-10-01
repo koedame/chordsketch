@@ -326,6 +326,12 @@ no system dependencies
 ([ADR-0056](https://github.com/koedame/chordsketch/blob/main/docs/adr/0056-desktop-bundles-target-ubuntu-2204.md),
 [ADR-0057](https://github.com/koedame/chordsketch/blob/main/docs/adr/0057-desktop-rpm-stays-a-webkit2gtk-41-channel.md)).
 
+The libraries the `.AppImage` carries (webkit2gtk, GTK, GLib and what
+they need, mostly LGPL) are listed with their versions, source packages
+and license texts in `usr/share/doc/chordsketch-desktop/bundled-libraries.txt`
+inside the image; each desktop release publishes the same file as
+`chordsketch-desktop-linux-bundled-libraries.txt`.
+
 ## Usage
 
 ```bash

@@ -143,8 +143,8 @@ fn json_serialization_is_byte_stable() {
     let song = make_sample();
     let json = song.to_json_string();
     let expected = "{\
-        \"title\":\"Autumn Leaves\",\
-        \"composer\":\"Joseph Kosma\",\
+        \"title\":\"Sample Chart\",\
+        \"composer\":\"Sample Composer\",\
         \"style\":\"Medium Swing\",\
         \"key_signature\":{\"root\":{\"note\":\"E\",\"accidental\":\"natural\"},\"mode\":\"minor\"},\
         \"time_signature\":{\"numerator\":4,\"denominator\":4},\
@@ -549,8 +549,8 @@ fn make_sample() -> IrealSong {
         bars: vec![bar],
     };
     IrealSong {
-        title: String::from("Autumn Leaves"),
-        composer: Some(String::from("Joseph Kosma")),
+        title: String::from("Sample Chart"),
+        composer: Some(String::from("Sample Composer")),
         style: Some(String::from("Medium Swing")),
         key_signature: KeySignature {
             root: ChordRoot::natural('E'),
