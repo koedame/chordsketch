@@ -260,6 +260,19 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/generate-bare-directives.py --check
 
+      # Guards `THIRD_PARTY_LICENSES.md` — the copyright notices and license
+      # texts of every Rust crate and bundled npm package, shipped with each
+      # binary — against drifting from `Cargo.lock` and the bundled
+      # `package-lock.json` files (ADR-0085). The check reads the lock files
+      # only, so it needs no Rust or Node toolchain; regenerating does.
+      #
+      # Runs on every PR rather than behind a path filter for the same reason
+      # as the catalog check above: the drift that matters is a lock-file
+      # change that never touched the notice.
+      - name: Third-party license notice sync
+        if: ${{ !cancelled() }}
+        run: python3 scripts/third-party-licenses.py --check
+
       # Unit tests for the guard scripts above, plus the code that only ever
       # runs during a release fan-out: the two `.github/actions/chocolatey-*`
       # composite actions — the PowerShell that decides whether a Chocolatey
@@ -295,7 +308,8 @@ jobs:
             scripts/test_chocolatey_generate_package.py \
             scripts/test_release_checksum_guards.py \
             scripts/test_desktop_security_config.py \
-            scripts/test_license_layers.py
+            scripts/test_license_layers.py \
+            scripts/test_third_party_licenses.py
 
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})

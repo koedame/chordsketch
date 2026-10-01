@@ -54,6 +54,7 @@ These apply to every artifact any channel receives.
 | No file containing a private key or a GitHub, npm, crates.io, PyPI, RubyGems, AWS or Slack token | Same | `content_problems` |
 | No file over 1 MiB unless it is declared in the package's `large_files` | The 0.6.0 render-pdf crate carried test PDFs; an undeclared large file fails on the pull request that adds it (adding a file over 1 MiB always runs the checks there), before any registry limit is reached. A declaration that matches no packed file also fails. | `content_problems` |
 | The package carries the MIT text its metadata names, byte for byte the repository's `LICENSE`: at the package root for a crate, an npm package and a gem; `<name>-<version>/LICENSE` in the sdist; `<name>-<version>.dist-info/licenses/LICENSE` in a wheel | A registry tarball holds one directory, so a license field without the text leaves a downloader with no terms to read. Each package directory therefore keeps its own copy (`scripts/test_license_layers.py` holds the copies equal to the root file). The AGPL-3.0-only application layer is never published to a registry | `license_problems` |
+| An npm package or VSIX that ships a `.wasm` or `.node` file also ships `THIRD_PARTY_LICENSES.md` | The binary links its Rust dependencies, and their licenses (MIT, Apache-2.0, BSD, MPL-2.0, ...) require the copyright notice and license text to travel with every copy ([ADR-0085](adr/0085-binaries-ship-a-generated-third-party-license-notice.md)). The package's build copies the file in from the repository root, because `npm pack` and `vsce` take files from the package directory only | `notice_problems` |
 | The publish dry run prints no unexpected warning | See above | `tool_warnings` |
 
 ## crates.io
@@ -223,7 +224,7 @@ channel's contract. The pull-request check runs `release.yml`'s own
 | Condition | Source | Checked by |
 |---|---|---|
 | The archive is named `chordsketch-vX.Y.Z-<target>.tar.gz` (`.zip` on Windows), one per `release.yml` target | — (Homebrew, Scoop, Chocolatey, AUR, Snap, docker.yml and the VS Code build all download by this name) | `cli_archive_problems`; `release_assets` reads the targets from `release.yml` |
-| A tarball holds `chordsketch-vX.Y.Z-<target>/` with `chordsketch`, `chordsketch-lsp`, `LICENSE`, `README.md`; the Windows zip holds `chordsketch.exe`, `chordsketch-lsp.exe`, `LICENSE`, `README.md` at its root | — (Scoop's `bin`, Chocolatey's unzip and winget's `RelativeFilePath` read the zip's root) | `cli_archive_problems` |
+| A tarball holds `chordsketch-vX.Y.Z-<target>/` with `chordsketch`, `chordsketch-lsp`, `LICENSE`, `NOTICE`, `THIRD_PARTY_LICENSES.md`, `README.md`; the Windows zip holds `chordsketch.exe`, `chordsketch-lsp.exe`, `LICENSE`, `NOTICE`, `THIRD_PARTY_LICENSES.md`, `README.md` at its root | — (Scoop's `bin`, Chocolatey's unzip and winget's `RelativeFilePath` read the zip's root) | `cli_archive_problems` |
 | `checksums.txt` has a `<sha256>  <archive name>` line, with no directory | — (the package managers `awk` for the name) | `cli_archive_problems` |
 
 ## Homebrew formula and cask

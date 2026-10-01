@@ -167,6 +167,28 @@ def content_problems(label: str, files: list[PackedFile], large_files: tuple[str
     return problems
 
 
+THIRD_PARTY_NOTICE = "THIRD_PARTY_LICENSES.md"
+COMPILED_SUFFIXES = (".wasm", ".node")
+
+
+def notice_problems(label: str, files: list[PackedFile], root: str = "") -> list[str]:
+    """A package that ships compiled code has to ship the third-party notice with it.
+
+    The wasm and native binaries link their Rust dependencies statically, and
+    the licenses of those dependencies (MIT, Apache-2.0, BSD, MPL-2.0, ...)
+    require their copyright notices and license texts to travel with every copy.
+    `root` is the directory the package's own files sit in (`extension/` in a
+    VSIX).
+    """
+    paths = {packed.path for packed in files}
+    if not any(path.endswith(COMPILED_SUFFIXES) for path in paths) or f"{root}{THIRD_PARTY_NOTICE}" in paths:
+        return []
+    return [
+        f"{label} ships compiled code but not `{root}{THIRD_PARTY_NOTICE}`, so the licenses of the "
+        f"dependencies linked into it would not travel with it; its build has to copy the file in"
+    ]
+
+
 def license_problems(label: str, files: list[PackedFile], location: str = "LICENSE") -> list[str]:
     """The MIT text a published package declares must be in the package itself.
 
@@ -488,6 +510,7 @@ def npm_manifest_problems(manifest: dict, files: list[PackedFile]) -> list[str]:
     paths = {packed.path for packed in files}
     if not any(path.lower().startswith("readme") and "/" not in path for path in paths):
         problems.append(f"{name} would publish without a README")
+    problems += notice_problems(name, files)
     for entry in sorted(set(entry_points(manifest))):
         target = entry.removeprefix("./")
         if target in paths or any(path.startswith(target.rstrip("/") + "/") for path in paths):
@@ -816,6 +839,7 @@ def vsix_problems(path: Path, target: VscodeTarget | None) -> list[str]:
     if manifest_file is None:
         return [f"{label} has no extension/package.json"]
     problems = vsix_manifest_problems(label, json.loads(manifest_file.data), files)
+    problems += notice_problems(label, files, "extension/")
     large = VSIX_LARGE_FILES
     servers = sorted(f.path for f in files if f.path.startswith("extension/server/"))
     if target is None and servers:
@@ -1760,7 +1784,7 @@ def chocolatey_problems(workspace: Path, version: str, runner: Runner = run) -> 
 # What each consumer takes out of a CLI archive: the tarball's top directory
 # is stripped by the VS Code and Snap steps, entered by AUR's
 # `package()` and named by docker.yml.
-CLI_ARCHIVE_FILES = ("chordsketch", "chordsketch-lsp", "LICENSE", "README.md")
+CLI_ARCHIVE_FILES = ("chordsketch", "chordsketch-lsp", "LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.md", "README.md")
 CLI_ARCHIVE_LARGE_FILES = ("*/chordsketch", "*/chordsketch-lsp")
 
 
@@ -1778,7 +1802,7 @@ def cli_archive_problems(version: str, target: str, binaries: Path, runner: Runn
         (directory / f"target/{target}/release").mkdir(parents=True)
         for name in ("chordsketch", "chordsketch-lsp"):
             shutil.copyfile(binaries / f"{name}{exe}", directory / f"target/{target}/release/{name}{exe}")
-        for name in ("LICENSE", "README.md"):
+        for name in ("LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.md", "README.md"):
             shutil.copyfile(REPO_ROOT / name, directory / name)
         tag = f"v{version}"
         github_env = directory / "github-env"
@@ -2213,6 +2237,9 @@ PACKAGING_PATHS = (
     "Dockerfile*",
     "flake.nix",
     "flake.lock",
+    # The third-party notice every binary ships.
+    "NOTICE",
+    "THIRD_PARTY_LICENSES.md",
     # The workflows whose release steps the checks lift and run, the
     # workflows publishable.yml calls, and the composite actions its jobs use.
     ".github/workflows/publishable.yml",

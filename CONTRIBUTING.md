@@ -104,6 +104,14 @@ findings by severity and may push fix commits directly.
   exceptions.
 - Renderer crates may use minimal external crates when justified.
 - New dependencies must be explained in the PR description.
+- Every dependency must be under a license listed in `deny.toml` (permissive
+  licenses only; `cargo deny --all-features check licenses` checks it in CI).
+- `THIRD_PARTY_LICENSES.md` lists the copyright notices and license texts of
+  the dependencies linked or bundled into the binaries, and ships with them.
+  It is generated: when CI reports it out of date after a change to
+  `Cargo.lock` or a bundled `package-lock.json`, run
+  `python3 scripts/third-party-licenses.py` and commit the result (see the
+  script's docstring for what it needs).
 
 ## Golden Tests
 

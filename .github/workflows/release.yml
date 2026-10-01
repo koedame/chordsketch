@@ -159,7 +159,7 @@ jobs:
           mkdir "$STAGING"
           cp "target/${TARGET}/release/chordsketch" "$STAGING/"
           cp "target/${TARGET}/release/chordsketch-lsp" "$STAGING/"
-          cp LICENSE README.md "$STAGING/"
+          cp LICENSE NOTICE THIRD_PARTY_LICENSES.md README.md "$STAGING/"
           tar czf "$ARCHIVE_NAME" "$STAGING"
           echo "ARCHIVE=$ARCHIVE_NAME" >> "$GITHUB_ENV"
         shell: bash
@@ -175,7 +175,7 @@ jobs:
           New-Item -ItemType Directory -Path $Staging
           Copy-Item "target/$env:TARGET/release/chordsketch.exe" "$Staging/"
           Copy-Item "target/$env:TARGET/release/chordsketch-lsp.exe" "$Staging/"
-          Copy-Item LICENSE, README.md "$Staging/"
+          Copy-Item LICENSE, NOTICE, THIRD_PARTY_LICENSES.md, README.md "$Staging/"
           Compress-Archive -Path "$Staging/*" -DestinationPath $ArchiveName
           echo "ARCHIVE=$ArchiveName" >> $env:GITHUB_ENV
         shell: pwsh

@@ -48,6 +48,13 @@ crates/napi/**/*.node
 crates/napi/package-lock.json
 crates/napi/npm/*/package-lock.json
 
+# Copies of the root THIRD_PARTY_LICENSES.md, placed in each package directory
+# at build time because `npm pack` and `vsce` take files from there only.
+packages/npm/THIRD_PARTY_LICENSES.md
+packages/npm-export/THIRD_PARTY_LICENSES.md
+packages/vscode-extension/THIRD_PARTY_LICENSES.md
+crates/napi/npm/*/THIRD_PARTY_LICENSES.md
+
 # Tauri code-gen output
 apps/desktop/src-tauri/gen/
 # Preview handler DLL staged by

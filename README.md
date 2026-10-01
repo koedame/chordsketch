@@ -488,6 +488,13 @@ the iReal Pro editor are AGPL-3.0-only: code copied from them into another
 program has to follow that licence. GitHub shows the repository as MIT
 because it reads only the root `LICENSE`.
 
+Third-party dependency notices are in [NOTICE](NOTICE) and
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). They ship with the CLI
+archives, container images, the desktop app, the VS Code extension, and
+the wasm and napi npm packages; the PyPI, RubyGem, Maven, and Swift /
+CocoaPods packages don't carry them yet — see
+[ADR-0085](docs/adr/0085-binaries-ship-a-generated-third-party-license-notice.md#consequences).
+
 ## Trademark
 
 The licences above cover the code, not the name. Describing, packaging, and
