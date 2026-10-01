@@ -19,10 +19,12 @@ carry ™ rather than ®. This page is updated if that changes.
 
 ## The licence covers the code, not the name
 
-[MIT](LICENSE) (SDK crates) and AGPL-3.0-only (application layer) are
-copyright licences. They let you use, modify, redistribute, and sell the
-code, and neither grants any trademark permission — AGPL-3.0 §7(e) says so
-explicitly, and MIT never addressed marks at all.
+[MIT](LICENSE) (the libraries, tools and packages) and
+[AGPL-3.0-only](apps/desktop/LICENSE) (the desktop app, the playground and
+the iReal Pro editor) are copyright licences. They let you use, modify,
+redistribute, and sell the code, and neither grants any trademark
+permission — AGPL-3.0 §7(e) says so explicitly, and MIT never addressed
+marks at all.
 
 So forking is always allowed and always will be. Shipping the fork *under
 this name* is the part that needs permission, so that a user who installs
@@ -83,8 +85,8 @@ You are welcome to. To keep the name from following the fork:
 
 1. Rename the project, the binaries, and the published packages.
 2. Replace the logo.
-3. Keep [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) — the copyright licence
-   requires it, and this policy does not change that.
+3. Keep [`LICENSE`](LICENSE), [`apps/desktop/LICENSE`](apps/desktop/LICENSE) and
+   [`NOTICE`](NOTICE) — the copyright licences require it, and this policy does not change that.
 4. Say where it came from in prose: "forked from ChordSketch" is exactly the
    nominative use the section above allows.
 

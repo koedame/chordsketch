@@ -305,3 +305,9 @@ how it goes through signing and notarization is in
   `packages/playground/`. There is no npm workspaces root —
   `apps/desktop` is an independent package with its own
   `package-lock.json`.
+
+## License
+
+The desktop app is licensed under [AGPL-3.0-only](LICENSE), unlike the MIT
+libraries it is built on. The README at the repository root lists which
+directories fall under which licence.
