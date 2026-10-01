@@ -226,6 +226,20 @@ class CrateOflTest(unittest.TestCase):
         self.assertEqual(checks.crate_ofl_problems("chordsketch-chordpro", "MIT", [packed("src/lib.rs", b"//")]), [])
 
 
+class FormulaDeclaresTest(unittest.TestCase):
+    def test_a_quoted_field_is_declared(self) -> None:
+        self.assertTrue(checks.formula_declares('  desc "ChordPro file format parser and renderer"\n', "desc"))
+
+    def test_a_keyword_field_like_license_all_of_is_declared(self) -> None:
+        self.assertTrue(checks.formula_declares('  license all_of: ["MIT", "OFL-1.1"]\n', "license"))
+
+    def test_a_field_that_is_absent_is_not_declared(self) -> None:
+        self.assertFalse(checks.formula_declares('  desc "ChordPro file format parser and renderer"\n', "license"))
+
+    def test_a_field_name_that_only_appears_as_a_substring_is_not_declared(self) -> None:
+        self.assertFalse(checks.formula_declares('  homepage "https://example.com/license"\n', "license"))
+
+
 class NpmManifestTest(unittest.TestCase):
     MANIFEST = {
         "name": "@chordsketch/example",

@@ -10,6 +10,12 @@ Pod::Spec.new do |s|
     pre-built chordsketchFFI XCFramework, for iOS and macOS.
   DESC
   s.homepage     = 'https://github.com/koedame/chordsketch'
+  # CocoaPods' `license` attribute takes only one `:file`/`:text`, so it
+  # cannot carry both license texts the way `THIRD_PARTY_LICENSES.md` or the
+  # Kotlin POM's two `<license>` entries do. `:file` keeps the full MIT text;
+  # the vendored chordsketchFFI XCFramework also embeds the Bravura SMuFL
+  # outlines (NOTICE) under SIL OFL-1.1, reproduced in full in `NOTICE` and
+  # `THIRD_PARTY_LICENSES.md` in the same tag this pod's `s.source` checks out.
   s.license      = { :type => 'MIT AND OFL-1.1', :file => 'LICENSE' }
   s.author       = { 'koedame' => 'koedame@users.noreply.github.com' }
 

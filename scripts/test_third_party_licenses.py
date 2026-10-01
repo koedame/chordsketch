@@ -255,9 +255,10 @@ class FontNoticeTest(unittest.TestCase):
         self.assertEqual(pyproject["project"]["license"], {"text": "MIT AND OFL-1.1"})
         self.assertIn('["MIT", "OFL-1.1"]', (REPO / "packages/ruby/chordsketch.gemspec").read_text())
 
-    def test_a_package_definition_that_installs_the_prebuilt_binary_installs_the_notices_with_it(self):
+    def test_a_package_definition_that_installs_a_binary_installs_the_notices_with_it(self):
         for path in ("packaging/aur/chordsketch-bin/PKGBUILD.template", "packaging/aur/chordsketch/PKGBUILD.template",
-                     "packaging/homebrew/chordsketch.rb.template", "packaging/snap/snapcraft.yaml.template"):
+                     "packaging/homebrew/chordsketch.rb.template", "packaging/homebrew/chordsketch-desktop-formula.rb.template",
+                     "packaging/snap/snapcraft.yaml.template"):
             text = (REPO / path).read_text()
             self.assertIn("NOTICE", text, path)
             self.assertIn("THIRD_PARTY_LICENSES.md", text, path)
