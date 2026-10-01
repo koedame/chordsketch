@@ -2392,10 +2392,10 @@ mod tests {
     #[test]
     fn irealbook_six_field_url_parses_with_explicit_timesig() {
         // 6-field iRealBook URL: Title=Composer=Style=Key=TimeSig=Music.
-        let url = "irealbook://Spain=Corea Chick=Medium Samba=B-=44=[*AC|D|E|F]";
+        let url = "irealbook://Sample Chart=Sample Composer=Medium Samba=B-=44=[*AC|D|E|F]";
         let song = parse(url).expect("parse");
-        assert_eq!(song.title, "Spain");
-        assert_eq!(song.composer.as_deref(), Some("Corea Chick"));
+        assert_eq!(song.title, "Sample Chart");
+        assert_eq!(song.composer.as_deref(), Some("Sample Composer"));
         assert_eq!(song.style.as_deref(), Some("Medium Samba"));
         assert_eq!(song.time_signature.numerator, 4);
         assert_eq!(song.time_signature.denominator, 4);

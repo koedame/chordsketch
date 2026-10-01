@@ -529,16 +529,16 @@ mod tests {
     #[test]
     fn metadata_maps_to_ireal_fields() {
         let song = song_with_metadata(
-            "Autumn Leaves",
-            Some("Joseph Kosma"),
+            "Sample Chart",
+            Some("Sample Composer"),
             Some("Em"),
             Some("120"),
             Some("4/4"),
         );
         let result = convert(&song).unwrap();
         let ir = &result.output;
-        assert_eq!(ir.title, "Autumn Leaves");
-        assert_eq!(ir.composer.as_deref(), Some("Joseph Kosma"));
+        assert_eq!(ir.title, "Sample Chart");
+        assert_eq!(ir.composer.as_deref(), Some("Sample Composer"));
         assert_eq!(ir.key_signature.root.note, 'E');
         assert_eq!(ir.key_signature.mode, KeyMode::Minor);
         assert_eq!(ir.time_signature.numerator, 4);
