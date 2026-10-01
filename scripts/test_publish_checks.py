@@ -221,6 +221,22 @@ class LicenseTest(unittest.TestCase):
         self.assertRegex(gemspec, r's\.files\s*=\s*\[[^\]]*"LICENSE"')
 
 
+class HomebrewFieldTest(unittest.TestCase):
+    def test_when_a_formula_sets_a_field_to_a_string_it_is_declared(self) -> None:
+        self.assertTrue(checks.formula_declares('class X < Formula\n  license "MIT"\nend\n', "license"))
+
+    def test_when_a_formula_sets_the_license_to_several_it_is_declared(self) -> None:
+        self.assertTrue(checks.formula_declares('class X < Formula\n  license all_of: ["AGPL-3.0-only", "MIT"]\nend\n', "license"))
+
+    def test_when_a_formula_has_no_license_line_it_is_not_declared(self) -> None:
+        self.assertFalse(checks.formula_declares('class X < Formula\n  # license "MIT"\n  desc "x"\nend\n', "license"))
+
+    def test_when_the_shipped_desktop_template_is_read_its_license_is_declared_as_the_application_layer_and_what_it_bundles(self) -> None:
+        text = (checks.REPO_ROOT / "packaging/homebrew/chordsketch-desktop-formula.rb.template").read_text()
+        self.assertTrue(checks.formula_declares(text, "license"))
+        self.assertIn('license all_of: ["AGPL-3.0-only", "MIT", "OFL-1.1"]', text)
+
+
 class ToolWarningTest(unittest.TestCase):
     def test_when_cargo_warns_about_a_yanked_lock_entry_it_is_a_problem(self) -> None:
         output = (
