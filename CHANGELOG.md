@@ -30,6 +30,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   along with an iReal Pro URL that did not parse and a Next.js setup that
   failed on every request; every recipe on that page now compiles in the
   test suite and was run in a fresh Vite app and a fresh Next.js app.
+- **Every published package carries its licence text, and the licence
+  notices say the same thing.** The MIT text was only at the repository
+  root, so the crates.io, npm, PyPI and RubyGems packages named a licence
+  without including it; each package directory now has a copy, and the
+  publish checks fail when a package lacks it. The README, `NOTICE` and
+  `TRADEMARK.md` called the AGPL-3.0-only desktop app a future layer or
+  pointed at licence files that do not exist. They now list the directories
+  per licence: `apps/desktop/`, `packages/playground/` and
+  `packages/ui-irealb-editor/` are AGPL-3.0-only (each with its text and a
+  `license` field); the rest is MIT. The Homebrew formula that builds the
+  desktop app from source declares `AGPL-3.0-only`, `MIT` and `OFL-1.1`
+  instead of MIT, `CONTRIBUTING.md` says contributions follow the licence of
+  the directory they land in, and `LICENSE` and `NOTICE` name the same
+  copyright holder.
 
 ## [0.7.0] - 2026-09-17
 

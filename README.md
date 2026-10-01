@@ -477,9 +477,22 @@ reference and additional examples.
 
 ## License
 
-SDK crates (core, renderers, CLI): [MIT](LICENSE)
+ChordSketch has two layers, split by directory. The licence text is in each
+directory, so a package you download carries its own copy.
 
-Future application layer (Forum, Playground, Desktop): AGPL-3.0-only
+| Path | Licence |
+|---|---|
+| `apps/desktop/` (desktop app and its frontend) | [AGPL-3.0-only](apps/desktop/LICENSE) |
+| `packages/playground/` (the web playground) | [AGPL-3.0-only](packages/playground/LICENSE) |
+| `packages/ui-irealb-editor/` (the iReal Pro editor the playground and the desktop app embed) | [AGPL-3.0-only](packages/ui-irealb-editor/LICENSE) |
+| `crates/`, the other `packages/`, `syntaxes/`, `design-system/`, `docs/`, `scripts/`, `packaging/` | [MIT](LICENSE) |
+| The Bravura music font glyphs (`chordsketch-render-html`, `chordsketch-render-ireal`, `@chordsketch/react`) and the Noto Sans CJK JP subset (`chordsketch-render-pdf`) | [SIL OFL 1.1](NOTICE) — any crate or package that embeds one of these fonts, directly or by depending on one of these crates, declares `MIT AND OFL-1.1` |
+
+`@chordsketch/react` and the other published libraries are MIT, so you can
+embed them in a closed-source product. The desktop app, the playground and
+the iReal Pro editor are AGPL-3.0-only: code copied from them into another
+program has to follow that licence. GitHub shows the repository as MIT
+because it reads only the root `LICENSE`.
 
 Third-party dependency notices are in [NOTICE](NOTICE) and
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). They ship with the CLI

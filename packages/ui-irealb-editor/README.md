@@ -164,3 +164,9 @@ npm test
 
 The vitest suite uses jsdom + a wasm stub. It does not require a
 built `@chordsketch/wasm`.
+
+## License
+
+[AGPL-3.0-only](LICENSE). This internal editor is part of the application layer
+(the playground and the desktop app); the published, MIT-licensed
+`@chordsketch/react` is the package to build on.

@@ -9,10 +9,11 @@ dynamic = ["version"]
 description = "ChordPro file format parser and renderer"
 readme = "README.md"
 license = { text = "MIT AND OFL-1.1" }
-# The licenses of the Rust crates linked into the library. maturin takes files
-# from this directory only, so the build copies the root file in (python.yml,
-# publishable.yml); the copy is gitignored.
-license-files = ["THIRD_PARTY_LICENSES.md"]
+# LICENSE is the MIT text; THIRD_PARTY_LICENSES.md is the licenses of the Rust
+# crates linked into the library. maturin takes files from this directory only,
+# so the build copies the latter in from the root (python.yml,
+# publishable.yml); that copy is gitignored.
+license-files = ["LICENSE", "THIRD_PARTY_LICENSES.md"]
 requires-python = ">=3.8"
 authors = [{ name = "koedame" }]
 keywords = ["chordpro", "music", "chord", "parser", "lyrics", "rust", "uniffi"]
