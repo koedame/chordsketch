@@ -1,11 +1,13 @@
 ChordSketch
-Copyright (c) ChordSketch contributors
+Copyright (c) 2025 koedame
 
 This product includes software developed by third parties, listed below
-together with the licenses under which they are redistributed. The full
-ChordSketch license is in `LICENSE` (or `LICENSE-MIT` / `LICENSE-AGPL`
-where the layered SDK / application split applies, per `CLAUDE.md`'s
-License Policy).
+together with the licenses under which they are redistributed. ChordSketch
+itself is under two licenses, split by directory: the MIT License in
+`LICENSE` covers the libraries, command-line tools, packages and everything
+else, and the GNU Affero General Public License v3.0 only in
+`apps/desktop/LICENSE` covers `apps/desktop/`, `packages/playground/` and
+`packages/ui-irealb-editor/`. The README's License section lists both.
 
 The Rust crates and npm packages that are linked or bundled into the
 binaries, with their copyright notices and license texts, are listed in

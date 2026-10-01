@@ -38,4 +38,4 @@ println!("{text}");
 
 ## License
 
-[MIT](../../LICENSE)
+[MIT](LICENSE)

@@ -148,4 +148,4 @@ need programmatic access to the warning list.
 
 ## License
 
-[MIT](../../LICENSE)
+[MIT](LICENSE)

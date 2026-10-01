@@ -38,4 +38,4 @@ assert_eq!(song.metadata.title.as_deref(), Some("Amazing Grace"));
 
 ## License
 
-[MIT](../../LICENSE)
+[MIT](LICENSE)

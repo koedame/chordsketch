@@ -47,6 +47,7 @@ import _publish_checks as checks  # noqa: E402
 from _release_channels import load_channels  # noqa: E402
 
 MIB = checks.MIB
+MIT_TEXT = (checks.REPO_ROOT / "LICENSE").read_bytes()
 
 
 def packed(path: str, data: bytes = b"", size: int | None = None) -> checks.PackedFile:
@@ -177,6 +178,67 @@ class ContentTest(unittest.TestCase):
     def test_when_a_file_only_mentions_a_forbidden_name_it_passes(self) -> None:
         files = [packed("src/env.rs", b"// reads .env files"), packed("src/key.rs", b"fn key() {}")]
         self.assertEqual(checks.content_problems("pkg", files, ()), [])
+
+
+class LicenseTest(unittest.TestCase):
+    MIT = (checks.REPO_ROOT / "LICENSE").read_bytes()
+
+    def test_when_the_package_carries_the_repository_license_it_passes(self) -> None:
+        self.assertEqual(checks.license_problems("pkg", [packed("LICENSE", self.MIT)]), [])
+
+    def test_when_the_license_has_windows_line_endings_it_passes(self) -> None:
+        self.assertEqual(checks.license_problems("pkg", [packed("LICENSE", self.MIT.replace(b"\n", b"\r\n"))]), [])
+
+    def test_when_the_package_has_no_license_file_it_is_reported(self) -> None:
+        problems = checks.license_problems("chordsketch-chordpro", [packed("README.md", b"# x")])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("chordsketch-chordpro would publish without `LICENSE`", problems[0])
+
+    def test_when_the_license_is_only_in_a_subdirectory_it_is_reported(self) -> None:
+        self.assertEqual(len(checks.license_problems("pkg", [packed("docs/LICENSE", self.MIT)])), 1)
+
+    def test_when_the_license_text_differs_from_the_repository_license_it_is_reported(self) -> None:
+        problems = checks.license_problems("pkg", [packed("LICENSE", b"Some other terms\n")])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("differs from the repository's LICENSE", problems[0])
+
+    def test_when_an_sdist_keeps_the_license_under_its_top_directory_that_location_is_checked(self) -> None:
+        location = "chordsketch-1.2.0/LICENSE"
+        self.assertEqual(checks.license_problems("sdist", [packed(location, self.MIT)], location), [])
+        self.assertEqual(len(checks.license_problems("sdist", [packed("LICENSE", self.MIT)], location)), 1)
+
+    def test_when_a_published_crate_is_packaged_from_its_directory_it_holds_the_license(self) -> None:
+        for crate in checks.CRATES.values():
+            directory = "cli" if crate.name == "chordsketch" else crate.name.removeprefix("chordsketch-")
+            self.assertEqual((checks.REPO_ROOT / "crates" / directory / "LICENSE").read_bytes(), self.MIT, crate.name)
+
+    def test_when_an_npm_package_is_packed_from_its_directory_it_holds_the_license(self) -> None:
+        for name, package in checks.NPM_PACKAGES.items():
+            self.assertEqual((checks.REPO_ROOT / package.directory / "LICENSE").read_bytes(), self.MIT, name)
+
+    def test_when_the_python_and_ruby_packages_are_built_from_their_directories_they_hold_the_license(self) -> None:
+        for directory in (checks.PYTHON_DIST_DIR, checks.RUBY_GEM_DIR):
+            self.assertEqual((checks.REPO_ROOT / directory / "LICENSE").read_bytes(), self.MIT, directory)
+
+    def test_when_the_gemspec_lists_the_files_to_pack_it_lists_the_license(self) -> None:
+        gemspec = (checks.REPO_ROOT / checks.RUBY_GEM_DIR / "chordsketch.gemspec").read_text()
+        self.assertRegex(gemspec, r's\.files\s*=\s*\[[^\]]*"LICENSE"')
+
+
+class HomebrewFieldTest(unittest.TestCase):
+    def test_when_a_formula_sets_a_field_to_a_string_it_is_declared(self) -> None:
+        self.assertTrue(checks.formula_declares('class X < Formula\n  license "MIT"\nend\n', "license"))
+
+    def test_when_a_formula_sets_the_license_to_several_it_is_declared(self) -> None:
+        self.assertTrue(checks.formula_declares('class X < Formula\n  license all_of: ["AGPL-3.0-only", "MIT"]\nend\n', "license"))
+
+    def test_when_a_formula_has_no_license_line_it_is_not_declared(self) -> None:
+        self.assertFalse(checks.formula_declares('class X < Formula\n  # license "MIT"\n  desc "x"\nend\n', "license"))
+
+    def test_when_the_shipped_desktop_template_is_read_its_license_is_declared_as_the_application_layer_and_what_it_bundles(self) -> None:
+        text = (checks.REPO_ROOT / "packaging/homebrew/chordsketch-desktop-formula.rb.template").read_text()
+        self.assertTrue(checks.formula_declares(text, "license"))
+        self.assertIn('license all_of: ["AGPL-3.0-only", "MIT", "OFL-1.1"]', text)
 
 
 class ToolWarningTest(unittest.TestCase):
@@ -504,7 +566,6 @@ class PythonDistributionTest(unittest.TestCase):
         self.assertIn("chordsketch-1.2.0-py3-none-linux_x86_64.whl has a bare linux platform tag, which PyPI refuses; build it manylinux-compliant", problems)
         self.assertIn(f"no sdist in {dist}", problems)
 
-
     NOTICE = checks.THIRD_PARTY_NOTICE
     QUIET = staticmethod(lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
 
@@ -512,10 +573,12 @@ class PythonDistributionTest(unittest.TestCase):
         wheel_files = {"chordsketch-1.2.0.dist-info/METADATA": self.METADATA.encode(), "chordsketch/_native/libchordsketch_ffi.so": b"elf"}
         if wheel_notice:
             wheel_files[f"chordsketch-1.2.0.dist-info/licenses/{self.NOTICE}"] = NOTICE_WITH_OFL
+        wheel_files["chordsketch-1.2.0.dist-info/licenses/LICENSE"] = MIT_TEXT
         write_zip(dist / "chordsketch-1.2.0-cp38-abi3-manylinux_2_17_x86_64.whl", wheel_files)
         sdist_files = {"PKG-INFO": self.METADATA.encode(), "crates/render-pdf/assets/NotoSansCJK-subset.otf": b"otf"}
         if sdist_notice:
             sdist_files[self.NOTICE] = NOTICE_WITH_OFL
+        sdist_files["LICENSE"] = MIT_TEXT
         write_tarball(dist / "chordsketch-1.2.0.tar.gz", "chordsketch-1.2.0", sdist_files)
 
     def test_when_the_wheel_and_the_sdist_carry_the_third_party_notice_it_passes(self) -> None:
@@ -536,6 +599,41 @@ class PythonDistributionTest(unittest.TestCase):
             problems = checks.python_dist_problems(Path(scratch), runner=self.QUIET)
         self.assertEqual(len(problems), 1)
         self.assertIn(f"chordsketch-1.2.0/{self.NOTICE}", problems[0])
+
+
+class PythonLicenseTest(unittest.TestCase):
+    """The sdist and the wheel each have to carry the license where installers look for it."""
+
+    METADATA = PythonDistributionTest.METADATA
+    MIT = (checks.REPO_ROOT / "LICENSE").read_bytes()
+
+    def problems(self, wheel_files: dict[str, bytes], sdist_files: dict[str, bytes]) -> list[str]:
+        with tempfile.TemporaryDirectory() as scratch:
+            dist = Path(scratch)
+            write_zip(dist / "chordsketch-1.2.0-py3-none-manylinux2014_x86_64.whl", wheel_files)
+            write_tarball(dist / "chordsketch-1.2.0.tar.gz", "chordsketch-1.2.0", sdist_files)
+            problems = checks.python_dist_problems(dist, runner=lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
+        return [p for p in problems if "MIT terms" in p or "differs from the repository" in p]
+
+    WHEEL = {"chordsketch-1.2.0.dist-info/METADATA": METADATA.encode(), "chordsketch/_native/libchordsketch_ffi.so": b"elf"}
+
+    def test_when_both_artifacts_carry_the_license_where_installers_look_for_it_it_passes(self) -> None:
+        wheel = {**self.WHEEL, "chordsketch-1.2.0.dist-info/licenses/LICENSE": self.MIT}
+        sdist = {"PKG-INFO": self.METADATA.encode(), "LICENSE": self.MIT}
+        self.assertEqual(self.problems(wheel, sdist), [])
+
+    def test_when_the_wheel_has_no_license_it_is_reported(self) -> None:
+        sdist = {"PKG-INFO": self.METADATA.encode(), "LICENSE": self.MIT}
+        problems = self.problems(self.WHEEL, sdist)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("chordsketch-1.2.0.dist-info/licenses/LICENSE", problems[0])
+
+    def test_when_the_sdist_has_the_license_only_inside_the_crate_directory_it_is_reported(self) -> None:
+        wheel = {**self.WHEEL, "chordsketch-1.2.0.dist-info/licenses/LICENSE": self.MIT}
+        sdist = {"PKG-INFO": self.METADATA.encode(), "crates/ffi/LICENSE": self.MIT}
+        problems = self.problems(wheel, sdist)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("chordsketch-1.2.0/LICENSE", problems[0])
 
 
 class GemTest(unittest.TestCase):
@@ -561,9 +659,10 @@ class GemTest(unittest.TestCase):
     def test_when_the_gemspec_has_no_license_it_is_reported(self) -> None:
         self.assertEqual(checks.gem_spec_problems("g", {**self.SPEC, "licenses": []}), ["g has no `licenses` in its gemspec"])
 
-
-    def build_gem(self, directory: Path, *, notice: bool) -> None:
+    def build_gem(self, directory: Path, *, notice: bool, license: bool = True) -> None:
         files = {path: b"lib" for path in ["lib/chordsketch.rb", *checks.GEM_PLATFORM_LIBRARIES]}
+        if license:
+            files["LICENSE"] = MIT_TEXT
         if notice:
             files[checks.THIRD_PARTY_NOTICE] = NOTICE_WITH_OFL
         with tarfile.open(directory / "data.tar.gz", "w:gz") as data:
@@ -574,12 +673,12 @@ class GemTest(unittest.TestCase):
         with tarfile.open(directory / "chordsketch-1.2.0.gem", "w") as gem:
             gem.add(directory / "data.tar.gz", arcname="data.tar.gz")
 
-    def gem_problems(self, *, notice: bool) -> list[str]:
+    def gem_problems(self, *, notice: bool, license: bool = True) -> list[str]:
         spec = {**self.SPEC, "files": [*self.SPEC["files"], *([checks.THIRD_PARTY_NOTICE] if notice else [])]}
 
         def runner(cmd, cwd, env=None):
             if cmd[:2] == ["gem", "build"]:
-                self.build_gem(cwd, notice=notice)
+                self.build_gem(cwd, notice=notice, license=license)
                 return checks.subprocess.CompletedProcess(cmd, 0, "")
             return checks.subprocess.CompletedProcess(cmd, 0, json.dumps(spec))
 
@@ -588,6 +687,11 @@ class GemTest(unittest.TestCase):
 
     def test_when_the_gem_carries_the_third_party_notice_it_passes(self) -> None:
         self.assertEqual(self.gem_problems(notice=True), [])
+
+    def test_when_the_gem_lacks_the_license_it_is_reported(self) -> None:
+        problems = self.gem_problems(notice=True, license=False)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("would publish without `LICENSE`", problems[0])
 
     def test_when_the_gem_lacks_the_third_party_notice_it_is_reported(self) -> None:
         problems = self.gem_problems(notice=False)
@@ -1093,7 +1197,12 @@ class NpmDryRunTest(unittest.TestCase):
         write_tarball(
             tarball,
             "package",
-            {"package.json": json.dumps(manifest).encode(), "index.js": b"module.exports = 1;\n", "README.md": b"# fixture\n"},
+            {
+                "package.json": json.dumps(manifest).encode(),
+                "index.js": b"module.exports = 1;\n",
+                "README.md": b"# fixture\n",
+                "LICENSE": (checks.REPO_ROOT / "LICENSE").read_bytes(),
+            },
         )
         return tarball
 

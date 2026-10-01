@@ -294,6 +294,7 @@ jobs:
           python3 -m unittest \
             scripts/test_check_version_consistency.py \
             scripts/test_check_release_channels.py \
+            scripts/test_license_layers.py \
             scripts/test_release.py \
             scripts/test_swift_package.py \
             scripts/test_check_msrv_consistency.py \

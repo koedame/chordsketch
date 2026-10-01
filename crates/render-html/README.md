@@ -40,7 +40,7 @@ let html = render_song(&song);
 
 ## License
 
-The crate sources are licensed under [MIT](../../LICENSE).
+The crate sources are licensed under [MIT](LICENSE).
 
 The treble clef (U+E050), sharp (U+E262), and flat (U+E260) glyph
 outlines baked into `src/bravura.rs` — used to draw the inline `{key}`

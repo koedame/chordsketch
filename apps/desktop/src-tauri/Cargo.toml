@@ -9,9 +9,10 @@ name = "chordsketch-desktop"
 version = "0.7.0"
 edition.workspace = true
 rust-version.workspace = true
-# Application-layer license per CLAUDE.md §License Policy ("future Forum,
-# Playground, Desktop apps: AGPL-3.0-only"). SDK crates (everything under
-# `crates/`) stay MIT via the workspace inheritance.
+# Application-layer license per CLAUDE.md §License Policy (`apps/desktop/`,
+# `packages/playground/` and `packages/ui-irealb-editor/` are
+# AGPL-3.0-only). SDK crates (everything under `crates/`) stay MIT via the
+# workspace inheritance.
 license = "AGPL-3.0-only"
 authors.workspace = true
 repository.workspace = true

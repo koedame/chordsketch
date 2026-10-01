@@ -2,6 +2,7 @@
   "name": "@chordsketch/ui-irealb-editor",
   "private": true,
   "version": "0.0.0",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "description": "Bar-grid GUI editor for iReal Pro charts; pluggable into any host via the self-contained EditorAdapter contract.",
   "main": "./src/index.ts",
