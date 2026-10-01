@@ -8,7 +8,7 @@ Gem::Specification.new do |s|
   s.description = "Parse and render ChordPro files to text, HTML, and PDF. " \
                   "Native bindings via UniFFI for high performance."
   s.authors     = ["koedame"]
-  s.license     = "MIT"
+  s.licenses    = ["MIT", "OFL-1.1"]
   s.homepage    = "https://github.com/koedame/chordsketch"
 
   s.metadata = {

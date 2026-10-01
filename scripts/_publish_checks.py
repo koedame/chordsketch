@@ -171,6 +171,27 @@ THIRD_PARTY_NOTICE = "THIRD_PARTY_LICENSES.md"
 COMPILED_SUFFIXES = (".wasm", ".node", ".so", ".dylib", ".dll", ".pyd")
 
 
+OFL_TEXT = b"SIL OPEN FONT LICENSE Version 1.1"
+
+
+def font_license_problems(label: str, files: list[PackedFile], notice: str) -> list[str]:
+    """The notice a package ships holds the SIL OFL text the embedded fonts are under.
+
+    Every build of the renderers carries the Noto Sans CJK JP subset (PDF) or
+    the Bravura glyph outlines (HTML, iReal), both under the OFL, whose second
+    condition is that each copy of the font software comes with its copyright
+    notice and the license text. `THIRD_PARTY_LICENSES.md` reproduces both, so
+    a notice without the OFL is one that was cut down or built without the fonts.
+    """
+    shipped = next((packed for packed in files if packed.path == notice), None)
+    if shipped is None or OFL_TEXT in shipped.data:
+        return []
+    return [
+        f"{label} ships `{notice}` without the SIL Open Font License text, which the fonts embedded in "
+        f"its binaries (Noto Sans CJK JP subset, Bravura glyphs) require to travel with every copy"
+    ]
+
+
 def notice_problems(label: str, files: list[PackedFile], root: str = "", *, always: bool = False) -> list[str]:
     """A package that ships compiled code has to ship the third-party notice with it.
 
@@ -182,8 +203,10 @@ def notice_problems(label: str, files: list[PackedFile], root: str = "", *, alwa
     source the binary is built from instead of the binary (an sdist).
     """
     paths = {packed.path for packed in files}
-    if not (always or any(path.endswith(COMPILED_SUFFIXES) for path in paths)) or f"{root}{THIRD_PARTY_NOTICE}" in paths:
+    if not (always or any(path.endswith(COMPILED_SUFFIXES) for path in paths)):
         return []
+    if f"{root}{THIRD_PARTY_NOTICE}" in paths:
+        return font_license_problems(label, files, f"{root}{THIRD_PARTY_NOTICE}")
     return [
         f"{label} has no `{root}{THIRD_PARTY_NOTICE}`, so the licenses of the dependencies linked into its "
         f"binaries would not travel with it; its build has to copy the file in"
@@ -353,6 +376,13 @@ def crate_readme_problems(crate: str, readme: str | None, files: list[PackedFile
     return []
 
 
+def crate_ofl_problems(crate: str, license: str | None, files: list[PackedFile]) -> list[str]:
+    """A crate that declares the OFL (it embeds a font or glyph outlines) packages the license text."""
+    if "OFL-1.1" not in (license or "") or any(OFL_TEXT in packed.data for packed in files):
+        return []
+    return [f"{crate} declares `{license}` but the packaged crate holds no copy of the SIL Open Font License"]
+
+
 def crates_problems(tree: Path, crates: tuple[str, ...], target_dir: Path, runner: Runner = run) -> list[str]:
     """Everything this module can check about publishing `crates` from `tree`.
 
@@ -399,6 +429,7 @@ def crates_problems(tree: Path, crates: tuple[str, ...], target_dir: Path, runne
         problems += content_problems(crate, files, CRATES[crate].large_files)
         problems += license_problems(crate, files)
         problems += crate_readme_problems(crate, by_name[crate].get("readme"), files)
+        problems += crate_ofl_problems(crate, by_name[crate].get("license"), files)
     return problems + crate_size_problems(sizes)
 
 
@@ -1618,6 +1649,8 @@ def snap_problems(version: str, binary: Path, runner: Runner = run) -> list[str]
         stage.mkdir()
         shutil.copyfile(binary, stage / "chordsketch")
         (stage / "chordsketch").chmod(0o755)
+        for name in ("LICENSE", "NOTICE", THIRD_PARTY_NOTICE):  # the release archive holds these beside the binary
+            shutil.copyfile(REPO_ROOT / name, stage / name)
         # The release job's own build command.
         packed = runner(["snapcraft", "--destructive-mode"], directory)
         if packed.returncode != 0:
@@ -1870,6 +1903,9 @@ def cli_archive_problems(version: str, target: str, binaries: Path, runner: Runn
         present = {f.path for f in files}
         if missing := sorted(expected - present):
             problems.append(f"{archive.name} lacks {', '.join(missing)}")
+        problems += font_license_problems(
+            archive.name, files, THIRD_PARTY_NOTICE if windows else f"chordsketch-{tag}-{target}/{THIRD_PARTY_NOTICE}"
+        )
         # Declared only where they are, so a wrong layout is reported once, as missing files.
         problems += content_problems(archive.name, files, tuple(glob for glob in large if any(fnmatch.fnmatch(path, glob) for path in present)))
         if windows:

@@ -8,7 +8,7 @@ name = "chordsketch"
 dynamic = ["version"]
 description = "ChordPro file format parser and renderer"
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "MIT AND OFL-1.1" }
 # LICENSE is the MIT text; THIRD_PARTY_LICENSES.md is the licenses of the Rust
 # crates linked into the library. maturin takes files from this directory only,
 # so the build copies the latter in from the root (python.yml,

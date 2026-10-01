@@ -41,4 +41,6 @@ std::fs::write("output.pdf", &pdf_bytes).unwrap();
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) for the Rust source. The crate embeds a subset of
+Noto Sans CJK JP (`assets/NotoSansCJK-subset.otf`), which is under the
+[SIL Open Font License 1.1](assets/OFL.txt).

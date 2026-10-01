@@ -13,6 +13,9 @@ class ChordsketchDesktop < Formula
   homepage "https://github.com/koedame/chordsketch"
   url "{{SOURCE_URL}}"
   sha256 "{{SHA256_SOURCE}}"
+  # The desktop app (`apps/desktop`) is AGPL-3.0-only. The `install` block below
+  # also builds `packages/npm`, which embeds the Bravura SMuFL outlines
+  # (OFL-1.1) alongside the MIT-licensed Rust and JS source.
   license all_of: ["AGPL-3.0-only", "MIT", "OFL-1.1"]
 
   depends_on "node" => :build
@@ -64,6 +67,7 @@ class ChordsketchDesktop < Formula
 
     prefix.install "target/release/bundle/macos/ChordSketch.app"
     bin.write_exec_script prefix/"ChordSketch.app/Contents/MacOS/chordsketch-desktop"
+    doc.install "LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.md"
   end
 
   def caveats
