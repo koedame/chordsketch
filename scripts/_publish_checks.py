@@ -1402,6 +1402,12 @@ def desktop_formula_source_url(version: str) -> str:
     return f"https://github.com/koedame/chordsketch/archive/refs/tags/desktop-v{version}.tar.gz"
 
 
+def formula_declares(text: str, field: str) -> bool:
+    """Whether a Homebrew formula or cask sets `field` to a string or, like
+    `license all_of: [...]`, to a keyword form."""
+    return re.search(rf"^\s+{field} (?:\"|\w+:)", text, flags=re.MULTILINE) is not None
+
+
 def homebrew_problems(version: str, runner: Runner = run) -> list[str]:
     """The CLI formula, the desktop cask, and the desktop source-build formula, as their release jobs generate them.
 
@@ -1451,7 +1457,7 @@ def homebrew_problems(version: str, runner: Runner = run) -> list[str]:
                     problems.append(f"{label} does not carry the tag archive's checksum")
             else:
                 problems += download_url_problems(label, text, version) + checksum_problems(label, text, version)
-            problems += [f"{label} has no `{field}`" for field in required if not re.search(rf"^\s+{field} \"", text, flags=re.MULTILINE)]
+            problems += [f"{label} has no `{field}`" for field in required if not formula_declares(text, field)]
             (tap / folder).mkdir(parents=True, exist_ok=True)
             (tap / folder / filename).write_text(text)
             for command in (["brew", "audit", "--strict", f"--{kind}"], ["brew", "style", f"--{kind}"]):
