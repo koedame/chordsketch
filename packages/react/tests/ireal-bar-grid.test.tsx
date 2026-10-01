@@ -13,8 +13,8 @@ interface EditorStub {
 
 function songFixture(): IrealSong {
   return {
-    title: 'Autumn Leaves',
-    composer: 'Joseph Kosma',
+    title: 'Sample Chart',
+    composer: 'Sample Composer',
     style: 'Jazz Ballad',
     key_signature: {
       root: { note: 'E', accidental: 'natural' },
@@ -85,8 +85,8 @@ describe('<IrealBarGrid>', () => {
     const stub = makeStub();
     render(<IrealBarGrid source="irealb://x" loader={makeLoader(stub)} />);
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
-    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Autumn Leaves');
-    expect((screen.getByLabelText('Composer') as HTMLInputElement).value).toBe('Joseph Kosma');
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Sample Chart');
+    expect((screen.getByLabelText('Composer') as HTMLInputElement).value).toBe('Sample Composer');
     expect((screen.getByLabelText('Style') as HTMLInputElement).value).toBe('Jazz Ballad');
     expect((screen.getByLabelText('Key root') as HTMLSelectElement).value).toBe('E');
     expect((screen.getByLabelText('Mode') as HTMLSelectElement).value).toBe('minor');
@@ -188,7 +188,7 @@ describe('<IrealBarGrid>', () => {
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
-    expect(titleInput.value).toBe('Autumn Leaves');
+    expect(titleInput.value).toBe('Sample Chart');
 
     // Break serializeIrealb. The next field edit should surface an
     // error and leave the title field showing the OLD value.
@@ -201,7 +201,7 @@ describe('<IrealBarGrid>', () => {
     });
     expect(onChange).not.toHaveBeenCalled();
     // Displayed title still reflects the pre-failure song.
-    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Autumn Leaves');
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Sample Chart');
   });
 
   test('parse failure after first success disables fields so edits cannot silently overwrite the new (broken) URL', async () => {
@@ -219,10 +219,10 @@ describe('<IrealBarGrid>', () => {
     );
     await waitFor(() => expect(stub.parseIrealb).toHaveBeenCalled());
     const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
-    expect(titleInput.value).toBe('Autumn Leaves');
+    expect(titleInput.value).toBe('Sample Chart');
 
     // Pass a new source that fails to parse. The error renders
-    // and the form fields keep the stale "Autumn Leaves" values,
+    // and the form fields keep the stale "Sample Chart" values,
     // but the fieldset is now disabled.
     stub.parseIrealb.mockImplementation(() => {
       throw new Error('parse boom');

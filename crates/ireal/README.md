@@ -42,12 +42,12 @@ use chordsketch_ireal::{
 };
 
 let mut song = IrealSong::new();
-song.title = "Autumn Leaves".to_string();
+song.title = "Sample Chart".to_string();
 song.sections.push(Section::new(SectionLabel::Letter('A')));
 
 // JSON debug output for golden-snapshot tests.
 let json = song.to_json_string();
-assert!(json.contains("\"title\":\"Autumn Leaves\""));
+assert!(json.contains("\"title\":\"Sample Chart\""));
 
 // Round-trip back through the deserializer.
 let parsed = IrealSong::from_json_str(&json).expect("round-trip succeeds");

@@ -228,63 +228,51 @@ function totalBars(song: IrealSong): number {
 interface Sample {
   id: string;
   label: string;
-  /** Always `irealb://…` URL — sample data flows through the
-   * canonical URL → `parseIrealb` → AST → React chart pipeline
-   * so every sample also round-trips through `serializeIrealb`. */
+  /** Always an `irealb://…` or `irealbook://…` URL — sample data
+   * flows through the canonical URL → `parseIrealb` → AST → React
+   * chart pipeline so every sample also round-trips through
+   * `serializeIrealb`. */
   source: string;
 }
 
-// Real-world Autumn Leaves chart taken verbatim from a user-
-// supplied iRealb URL (G minor, 4/4, 138 BPM, three sections).
-// Exercises the full parse pipeline including endings, repeats,
-// custom-tension qualities (`9b7`, `Δ7♯11`, etc.), and section
-// breaks.
-const AUTUMN_LEAVES_URL =
-  'irealb://Autumn%20Leaves%3DKosma%20Joseph%3D%3DMedium%20Swing%3DG-%3D%3D' +
-  '1r34LbKcu7%239b7D4C-9Xb7-A%7CQyX9%5EbE%7CQXy9%5EbB%7CQyX31F%7CQy5XyQ%7C' +
-  '4TA*%7B9b7D%7CG-9XyAB*%5B%5DQyX%2C9-G2N%7D%7C%20%2C5%237G%209-G1N%7C' +
-  'Qh7XyQ%7CQyX5bE%7CQy%7CG-9XB%7CQyX9b31F%7CQyX-9CZL5%237G%209-G%7C' +
-  'Qyb%5E13XQyX5%23-AZL9%5D%5B*CA%209-FZL31bG%209-GQ%7CyX5%239%237D%7C' +
-  'QyX7hE7b9%23QyX9%5E7b5XyQ%7CD7b9%235XyQ%7CG-11XyQKcl%20%20Z%20%3D' +
-  'Jazz-Even%208ths%3D138%3D10';
+// Public-domain charts written out in the plain-text `irealbook://`
+// open-protocol shape (title=composer=style=key=n=chart). Together
+// they exercise section markers, repeat bars, a numbered ending and
+// both 4/4 and 3/4.
+const TWELVE_BAR_BLUES_URL =
+  'irealbook://' +
+  'Twelve-Bar%20Blues%3DTraditional%3DMedium%20Swing%3DC%3Dn%3D%5B' +
+  '%2AAT44C7%20%7CF7%20%7CC7%20%7CC7%20%7CF7%20%7CF7%20%7CC7%20%7CC' +
+  '7%20%7CG7%20%7CF7%20%7CC7%20%7CG7%20Z';
 
-const SPAIN_URL =
-  'irealbook://Spain%3DCorea%20Chick%3DMedium%20Samba%3DB-%3D44%3D' +
-  '%5B*AG%5E7%20%20%20%7C%20x%20%20%7CF%237%20%20%20%7C%20x%20%20%7C%2C' +
-  'S%2CE-7%20%20%20%7CA7%20%20%20%7CD%5E7%20%20%20%7CG%5E9%2311%20%20%20%5D' +
-  '%5B%2CC%237%20%20%20%7CF%237%239%20%20%20%7CBsus%20%20%20%7CB%20%20%20%7C%7C' +
-  '%2C*B%2Cn%20%20%20%7C%3C13%20measure%20lead%20break%3E%20%20%20%20%7C' +
-  '!Bsus%20%20%20%7C%20%20%20%20%7D%7C%2C*C%2C@G%5E7%20%20%20%7C%20x%20%20' +
-  '%7C%20x%20%20%7C%20x%20%20%7CF%237%20%20%20%7C%20x%20%20%7C%20x%20%20' +
-  '%7C%20x%20%20%7CE-7%20%20%20%7C%20x%20%20%7CA7%20%20%20%7C%20x%20%20' +
-  '%7CD%5E7%20%20%20%7C%20x%20%20%7CG%5E7%20%20%20%7C%20x%20%20%7CC%237%20%20%20' +
-  '%7C%20x%20%20%7CF%237%20%20%20%7C%20x%20%20%7CB-%20%20%20%7C%20x%20%20' +
-  '%7C%3CD.S.%20al%202nd%20ending%3EB7%20%20%20%7C%20x%20%20%5D%20';
+const AMAZING_GRACE_URL =
+  'irealbook://' +
+  'Amazing%20Grace%3DNewton%20John%3DWaltz%3DG%3Dn%3D%5B%2AAT34G%20' +
+  '%7CG7%20%7CC%20%7CG%20%7CG%20%7CEm%20%7CD%20%7CD7%20%5D%5B%2ABG' +
+  '%20%7CG7%20%7CC%20%7CG%20%7CEm%20%7CD%20%7CG%20%7CG%20Z';
 
-const MOON_RIVER_URL =
-  'irealb://Moon%20River=Mancini%20Henry==Waltz=C==' +
-  '1r34LbKcu7C%7CQyX4C%5E7XF%7CQyXE%2F7%5EC%7CQyX11%237%5EF%7CQyX7%2DA%7CQy%5E7%23113T%7BA%2A%7CQyX7yQ%7C' +
-  'BhXG%2F7%2DA%7CQyX%2DA1NB%5B%2A%5DQyX9b7E%7CQyX7yQ%7CF%5EXE%2F7%5EN%5BC%2A%7D1XyQ%7C' +
-  '%2DDZL7A%207%2DEZL9bB7%207h%23FZLG%2F%2DA%20%2DA7%20G7%201%237bB11%237%5EyQ%7C' +
-  'A%2DE%2F7%5EC%7CQyX11%237%5E%7CFQyX7h%23F%7CQyXG%2F7XyQ%7C' +
-  'FX7%2DA2yX7%2DD%5E7%2FEX9%237A%287%2DA%7CQyX%2997%23E%287%2DE%7CQyX7F%7CQy%29XyQ%7C' +
-  'C%7CQyXQ%7CG7XyQ%7CC6XyQ%7CG7%20%20%20Z==0=0===';
+const SAINTS_URL =
+  'irealbook://' +
+  'When%20the%20Saints%20Go%20Marching%20In%3DTraditional%3DMedium' +
+  '%20Up%20Swing%3DC%3Dn%3D%7B%2AAT44C%20%7CC%20%7CC%20%7CC7%20%7CF' +
+  '%20%7CF%20%7CC%20%7CC%20%7CC%20%7CG7%20%7CN1C%20%7CG7%20%7D%7CN2' +
+  'C%20Z';
 
 const SAMPLES: ReadonlyArray<Sample> = [
   {
-    id: 'autumn-leaves',
-    label: 'Autumn Leaves',
-    source: AUTUMN_LEAVES_URL,
+    id: 'twelve-bar-blues',
+    label: 'Twelve-Bar Blues',
+    source: TWELVE_BAR_BLUES_URL,
   },
   {
-    id: 'spain',
-    label: 'Spain',
-    source: SPAIN_URL,
+    id: 'amazing-grace',
+    label: 'Amazing Grace',
+    source: AMAZING_GRACE_URL,
   },
   {
-    id: 'moon-river',
-    label: 'Moon River',
-    source: MOON_RIVER_URL,
+    id: 'saints',
+    label: 'When the Saints Go Marching In',
+    source: SAINTS_URL,
   },
 ];
 

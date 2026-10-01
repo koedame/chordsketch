@@ -74,8 +74,8 @@ fn build_basic_song() -> IrealSong {
         beat_grouping_override: None,
     };
     IrealSong {
-        title: "Autumn Leaves".into(),
-        composer: Some("Joseph Kosma".into()),
+        title: "Sample Chart".into(),
+        composer: Some("Sample Composer".into()),
         style: Some("Medium Swing".into()),
         key_signature: KeySignature {
             root: ChordRoot {

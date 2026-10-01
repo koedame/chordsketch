@@ -191,8 +191,8 @@ mod tests {
 
     #[test]
     fn test_decode_source_keeps_plain_utf8_unchanged() {
-        let bytes = "{title: 春よ、来い}\n".as_bytes();
-        assert_eq!(decode_source(bytes).unwrap(), "{title: 春よ、来い}\n");
+        let bytes = "{title: 桜の歌}\n".as_bytes();
+        assert_eq!(decode_source(bytes).unwrap(), "{title: 桜の歌}\n");
     }
 
     #[test]
@@ -240,8 +240,8 @@ mod tests {
 
     #[test]
     fn test_render_document_uses_the_song_title_as_the_document_title() {
-        let html = render_document("{title: Yesterday}\n");
-        assert!(html.contains("<title>Yesterday</title>"));
+        let html = render_document("{title: Greensleeves}\n");
+        assert!(html.contains("<title>Greensleeves</title>"));
     }
 
     #[test]

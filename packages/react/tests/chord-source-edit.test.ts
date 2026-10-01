@@ -1263,7 +1263,7 @@ describe('splitBassNote', () => {
 describe('findChordAtCaret', () => {
   // Source: line 0 is a directive, line 1 has the chords. Absolute
   // offset of line 1 is `"{title: T}".length + 1` = 11.
-  const source = '{title: T}\n[G]Almost [Bbm7]heaven';
+  const source = '{title: T}\n[G]Sample [Bbm7]text';
   const line1Start = source.indexOf('\n') + 1; // 11
 
   test('caret inside a bracket selects that chord', () => {
@@ -1273,14 +1273,14 @@ describe('findChordAtCaret', () => {
     expect(match).not.toBeNull();
     expect(match!.chordName).toBe('Bbm7');
     expect(match!.line).toBe(2);
-    expect(match!.sourceColumn).toBe('[G]Almost '.length);
+    expect(match!.sourceColumn).toBe('[G]Sample '.length);
     expect(match!.bracketLength).toBe('[Bbm7]'.length);
     expect(match!.parts).toEqual({ root: 'B', accidental: 'b', suffix: 'm7', bass: '' });
-    // "Almost " = 7 lyric chars before the 2nd chord.
+    // "Sample " = 7 lyric chars before the 2nd chord.
     expect(match!.offset).toBe(7);
     expect(match!.ordinal).toBe(0);
     expect(match!.otherOffsets).toEqual([0]);
-    expect(match!.totalLyrics).toBe('Almost heaven'.length);
+    expect(match!.totalLyrics).toBe('Sample text'.length);
   });
 
   test('caret on the opening bracket selects the chord', () => {
@@ -1291,7 +1291,7 @@ describe('findChordAtCaret', () => {
   });
 
   test('caret in the lyrics (not on a chord) returns null', () => {
-    const at = source.indexOf('Almost'); // just after `]` of [G], on the lyric
+    const at = source.indexOf('Sample'); // just after `]` of [G], on the lyric
     expect(findChordAtCaret(source, at)).toBeNull();
   });
 
@@ -1321,11 +1321,11 @@ describe('findChordAtCaret', () => {
 
 describe('applyChordInsert', () => {
   test('inserts a new [chord] at the caret column', () => {
-    const source = 'Almost heaven';
+    const source = 'Sample text';
     const result = applyChordInsert(source, { line: 1, column: 7, chord: 'Bbm7' });
-    expect(result.text).toBe('Almost [Bbm7]heaven');
+    expect(result.text).toBe('Sample [Bbm7]text');
     // Caret lands just past the inserted bracket.
-    expect(result.caretOffset).toBe('Almost [Bbm7]'.length);
+    expect(result.caretOffset).toBe('Sample [Bbm7]'.length);
   });
 
   test('clamps a past-end column to the line end', () => {
@@ -1341,9 +1341,9 @@ describe('applyChordInsert', () => {
   });
 
   test('inserts on the correct line in a multi-line source', () => {
-    const source = '{title: T}\nAlmost heaven';
+    const source = '{title: T}\nSample text';
     const result = applyChordInsert(source, { line: 2, column: 0, chord: 'G' });
-    expect(result.text).toBe('{title: T}\n[G]Almost heaven');
+    expect(result.text).toBe('{title: T}\n[G]Sample text');
   });
 
   test('rejects a structurally dangerous chord body', () => {
@@ -1357,7 +1357,7 @@ describe('applyChordInsert', () => {
 });
 
 describe('chordSelectionCaretOffset', () => {
-  const source = '{title: T}\n[G]Almost [Bbm7]heaven';
+  const source = '{title: T}\n[G]Sample [Bbm7]text';
 
   test('round-trips with findChordAtCaret', () => {
     const at = source.indexOf('Bbm7');

@@ -159,7 +159,7 @@ export interface ChordSourceAreaProps extends Omit<HTMLAttributes<HTMLDivElement
  * DESIGN.md §3.2 applies to the rendered chord-sheet output, not
  * to the source pane. Directive values (the text after `:`) are
  * intentionally unstyled here so they inherit `--cs-text-primary`,
- * matching the plain "Country Roads" / "John Denver" copy in the
+ * matching the plain "Oh! Susanna" / "Stephen Foster" copy in the
  * editor.html reference. Colours pull through CSS variables
  * defined in `@chordsketch/react/styles.css` (and the workspace
  * `design-system/tokens.css`) with inline fallbacks so the editor renders

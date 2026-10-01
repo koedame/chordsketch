@@ -415,28 +415,25 @@ const SAMPLES: ReadonlyArray<Sample> = [
     source: KITCHEN_SINK_SOURCE,
   },
   {
-    id: 'country-roads',
-    label: 'Country Roads',
-    source: withDiagramsOff(`{title: Country Roads}
-{artist: John Denver}
+    id: 'oh-susanna',
+    label: 'Oh! Susanna',
+    source: withDiagramsOff(`{title: Oh! Susanna}
+{composer: Stephen Foster}
 {key: G}
-{capo: 0}
-{tempo: 82}
+{tempo: 100}
 {time: 4/4}
 
 # Verse 1
 {start_of_verse}
-[G]Almost heaven, [Em]West Virginia
-[D]Blue Ridge Mountains, [C]Shenandoah [G]River
-[G]Life is old there, [Em]older than the trees
-[D]Younger than the mountains, [C]growin' like a [G]breeze
+[G]I come from Alabama with my [D]banjo on my knee
+[G]I'm going to Louisiana, my [D]true love for to [G]see
+[G]It rained all night the day I left, the [D]weather it was dry
+The [G]sun so hot I froze to death, [D]Susanna, don't you [G]cry
 {end_of_verse}
 
 {start_of_chorus}
-[G]Country roads, [D/F#]take me home
-[Em7]To the place [C]I belong, [G/D]West Virginia
-[G]Mountain mama, [D]take me home
-[C]Country [G]roads
+[G]Oh! Susanna, [D]oh, don't you cry for me
+For I [C]come from Alabama [G]with my [D]banjo on my [G]knee
 {end_of_chorus}
 `),
   },
