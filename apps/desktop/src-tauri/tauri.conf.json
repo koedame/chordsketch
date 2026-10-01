@@ -38,6 +38,9 @@
     "targets": "all",
     "category": "Music",
     "resources": {
+      "../LICENSE": "licenses/AGPL-3.0-only/LICENSE",
+      "../../../LICENSE": "licenses/MIT/LICENSE",
+      "../../../crates/render-ireal/LICENSE-OFL.txt": "licenses/OFL-1.1/LICENSE-OFL.txt",
       "../../../NOTICE": "NOTICE",
       "../../../THIRD_PARTY_LICENSES.md": "THIRD_PARTY_LICENSES.md"
     },

@@ -158,9 +158,13 @@ jobs:
           # `TAURI_SIGNING_PRIVATE_KEY` is populated (#2076); without
           # the secret the `.sig` glob matches nothing and auto-update
           # stays disabled — the rest of the release still ships.
+          # `*-bundled-libraries.txt` (Linux only) names the system
+          # libraries the AppImage carries, with their versions, sources
+          # and license texts; it is published next to the AppImage.
           for pat in '*.dmg' '*.app.tar.gz' '*.app.tar.gz.sig' \
                      '*.msi' '*.msi.sig' '*.exe' '*.exe.sig' \
-                     '*.deb' '*.rpm' '*.AppImage' '*.AppImage.sig'; do
+                     '*.deb' '*.rpm' '*.AppImage' '*.AppImage.sig' \
+                     '*-bundled-libraries.txt'; do
             find "$SRC" -type f -name "$pat" -exec cp -v {} "$DST/" \; || true
           done
 
@@ -260,7 +264,8 @@ jobs:
                -o -name '*.msi.sig' -o -name '*.exe' \
                -o -name '*.exe.sig' -o -name '*.deb' \
                -o -name '*.rpm' -o -name '*.AppImage' \
-               -o -name '*.AppImage.sig' \) \
+               -o -name '*.AppImage.sig' \
+               -o -name '*-bundled-libraries.txt' \) \
             -exec cp -v {} release/ \;
           cd release
           # Deterministic sort so the SHA256SUMS file is stable

@@ -77,6 +77,13 @@ and
 `scripts/check-glibc-floor.py --channel desktop` measures the bundles in
 CI before they are uploaded.
 
+The libraries the `.AppImage` copies from the build host are mostly LGPL.
+`scripts/appimage-bundled-libraries.py` lists them with their package,
+version, source and license texts; the list is packed into the image at
+`usr/share/doc/chordsketch-desktop/bundled-libraries.txt` and published with
+each release as `chordsketch-desktop-linux-bundled-libraries.txt`
+([ADR-0086](../../docs/adr/0086-the-desktop-appimage-ships-a-generated-list-of-the-system-libraries-it-bundles.md)).
+
 ## First-time setup
 
 The Vite alias in `vite.config.ts` points `@chordsketch/wasm` at
