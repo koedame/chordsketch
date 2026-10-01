@@ -20,7 +20,10 @@ Gem::Specification.new do |s|
 
   s.required_ruby_version = ">= 3.0"
 
-  s.files = Dir["lib/**/*.rb"] + Dir["lib/**/*.so"] + Dir["lib/**/*.dylib"] + Dir["lib/**/*.dll"]
+  # THIRD_PARTY_LICENSES.md is the licenses of the Rust crates linked into the
+  # native libraries; scripts/stage-native-libs.sh copies it here.
+  s.files = Dir["lib/**/*.rb"] + Dir["lib/**/*.so"] + Dir["lib/**/*.dylib"] + Dir["lib/**/*.dll"] +
+            ["THIRD_PARTY_LICENSES.md"]
   s.require_paths = ["lib"]
 
   s.add_dependency "ffi", "~> 1.15"

@@ -168,24 +168,25 @@ def content_problems(label: str, files: list[PackedFile], large_files: tuple[str
 
 
 THIRD_PARTY_NOTICE = "THIRD_PARTY_LICENSES.md"
-COMPILED_SUFFIXES = (".wasm", ".node")
+COMPILED_SUFFIXES = (".wasm", ".node", ".so", ".dylib", ".dll", ".pyd")
 
 
-def notice_problems(label: str, files: list[PackedFile], root: str = "") -> list[str]:
+def notice_problems(label: str, files: list[PackedFile], root: str = "", *, always: bool = False) -> list[str]:
     """A package that ships compiled code has to ship the third-party notice with it.
 
     The wasm and native binaries link their Rust dependencies statically, and
     the licenses of those dependencies (MIT, Apache-2.0, BSD, MPL-2.0, ...)
     require their copyright notices and license texts to travel with every copy.
-    `root` is the directory the package's own files sit in (`extension/` in a
-    VSIX).
+    `root` is the directory the notice sits in (`extension/` in a VSIX,
+    `META-INF/` in a jar). `always` asks for it in a package that holds the
+    source the binary is built from instead of the binary (an sdist).
     """
     paths = {packed.path for packed in files}
-    if not any(path.endswith(COMPILED_SUFFIXES) for path in paths) or f"{root}{THIRD_PARTY_NOTICE}" in paths:
+    if not (always or any(path.endswith(COMPILED_SUFFIXES) for path in paths)) or f"{root}{THIRD_PARTY_NOTICE}" in paths:
         return []
     return [
-        f"{label} ships compiled code but not `{root}{THIRD_PARTY_NOTICE}`, so the licenses of the "
-        f"dependencies linked into it would not travel with it; its build has to copy the file in"
+        f"{label} has no `{root}{THIRD_PARTY_NOTICE}`, so the licenses of the dependencies linked into its "
+        f"binaries would not travel with it; its build has to copy the file in"
     ]
 
 
@@ -954,11 +955,14 @@ def python_dist_problems(dist: Path, runner: Runner = run) -> list[str]:
         if not libraries:
             problems.append(f"{path.name} contains no chordsketch_ffi native library")
         problems += content_problems(path.name, files, libraries)
+        problems += notice_problems(path.name, files, metadata_file.path.removesuffix("METADATA") + "licenses/")
     for path in sdists:
         files = read_tarball(path, strip_top_level=False)
         pkg_info = next((f for f in files if f.path.count("/") == 1 and f.path.endswith("/PKG-INFO")), None)
         if pkg_info is None:
             problems.append(f"{path.name} has no PKG-INFO")
+        else:
+            problems += notice_problems(path.name, files, pkg_info.path.removesuffix("PKG-INFO"), always=True)
         problems += content_problems(path.name, files, SDIST_LARGE_FILES)
 
     with tempfile.TemporaryDirectory(prefix="twine-") as scratch:
@@ -1042,7 +1046,9 @@ def gem_problems(directory: Path, runner: Runner = run) -> list[str]:
     with tempfile.TemporaryDirectory(prefix="gem-") as scratch:
         data_path = Path(scratch) / "data.tar.gz"
         data_path.write_bytes(data)
-        problems += content_problems(gem.name, read_tarball(data_path, strip_top_level=False), GEM_LARGE_FILES)
+        packed = read_tarball(data_path, strip_top_level=False)
+        problems += content_problems(gem.name, packed, GEM_LARGE_FILES)
+        problems += notice_problems(gem.name, packed)
 
         home = Path(scratch) / "gems"
         installed = runner(["gem", "install", "--no-document", "--install-dir", str(home), str(gem)], Path(scratch))
@@ -1145,6 +1151,7 @@ def maven_repository_problems(repository: Path, version: str, runner: Runner = r
         if library not in paths:
             problems.append(f"{base}.jar has no `{library}`, where JNA looks for the native library on that platform")
     problems += content_problems(f"{base}.jar", jar, JAR_LARGE_FILES)
+    problems += notice_problems(f"{base}.jar", jar, "META-INF/")
 
     with tempfile.TemporaryDirectory(prefix="maven-smoke-") as scratch:
         classpath = [str(directory / f"{base}.jar")]
@@ -1590,6 +1597,7 @@ def snap_problems(version: str, binary: Path, runner: Runner = run) -> list[str]
 
 
 # https://guides.cocoapods.org/syntax/podspec.html
+XCFRAMEWORK_UNZIP = "unzip -q chordsketch-xcframework.zip 'chordsketchFFI.xcframework/*'"
 REQUIRED_PODSPEC_ATTRIBUTES = ("name", "version", "summary", "license", "homepage", "authors", "source")
 
 
@@ -1621,6 +1629,11 @@ def cocoapods_problems(version: str, runner: Runner = run) -> list[str]:
         problems += download_url_problems("podspec prepare_command", prepare, version)
         if checksum not in prepare:
             problems.append("the podspec's prepare_command does not verify the XCFramework against the checksum Package.swift pins")
+        if XCFRAMEWORK_UNZIP not in prepare:
+            problems.append(
+                f"the podspec's prepare_command does not run `{XCFRAMEWORK_UNZIP}`: unzipping the whole zip stops on the "
+                f"{THIRD_PARTY_NOTICE} the tag already holds (unzip asks before overwriting it and nothing answers)"
+            )
         source_files = spec.get("source_files") or ""
         if not source_files or not any(REPO_ROOT.glob(source_files)):
             problems.append(f"the podspec's source_files {source_files!r} match nothing in the repository: the pod would have no Swift API")
@@ -1668,6 +1681,33 @@ def swift_package_problems(version: str, runner: Runner = run) -> list[str]:
         if len(binaries) != 1 or binaries[0].get("checksum") != checksum:
             problems.append("Package.swift does not declare one binary target with the pinned checksum")
         return problems
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+def xcframework_archive_problems(runner: Runner = run) -> list[str]:
+    """The XCFramework zip holds the framework at its root with the third-party notice beside it.
+
+    The zip is built on a macOS runner from five Rust targets, so it cannot be
+    rebuilt here. The step that zips it is lifted out of `swift.yml` and run on
+    a stand-in framework, so what the real step names is what is checked.
+    """
+    label = "chordsketch-xcframework.zip"
+    directory = Path(tempfile.mkdtemp(prefix="xcframework-"))
+    try:
+        (directory / "chordsketchFFI.xcframework").mkdir()
+        (directory / "chordsketchFFI.xcframework/Info.plist").write_text("<plist/>")
+        shutil.copyfile(REPO_ROOT / THIRD_PARTY_NOTICE, directory / THIRD_PARTY_NOTICE)
+        done = run_release_step("swift.yml", "assemble-xcframework", "Package XCFramework", directory, {}, runner)
+        if done.returncode != 0:
+            return [f"swift.yml `assemble-xcframework` / `Package XCFramework` failed:\n{tail(done.stdout)}"]
+        if not (directory / label).is_file():
+            return [f"swift.yml `Package XCFramework` did not write {label}"]
+        files = read_zip(directory / label)
+        problems = []
+        if not any(f.path.startswith("chordsketchFFI.xcframework/") for f in files):
+            problems.append(f"{label} has no chordsketchFFI.xcframework at its root, where SwiftPM and the podspec look for it")
+        return problems + notice_problems(label, files, always=True)
     finally:
         shutil.rmtree(directory, ignore_errors=True)
 

@@ -182,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
             "scoop": checks.scoop_problems,
             "aur": checks.aur_problems,
             "cocoapods": checks.cocoapods_problems,
-            "swift-package": checks.swift_package_problems,
+            "swift-package": lambda version: checks.swift_package_problems(version) + checks.xcframework_archive_problems(),
             "winget": checks.winget_problems,
             "desktop-updater": checks.desktop_updater_problems,
             "flathub": checks.flathub_problems,

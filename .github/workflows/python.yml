@@ -42,6 +42,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # maturin takes the license-files named in pyproject.toml from the crate
+      # directory only; the copy is gitignored.
+      - name: Copy the third-party license notice into the package
+        shell: bash
+        run: cp THIRD_PARTY_LICENSES.md crates/ffi/
+
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
         with:
           command: sdist
@@ -77,6 +83,12 @@ jobs:
           - target: aarch64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # maturin takes the license-files named in pyproject.toml from the crate
+      # directory only; the copy is gitignored.
+      - name: Copy the third-party license notice into the package
+        shell: bash
+        run: cp THIRD_PARTY_LICENSES.md crates/ffi/
 
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
         with:
@@ -116,6 +128,12 @@ jobs:
           - target: aarch64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # maturin takes the license-files named in pyproject.toml from the crate
+      # directory only; the copy is gitignored.
+      - name: Copy the third-party license notice into the package
+        shell: bash
+        run: cp THIRD_PARTY_LICENSES.md crates/ffi/
 
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
         with:
@@ -177,6 +195,12 @@ jobs:
         with:
           shared-key: python-x86_64-pc-windows-msvc
           save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # maturin takes the license-files named in pyproject.toml from the crate
+      # directory only; the copy is gitignored.
+      - name: Copy the third-party license notice into the package
+        shell: bash
+        run: cp THIRD_PARTY_LICENSES.md crates/ffi/
 
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
         with:

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Move the downloaded native libraries into the per-platform directories
-# `lib/chordsketch.rb` loads them from.
+# `lib/chordsketch.rb` loads them from, and copy in the third-party license
+# notice the gemspec lists (`gem build` takes files from the gem directory only).
 #
 # Usage: packages/ruby/scripts/stage-native-libs.sh <artifacts-dir>
 #   <artifacts-dir>: holds one `native-<rust-target>/` directory per target
@@ -19,6 +20,7 @@ fi
 
 ARTIFACTS=$(cd "$1" && pwd)
 LIB=$(cd "$(dirname "$0")/../lib" && pwd)
+cp "$(dirname "$0")/../../../THIRD_PARTY_LICENSES.md" "$LIB/.."
 
 declare -A TARGET_TO_PLATFORM=(
   [x86_64-unknown-linux-gnu]=x86_64-linux
