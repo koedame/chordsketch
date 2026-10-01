@@ -2,7 +2,7 @@
   "version": "{{VERSION}}",
   "description": "ChordPro file format parser and renderer",
   "homepage": "https://github.com/koedame/chordsketch",
-  "license": "MIT",
+  "license": "MIT,OFL-1.1",
   "architecture": {
     "64bit": {
       "url": "https://github.com/koedame/chordsketch/releases/download/v{{VERSION}}/chordsketch-v{{VERSION}}-x86_64-pc-windows-msvc.zip",
