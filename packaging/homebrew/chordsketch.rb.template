@@ -4,7 +4,7 @@
 class Chordsketch < Formula
   desc "ChordPro file format parser and renderer"
   homepage "https://github.com/koedame/chordsketch"
-  license "MIT"
+  license all_of: ["MIT", "OFL-1.1"]
 
   on_macos do
     if Hardware::CPU.arm?
@@ -28,6 +28,7 @@ class Chordsketch < Formula
 
   def install
     bin.install "chordsketch"
+    doc.install "LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.md"
   end
 
   test do

@@ -3,7 +3,11 @@ name = "chordsketch-render-pdf"
 version = "0.7.0"
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
+# Override the workspace's plain `MIT` because the crate embeds a subset of
+# Noto Sans CJK JP (`assets/NotoSansCJK-subset.otf`) under SIL OFL-1.1
+# alongside the MIT-licensed Rust source.
+# Attribution: NOTICE (project root) + assets/OFL.txt.
+license = "MIT AND OFL-1.1"
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true

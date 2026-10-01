@@ -2,7 +2,7 @@
   "name": "@chordsketch/node-linux-arm64-gnu",
   "version": "0.7.0",
   "description": "Prebuilt @chordsketch/node binary for Linux aarch64 (glibc).",
-  "license": "MIT",
+  "license": "MIT AND OFL-1.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/koedame/chordsketch.git",

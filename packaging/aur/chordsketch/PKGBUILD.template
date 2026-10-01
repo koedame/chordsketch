@@ -7,7 +7,7 @@ pkgrel=1
 pkgdesc='ChordPro file format parser and renderer'
 arch=('x86_64' 'aarch64')
 url='https://github.com/koedame/chordsketch'
-license=('MIT')
+license=('MIT' 'OFL-1.1')
 depends=('glibc' 'libgcc' 'zlib')
 makedepends=('cargo')
 # The release profile strips debug info, so a -debug split package would be empty.
@@ -31,5 +31,5 @@ build() {
 package() {
     cd "${pkgname}-${pkgver}"
     install -Dm755 target/release/chordsketch "${pkgdir}/usr/bin/chordsketch"
-    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 LICENSE NOTICE THIRD_PARTY_LICENSES.md -t "${pkgdir}/usr/share/licenses/${pkgname}/"
 }
