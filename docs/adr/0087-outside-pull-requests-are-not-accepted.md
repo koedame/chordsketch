@@ -29,6 +29,18 @@ other than the maintainers are not reviewed or merged.
 - A fix from someone else is never taken over as a commit or credited as a
   co-author; an idea from an issue is reimplemented by a maintainer.
 
+## Rationale
+
+An inbound agreement (DCO or CLA) only resolves whose signature is needed
+before accepting a change; it does not resolve what the rights in that change
+*are* when the surrounding repository is split MIT / AGPL-3.0-only by
+directory and much of the existing code was written with an AI tool. Refusing
+outside pull requests sidesteps the question entirely rather than picking an
+agreement to fit a case that has not actually occurred — no outside pull
+request had been opened at the time of this decision. The cost is small: the
+project is young enough that no contributor workflow or community expectation
+has to be unwound.
+
 ## Consequences
 
 - Every line in the repository has a maintainer as its author, so relicensing
@@ -45,3 +57,12 @@ other than the maintainers are not reviewed or merged.
   copyright, so the AGPL parts could not be relicensed without them.
 - **CLA**: allows relicensing but needs a signing service and raises the bar
   for contributors, for contributions nobody wants to take.
+
+## References
+
+- PR #2979, which introduced this ADR alongside the `CONTRIBUTING.md` and
+  `.github/PULL_REQUEST_TEMPLATE.md` wording changes.
+- `CLAUDE.md` §License Policy — the MIT / AGPL-3.0-only split by directory
+  referenced in Context.
+- Watch signal: revisit if a maintainer wants to accept outside contributions
+  — pick DCO or CLA first, per Consequences.
