@@ -2,7 +2,7 @@
   "name": "@chordsketch/wasm-export",
   "version": "0.7.0",
   "description": "ChordPro PDF / PNG export bindings (heavy WebAssembly bundle) — sister of @chordsketch/wasm",
-  "license": "MIT",
+  "license": "MIT AND OFL-1.1",
   "type": "module",
   "main": "./node/chordsketch_wasm.js",
   "browser": "./web/chordsketch_wasm.js",
