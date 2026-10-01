@@ -53,6 +53,7 @@ These apply to every artifact any channel receives.
 | No file matching `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `.npmrc`, `.pypirc`, `.git/`, `node_modules/`, `target/` | Credentials and build debris must never be published; nothing can be taken back from a registry | `content_problems` |
 | No file containing a private key or a GitHub, npm, crates.io, PyPI, RubyGems, AWS or Slack token | Same | `content_problems` |
 | No file over 1 MiB unless it is declared in the package's `large_files` | The 0.6.0 render-pdf crate carried test PDFs; an undeclared large file fails on the pull request that adds it (adding a file over 1 MiB always runs the checks there), before any registry limit is reached. A declaration that matches no packed file also fails. | `content_problems` |
+| The package carries the MIT text its metadata names, byte for byte the repository's `LICENSE`: at the package root for a crate, an npm package and a gem; `<name>-<version>/LICENSE` in the sdist; `<name>-<version>.dist-info/licenses/LICENSE` in a wheel | A registry tarball holds one directory, so a license field without the text leaves a downloader with no terms to read. Each package directory therefore keeps its own copy (`scripts/test_license_layers.py` holds the copies equal to the root file). The AGPL-3.0-only application layer is never published to a registry | `license_problems` |
 | The publish dry run prints no unexpected warning | See above | `tool_warnings` |
 
 ## crates.io

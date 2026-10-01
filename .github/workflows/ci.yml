@@ -295,6 +295,7 @@ jobs:
             scripts/test_chocolatey_generate_package.py \
             scripts/test_release_checksum_guards.py \
             scripts/test_desktop_security_config.py
+            scripts/test_license_layers.py
 
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})

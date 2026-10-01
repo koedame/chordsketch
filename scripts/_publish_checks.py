@@ -167,6 +167,28 @@ def content_problems(label: str, files: list[PackedFile], large_files: tuple[str
     return problems
 
 
+def license_problems(label: str, files: list[PackedFile], location: str = "LICENSE") -> list[str]:
+    """The MIT text a published package declares must be in the package itself.
+
+    Every published package here is MIT (`AND OFL-1.1` for the two that carry
+    Bravura glyphs; the AGPL-3.0-only application layer is never published).
+    A registry tarball holds one directory, so a package that relies on the
+    repository's root `LICENSE` ships a licence field with no licence text.
+    `location` is where the artifact keeps it: the package root for crates,
+    npm and gems, `<name>-<version>/LICENSE` for an sdist, and
+    `<name>-<version>.dist-info/licenses/LICENSE` for a wheel.
+    """
+    packed = next((f for f in files if f.path == location), None)
+    if packed is None:
+        return [
+            f"{label} would publish without `{location}`, so the MIT terms its metadata names would not travel "
+            f"with it; put a copy of the repository's LICENSE in the package directory"
+        ]
+    if packed.data.replace(b"\r\n", b"\n") != (REPO_ROOT / "LICENSE").read_bytes():
+        return [f"{label} would publish a `{location}` that differs from the repository's LICENSE; copy the root file over it"]
+    return []
+
+
 def _matches(path: str, pattern: str) -> bool:
     """A forbidden pattern matches the path or any of its trailing segments."""
     parts = path.split("/")
@@ -352,6 +374,7 @@ def crates_problems(tree: Path, crates: tuple[str, ...], target_dir: Path, runne
         sizes[crate] = path.stat().st_size
         files = read_tarball(path)
         problems += content_problems(crate, files, CRATES[crate].large_files)
+        problems += license_problems(crate, files)
         problems += crate_readme_problems(crate, by_name[crate].get("readme"), files)
     return problems + crate_size_problems(sizes)
 
@@ -585,6 +608,7 @@ def npm_tarball_problems(
         problems.append(f"{tarball.name} is `{manifest.get('name')}`, not {package.name}")
     problems += npm_manifest_problems(manifest, files)
     problems += content_problems(package.name, files, package.large_files)
+    problems += license_problems(package.name, files)
     problems += npm_dependency_problems(manifest, released_together, view)
 
     with tempfile.TemporaryDirectory(prefix="npm-dry-run-") as scratch:
@@ -930,12 +954,14 @@ def python_dist_problems(dist: Path, runner: Runner = run) -> list[str]:
         if not libraries:
             problems.append(f"{path.name} contains no chordsketch_ffi native library")
         problems += content_problems(path.name, files, libraries)
+        problems += license_problems(path.name, files, metadata_file.path.removesuffix("METADATA") + "licenses/LICENSE")
     for path in sdists:
         files = read_tarball(path, strip_top_level=False)
         pkg_info = next((f for f in files if f.path.count("/") == 1 and f.path.endswith("/PKG-INFO")), None)
         if pkg_info is None:
             problems.append(f"{path.name} has no PKG-INFO")
         problems += content_problems(path.name, files, SDIST_LARGE_FILES)
+        problems += license_problems(path.name, files, path.name.removesuffix(".tar.gz") + "/LICENSE")
 
     with tempfile.TemporaryDirectory(prefix="twine-") as scratch:
         venv = Path(scratch) / "venv"
@@ -1018,7 +1044,9 @@ def gem_problems(directory: Path, runner: Runner = run) -> list[str]:
     with tempfile.TemporaryDirectory(prefix="gem-") as scratch:
         data_path = Path(scratch) / "data.tar.gz"
         data_path.write_bytes(data)
-        problems += content_problems(gem.name, read_tarball(data_path, strip_top_level=False), GEM_LARGE_FILES)
+        packed = read_tarball(data_path, strip_top_level=False)
+        problems += content_problems(gem.name, packed, GEM_LARGE_FILES)
+        problems += license_problems(gem.name, packed)
 
         home = Path(scratch) / "gems"
         installed = runner(["gem", "install", "--no-document", "--install-dir", str(home), str(gem)], Path(scratch))
@@ -2170,6 +2198,7 @@ PACKAGING_PATHS = (
     "tsup.config.*",
     "pyproject.toml",
     "*.gemspec",
+    "LICENSE",
     "Package.swift",
     "*.gradle.kts",
     "gradle.properties",

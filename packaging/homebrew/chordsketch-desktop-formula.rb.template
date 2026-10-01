@@ -13,7 +13,7 @@ class ChordsketchDesktop < Formula
   homepage "https://github.com/koedame/chordsketch"
   url "{{SOURCE_URL}}"
   sha256 "{{SHA256_SOURCE}}"
-  license "MIT"
+  license all_of: ["AGPL-3.0-only", "MIT", "OFL-1.1"]
 
   depends_on "node" => :build
   # Homebrew's `rust` ships no wasm32 standard library, and the app's

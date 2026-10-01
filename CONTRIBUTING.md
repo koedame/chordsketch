@@ -118,8 +118,11 @@ Track progress and find available work on the
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the
-[MIT License](LICENSE).
+By contributing, you agree that your contributions are provided under the
+licence of the directory they are in: the [GNU AGPL v3.0 only](apps/desktop/LICENSE)
+for `apps/desktop/`, `packages/playground/` and `packages/ui-irealb-editor/`,
+and the [MIT License](LICENSE) for everything else. The README's License
+section has the full list.
 
 ## Trademark
 

@@ -1,6 +1,7 @@
 {
     "name": "@chordsketch/syntaxes",
     "version": "0.0.1",
+    "license": "MIT",
     "private": true,
     "description": "TextMate grammar and language configuration for ChordPro files",
     "scripts": {

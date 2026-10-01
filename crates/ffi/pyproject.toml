@@ -9,6 +9,7 @@ dynamic = ["version"]
 description = "ChordPro file format parser and renderer"
 readme = "README.md"
 license = { text = "MIT" }
+license-files = ["LICENSE"]
 requires-python = ">=3.8"
 authors = [{ name = "koedame" }]
 keywords = ["chordpro", "music", "chord", "parser", "lyrics", "rust", "uniffi"]

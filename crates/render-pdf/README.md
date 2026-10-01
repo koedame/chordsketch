@@ -41,4 +41,4 @@ std::fs::write("output.pdf", &pdf_bytes).unwrap();
 
 ## License
 
-[MIT](../../LICENSE)
+[MIT](LICENSE)

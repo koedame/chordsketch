@@ -471,9 +471,22 @@ reference and additional examples.
 
 ## License
 
-SDK crates (core, renderers, CLI): [MIT](LICENSE)
+ChordSketch has two layers, split by directory. The licence text is in each
+directory, so a package you download carries its own copy.
 
-Future application layer (Forum, Playground, Desktop): AGPL-3.0-only
+| Path | Licence |
+|---|---|
+| `apps/desktop/` (desktop app and its frontend) | [AGPL-3.0-only](apps/desktop/LICENSE) |
+| `packages/playground/` (the web playground) | [AGPL-3.0-only](packages/playground/LICENSE) |
+| `packages/ui-irealb-editor/` (the iReal Pro editor the playground and the desktop app embed) | [AGPL-3.0-only](packages/ui-irealb-editor/LICENSE) |
+| `crates/`, the other `packages/`, `syntaxes/`, `design-system/`, `docs/`, `scripts/`, `packaging/` | [MIT](LICENSE) |
+| The Bravura music font glyphs in `chordsketch-render-html`, `chordsketch-render-ireal` and `@chordsketch/react` | [SIL OFL 1.1](NOTICE) (their crates and packages are `MIT AND OFL-1.1`) |
+
+`@chordsketch/react` and the other published libraries are MIT, so you can
+embed them in a closed-source product. The desktop app and the playground are
+AGPL-3.0-only: code copied from them into another program has to follow that
+licence. GitHub shows the repository as MIT because it reads only the root
+`LICENSE`.
 
 ## Trademark
 

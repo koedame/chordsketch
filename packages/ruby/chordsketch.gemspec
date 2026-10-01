@@ -20,7 +20,7 @@ Gem::Specification.new do |s|
 
   s.required_ruby_version = ">= 3.0"
 
-  s.files = Dir["lib/**/*.rb"] + Dir["lib/**/*.so"] + Dir["lib/**/*.dylib"] + Dir["lib/**/*.dll"]
+  s.files = ["LICENSE"] + Dir["lib/**/*.rb"] + Dir["lib/**/*.so"] + Dir["lib/**/*.dylib"] + Dir["lib/**/*.dll"]
   s.require_paths = ["lib"]
 
   s.add_dependency "ffi", "~> 1.15"

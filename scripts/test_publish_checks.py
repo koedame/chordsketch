@@ -175,6 +175,52 @@ class ContentTest(unittest.TestCase):
         self.assertEqual(checks.content_problems("pkg", files, ()), [])
 
 
+class LicenseTest(unittest.TestCase):
+    MIT = (checks.REPO_ROOT / "LICENSE").read_bytes()
+
+    def test_when_the_package_carries_the_repository_license_it_passes(self) -> None:
+        self.assertEqual(checks.license_problems("pkg", [packed("LICENSE", self.MIT)]), [])
+
+    def test_when_the_license_has_windows_line_endings_it_passes(self) -> None:
+        self.assertEqual(checks.license_problems("pkg", [packed("LICENSE", self.MIT.replace(b"\n", b"\r\n"))]), [])
+
+    def test_when_the_package_has_no_license_file_it_is_reported(self) -> None:
+        problems = checks.license_problems("chordsketch-chordpro", [packed("README.md", b"# x")])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("chordsketch-chordpro would publish without `LICENSE`", problems[0])
+
+    def test_when_the_license_is_only_in_a_subdirectory_it_is_reported(self) -> None:
+        self.assertEqual(len(checks.license_problems("pkg", [packed("docs/LICENSE", self.MIT)])), 1)
+
+    def test_when_the_license_text_differs_from_the_repository_license_it_is_reported(self) -> None:
+        problems = checks.license_problems("pkg", [packed("LICENSE", b"Some other terms\n")])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("differs from the repository's LICENSE", problems[0])
+
+    def test_when_an_sdist_keeps_the_license_under_its_top_directory_that_location_is_checked(self) -> None:
+        location = "chordsketch-1.2.0/LICENSE"
+        self.assertEqual(checks.license_problems("sdist", [packed(location, self.MIT)], location), [])
+        self.assertEqual(len(checks.license_problems("sdist", [packed("LICENSE", self.MIT)], location)), 1)
+
+    def test_when_a_published_crate_is_packaged_from_its_directory_it_holds_the_license(self) -> None:
+        for crate in checks.CRATES.values():
+            directory = "cli" if crate.name == "chordsketch" else crate.name.removeprefix("chordsketch-")
+            self.assertEqual((checks.REPO_ROOT / "crates" / directory / "LICENSE").read_bytes(), self.MIT, crate.name)
+
+    def test_when_an_npm_package_is_packed_from_its_directory_it_holds_the_license(self) -> None:
+        for name, package in checks.NPM_PACKAGES.items():
+            self.assertEqual((checks.REPO_ROOT / package.directory / "LICENSE").read_bytes(), self.MIT, name)
+
+    def test_when_the_python_and_ruby_packages_are_built_from_their_directories_they_hold_the_license(self) -> None:
+        for directory in (checks.PYTHON_DIST_DIR, checks.RUBY_GEM_DIR):
+            self.assertEqual((checks.REPO_ROOT / directory / "LICENSE").read_bytes(), self.MIT, directory)
+
+
+    def test_when_the_gemspec_lists_the_files_to_pack_it_lists_the_license(self) -> None:
+        gemspec = (checks.REPO_ROOT / checks.RUBY_GEM_DIR / "chordsketch.gemspec").read_text()
+        self.assertRegex(gemspec, r's\.files\s*=\s*\[[^\]]*"LICENSE"')
+
+
 class ToolWarningTest(unittest.TestCase):
     def test_when_cargo_warns_about_a_yanked_lock_entry_it_is_a_problem(self) -> None:
         output = (
@@ -446,6 +492,41 @@ class PythonDistributionTest(unittest.TestCase):
             problems = checks.python_dist_problems(dist, runner=lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
         self.assertIn("chordsketch-1.2.0-py3-none-linux_x86_64.whl has a bare linux platform tag, which PyPI refuses; build it manylinux-compliant", problems)
         self.assertIn(f"no sdist in {dist}", problems)
+
+
+class PythonLicenseTest(unittest.TestCase):
+    """The sdist and the wheel each have to carry the license where installers look for it."""
+
+    METADATA = PythonDistributionTest.METADATA
+    MIT = (checks.REPO_ROOT / "LICENSE").read_bytes()
+
+    def problems(self, wheel_files: dict[str, bytes], sdist_files: dict[str, bytes]) -> list[str]:
+        with tempfile.TemporaryDirectory() as scratch:
+            dist = Path(scratch)
+            write_zip(dist / "chordsketch-1.2.0-py3-none-manylinux2014_x86_64.whl", wheel_files)
+            write_tarball(dist / "chordsketch-1.2.0.tar.gz", "chordsketch-1.2.0", sdist_files)
+            problems = checks.python_dist_problems(dist, runner=lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
+        return [p for p in problems if "LICENSE" in p]
+
+    WHEEL = {"chordsketch-1.2.0.dist-info/METADATA": METADATA.encode(), "chordsketch/_native/libchordsketch_ffi.so": b"elf"}
+
+    def test_when_both_artifacts_carry_the_license_where_installers_look_for_it_it_passes(self) -> None:
+        wheel = {**self.WHEEL, "chordsketch-1.2.0.dist-info/licenses/LICENSE": self.MIT}
+        sdist = {"PKG-INFO": self.METADATA.encode(), "LICENSE": self.MIT}
+        self.assertEqual(self.problems(wheel, sdist), [])
+
+    def test_when_the_wheel_has_no_license_it_is_reported(self) -> None:
+        sdist = {"PKG-INFO": self.METADATA.encode(), "LICENSE": self.MIT}
+        problems = self.problems(self.WHEEL, sdist)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("chordsketch-1.2.0.dist-info/licenses/LICENSE", problems[0])
+
+    def test_when_the_sdist_has_the_license_only_inside_the_crate_directory_it_is_reported(self) -> None:
+        wheel = {**self.WHEEL, "chordsketch-1.2.0.dist-info/licenses/LICENSE": self.MIT}
+        sdist = {"PKG-INFO": self.METADATA.encode(), "crates/ffi/LICENSE": self.MIT}
+        problems = self.problems(wheel, sdist)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("chordsketch-1.2.0/LICENSE", problems[0])
 
 
 class GemTest(unittest.TestCase):
@@ -938,7 +1019,12 @@ class NpmDryRunTest(unittest.TestCase):
         write_tarball(
             tarball,
             "package",
-            {"package.json": json.dumps(manifest).encode(), "index.js": b"module.exports = 1;\n", "README.md": b"# fixture\n"},
+            {
+                "package.json": json.dumps(manifest).encode(),
+                "index.js": b"module.exports = 1;\n",
+                "README.md": b"# fixture\n",
+                "LICENSE": (checks.REPO_ROOT / "LICENSE").read_bytes(),
+            },
         )
         return tarball
 
