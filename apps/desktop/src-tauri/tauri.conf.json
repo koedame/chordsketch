@@ -38,9 +38,9 @@
     "targets": "all",
     "category": "Music",
     "resources": {
-      "../LICENSE": "LICENSE",
-      "../../../LICENSE": "LICENSE-MIT",
-      "../../../crates/render-ireal/LICENSE-OFL.txt": "LICENSE-OFL.txt",
+      "../LICENSE": "licenses/AGPL-3.0-only/LICENSE",
+      "../../../LICENSE": "licenses/MIT/LICENSE",
+      "../../../crates/render-ireal/LICENSE-OFL.txt": "licenses/OFL-1.1/LICENSE-OFL.txt",
       "../../../NOTICE": "NOTICE"
     },
     "shortDescription": "ChordPro editor",
