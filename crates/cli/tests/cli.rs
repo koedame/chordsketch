@@ -1206,3 +1206,225 @@ fn mcp_subcommand_writes_nothing_but_protocol_messages_to_stdout() {
         );
     }
 }
+
+// --- Hostile input entering through the CLI ---
+//
+// The unit tests next to `Config::load` and the PDF image check prove the
+// parts behave. These tests prove the `chordsketch` binary actually routes
+// a hostile project directory or song file through those parts: each one
+// has a control run that shows the probe can observe the effect, and an
+// attack run that must not produce it.
+
+/// `chordsketch` run from `dir`, with the user config directory moved to
+/// `home` so the developer's own configuration cannot leak into a test.
+fn cli_in(dir: &Path, home: &Path) -> Command {
+    let mut cmd = Command::cargo_bin("chordsketch").unwrap();
+    cmd.current_dir(dir)
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", home);
+    cmd
+}
+
+/// A config that transposes by 2 semitones: `[G]` renders as `A`.
+const TRANSPOSE_CONFIG: &str = r#"{ "settings": { "transpose": 2 } }"#;
+
+fn write_probe_song(dir: &Path) -> std::path::PathBuf {
+    let song = dir.join("song.cho");
+    std::fs::write(&song, "{title: Probe}\n[G]Hello\n").unwrap();
+    song
+}
+
+fn chord_line_is(stdout: &[u8], chord: &str) -> bool {
+    String::from_utf8_lossy(stdout)
+        .lines()
+        .any(|l| l.trim() == chord)
+}
+
+#[test]
+fn project_config_next_to_the_song_is_applied_when_it_is_a_regular_file() {
+    // Control for the symlink / size tests below: the probe config changes
+    // the output, so "not applied" in those tests means something.
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let song = write_probe_song(dir.path());
+    std::fs::write(dir.path().join("chordsketch.json"), TRANSPOSE_CONFIG).unwrap();
+
+    let out = cli_in(dir.path(), home.path()).arg(&song).output().unwrap();
+    assert!(out.status.success());
+    assert!(chord_line_is(&out.stdout, "A"), "{out:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn project_config_that_is_a_symlink_is_not_read_when_rendering() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let song = write_probe_song(dir.path());
+    let elsewhere = tempfile::tempdir().unwrap();
+    let target = elsewhere.path().join("evil.json");
+    std::fs::write(&target, TRANSPOSE_CONFIG).unwrap();
+    std::os::unix::fs::symlink(&target, dir.path().join("chordsketch.json")).unwrap();
+
+    let out = cli_in(dir.path(), home.path()).arg(&song).output().unwrap();
+    assert!(out.status.success());
+    assert!(
+        chord_line_is(&out.stdout, "G"),
+        "the symlinked config must not be applied: {out:?}"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("symlink"), "a warning is shown: {stderr}");
+}
+
+#[test]
+fn project_config_over_the_untrusted_size_limit_is_not_read_when_rendering() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let song = write_probe_song(dir.path());
+    // Valid config padded with whitespace to just over 1 MB (the limit for
+    // project-level configs).
+    let padded = format!("{TRANSPOSE_CONFIG}{}", " ".repeat(1024 * 1024 + 1));
+    std::fs::write(dir.path().join("chordsketch.json"), padded).unwrap();
+
+    let out = cli_in(dir.path(), home.path()).arg(&song).output().unwrap();
+    assert!(out.status.success());
+    assert!(
+        chord_line_is(&out.stdout, "G"),
+        "the oversized config must not be applied: {out:?}"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("exceeds"), "a warning is shown: {stderr}");
+}
+
+/// Put an `abc2svg` stand-in on PATH that records only a real render
+/// (`tosvg.js <file>`), not the `--version` probe used for auto-detection.
+#[cfg(unix)]
+fn fake_abc2svg(bin: &Path, marker: &Path) -> std::ffi::OsString {
+    use std::os::unix::fs::PermissionsExt;
+    let script = bin.join("abc2svg");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = tosvg.js ]; then : > '{}'; fi\nexit 0\n",
+            marker.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut paths = vec![bin.to_path_buf()];
+    paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap()));
+    std::env::join_paths(paths).unwrap()
+}
+
+#[cfg(unix)]
+fn run_html_with_abc_section(
+    song_prefix: &str,
+    project_config: Option<&str>,
+    user_config: &str,
+) -> bool {
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let bin = tempfile::tempdir().unwrap();
+    let marker = dir.path().join("abc2svg-was-run");
+    let path = fake_abc2svg(bin.path(), &marker);
+
+    std::fs::create_dir_all(home.path().join("chordsketch")).unwrap();
+    std::fs::write(
+        home.path().join("chordsketch").join("chordsketch.json"),
+        user_config,
+    )
+    .unwrap();
+    if let Some(cfg) = project_config {
+        std::fs::write(dir.path().join("chordsketch.json"), cfg).unwrap();
+    }
+    let song = dir.path().join("song.cho");
+    std::fs::write(
+        &song,
+        format!("{song_prefix}{{start_of_abc}}\nX:1\nK:C\nCDEF|\n{{end_of_abc}}\n"),
+    )
+    .unwrap();
+
+    cli_in(dir.path(), home.path())
+        .env("PATH", path)
+        .args(["--format", "html"])
+        .arg(&song)
+        .assert()
+        .success();
+    marker.exists()
+}
+
+#[cfg(unix)]
+#[test]
+fn abc2svg_is_run_when_the_user_config_enables_it() {
+    // Control for the two tests below: the stand-in tool is run when the
+    // trusted configuration allows it.
+    assert!(run_html_with_abc_section(
+        "",
+        None,
+        r#"{ "delegates": { "abc2svg": true } }"#
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn abc2svg_is_not_run_when_only_the_project_config_enables_it() {
+    assert!(!run_html_with_abc_section(
+        "",
+        Some(r#"{ "delegates": { "abc2svg": true } }"#),
+        r#"{ "delegates": { "abc2svg": false } }"#,
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn abc2svg_is_not_run_when_only_the_song_file_enables_it() {
+    assert!(!run_html_with_abc_section(
+        "{+config.delegates.abc2svg: true}\n",
+        None,
+        r#"{ "delegates": { "abc2svg": false } }"#,
+    ));
+}
+
+/// A JPEG header the PDF renderer accepts (not a displayable picture).
+const TINY_JPEG: &[u8] = &[
+    0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x02, 0xFF, 0xC0, 0x00, 0x08, 0x08, 0x00, 0x10, 0x00, 0x10, 0x03,
+];
+
+fn pdf_embeds_an_image(dir: &Path, song_body: &str) -> bool {
+    let home = tempfile::tempdir().unwrap();
+    let song = dir.join("song.cho");
+    std::fs::write(&song, song_body).unwrap();
+    let out = cli_in(dir, home.path())
+        .args(["--format", "pdf"])
+        .arg(&song)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    String::from_utf8_lossy(&out.stdout).contains("/Subtype /Image")
+}
+
+#[test]
+fn pdf_embeds_a_relative_image_next_to_the_song() {
+    // Control for the two tests below.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("pic.jpg"), TINY_JPEG).unwrap();
+    assert!(pdf_embeds_an_image(dir.path(), "{image: src=pic.jpg}\n"));
+}
+
+#[test]
+fn pdf_does_not_embed_an_image_given_by_absolute_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let secret = tempfile::tempdir().unwrap();
+    let target = secret.path().join("secret.jpg");
+    std::fs::write(&target, TINY_JPEG).unwrap();
+    let song = format!("{{image: src={}}}\n", target.display());
+    assert!(!pdf_embeds_an_image(dir.path(), &song));
+}
+
+#[test]
+fn pdf_does_not_embed_an_image_reached_through_a_parent_directory() {
+    let outer = tempfile::tempdir().unwrap();
+    std::fs::write(outer.path().join("secret.jpg"), TINY_JPEG).unwrap();
+    let inner = outer.path().join("songs");
+    std::fs::create_dir(&inner).unwrap();
+    assert!(!pdf_embeds_an_image(&inner, "{image: src=../secret.jpg}\n"));
+}

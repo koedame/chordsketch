@@ -41,7 +41,8 @@
       "../LICENSE": "licenses/AGPL-3.0-only/LICENSE",
       "../../../LICENSE": "licenses/MIT/LICENSE",
       "../../../crates/render-ireal/LICENSE-OFL.txt": "licenses/OFL-1.1/LICENSE-OFL.txt",
-      "../../../NOTICE": "NOTICE"
+      "../../../NOTICE": "NOTICE",
+      "../../../THIRD_PARTY_LICENSES.md": "THIRD_PARTY_LICENSES.md"
     },
     "shortDescription": "ChordPro editor",
     "longDescription": "ChordSketch is a ChordPro editor with live preview, transpose, and PDF export.",

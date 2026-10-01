@@ -11,7 +11,8 @@
   "homepage": "https://github.com/koedame/chordsketch",
   "main": "chordsketch-napi.win32-x64-msvc.node",
   "files": [
-    "chordsketch-napi.win32-x64-msvc.node"
+    "chordsketch-napi.win32-x64-msvc.node",
+    "THIRD_PARTY_LICENSES.md"
   ],
   "os": [
     "win32"

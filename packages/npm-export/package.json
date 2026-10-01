@@ -41,6 +41,7 @@
     "webassembly"
   ],
   "files": [
+    "THIRD_PARTY_LICENSES.md",
     "node/package.json",
     "node/chordsketch_wasm.js",
     "node/chordsketch_wasm.d.ts",

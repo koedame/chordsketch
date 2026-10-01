@@ -24,6 +24,7 @@ FROM debian:bookworm-20260406-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0
 
 RUN useradd --no-create-home --uid 1000 chordsketch
 COPY --from=builder /usr/local/bin/chordsketch /usr/local/bin/chordsketch
+COPY --from=builder /build/LICENSE /build/NOTICE /build/THIRD_PARTY_LICENSES.md /usr/share/licenses/chordsketch/
 USER chordsketch
 
 ENTRYPOINT ["/usr/local/bin/chordsketch"]

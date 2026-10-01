@@ -27,6 +27,7 @@ EXPECTED = {
     "licenses/MIT/LICENSE": REPO_ROOT / "LICENSE",
     "licenses/OFL-1.1/LICENSE-OFL.txt": REPO_ROOT / "crates" / "render-ireal" / "LICENSE-OFL.txt",
     "NOTICE": REPO_ROOT / "NOTICE",
+    "THIRD_PARTY_LICENSES.md": REPO_ROOT / "THIRD_PARTY_LICENSES.md",
 }
 
 
