@@ -305,6 +305,36 @@ runs:
           exit 1
         fi
 
+    - name: List the system libraries the AppImage bundles (Linux)
+      # The AppImage copies about 170 shared libraries and helper programs
+      # (webkit2gtk, GTK, GLib and what they need, mostly LGPL) out of this
+      # runner. Which ones depends on the runner image, so the notice that
+      # names them, with each package's version, source and copyright file, is
+      # made from an AppImage built here and then packed into the real one
+      # (`files` below). The bundler has no hook between collecting the
+      # libraries and squashing the image, hence the first pass: it compiles
+      # everything, so the real build below only repeats the bundling. Fails
+      # when a library cannot be matched to a package, because the notice
+      # would be missing it.
+      if: runner.os == 'Linux'
+      shell: bash
+      working-directory: apps/desktop/src-tauri
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+        cargo tauri build --target "$TARGET" --bundles appimage
+        dir="$GITHUB_WORKSPACE/target/${TARGET}/release/bundle/appimage"
+        appimage=$(find "$dir" -maxdepth 1 -name '*.AppImage' -print -quit)
+        if [ -z "$appimage" ]; then
+          echo "ERROR: no .AppImage bundle under ${dir}" >&2
+          exit 1
+        fi
+        notice="${RUNNER_TEMP}/appimage-notice/chordsketch-desktop-linux-bundled-libraries.txt"
+        mkdir -p "$(dirname "$notice")"
+        python3 "$GITHUB_WORKSPACE/scripts/appimage-bundled-libraries.py" "$appimage" "$notice"
+        echo "APPIMAGE_NOTICE=$notice" >> "$GITHUB_ENV"
+
     - name: Build Tauri bundle
       # `cargo tauri build` fires `beforeBuildCommand: "npm run
       # build"` from `tauri.conf.json`, which in turn runs the
@@ -387,11 +417,36 @@ runs:
           unset TAURI_SIGNING_PRIVATE_KEY_PASSWORD
         fi
 
+        args=(--target "$TARGET")
         if [ -n "$BUILD_CONFIG" ]; then
-          cargo tauri build --target "$TARGET" -c "$BUILD_CONFIG"
-        else
-          cargo tauri build --target "$TARGET"
+          args+=(-c "$BUILD_CONFIG")
         fi
+        # Linux: the library notice made above goes into the AppImage.
+        if [ -n "${APPIMAGE_NOTICE:-}" ]; then
+          args+=(-c "$(python3 -c 'import json, sys; print(json.dumps({"bundle": {"linux": {"appimage": {"files": {"usr/share/doc/chordsketch-desktop/bundled-libraries.txt": sys.argv[1]}}}}}))' "$APPIMAGE_NOTICE")")
+        fi
+        cargo tauri build "${args[@]}"
+
+    - name: Check the AppImage carries the library notice (Linux)
+      # The notice was made from the first-pass AppImage. The final one has to
+      # hold that file, and listing the final one again has to give the same
+      # text: a library that appeared or disappeared between the two passes
+      # would make the notice wrong. The notice is also copied next to the
+      # AppImage so the release can publish it.
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+        dir="target/${TARGET}/release/bundle/appimage"
+        appimage=$(find "$dir" -maxdepth 1 -name '*.AppImage' -print -quit)
+        work="$(mktemp -d)"
+        python3 scripts/appimage-bundled-libraries.py "$appimage" "$work/again.txt"
+        cmp "$APPIMAGE_NOTICE" "$work/again.txt"
+        ( cd "$work" && "$GITHUB_WORKSPACE/$appimage" --appimage-extract >/dev/null )
+        cmp "$APPIMAGE_NOTICE" "$work/squashfs-root/usr/share/doc/chordsketch-desktop/bundled-libraries.txt"
+        cp "$APPIMAGE_NOTICE" "$dir/"
 
     - name: Verify glibc floor (Linux bundles)
       # ADR-0056: the Linux bundles are held to glibc 2.35 — the floor

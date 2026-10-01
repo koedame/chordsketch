@@ -344,7 +344,7 @@ needs one — the CSS is what was missing.
 | Oops! Couldn't save your song… 🥲 | Save failed. Check your connection. |
 | Let's create a new song! | New song |
 | Try adding your very first song now! | Add your first song |
-| Part of the title | e.g. Yesterday |
+| Part of the title | e.g. Greensleeves |
 | Title (partial match supported) | Title |
 
 ---

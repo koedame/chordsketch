@@ -326,6 +326,12 @@ no system dependencies
 ([ADR-0056](https://github.com/koedame/chordsketch/blob/main/docs/adr/0056-desktop-bundles-target-ubuntu-2204.md),
 [ADR-0057](https://github.com/koedame/chordsketch/blob/main/docs/adr/0057-desktop-rpm-stays-a-webkit2gtk-41-channel.md)).
 
+The libraries the `.AppImage` carries (webkit2gtk, GTK, GLib and what
+they need, mostly LGPL) are listed with their versions, source packages
+and license texts in `usr/share/doc/chordsketch-desktop/bundled-libraries.txt`
+inside the image; each desktop release publishes the same file as
+`chordsketch-desktop-linux-bundled-libraries.txt`.
+
 ## Usage
 
 ```bash
@@ -477,10 +483,10 @@ Future application layer (Forum, Playground, Desktop): AGPL-3.0-only
 
 Third-party dependency notices are in [NOTICE](NOTICE) and
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). They ship with the CLI
-archives, container images, the desktop app, the VS Code extension, and
-the wasm and napi npm packages; the PyPI, RubyGem, Maven, and Swift /
-CocoaPods packages don't carry them yet — see
-[ADR-0085](docs/adr/0085-binaries-ship-a-generated-third-party-license-notice.md#consequences).
+archives, container images, the desktop app, the VS Code extension, the
+wasm and napi npm packages, and the PyPI, RubyGems, Maven, and Swift /
+CocoaPods packages — see
+[ADR-0085](docs/adr/0085-binaries-ship-a-generated-third-party-license-notice.md).
 
 ## Trademark
 
