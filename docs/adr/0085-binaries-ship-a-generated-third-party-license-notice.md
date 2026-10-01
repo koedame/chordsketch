@@ -59,7 +59,7 @@ a template with no copyright holder for them.
    `deny.toml`, the OFL files and the script, and a hash of the body, so a
    hand edit fails too. Workspace version bumps and changes to build
    tooling (`vite`, `vitest`, `@types/*`, ...) do not change the hash.
-5. **Every binary distribution carries the file.** The CLI archives and the
+5. **Binary distributions carry the file.** The CLI archives and the
    container images add `NOTICE` and `THIRD_PARTY_LICENSES.md` beside
    `LICENSE`; the desktop bundle lists them under `bundle.resources` (and
    the Flatpak installs them); the build of each npm package that ships a

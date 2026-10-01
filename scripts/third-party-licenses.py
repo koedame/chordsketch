@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build `THIRD_PARTY_LICENSES.md`, the third-party notice shipped with every binary.
+"""Build `THIRD_PARTY_LICENSES.md`, the third-party notice shipped with the binaries.
 
     python3 scripts/third-party-licenses.py          regenerate the file
     python3 scripts/third-party-licenses.py --check  fail when it is out of date
