@@ -120,6 +120,15 @@ for (const file of wasmNodeFiles) {
   }
 }
 
+// The VSIX bundles third-party code (the esbuild bundles and the wasm engine)
+// and so has to carry its licenses. `vsce` packages files from this directory
+// only, so the notice generated at the repository root is copied in; the copy
+// is gitignored.
+fs.copyFileSync(
+  path.join(repoRoot, 'THIRD_PARTY_LICENSES.md'),
+  path.join(here, 'THIRD_PARTY_LICENSES.md'),
+);
+
 /** @type {esbuild.BuildOptions} */
 const extensionBuild = {
   entryPoints: ['src/extension.ts'],

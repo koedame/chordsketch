@@ -37,6 +37,10 @@
     "active": true,
     "targets": "all",
     "category": "Music",
+    "resources": {
+      "../../../NOTICE": "NOTICE",
+      "../../../THIRD_PARTY_LICENSES.md": "THIRD_PARTY_LICENSES.md"
+    },
     "shortDescription": "ChordPro editor",
     "longDescription": "ChordSketch is a ChordPro editor with live preview, transpose, and PDF export.",
     "icon": [
