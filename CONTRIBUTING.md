@@ -1,12 +1,19 @@
 # Contributing to ChordSketch
 
-Thank you for your interest in contributing to ChordSketch! This document
-explains how to get started.
+**ChordSketch does not accept outside contributions.** The source is public so
+that anyone can read it, build it and use or fork it under the licences in
+this repository. It is not an invitation to send changes: pull requests from
+anyone other than the maintainers are not reviewed or merged and may be closed
+without a reply. Bug reports and questions can still be filed as issues
+(see below), without any promise of an answer.
+
+The rest of this document describes how the maintainers work. It is also the
+guide to building from source or working on a fork.
 
 ## Language
 
-All contributions must be in **English**. This includes code, comments,
-documentation, commit messages, PR titles, PR descriptions, issue titles, and
+Everything in this repository is in **English**: code, comments,
+documentation, commit messages, PR titles and descriptions, issue titles and
 issue bodies.
 
 ## Filing Issues
@@ -54,7 +61,7 @@ npm install
 npm run dev
 ```
 
-## Submitting Pull Requests
+## Making Changes (Maintainers)
 
 1. **An issue is optional.** Open one when the change is worth discussing
    before it is written; a self-contained fix can go straight to a PR
@@ -126,11 +133,14 @@ Track progress and find available work on the
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the
-[MIT License](LICENSE).
+Outside contributions are not accepted, so there are no terms for them. The
+code is under the licence of the directory it is in, as the README's License
+section lists: the [MIT License](LICENSE) for most of the repository and the
+[GNU AGPL v3.0 only](apps/desktop/LICENSE) for `apps/desktop/`,
+`packages/playground/` and `packages/ui-irealb-editor/`.
 
 ## Trademark
 
-The MIT licence does not cover the ChordSketch name or logo. Contributing
-here needs no permission; naming something of your own after the project
-does. [TRADEMARK.md](TRADEMARK.md) has the boundary and the examples.
+The MIT licence does not cover the ChordSketch name or logo. Using or forking
+the code needs no permission under its licence; naming something of your own
+after the project does. [TRADEMARK.md](TRADEMARK.md) has the boundary and the examples.
