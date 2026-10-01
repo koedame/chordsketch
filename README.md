@@ -475,6 +475,10 @@ SDK crates (core, renderers, CLI): [MIT](LICENSE)
 
 Future application layer (Forum, Playground, Desktop): AGPL-3.0-only
 
+Third-party dependency notices are in [NOTICE](NOTICE) and
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md), which ship with every
+binary distribution.
+
 ## Trademark
 
 The licences above cover the code, not the name. Describing, packaging, and
