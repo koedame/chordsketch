@@ -57,6 +57,9 @@ for target in "${!TARGET_TO_TRIPLE[@]}"; do
     exit 1
   fi
   cp "$node_file" "$dst"
+  # The addon statically links its Rust dependencies, so it carries their
+  # notice. `npm pack` takes files from the package directory only.
+  cp "$NAPI_DIR/../../THIRD_PARTY_LICENSES.md" "$NAPI_DIR/npm/${triple}/"
   if [ ! -s "$dst" ]; then
     echo "::error::$dst is empty" >&2
     exit 1

@@ -195,7 +195,18 @@ appear; do not drop rows for crates that look transitive.
 >      cargo fmt --check
 >      cargo clippy --workspace --exclude chordsketch-desktop --all-targets -- -D warnings
 >      cargo test --workspace --exclude chordsketch-desktop
+>      python3 scripts/third-party-licenses.py --check
 >      ```
+>      The last command fails when the bump changed the set of
+>      third-party crates `THIRD_PARTY_LICENSES.md` lists (a version
+>      bump of a crate in the lockfile does). Regenerate it with
+>      `python3 scripts/third-party-licenses.py` (needs
+>      `cargo install cargo-about --locked`) and push the result as the
+>      fix commit. A bump that adds a dependency whose license
+>      `deny.toml` does not allow (`cargo deny --all-features check
+>      licenses`, from `cargo install cargo-deny --locked`) is
+>      `BLOCKED`: the license is a decision for the maintainer, not
+>      something to allow-list in a bump.
 >      The `chordsketch-desktop` exclusion mirrors `claude-review.yml`'s
 >      historical scope — that crate's transitive deps (webkit2gtk /
 >      WebView2) are not installed on this machine and the

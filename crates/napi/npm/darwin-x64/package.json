@@ -11,7 +11,8 @@
   "homepage": "https://github.com/koedame/chordsketch",
   "main": "chordsketch-napi.darwin-x64.node",
   "files": [
-    "chordsketch-napi.darwin-x64.node"
+    "chordsketch-napi.darwin-x64.node",
+    "THIRD_PARTY_LICENSES.md"
   ],
   "os": [
     "darwin"
