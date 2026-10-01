@@ -62,12 +62,16 @@ def owners(name: str) -> list:
     return sorted(set(pkgs))
 
 
-def package_info(pkg: str) -> dict:
-    out = subprocess.run(
+def package_info(pkg: str) -> dict | None:
+    """`None` on failure; the caller prints nothing further and stops."""
+    r = subprocess.run(
         [DPKG_QUERY, "-W", "-f", "${Version}\t${source:Package}\t${source:Version}", pkg],
-        check=True, capture_output=True, text=True,
-    ).stdout
-    version, source, source_version = out.split("\t")
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(f"error: {DPKG_QUERY} -W {pkg} failed:\n{r.stderr}", file=sys.stderr)
+        return None
+    version, source, source_version = r.stdout.split("\t")
     return {"version": version, "source": source or pkg, "source_version": source_version or version}
 
 
@@ -79,15 +83,25 @@ def main(argv: list) -> int:
     if len(argv) != 2:
         sys.exit(__doc__)
     target, out_path = Path(argv[0]), Path(argv[1])
+    if not target.exists():
+        # A non-existent target silently produces an empty library list
+        # (Path.rglob on a missing directory yields no matches rather than
+        # raising) instead of the "0 libraries matched" failure the caller
+        # needs to see — most likely a shell glob that matched nothing.
+        print(f"error: {target} does not exist", file=sys.stderr)
+        return 1
 
     with tempfile.TemporaryDirectory() as tmp:
         root = target
         if target.is_file():
-            subprocess.run(
+            extract = subprocess.run(
                 [str(target.resolve()), "--appimage-extract"],
-                check=True, cwd=tmp, capture_output=True,
+                cwd=tmp, capture_output=True, text=True,
                 env={**os.environ, "APPIMAGE_EXTRACT_AND_RUN": "1"},
             )
+            if extract.returncode != 0:
+                print(f"error: {target} --appimage-extract failed:\n{extract.stderr}", file=sys.stderr)
+                return 1
             root = Path(tmp) / "squashfs-root"
 
         libs = bundled_libraries(root)
@@ -100,7 +114,12 @@ def main(argv: list) -> int:
             for pkg in pkgs:
                 by_package.setdefault(pkg, []).append(lib)
 
-    infos = {pkg: package_info(pkg) for pkg in by_package}
+    infos: dict = {}
+    for pkg in by_package:
+        info = package_info(pkg)
+        if info is None:
+            return 1
+        infos[pkg] = info
     copyrights: dict = {}
     for pkg in by_package:
         path = SHARE_DIR / "doc" / pkg / "copyright"

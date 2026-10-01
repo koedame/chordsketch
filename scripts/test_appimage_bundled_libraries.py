@@ -155,6 +155,29 @@ class BundledLibrariesTest(unittest.TestCase):
         self.assertIn("libmystery.so.1", err)
         self.assertIn("Not matched to any package", fx.out.read_text())
 
+    def test_when_the_target_does_not_exist_the_run_fails_instead_of_writing_an_empty_notice(self) -> None:
+        fx = Fixture(self)
+        missing = fx.appdir.parent / "no-such-appimage-or-dir"
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = tool.main([str(missing), str(fx.out)])
+        self.assertEqual(code, 1)
+        self.assertIn("does not exist", err.getvalue())
+        self.assertFalse(fx.out.exists())
+
+    def test_when_dpkg_query_w_fails_for_an_owning_package_the_run_fails_with_the_command_error(self) -> None:
+        # A package name `dpkg-query -S` can find but `-W` then rejects
+        # (e.g. purged from the dpkg database between the two calls). The
+        # stub table is captured when the Fixture is built, so the owning
+        # entry must exist before that.
+        OWNERS["libbroken.so.1"] = "package-missing-from-status-db"
+        self.addCleanup(OWNERS.pop, "libbroken.so.1", None)
+        fx = Fixture(self)
+        fx.put("usr/lib/libbroken.so.1", ELF)
+        code, _, err = fx.run()
+        self.assertEqual(code, 1)
+        self.assertIn("-W", err)
+
     def test_when_two_license_names_are_the_same_file_the_text_is_printed_once(self) -> None:
         fx = Fixture(self)
         fx.copyright("libglib2.0-0", "See /usr/share/common-licenses/GPL and /usr/share/common-licenses/GPL-3\n")

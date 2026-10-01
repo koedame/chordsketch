@@ -325,9 +325,14 @@ runs:
         set -euo pipefail
         cargo tauri build --target "$TARGET" --bundles appimage
         dir="$GITHUB_WORKSPACE/target/${TARGET}/release/bundle/appimage"
+        appimage=$(find "$dir" -maxdepth 1 -name '*.AppImage' -print -quit)
+        if [ -z "$appimage" ]; then
+          echo "ERROR: no .AppImage bundle under ${dir}" >&2
+          exit 1
+        fi
         notice="${RUNNER_TEMP}/appimage-notice/chordsketch-desktop-linux-bundled-libraries.txt"
         mkdir -p "$(dirname "$notice")"
-        python3 "$GITHUB_WORKSPACE/scripts/appimage-bundled-libraries.py" "$dir"/*.AppImage "$notice"
+        python3 "$GITHUB_WORKSPACE/scripts/appimage-bundled-libraries.py" "$appimage" "$notice"
         echo "APPIMAGE_NOTICE=$notice" >> "$GITHUB_ENV"
 
     - name: Build Tauri bundle
