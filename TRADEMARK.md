@@ -20,10 +20,11 @@ carry ™ rather than ®. This page is updated if that changes.
 ## The licence covers the code, not the name
 
 [MIT](LICENSE) (the libraries, tools and packages) and
-[AGPL-3.0-only](apps/desktop/LICENSE) (the desktop app and the playground) are
-copyright licences. They let you use, modify, redistribute, and sell the
-code, and neither grants any trademark permission — AGPL-3.0 §7(e) says so
-explicitly, and MIT never addressed marks at all.
+[AGPL-3.0-only](apps/desktop/LICENSE) (the desktop app, the playground and
+the iReal Pro editor) are copyright licences. They let you use, modify,
+redistribute, and sell the code, and neither grants any trademark
+permission — AGPL-3.0 §7(e) says so explicitly, and MIT never addressed
+marks at all.
 
 So forking is always allowed and always will be. Shipping the fork *under
 this name* is the part that needs permission, so that a user who installs

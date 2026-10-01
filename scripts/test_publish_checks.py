@@ -215,7 +215,6 @@ class LicenseTest(unittest.TestCase):
         for directory in (checks.PYTHON_DIST_DIR, checks.RUBY_GEM_DIR):
             self.assertEqual((checks.REPO_ROOT / directory / "LICENSE").read_bytes(), self.MIT, directory)
 
-
     def test_when_the_gemspec_lists_the_files_to_pack_it_lists_the_license(self) -> None:
         gemspec = (checks.REPO_ROOT / checks.RUBY_GEM_DIR / "chordsketch.gemspec").read_text()
         self.assertRegex(gemspec, r's\.files\s*=\s*\[[^\]]*"LICENSE"')

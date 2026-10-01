@@ -483,10 +483,10 @@ directory, so a package you download carries its own copy.
 | The Bravura music font glyphs in `chordsketch-render-html`, `chordsketch-render-ireal` and `@chordsketch/react` | [SIL OFL 1.1](NOTICE) (their crates and packages are `MIT AND OFL-1.1`) |
 
 `@chordsketch/react` and the other published libraries are MIT, so you can
-embed them in a closed-source product. The desktop app and the playground are
-AGPL-3.0-only: code copied from them into another program has to follow that
-licence. GitHub shows the repository as MIT because it reads only the root
-`LICENSE`.
+embed them in a closed-source product. The desktop app, the playground and
+the iReal Pro editor are AGPL-3.0-only: code copied from them into another
+program has to follow that licence. GitHub shows the repository as MIT
+because it reads only the root `LICENSE`.
 
 ## Trademark
 
