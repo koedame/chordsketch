@@ -458,8 +458,8 @@ mod tests {
 
     fn sample_song() -> IrealSong {
         IrealSong {
-            title: "Autumn Leaves".into(),
-            composer: Some("Joseph Kosma".into()),
+            title: "Sample Chart".into(),
+            composer: Some("Sample Composer".into()),
             style: Some("Medium Swing".into()),
             key_signature: KeySignature {
                 root: ChordRoot {
@@ -511,11 +511,11 @@ mod tests {
         let song = &result.output;
         assert_eq!(
             directive_value(song, "title").as_deref(),
-            Some("Autumn Leaves")
+            Some("Sample Chart")
         );
         assert_eq!(
             directive_value(song, "composer").as_deref(),
-            Some("Joseph Kosma")
+            Some("Sample Composer")
         );
         assert_eq!(directive_value(song, "key").as_deref(), Some("Em"));
         assert_eq!(directive_value(song, "time").as_deref(), Some("4/4"));

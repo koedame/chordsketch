@@ -481,9 +481,9 @@ import { IrealProEditor } from '@chordsketch/react';
 import '@chordsketch/react/styles.css';
 
 const URL =
-  'irealb://Autumn%20Leaves%3DKosma%20Joseph%3D%3DMedium%20Swing%3DG%2D%3D%3D' +
-  '1r34LbKcu7T44%2AA%5BC%2D7%7CF7%7CBb%5E7%7CEb%5E7%7CAh7%7CD7%7CG%2D6%7CG%2D6Z' +
-  '%3D%3D0%3D0';
+  'irealbook://Twelve-Bar%20Blues%3DTraditional%3DMedium%20Swing%3DC%3Dn%3D' +
+  '%5B%2AAT44C7%20%7CF7%20%7CC7%20%7CC7%20%7CF7%20%7CF7%20%7CC7%20%7CC7%20' +
+  '%7CG7%20%7CF7%20%7CC7%20%7CG7%20Z';
 
 export function Chart() {
   return <IrealProEditor defaultValue={URL} />;
