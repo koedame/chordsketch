@@ -48,10 +48,13 @@ ignores them:
 | `{titles: left\|right\|center}` | deprecated, use the configuration file | sets title alignment |
 | `{pagesize}` | not implemented since ChordPro 5.0 (`{pagetype}` is documented the same way) | the Perl code still maps it to `{pagetype}` |
 
-R6.101.0 also accepts `{start_of_grille}` / `{end_of_grille}`, which its
-documentation does not mention. ChordSketch has no directive of that name and
-treats them as an ordinary custom section titled "Grille", not as a grid.
-The snapshot test leaves them out for that reason.
+`{start_of_grille}` / `{end_of_grille}` are left out of this snapshot.
+Nothing in this repository — not ChordPro's own directive documentation, not
+the test corpus — corroborates them as directives ChordPro specifically
+recognises, as opposed to the generic `start_of_<name>` / `end_of_<name>`
+fallback that accepts any name as a custom section (the same path a
+user-written `{start_of_intro}` takes). ChordSketch parses them that way: as
+an ordinary custom section titled "Grille", not as a grid.
 
 Being parsed is not the same as being rendered the way Perl renders it. The
 sections below describe where the output differs.
