@@ -30,7 +30,7 @@ directive coverage described in the next section.
 
 ## Directive coverage
 
-Every directive in the R6.101.0 directive table, its abbreviations, the
+Every documented directive in the R6.101.0 directive table, its abbreviations, the
 metadata keys of its default configuration, and its
 `chord`/`chorus`/`footer`/`grid`/`label`/`tab`/`text`/`title`/`toc` ×
 `font`/`size`/`colour` properties is parsed by ChordSketch, with six
@@ -47,6 +47,11 @@ ignores them:
 | `{no_grid}` / `{ng}` | obsolete, use `{diagrams: off}` | same as `{diagrams: off}` |
 | `{titles: left\|right\|center}` | deprecated, use the configuration file | sets title alignment |
 | `{pagesize}` | not implemented since ChordPro 5.0 (`{pagetype}` is documented the same way) | the Perl code still maps it to `{pagetype}` |
+
+R6.101.0 also accepts `{start_of_grille}` / `{end_of_grille}`, which its
+documentation does not mention. ChordSketch has no directive of that name and
+treats them as an ordinary custom section titled "Grille", not as a grid.
+The snapshot test leaves them out for that reason.
 
 Being parsed is not the same as being rendered the way Perl renders it. The
 sections below describe where the output differs.
