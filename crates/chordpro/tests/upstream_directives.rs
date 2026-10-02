@@ -9,8 +9,20 @@
 
 use chordsketch_chordpro::ast::DirectiveKind;
 
+/// Mirrors `DirectiveKind::resolve_with_selector`'s own definition of "a
+/// known directive": NOT `Unknown`, and NOT the generic `start_of_X` /
+/// `end_of_X` custom-section fallback either. Checking only `Unknown` would
+/// let any made-up `start_of_whatever` / `end_of_whatever` name pass this
+/// test — the fallback accepts them exactly the way it accepts a
+/// user-defined custom section, which proves nothing about whether the name
+/// is a real, specifically-handled ChordPro directive.
 fn is_known(name: &str) -> bool {
-    !matches!(DirectiveKind::from_name(name), DirectiveKind::Unknown(_))
+    !matches!(
+        DirectiveKind::from_name(name),
+        DirectiveKind::Unknown(_)
+            | DirectiveKind::StartOfSection(_)
+            | DirectiveKind::EndOfSection(_)
+    )
 }
 
 const DIRECTIVES: &[&str] = &[
@@ -26,7 +38,6 @@ const DIRECTIVES: &[&str] = &[
     "end_of_bridge",
     "end_of_chorus",
     "end_of_grid",
-    "end_of_grille",
     "end_of_tab",
     "end_of_verse",
     "highlight",
@@ -39,7 +50,6 @@ const DIRECTIVES: &[&str] = &[
     "start_of_bridge",
     "start_of_chorus",
     "start_of_grid",
-    "start_of_grille",
     "start_of_tab",
     "start_of_verse",
     "subtitle",
