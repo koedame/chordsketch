@@ -258,10 +258,18 @@ class FontNoticeTest(unittest.TestCase):
     def test_a_package_definition_that_installs_a_binary_installs_the_notices_with_it(self):
         for path in ("packaging/aur/chordsketch-bin/PKGBUILD.template", "packaging/aur/chordsketch/PKGBUILD.template",
                      "packaging/homebrew/chordsketch.rb.template", "packaging/homebrew/chordsketch-desktop-formula.rb.template",
-                     "packaging/snap/snapcraft.yaml.template"):
+                     "packaging/snap/snapcraft.yaml.template", "packaging/macports/Portfile"):
             text = (REPO / path).read_text()
             self.assertIn("NOTICE", text, path)
             self.assertIn("THIRD_PARTY_LICENSES.md", text, path)
+
+    def test_the_macports_portfile_declares_the_ofl_beside_the_mit(self):
+        self.assertRegex((REPO / "packaging/macports/Portfile").read_text(), r"(?m)^license\s+MIT OFL-1\.1$")
+
+    def test_the_chocolatey_nuspec_names_a_license_url_because_choco_pack_rejects_the_license_element(self):
+        nuspec = (REPO / "packaging/chocolatey/chordsketch.nuspec.template").read_text()
+        self.assertIn("<licenseUrl>", nuspec)
+        self.assertNotIn("<license ", nuspec)
 
 
 class PolicyTest(unittest.TestCase):

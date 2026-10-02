@@ -276,6 +276,7 @@ step.
 | The nuspec has `id` (lowercase), `version`, `title`, `authors`, `projectUrl`, `packageSourceUrl`, `description`, `summary`, `tags` and a license | [Create packages](https://docs.chocolatey.org/en-us/create/create-packages/), [Moderation](https://docs.chocolatey.org/en-us/community-repository/moderation/) | `chocolatey_problems` |
 | The install script downloads a release asset with that asset's checksum | — | `chocolatey_problems` |
 | Size: the community repository documents no limit | [FAQ](https://docs.chocolatey.org/en-us/faqs/) | the 1 MiB large-file rule |
+| The license is `licenseUrl` (the MIT `LICENSE`), not a `<license>` expression: `choco pack` throws on that element, and the moderation rule CPMR0039 asks for a non-empty `licenseUrl`. The `.nupkg` carries no font; the zip its install script downloads holds `LICENSE`, `NOTICE` and `THIRD_PARTY_LICENSES.md`, which carry the OFL notice | [Chocolatey CLI: unsupported nuspec elements](https://github.com/chocolatey/choco/pull/2947), [CPMR0039](https://docs.chocolatey.org/en-us/community-repository/moderation/package-validator/rules/cpmr0039) | `cli_archive_problems`; `scripts/test_third_party_licenses.py` |
 
 ## AUR
 
@@ -357,6 +358,7 @@ Submitted by hand as a pull request to `macports/macports-ports`.
 |---|---|---|
 | `port lint --nitpick` passes | [MacPorts guide: contributing](https://guide.macports.org/chunked/project.contributing.html) | [`macports-smoke.yml`](../.github/workflows/macports-smoke.yml), called by `publishable.yml` |
 | The Portfile's `cargo.crates` match the tagged `Cargo.lock` | — | `ci.yml`'s `macports-portfile-sync` job |
+| `license` lists every license that applies, space-separated (`MIT OFL-1.1`: braces would offer a choice), and `destroot` installs `LICENSE`, `NOTICE` and `THIRD_PARTY_LICENSES.md` under `share/doc/${name}` | [MacPorts guide: keywords](https://guide.macports.org/chunked/reference.keywords.html), the `terminus-font` port | `scripts/test_third_party_licenses.py` |
 
 ## nixpkgs
 

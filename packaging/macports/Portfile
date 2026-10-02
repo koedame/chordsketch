@@ -26,7 +26,7 @@ github.tarball_from archive
 revision            0
 categories          textproc audio
 installs_libs       no
-license             MIT
+license             MIT OFL-1.1
 maintainers         {koeda.me:oss @koedame} openmaintainer
 description         ChordPro file format parser and renderer
 long_description    ChordSketch is a Rust implementation of the ChordPro file \
@@ -811,6 +811,13 @@ destroot {
     # `can't read "cargo.rust_platform": no such variable`.
     xinstall -m 0755 ${worksrcpath}/target/[cargo.rust_platform]/release/chordsketch \
         ${destroot}${prefix}/bin/chordsketch
+
+    # The binary embeds the Noto Sans CJK JP subset and the Bravura
+    # outlines under the SIL OFL 1.1, which asks for the copyright
+    # notice and the license text with every copy.
+    xinstall -d ${destroot}${prefix}/share/doc/${name}
+    xinstall -m 0644 -W ${worksrcpath} LICENSE NOTICE THIRD_PARTY_LICENSES.md \
+        ${destroot}${prefix}/share/doc/${name}
 }
 
 notes "
