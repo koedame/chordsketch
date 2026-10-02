@@ -31,8 +31,7 @@ maintainers         {koeda.me:oss @koedame} openmaintainer
 description         ChordPro file format parser and renderer
 long_description    ChordSketch is a Rust implementation of the ChordPro file \
                     format. It parses .cho files and renders them to plain text, \
-                    HTML, or PDF output. Full compatibility with the ChordPro \
-                    specification.
+                    HTML, or PDF output.
 
 # The `${distname}${extract.suffix}` key is required, not decorative.
 # `cargo.crates` below appends one checksum entry per crate distfile,

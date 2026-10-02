@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The README and package descriptions no longer say "100% ChordPro
+  compatible".** ChordSketch parses every directive that ChordPro R6.101.0
+  recognises except six obsolete ones (`grid`, `g`, `no_grid`, `ng`,
+  `titles`, `pagesize`), a new test keeps that list honest, and
+  `docs/known-deviations.md` is re-measured against R6.101.0. The output is
+  not identical to Perl's, only some configuration keys are implemented, and
+  the CLI is not a drop-in replacement for `chordpro`.
+
 ### Fixed
 
 - **The Swift package installs from Swift Package Manager.** The manifest
