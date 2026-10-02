@@ -3,8 +3,9 @@
 ## Project Overview
 
 **ChordSketch** is a Rust rewrite of the Perl [ChordPro](https://www.chordpro.org/)
-reference implementation. The goal is full compatibility with the ChordPro file format
-and rendering pipeline, implemented as a set of focused Rust library crates with a CLI
+reference implementation. The goal is compatibility with the ChordPro file format
+and rendering pipeline (`docs/known-deviations.md` lists what is and is not
+matched), implemented as a set of focused Rust library crates with a CLI
 front-end.
 
 All code, comments, documentation, commit messages, and PR descriptions must be in
@@ -273,5 +274,7 @@ was created).
   underdocumented behavior.
 - Parser behavior is validated via **golden tests**: input `.cho` files paired with
   expected output snapshots.
-- Compatibility with the Perl reference implementation is verified by comparing output
-  on a shared test corpus.
+- Compatibility with the Perl reference implementation is checked by hand with
+  `scripts/compare-with-perl.sh` on a shared test corpus (results in
+  `docs/known-deviations.md`), and the directive coverage is checked in CI by
+  `crates/chordpro/tests/upstream_directives.rs`.

@@ -7,10 +7,16 @@
 [![codecov](https://codecov.io/gh/koedame/chordsketch/branch/main/graph/badge.svg)](https://codecov.io/gh/koedame/chordsketch)
 
 A Rust implementation of the [ChordPro](https://www.chordpro.org/) and
-[iReal Pro](https://www.irealpro.com/) chord chart formats. 100% ChordPro
-compatible (parse to a structured AST, render to plain text, HTML, and
-PDF), full `irealb://` URL parsing, iReal Pro chart rendering to SVG /
-PNG / PDF, and bidirectional ChordPro ↔ iReal Pro conversion.
+[iReal Pro](https://www.irealpro.com/) chord chart formats. It reads
+ChordPro files (parse to a structured AST, render to plain text, HTML, and
+PDF), parses `irealb://` URLs, renders iReal Pro charts to SVG / PNG / PDF,
+and converts between ChordPro and iReal Pro.
+
+ChordSketch is not a drop-in replacement for the Perl ChordPro
+implementation. It parses every directive that ChordPro R6.101.0 does
+except six obsolete ones, but its output is not identical to Perl's and it
+offers fewer output formats. See
+[Known Deviations](docs/known-deviations.md) for the list.
 
 ## Stability
 
@@ -27,8 +33,10 @@ version if you depend on this crate today. The full policy is in
 
 ### ChordPro
 
-- Full [ChordPro](https://www.chordpro.org/chordpro/) format parser with
-  zero external dependencies in the core crate
+- [ChordPro](https://www.chordpro.org/chordpro/) format parser with
+  zero external dependencies in the core crate. Parses the directives of
+  ChordPro R6.101.0 except six obsolete ones
+  ([details](docs/known-deviations.md#directive-coverage))
 - Three output formats: plain text, HTML, and PDF
 - Chord transposition
 - Configuration file system (chordsketch.json)
@@ -49,11 +57,11 @@ version if you depend on this crate today. The full policy is in
 
 ### iReal Pro
 
-- Full `irealb://` URL parser (single-song and multi-song collections)
+- `irealb://` URL parser (single-song and multi-song collections)
   with zero external dependencies in the core crate. Accepts both the
   canonical 7..=9-field `irealb://` shape and the iRealBook 6-field
   `irealbook://` shape (`Title=Composer=Style=Key=TimeSig=Music`).
-- Complete URL grammar coverage: `(altchord)` substitutions, `n`
+- URL constructs handled: `(altchord)` substitutions, `n`
   no-chord, `Kcl` / `x` / `r` repeat-previous-measure, `<text>`
   free-form captions, `S` segno, `Q` coda, `<D.C.>` / `<D.S.>` /
   `<Fine>` macros, repeat / final / double / single barlines, and
@@ -237,6 +245,11 @@ winget install koedame.chordsketch
 ```bash
 choco install chordsketch
 ```
+
+The Chocolatey community repository reviews each new version by hand, so
+`choco install` can install an older release than the other channels. The
+[package page](https://community.chocolatey.org/packages/chordsketch) shows
+the current version.
 
 ### Snap (Linux)
 
