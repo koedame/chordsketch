@@ -124,8 +124,11 @@ ChordSketch loads config from four precedence levels, lowest to highest:
 Configs are written in **RRJSON** — a relaxed JSON dialect with unquoted
 keys, trailing commas, and comments. See the
 [ChordPro configuration reference](https://www.chordpro.org/chordpro/chordpro-configuration-pp/)
-for the canonical schema; ChordSketch aims to be a drop-in replacement
-for the upstream Perl implementation.
+for the upstream schema. ChordSketch looks for `chordsketch.json` (see the
+[configuration guide](https://github.com/koedame/chordsketch/blob/main/docs/configuration.md)),
+so an existing upstream `chordpro.json` is not picked up as is, and not every
+upstream key is implemented. It is not a drop-in replacement for the
+upstream Perl implementation.
 
 ## Exit codes
 
