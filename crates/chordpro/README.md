@@ -22,7 +22,8 @@ assert_eq!(song.metadata.title.as_deref(), Some("Amazing Grace"));
 
 ## Features
 
-- Full ChordPro format parser (100+ directive types)
+- ChordPro format parser covering the directives of ChordPro R6.101.0
+  except six obsolete ones ([details](https://github.com/koedame/chordsketch/blob/main/docs/known-deviations.md#directive-coverage))
 - Structured AST representation
 - Chord transposition
 - Configuration system with RRJSON support
