@@ -38,7 +38,6 @@ libraries and bindings, the editor integrations, and the MCP server.
 The playground, the docs site and the design-system pages loaded fonts from
 Google Fonts and the iReal Pro route loaded Bravura Text from jsDelivr, and
 the desktop app checks GitHub for updates on every launch, while nothing the
-user could read said so. A German court has ordered damages over exactly this
-kind of Google Fonts embedding without consent, and the README promised more
-than the software did. Writing the connections down, and testing that the web
-pages make none beyond their own host, removes the gap.
+user could read said so, and the README promised more than the software
+did. Writing the connections down, and testing that the web pages make none
+beyond their own host, removes the gap.
