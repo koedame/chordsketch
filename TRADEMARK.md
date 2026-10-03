@@ -97,6 +97,17 @@ this repository belong to their respective owners. ChordSketch is not
 affiliated with, endorsed by, or sponsored by any of them; those names appear
 here only to say truthfully which formats this software reads and writes.
 
+| Name | Whose |
+|---|---|
+| ChordPro | The file format, and its reference program by The ChordPro Team |
+| iReal Pro | Technimo LLC |
+| MusicXML | Published by the W3C Music Notation Community Group |
+| Bravura | A font by Steinberg Media Technologies GmbH |
+
+This is also why the JetBrains and Zed extensions are listed as ChordSketch,
+not ChordPro: a listing under another project's name reads as that project's
+own.
+
 ## Attribution text
 
 When a notice is useful, this is the wording to copy:

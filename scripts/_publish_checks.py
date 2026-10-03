@@ -2157,6 +2157,7 @@ def flathub_problems(version: str, runner: Runner = run) -> list[str]:
 JETBRAINS_DIR = "packages/jetbrains-plugin"
 # https://plugins.jetbrains.com/docs/marketplace/uploading-a-new-plugin.html
 JETBRAINS_MAX_PLUGIN = 400 * MIB
+JETBRAINS_MAX_NAME = 30
 
 
 def jetbrains_problems(runner: Runner = run) -> list[str]:
@@ -2188,8 +2189,11 @@ def jetbrains_problems(runner: Runner = run) -> list[str]:
     for element in ("id", "name", "version", "vendor", "description"):
         if not (root.findtext(element) or "").strip():
             problems.append(f"plugin.xml has no <{element}>")
-    if len((root.findtext("name") or "").strip()) > 60:
-        problems.append("plugin.xml <name> is over the Marketplace's 60 characters")
+    name = (root.findtext("name") or "").strip()
+    if len(name) > JETBRAINS_MAX_NAME:
+        problems.append(f"plugin.xml <name> {name!r} is over the Marketplace's {JETBRAINS_MAX_NAME} characters")
+    if re.search(r"plugin|intellij|jetbrains", name, re.I):
+        problems.append(f"plugin.xml <name> {name!r} contains 'Plugin', 'IntelliJ' or 'JetBrains', which the Marketplace refuses")
     if not re.fullmatch(r"\d+\.\d+\.\d+", (root.findtext("version") or "").strip()):
         problems.append(f"plugin.xml <version> {root.findtext('version')!r} is not SemVer")
     idea_version = root.find("idea-version")

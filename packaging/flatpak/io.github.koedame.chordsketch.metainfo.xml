@@ -24,6 +24,10 @@
       <li>Open and edit iReal Pro charts as a bar grid</li>
       <li>Listen to a chord, the key of the song, or a metronome at its tempo</li>
     </ul>
+    <p>
+      ChordPro (The ChordPro Team) and iReal Pro (Technimo LLC) are names of
+      their owners; ChordSketch is not affiliated with or endorsed by them.
+    </p>
   </description>
 
   <launchable type="desktop-id">io.github.koedame.chordsketch.desktop</launchable>

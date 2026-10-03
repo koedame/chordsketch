@@ -16,7 +16,7 @@
     <releaseNotes>https://github.com/koedame/chordsketch/releases</releaseNotes>
     <tags>chordpro music chord parser lyrics renderer cli</tags>
     <summary>ChordPro file format parser and renderer</summary>
-    <description>ChordSketch is a Rust implementation of the ChordPro file format. It parses .cho files and renders them to text, HTML, or PDF output. This package installs the chordsketch CLI.</description>
+    <description>ChordSketch is a Rust implementation of the ChordPro file format. It parses .cho files and renders them to text, HTML, or PDF output. This package installs the chordsketch CLI. ChordPro is the name of a file format by The ChordPro Team; ChordSketch is not affiliated with or endorsed by them.</description>
   </metadata>
   <files>
     <file src="tools\**" target="tools" />
