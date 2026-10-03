@@ -348,7 +348,19 @@ Published by hand with `./gradlew publishPlugin`.
 |---|---|---|
 | The plugin builds and `verifyPluginProjectConfiguration` passes | [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html) | `jetbrains_problems` |
 | The distribution is at most 400 MB | [Uploading a new plugin](https://plugins.jetbrains.com/docs/marketplace/uploading-a-new-plugin.html) | `jetbrains_problems` |
-| `plugin.xml` has `id`, `name` (at most 60 characters), a SemVer `version`, `vendor`, `description` and `idea-version since-build` | [Plugin configuration file](https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html) | `jetbrains_problems` |
+| `plugin.xml` has `id`, `name`, a SemVer `version`, `vendor`, `description` and `idea-version since-build` | [Plugin configuration file](https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html) | `jetbrains_problems` |
+| The `name` is at most 30 characters (the configuration file allows 60, the approval guidelines 30), does not contain `Plugin`, `IntelliJ` or `JetBrains`, and is not a famous or trademarked name of a third party used without authorization. It is `ChordSketch`, not `ChordPro`: ChordPro is another project's name, and a plugin listed under it reads as that project's own. The description says what the plugin does for ChordPro files and that ChordSketch is not affiliated with the ChordPro Team. The guidelines also discourage `Support` and `Integration` in a name | [Approval guidelines: 1.2 The plugin name, 1.3 The plugin vendor, 1.8 Third-party rights](https://plugins.jetbrains.com/docs/marketplace/jetbrains-marketplace-approval-guidelines.html) | `jetbrains_problems` (length and the three words); the rest is read at review |
+
+## Zed extensions
+
+Submitted by hand as a pull request to `zed-industries/extensions`, which adds `packages/zed-extension` as a submodule and an entry in `extensions.toml`. Not published yet.
+
+| Condition | Source | Checked by |
+|---|---|---|
+| The extension `id` is unique, kebab-case, and does not contain `zed` or `extension` | [Zed: prerequisites](https://zed.dev/docs/extensions/publishing/prerequisites) | not checked |
+| The `id` and `name` are `chordsketch` and `ChordSketch`, not the language's name `ChordPro`. Zed asks a language extension to choose an id and name "similar or equal to the name of the primary language", but ChordPro is another project's name, so the extension carries ours and registers the language `ChordPro` inside it (`languages/chordpro/config.toml`). A reviewer who asks for the language's name is a question for the submission, not a reason to take the name back | [Zed: prerequisites](https://zed.dev/docs/extensions/publishing/prerequisites); [ChordPro](https://www.chordpro.org/) states no rule for the name | not checked |
+| The license is one of the accepted ones (MIT is) and its file is in the extension's own directory (`packages/zed-extension/LICENSE`) | [Zed: license requirements](https://zed.dev/docs/extensions/publishing/license-requirements) | not checked |
+| `extensions.toml`'s `version` matches `extension.toml` at the submitted commit, and the repository is reachable by an HTTPS URL | [Zed: publishing guide](https://zed.dev/docs/extensions/publishing/publishing-guide) | not checked |
 
 ## MacPorts
 
