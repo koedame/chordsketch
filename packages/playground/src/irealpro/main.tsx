@@ -20,6 +20,7 @@ import '@chordsketch/react/styles.css';
 import { Button } from '@chordsketch/react-ui';
 import '@chordsketch/react-ui/styles.css';
 
+import '../fonts.css';
 import '../playground.css';
 import { IrealChart } from './chart';
 
@@ -469,6 +470,15 @@ function PlaygroundApp(): JSX.Element {
           </span>
         )}
         <span className="spacer" />
+        <a
+          className="item status__link"
+          href="https://github.com/koedame/chordsketch#privacy"
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label="Privacy: ChordSketch collects nothing (opens in a new tab)"
+        >
+          Privacy
+        </a>
         <span className="item">irealb://</span>
         {version && <span className="item">v{version}</span>}
       </footer>

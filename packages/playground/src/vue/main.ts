@@ -4,6 +4,7 @@
 // stylesheet, mount.
 import { createApp } from 'vue';
 
+import '../fonts.css';
 import '../playground.css';
 import '../framework-demo.css';
 import '@chordsketch/vue/styles.css';
