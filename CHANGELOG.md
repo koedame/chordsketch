@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The playground, docs site, and design-system reference pages serve their
+  own web fonts instead of fetching Inter, JetBrains Mono, Noto Sans JP,
+  Roboto, Source Serif 4 and Bravura Text from Google Fonts / jsDelivr.**
+  Opening any of those pages no longer sends the visitor's IP address to a
+  third party. The kitchen-sink ChordPro sample's `{image}` directive now
+  points at the bundled logo instead of `raw.githubusercontent.com`. The
+  README's new Privacy section lists every network connection ChordSketch
+  itself makes, including the desktop app's update check.
 - **The README and package descriptions no longer say "100% ChordPro
   compatible".** ChordSketch parses every directive that ChordPro R6.101.0
   recognises except six obsolete ones (`grid`, `g`, `no_grid`, `ng`,

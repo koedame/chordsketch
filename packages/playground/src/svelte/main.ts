@@ -3,6 +3,7 @@
 // package's own component stylesheet, mount.
 import { mount } from 'svelte';
 
+import '../fonts.css';
 import '../playground.css';
 import '../framework-demo.css';
 import '@chordsketch/svelte/styles.css';

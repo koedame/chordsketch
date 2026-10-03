@@ -297,6 +297,18 @@ On Windows the installer also registers a File Explorer preview
 handler, so `.cho` / `.chopro` / `.crd` / `.chordpro` files render
 in Explorer's preview pane.
 
+The app checks for updates when it starts and every 24 hours while it
+runs. The check is one ordinary HTTPS `GET` request for
+`https://raw.githubusercontent.com/koedame/chordsketch/desktop-updater-manifest/latest.json`;
+it carries no identifier, no document content, and not even your app or OS
+version (the request header names only the updater library), but GitHub
+sees your IP address like any web server does. If a newer version exists,
+the app shows its release notes and installs it only after you accept. The
+Flatpak build never checks (the store delivers updates). The app has no
+settings switch for the check yet; until it does, block
+`raw.githubusercontent.com` for the app in your firewall to stop it. See
+[Privacy](#privacy).
+
 The macOS app is not yet signed or notarized by Apple, so Gatekeeper
 blocks its first launch whether you installed it with the Homebrew cask
 or downloaded the `.dmg` from a GitHub Release. Homebrew leaves the
@@ -487,6 +499,29 @@ reference and additional examples.
 - [SECURITY.md](SECURITY.md)
 - [TRADEMARK.md](TRADEMARK.md)
 - [CHANGELOG.md](CHANGELOG.md)
+
+## Privacy
+
+ChordSketch collects nothing: there is no telemetry, analytics, crash
+reporting, or account, and the documents you edit never leave your device.
+The playground parses and renders in your browser (WebAssembly); the
+command-line tool, the libraries, and the editor integrations do their work
+locally.
+
+These are the only network connections ChordSketch itself makes, and what
+the other side can see:
+
+| When | Connects to | What is sent |
+|---|---|---|
+| You open the [playground or the docs site](https://koedame.github.io/chordsketch/) | GitHub Pages (`koedame.github.io`) | An ordinary page request. The fonts, scripts, and images are served from the same host: the site loads nothing from a font service or a CDN. GitHub sees your IP address, as for any page it hosts |
+| The desktop app starts, then every 24 hours | `raw.githubusercontent.com` | An update check, described under [Desktop application](#desktop-application). Not made by the Flatpak build |
+| A ChordPro file you open names a remote image (`{image: src="https://..."}`) | The host in that URL | A request for that image. Only your own document can cause it; none of the playground samples does |
+
+Installing ChordSketch through a package manager, `cargo`, or `npm` contacts
+that registry, not ChordSketch.
+
+When a change adds a connection, it updates this section in the same pull
+request.
 
 ## License
 
