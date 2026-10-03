@@ -65,13 +65,13 @@
   --focus-ring: 0 0 0 2px var(--ink-0), 0 0 0 4px var(--crimson-500);
 
   /* Typography families. */
-  --font-jp: "Noto Sans JP Variable", "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Noto Sans JP Variable", "Noto Sans JP", system-ui, sans-serif;
-  --font-latin: "Inter Variable", "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-jp: "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Noto Sans JP", system-ui, sans-serif;
+  --font-latin: "Inter", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-sans: var(--font-jp);
-  --font-chord: "Roboto Variable", "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-chart-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-chord: "Roboto", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-chart-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
   --font-music: "Bravura Text", "Noto Music", "Symbola", serif;
 
   /* Type scale. */

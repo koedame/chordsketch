@@ -28,16 +28,25 @@ for (const route of ROUTES) {
 
     expect(foreign).toEqual([]);
 
-    const loaded = await page.evaluate(async () => {
+    const { loaded, failed } = await page.evaluate(async () => {
       await document.fonts.ready;
-      return [...document.fonts]
-        .filter((f) => f.status === 'loaded')
-        .map((f) => f.family.replace(/["']/g, ''));
+      const name = (f: FontFace) => f.family.replace(/["']/g, '');
+      return {
+        loaded: [...document.fonts].filter((f) => f.status === 'loaded').map(name),
+        failed: [...document.fonts].filter((f) => f.status === 'error').map(name),
+      };
     });
+    // A font file the browser cannot decode leaves the text in a fallback
+    // face with no visible error; the face status is the only signal.
+    expect(failed).toEqual([]);
     // Which family a page uses first differs per route; any self-hosted face
     // loading proves the `@font-face` rules resolve to files on this origin.
     expect(loaded.length).toBeGreaterThan(0);
-    expect(loaded.every((family) => family.endsWith(' Variable'))).toBe(true);
+    expect(
+      loaded.every((family) =>
+        ['Inter', 'JetBrains Mono', 'Noto Sans JP', 'Roboto', 'Bravura Text'].includes(family),
+      ),
+    ).toBe(true);
   });
 }
 
