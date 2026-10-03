@@ -31,6 +31,7 @@ import '@chordsketch/react/styles.css';
 import { Button } from '@chordsketch/react-ui';
 import '@chordsketch/react-ui/styles.css';
 
+import '../fonts.css';
 import '../playground.css';
 
 // ---------------------------------------------------------------
@@ -349,7 +350,7 @@ Coda | D7 . | Eb7  | D7   | G7 . | %  . |.
 
 # === Image [Nx] [Pos] ============================================
 # Rendered inline at this location in document flow.
-{image: src="https://raw.githubusercontent.com/koedame/chordsketch/refs/heads/main/assets/logo.svg" width=64 height=64 title="ChordSketch logo"}
+{image: src="../favicon.svg" width=64 height=64 title="ChordSketch logo"}
 
 {new_physical_page}
 
@@ -956,6 +957,15 @@ function PlaygroundApp(): JSX.Element {
           {stats.sections === 1 ? 'section' : 'sections'}
         </span>
         <span className="spacer" />
+        <a
+          className="item status__link"
+          href="https://github.com/koedame/chordsketch#privacy"
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label="Privacy: ChordSketch collects nothing (opens in a new tab)"
+        >
+          Privacy
+        </a>
         <span className="item">UTF-8</span>
         <span className="item">ChordPro</span>
         {version && <span className="item">v{version}</span>}

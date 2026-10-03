@@ -185,8 +185,9 @@ calls `@tauri-apps/plugin-process`'s `relaunch()`.
 
 `check()` hits the manifest URL configured in
 `tauri.conf.json`'s `plugins.updater.endpoints`, currently
-`https://github.com/koedame/chordsketch/releases/latest/download/
-latest.json`. The `latest.json` manifest is produced by the
+`https://raw.githubusercontent.com/koedame/chordsketch/
+desktop-updater-manifest/latest.json`. The `latest.json` manifest is
+published to the `desktop-updater-manifest` branch by the
 `publish-updater-manifest` job in `desktop-release.yml` on every
 `desktop-v*` tag — see
 [ADR-0005](../../docs/adr/0005-tauri-updater-key-management.md)

@@ -9,6 +9,8 @@
 *.jpeg binary
 *.ico binary
 *.wasm binary
+*.woff binary
+*.woff2 binary
 
 # Golden test input fixtures parse differently under CRLF on some
 # platforms; pin to LF so the committed byte content is what every
