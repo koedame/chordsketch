@@ -40,6 +40,9 @@ network access for `cargo fetch`, and `npm ci --ignore-scripts` in each
 directory of `NPM_SURFACES` (run it in `packages/react` first: the VS Code
 extension links it and npm builds a linked package even with
 `--ignore-scripts`).
+It also needs `pip install fonttools brotli`: an npm font package's LICENSE names
+whoever published it (fontsource copies "Google Inc." for Noto Sans JP), so the
+holder is checked against the copyright line inside the font files themselves.
 """
 from __future__ import annotations
 
@@ -368,6 +371,47 @@ def npm_author(meta: dict) -> str:
     return re.sub(r"\s*[<(][^>)]*[>)]", "", author or "").strip()
 
 
+def copyright_holder(line: str) -> str:
+    """The name in a copyright line, without the word, the sign, the years or the URL."""
+    rest = re.sub(r"^(?:copyright|\(c\)|\u00a9|\s)*[\d\s,\u2013-]*", "", line.strip(), flags=re.I)
+    return re.split(r"\s*[(,]", rest, maxsplit=1)[0].strip()
+
+
+def font_file_copyright(path: Path) -> str:
+    """The first line of a font's copyright (name ID 0). Some files append the whole license
+    to it, and the Mac record of some is mis-decoded, so the Windows record is read."""
+    from fontTools.ttLib import TTFont
+
+    name = TTFont(path)["name"]
+    record = name.getName(0, 3, 1, 0x409) or name.getName(0, 1, 0, 0)
+    return record.toUnicode().strip().split("\n", 1)[0]
+
+
+def font_name_copyright(directory: Path) -> str | None:
+    """The copyright line every woff2 of a font package states in its own name table."""
+    files = sorted((directory / "files").glob("*.woff2")) if (directory / "files").is_dir() else []
+    if not files:
+        return None
+    try:
+        lines = {font_file_copyright(f) for f in files}
+    except ImportError:
+        sys.exit(f"{directory} bundles fonts; check their copyright holder with `pip install fonttools brotli`")
+    if len(lines) != 1:
+        sys.exit(f"{directory}: its font files state different copyright lines: {sorted(lines)}")
+    return lines.pop()
+
+
+def font_package_license(text: str, name_copyright: str) -> str:
+    """A font package's LICENSE names whoever published it on npm (fontsource copies
+    "Google Inc." from the Google Fonts listing), not the holder. The font's own name
+    table is the primary source: when the first line names someone else, replace it."""
+    first, sep, rest = text.partition("\n")
+    if copyright_holder(first) == copyright_holder(name_copyright):
+        return text
+    stated = re.sub(r"^(?:\(c\)|\u00a9)\s*", "", name_copyright.strip(), flags=re.I)
+    return f"Copyright {stated}{sep}{rest}"
+
+
 def npm_license_files(directory: Path) -> list[Path]:
     return [
         f
@@ -394,6 +438,9 @@ def npm_licenses(surfaces: list[tuple[str, dict]]) -> dict:
             if not isinstance(license_id, str):
                 license_id = "UNKNOWN"
             texts = [(license_id if len(files) == 1 else f.name, normalize(f.read_text(encoding="utf-8"))) for f in files]
+            name_copyright = font_name_copyright(directory)
+            if name_copyright:
+                texts = [(n, font_package_license(t, name_copyright)) for n, t in texts]
             if not texts and license_id == "MIT" and npm_author(meta):
                 # No license file in the package: the standard text, with the
                 # holder the manifest names, as for the crates without one.
