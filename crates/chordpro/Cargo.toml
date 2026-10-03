@@ -12,6 +12,10 @@ categories.workspace = true
 description = "ChordPro parser, AST, and transforms"
 readme = "README.md"
 
+# The charango voicings in `src/voicings.rs` come from ChordPro and are under
+# the Artistic License 2.0 beside the MIT-licensed Rust source.
+# Attribution: NOTICE (project root) + LICENSE-ARTISTIC-2.0.txt.
+
 [dependencies]
 # This crate has ZERO external dependencies — normal, dev, AND build.
 # See CLAUDE.md "Dependency Policy", `.claude/rules/code-style.md`, and
