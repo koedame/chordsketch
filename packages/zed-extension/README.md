@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo.svg" alt="ChordSketch" width="80" height="80">
 </p>
 
-# ChordPro (Zed Extension)
+# ChordSketch for Zed
 
 [ChordPro](https://www.chordpro.org/) language support for the
 [Zed](https://zed.dev/) editor, powered by
@@ -15,7 +15,7 @@ This extension provides syntax highlighting and LSP integration for `.cho`,
 
 ### From Zed Extensions (once published)
 
-Open the Zed command palette and search for **"ChordPro"** in the extensions
+Open the Zed command palette and search for **"ChordSketch"** in the extensions
 panel.
 
 ### Development install
@@ -72,6 +72,10 @@ No additional Zed settings are required.
 - [Playground](https://chordsketch.koeda.me) — browser-based demo
 - [Editor setup guide](https://github.com/koedame/chordsketch/blob/main/docs/editors.md) — all editors
 - [Issues](https://github.com/koedame/chordsketch/issues) — bug reports
+
+## Other people's names
+
+ChordPro is the name of a file format and of its reference program by The ChordPro Team; iReal Pro is a product of Technimo LLC; MusicXML is published by the W3C Music Notation Community Group; Bravura is a font by Steinberg Media Technologies GmbH. These names belong to their owners. ChordSketch is not affiliated with or endorsed by any of them.
 
 ## License
 

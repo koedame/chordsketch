@@ -6,6 +6,7 @@ summary: ChordPro file format parser and renderer
 description: |
   ChordSketch is a Rust implementation of the ChordPro file format.
   It parses .cho files and renders them to text, HTML, or PDF output.
+  ChordPro is the name of a file format by The ChordPro Team; ChordSketch is not affiliated with or endorsed by them.
 license: MIT AND OFL-1.1
 contact: https://github.com/koedame/chordsketch/issues
 issues: https://github.com/koedame/chordsketch/issues

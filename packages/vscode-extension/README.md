@@ -134,6 +134,10 @@ Settings live under **ChordSketch** in Settings UI (or edit
 - Issue tracker: <https://github.com/koedame/chordsketch/issues>
 - ChordPro format specification: <https://www.chordpro.org/chordpro/>
 
+## Other people's names
+
+ChordPro is the name of a file format and of its reference program by The ChordPro Team; iReal Pro is a product of Technimo LLC; MusicXML is published by the W3C Music Notation Community Group; Bravura is a font by Steinberg Media Technologies GmbH. These names belong to their owners. ChordSketch is not affiliated with or endorsed by any of them.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
