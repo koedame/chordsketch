@@ -288,6 +288,14 @@ jobs:
       # `bash` with `choco`, the Chocolatey feed, and the workspace stubbed;
       # what they exercise is HTTP status handling, string matching, exit
       # codes, and template substitution, none of which is Windows-specific.
+      # `test_third_party_licenses.py` reads the copyright line out of each
+      # bundled woff2 (name table, ID 0) and compares its holder with the one
+      # named in the license beside the file; that needs fontTools and its
+      # Brotli decoder.
+      - name: Install font tooling for the notice tests
+        if: ${{ !cancelled() }}
+        run: python3 -m pip install fonttools==4.66.1 brotli==1.2.0
+
       - name: Unit tests
         if: ${{ !cancelled() }}
         run: |
