@@ -3,7 +3,7 @@ name = "chordsketch-chordpro"
 version = "0.7.0"
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
+license = "MIT AND Artistic-2.0"
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -13,7 +13,9 @@ description = "ChordPro parser, AST, and transforms"
 readme = "README.md"
 
 # The charango voicings in `src/voicings.rs` come from ChordPro and are under
-# the Artistic License 2.0 beside the MIT-licensed Rust source.
+# the Artistic License 2.0 beside the MIT-licensed Rust source — hence the
+# compound `license` field above, matching the `MIT AND OFL-1.1` precedent
+# the Bravura/Noto-embedding renderer crates use (ADR-0036).
 # Attribution: NOTICE (project root) + LICENSE-ARTISTIC-2.0.txt.
 
 [dependencies]
