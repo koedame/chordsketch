@@ -7,6 +7,7 @@ neither cargo-about nor `npm ci`. One smoke test asserts that the real
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -224,6 +225,82 @@ OFL_JSON_MANIFESTS = [
 ]
 
 
+try:
+    from fontTools.ttLib import TTFont
+except ImportError:
+    TTFont = None
+
+# NOTICE calls these two files the publisher's unmodified release
+# (adobe-fonts/source-serif, `release` branch, WOFF2/VAR/*.ttf.woff2, version 4.005).
+SOURCE_SERIF_SHA256 = {
+    "source-serif-4-variable-roman.woff2": "940a76eda1388de39d38c8e7a79bf6ea058a387faee0a9f33c8d25c6ba05e1be",
+    "source-serif-4-variable-italic.woff2": "9d28b5749a1ad096a295cb607c521bd1af4cd9979b6f37332daf70143149fb44",
+}
+
+
+class FontCopyrightHolderTest(unittest.TestCase):
+    def test_the_holder_is_the_name_without_the_word_the_sign_the_years_or_the_url(self):
+        for line, holder in [
+            ("(c) 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.", "Adobe"),
+            ("\u00a9 2014 - 2023 Adobe (http://www.adobe.com/), with Reserved Font Name \u2018Source\u2019.", "Adobe"),
+            ("Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)", "The Inter Project Authors"),
+            ("Copyright \u00a9 2015, Steinberg Media Technologies GmbH (http://www.steinberg.net/),", "Steinberg Media Technologies GmbH"),
+            ("Google Inc.", "Google Inc."),
+        ]:
+            self.assertEqual(tpl.copyright_holder(line), holder, line)
+
+    def test_a_font_package_license_that_names_the_redistributor_gets_the_holder_the_font_states(self):
+        text = "Google Inc.\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1."
+        fixed = tpl.font_package_license(
+            text, "(c) 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'."
+        )
+        self.assertEqual(
+            fixed,
+            "Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'."
+            "\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.",
+        )
+
+    def test_a_font_package_license_that_names_the_holder_is_left_alone(self):
+        text = "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) Inter-Italic.ttf\n\nOFL"
+        self.assertEqual(
+            tpl.font_package_license(text, "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)"),
+            text,
+        )
+
+    def test_a_year_that_differs_from_the_name_table_does_not_count_as_another_holder(self):
+        text = "Copyright \u00a9 2015, Steinberg Media Technologies GmbH (http://www.steinberg.net/),\nwith RFN"
+        self.assertEqual(
+            tpl.font_package_license(text, "\u00a9 2021, Steinberg Media Technologies GmbH (http://www.steinberg.net/)"),
+            text,
+        )
+
+
+@unittest.skipIf(TTFont is None, "needs `pip install fonttools brotli`")
+class DesignSystemFontCopyrightTest(unittest.TestCase):
+    def test_the_license_beside_every_font_names_the_holder_the_font_file_itself_states(self):
+        fonts_dir = REPO / "design-system/fonts"
+        checked = 0
+        for license_file in sorted(fonts_dir.glob("LICENSE-*.txt")):
+            family = license_file.stem.removeprefix("LICENSE-")
+            first = license_file.read_text().split("\n", 1)[0]
+            for font in sorted(fonts_dir.glob(family + "-*.woff2")):
+                stated = tpl.font_file_copyright(font)
+                self.assertEqual(
+                    tpl.copyright_holder(first), tpl.copyright_holder(stated),
+                    f"{license_file.name} says {first!r}, {font.name} says {stated!r}",
+                )
+                checked += 1
+        self.assertGreaterEqual(checked, 8)
+
+    def test_the_noto_sans_jp_package_license_gets_the_holder_its_font_files_state(self):
+        directory = REPO / "packages/playground/node_modules/@fontsource-variable/noto-sans-jp"
+        if not directory.is_dir():
+            self.skipTest("run `npm ci --ignore-scripts` in packages/playground")
+        stated = tpl.font_name_copyright(directory)
+        fixed = tpl.font_package_license((directory / "LICENSE").read_text(), stated)
+        self.assertEqual(tpl.copyright_holder(fixed.split("\n", 1)[0]), "Adobe")
+
+
 class FontNoticeTest(unittest.TestCase):
     def test_the_only_font_file_in_the_tree_is_the_one_the_notice_generator_reproduces_the_license_of(self):
         listed = subprocess.run(
@@ -251,6 +328,23 @@ class FontNoticeTest(unittest.TestCase):
             )
         notice = (REPO / "NOTICE").read_text()
         self.assertIn("design-system/fonts/LICENSE-*.txt", notice)
+
+    def test_the_source_serif_files_are_the_publishers_unmodified_release(self):
+        for name, digest in SOURCE_SERIF_SHA256.items():
+            data = (REPO / DESIGN_SYSTEM_FONTS / name).read_bytes()
+            self.assertEqual(hashlib.sha256(data).hexdigest(), digest, name)
+
+    def test_the_notices_credit_noto_sans_jp_and_source_serif_to_adobe_not_to_google(self):
+        notice = (REPO / "NOTICE").read_text()
+        playground = (REPO / "packages/playground/public/font-licenses.txt").read_text()
+        full = (REPO / "THIRD_PARTY_LICENSES.md").read_text()
+        self.assertNotIn("Google Inc.\n\nThis Font Software", full)
+        self.assertNotIn("Google Inc.", (REPO / DESIGN_SYSTEM_FONTS / "LICENSE-source-serif-4.txt").read_text())
+        for text in (notice, playground):
+            self.assertIn("Noto Sans JP", text)
+            self.assertNotIn("Google Inc.", text)
+        self.assertRegex(notice, r"Source Serif 4\s+Copyright 2014 - 2023 Adobe")
+        self.assertRegex(playground, r"Noto Sans JP\n\s+Copyright 2014-2021 Adobe")
 
     def test_the_committed_notice_reproduces_the_license_text_of_every_bundled_font(self):
         notice = (REPO / "THIRD_PARTY_LICENSES.md").read_text()
