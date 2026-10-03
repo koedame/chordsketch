@@ -384,6 +384,8 @@ def font_file_copyright(path: Path) -> str:
 
     name = TTFont(path)["name"]
     record = name.getName(0, 3, 1, 0x409) or name.getName(0, 1, 0, 0)
+    if record is None:
+        sys.exit(f"{path}: no copyright (name ID 0) record on the Windows or Mac platform")
     return record.toUnicode().strip().split("\n", 1)[0]
 
 
