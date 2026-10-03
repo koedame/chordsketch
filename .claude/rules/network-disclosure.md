@@ -18,9 +18,13 @@ one serving it MUST, in the same pull request:
    that host. Bundle the file instead (`packages/playground/src/fonts.css` is
    the pattern for fonts).
 3. Keep `packages/playground/tests-e2e/no-external-requests.spec.ts` green.
-   It fails on any request from the deployed pages to another origin. Do not
-   allowlist an origin to make it pass; either remove the request or
-   rewrite the Privacy section and the test together.
+   It fails on any request from the deployed pages (the playground and the
+   docs site) to another origin, with no per-origin exception — do not add
+   one just to make it pass. A connection from those pages has exactly one
+   compliant path: remove it by bundling, per rule 2. A connection from a
+   surface this spec does not exercise (the desktop app, the CLI, an editor
+   integration, the MCP server) is not constrained by it; rule 1 still
+   applies.
 
 "Surface" means the playground and docs site, the desktop app, the CLI, the
 libraries and bindings, the editor integrations, and the MCP server.
@@ -37,7 +41,8 @@ libraries and bindings, the editor integrations, and the MCP server.
 
 The playground, the docs site and the design-system pages loaded fonts from
 Google Fonts and the iReal Pro route loaded Bravura Text from jsDelivr, and
-the desktop app checks GitHub for updates on every launch, while nothing the
-user could read said so, and the README promised more than the software
-did. Writing the connections down, and testing that the web pages make none
-beyond their own host, removes the gap.
+the desktop app checks GitHub for updates on every launch and every 24
+hours while it runs. Nothing the user could read said so, and the README
+promised more than the software did. Writing the connections down, and
+testing that the web pages make none beyond their own host, removes the
+gap.
