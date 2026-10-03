@@ -258,6 +258,11 @@ class FontNoticeTest(unittest.TestCase):
             text = (REPO / licence).read_text().strip()
             self.assertIn(text, notice, name)
 
+    def test_the_notice_names_the_license_file_of_every_bundled_entry(self):
+        notice = (REPO / "NOTICE").read_text()
+        for name, _, _, licence in tpl.BUNDLED:
+            self.assertIn(licence, notice, name)
+
     def test_the_noto_subset_does_not_claim_a_reserved_font_name_the_upstream_font_does_not_declare(self):
         text = (REPO / "crates/render-pdf/assets/OFL.txt").read_text()
         first = text.split("\n", 1)[0]

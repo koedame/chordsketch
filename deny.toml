@@ -36,6 +36,8 @@ exceptions = [
     # The application layer is AGPL-3.0-only (CLAUDE.md, License Policy).
     { crate = "chordsketch-desktop", allow = ["AGPL-3.0-only"] },
     { crate = "chordsketch-preview-handler", allow = ["AGPL-3.0-only"] },
+    # The charango chord voicings taken from ChordPro (NOTICE).
+    { crate = "chordsketch-chordpro", allow = ["Artistic-2.0"] },
     # The Bravura glyph outlines and the Noto Sans CJK JP subset (NOTICE).
     { crate = "chordsketch-render-html", allow = ["OFL-1.1"] },
     { crate = "chordsketch-render-ireal", allow = ["OFL-1.1"] },

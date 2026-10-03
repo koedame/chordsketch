@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/known-deviations.md` is re-measured against R6.101.0. The output is
   not identical to Perl's, only some configuration keys are implemented, and
   the CLI is not a drop-in replacement for `chordpro`.
+- **`NOTICE` credits the ChordPro charango voicings and the iReal Pro
+  de-obfuscation source.** The 156 charango chord diagrams come from
+  ChordPro's `charango.json` and are under its Artistic License 2.0; the
+  `irealb://` unscramble is a translation of MIT-licensed ireal-reader and
+  accompaniser code. `NOTICE`, `THIRD_PARTY_LICENSES.md` and the two crates
+  now carry the license texts and say what changed.
 
 ### Fixed
 
