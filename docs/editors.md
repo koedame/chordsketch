@@ -13,8 +13,8 @@ and LSP integration out of the box.
 
 ## Zed
 
-Install the **ChordPro** extension from the Zed extensions panel (command
-palette → "zed: extensions" → search for "ChordPro").
+Install the **ChordSketch** extension from the Zed extensions panel (command
+palette → "zed: extensions" → search for "ChordSketch").
 
 The extension provides syntax highlighting via a tree-sitter grammar and LSP
 integration via `chordsketch-lsp`.
@@ -127,11 +127,11 @@ vim.api.nvim_create_autocmd("FileType", {
 
 ## JetBrains IDEs (IntelliJ IDEA, PyCharm, WebStorm, etc.)
 
-Install the **ChordPro** plugin from the
+Install the **ChordSketch** plugin from the
 [JetBrains Marketplace](https://plugins.jetbrains.com/):
 
 1. Open **Settings** → **Plugins** → **Marketplace**
-2. Search for **ChordPro**
+2. Search for **ChordSketch**
 3. Click **Install**
 
 The plugin provides syntax highlighting for `.cho`, `.chordpro`, and `.chopro`

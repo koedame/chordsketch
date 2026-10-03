@@ -8,6 +8,7 @@ Pod::Spec.new do |s|
     It parses .cho files and renders them to text, HTML, or PDF output.
     This pod provides the Swift API (`import ChordSketch`) on top of the
     pre-built chordsketchFFI XCFramework, for iOS and macOS.
+    ChordPro is the name of a file format by The ChordPro Team; ChordSketch is not affiliated with or endorsed by them.
   DESC
   s.homepage     = 'https://github.com/koedame/chordsketch'
   # CocoaPods' `license` attribute takes only one `:file`/`:text`, so it

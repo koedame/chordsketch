@@ -119,8 +119,8 @@ ChordSketch provides syntax highlighting and Language Server Protocol (LSP)
 support for multiple editors:
 
 - **VS Code / Cursor / Windsurf / VSCodium** — install the [ChordSketch extension](https://marketplace.visualstudio.com/items?itemName=koedame.chordsketch)
-- **JetBrains IDEs** (IntelliJ IDEA, PyCharm, WebStorm, etc.) — install the ChordPro plugin
-- **Zed** — install the ChordPro extension from the extensions panel
+- **JetBrains IDEs** (IntelliJ IDEA, PyCharm, WebStorm, etc.) — install the ChordSketch plugin
+- **Zed** — install the ChordSketch extension from the extensions panel
 - **Neovim** — manual tree-sitter + LSP configuration
 - **Helix** — manual grammar + LSP configuration
 
@@ -520,3 +520,5 @@ The licences above cover the code, not the name. Describing, packaging, and
 building on ChordSketch never needs permission; naming your own product
 ChordSketch does. Forks are welcome and must rename — see
 [TRADEMARK.md](TRADEMARK.md).
+
+ChordPro is the name of a file format and of its reference program by The ChordPro Team; iReal Pro is a product of Technimo LLC; MusicXML is published by the W3C Music Notation Community Group; Bravura is a font by Steinberg Media Technologies GmbH. These names belong to their owners. ChordSketch is not affiliated with or endorsed by any of them. They appear here only to say which formats and fonts ChordSketch reads, writes or embeds.
