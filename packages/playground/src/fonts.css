@@ -1,0 +1,11 @@
+/*
+ * Self-hosted web fonts (SIL OFL 1.1). Vite bundles the font files into
+ * `dist/assets/`, so the deployed site never requests a third-party font
+ * service. The family names (`Inter Variable`, ...) are the ones the
+ * design tokens list first in each `--font-*` stack. Licence texts:
+ * `NOTICE` (Web fonts section).
+ */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "@fontsource-variable/noto-sans-jp/wght.css";
+@import "@fontsource-variable/roboto/wght.css";

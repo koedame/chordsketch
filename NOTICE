@@ -95,3 +95,34 @@ ChordSketch's redistribution complies by retaining this NOTICE entry and by
 shipping the OFL text in `crates/render-pdf/assets/OFL.txt` (inside the
 `chordsketch-render-pdf` crate package) and in `THIRD_PARTY_LICENSES.md`
 (inside the binary distributions named above).
+
+
+===============================================================================
+Web fonts — Inter, JetBrains Mono, Noto Sans JP, Roboto, Source Serif 4, Bravura Text
+===============================================================================
+
+The playground and documentation site (`packages/playground/`) serve Inter,
+JetBrains Mono, Noto Sans JP, Roboto and Bravura Text from their own files,
+bundled from the `@fontsource-variable/*` and `@fontsource/bravura-text` npm
+packages at build time. The design-system reference pages (`design-system/`)
+carry the Latin subsets of Inter, JetBrains Mono, Roboto, Source Serif 4 and
+Bravura Text in `design-system/fonts/`. No page requests a font from a
+third-party service.
+
+  - Inter           Copyright 2016 The Inter Project Authors
+                    (https://github.com/rsms/inter)
+  - JetBrains Mono  Copyright 2020 The JetBrains Mono Project Authors
+                    (https://github.com/JetBrains/JetBrainsMono)
+  - Noto Sans JP    Google Inc.
+  - Roboto          Copyright 2011 The Roboto Project Authors
+                    (https://github.com/googlefonts/roboto-classic)
+  - Source Serif 4  Google Inc. (as the font package states it)
+  - Bravura Text    Copyright © 2019, Steinberg Media Technologies GmbH
+                    (http://www.steinberg.net/), with Reserved Font Name
+                    "Bravura" (the same family as the Bravura entry above;
+                    the files are unmodified)
+
+All are licensed under the SIL Open Font License, Version 1.1. The license
+text ships next to the files: `font-licenses.txt` at the root of the deployed
+site, and `design-system/fonts/LICENSE-*.txt`. The same text is available with
+a FAQ at https://openfontlicense.org
