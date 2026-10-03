@@ -27,8 +27,9 @@ cargo deny --all-features check licenses  # Dependency license allow-list (needs
                      # that touches the dependency graph — see deny.toml and
                      # docs/adr/0085-binaries-ship-a-generated-third-party-license-notice.md
 python3 scripts/third-party-licenses.py          # Regenerate THIRD_PARTY_LICENSES.md
-                     # (needs `cargo install cargo-about --locked`); add --check to
-                     # verify it is up to date without a toolchain, as CI does
+                     # (needs `cargo install cargo-about --locked` and
+                     # `pip install fonttools brotli`); add --check to verify it is
+                     # up to date without a toolchain, as CI does
 cargo +nightly fuzz run parse --fuzz-dir crates/chordpro/fuzz  # Fuzz the ChordPro
                      # parser (needs a nightly toolchain + `cargo install cargo-fuzz`;
                      # CI runs it nightly — see crates/chordpro/fuzz/README.md and

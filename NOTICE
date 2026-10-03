@@ -182,18 +182,23 @@ the first four are bundled from the `@fontsource-variable/*` npm packages at
 build time, Bravura Text is the unmodified `BravuraText.woff2` of the Bravura
 1.392 release (`design-system/fonts/bravura-text-1.392.woff2`). The
 design-system reference pages (`design-system/`) carry the Latin subsets of
-Inter, JetBrains Mono, Roboto and Source Serif 4, and the same Bravura Text
-file, in `design-system/fonts/`. No page requests a font from a third-party
-service.
+Inter, JetBrains Mono and Roboto, the publisher's unmodified Source Serif 4
+variable font files, and the same Bravura Text file, in `design-system/fonts/`.
+No page requests a font from a third-party service.
 
   - Inter           Copyright 2016 The Inter Project Authors
                     (https://github.com/rsms/inter)
   - JetBrains Mono  Copyright 2020 The JetBrains Mono Project Authors
                     (https://github.com/JetBrains/JetBrainsMono)
-  - Noto Sans JP    Google Inc.
+  - Noto Sans JP    Copyright 2014-2021 Adobe (http://www.adobe.com/), with
+                    Reserved Font Name 'Source' (the bundled files are
+                    subsets, which are Modified Versions; their primary
+                    name is "Noto Sans JP")
   - Roboto          Copyright 2011 The Roboto Project Authors
                     (https://github.com/googlefonts/roboto-classic)
-  - Source Serif 4  Google Inc. (as the font package states it)
+  - Source Serif 4  Copyright 2014 - 2023 Adobe (http://www.adobe.com/), with
+                    Reserved Font Name 'Source' (the files are the
+                    publisher's unmodified release)
   - Bravura Text    Copyright © 2015, Steinberg Media Technologies GmbH
                     (http://www.steinberg.net/), with Reserved Font Name
                     "Bravura" (the same family as the Bravura entry above;
