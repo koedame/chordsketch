@@ -2,6 +2,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { plainFontFamilies } from './vite-plain-font-families';
 import vue from '@vitejs/plugin-vue';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
@@ -9,6 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   base: '/chordsketch/',
+  css: { postcss: { plugins: [plainFontFamilies] } },
   // One plugin per binding. Each only claims its own file
   // extensions (`.tsx` / `.vue` / `.svelte`), so the three coexist
   // and every entry pays for exactly the framework it mounts.
@@ -114,6 +116,7 @@ export default defineConfig({
         resolve(here, '../ui-irealb-editor'),
         resolve(here, '../vue'),
         resolve(here, '../svelte'),
+        resolve(here, '../../design-system'),
       ],
     },
   },

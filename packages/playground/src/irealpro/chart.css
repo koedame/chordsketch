@@ -7,13 +7,13 @@
  *
  * Bravura Text glyph dependency: the `editor-irealb.html` mock
  * loads Bravura via `@font-face` from `design-system/fonts/`. The
- * playground bundles the same font file from the `@fontsource/bravura-text`
- * npm package, so the page makes no request to a font host.
+ * playground bundles that same file (Bravura 1.392, as before), so the
+ * page makes no request to a font host.
  */
 
 @font-face {
   font-family: "Bravura Text";
-  src: url("../../node_modules/@fontsource/bravura-text/files/bravura-text-latin-400-normal.woff2") format("woff2");
+  src: url("../../../../design-system/fonts/bravura-text-1.392.woff2") format("woff2");
   font-weight: normal;
   font-style: normal;
   font-display: swap;

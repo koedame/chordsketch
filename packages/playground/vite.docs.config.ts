@@ -9,11 +9,13 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { plainFontFamilies } from './vite-plain-font-families';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   base: '/chordsketch/',
+  css: { postcss: { plugins: [plainFontFamilies] } },
   plugins: [react()],
   build: {
     outDir: 'dist',
