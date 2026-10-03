@@ -207,6 +207,10 @@ class NpmAuthorTest(unittest.TestCase):
 
 
 REPO = SCRIPTS_DIR.parent
+# The reference pages of the design system serve their own copies of the web
+# fonts. They ship in no binary, so the generated notice does not list them;
+# NOTICE does, and each family's OFL sits beside its files.
+DESIGN_SYSTEM_FONTS = "design-system/fonts/"
 # Everything that ships a compiled build of the renderers, and so the Noto
 # Sans CJK subset (PDF) and the Bravura outlines (HTML, iReal), with the OFL
 # those fonts are under named beside the MIT of the source.
@@ -226,17 +230,38 @@ class FontNoticeTest(unittest.TestCase):
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
             cwd=REPO, check=True, stdout=subprocess.PIPE, text=True,
         ).stdout.split("\0")
-        fonts = {p for p in listed if p.lower().endswith((".otf", ".ttf", ".woff", ".woff2"))}
+        fonts = {
+            p for p in listed
+            if p.lower().endswith((".otf", ".ttf", ".woff", ".woff2"))
+            and not p.startswith(DESIGN_SYSTEM_FONTS)
+        }
         self.assertEqual(
             fonts, {"crates/render-pdf/assets/NotoSansCJK-subset.otf"},
             "a font file was added or removed: update BUNDLED in third-party-licenses.py (with its OFL) and NOTICE",
         )
+
+    def test_every_font_file_in_the_design_system_sits_next_to_the_license_of_its_family(self):
+        fonts_dir = REPO / DESIGN_SYSTEM_FONTS
+        families = sorted(p.stem.removeprefix("LICENSE-") for p in fonts_dir.glob("LICENSE-*.txt"))
+        self.assertTrue(families)
+        for font in fonts_dir.glob("*.woff2"):
+            self.assertTrue(
+                any(font.name.startswith(family + "-") for family in families),
+                f"{font.name} has no LICENSE-<family>.txt next to it in {DESIGN_SYSTEM_FONTS}",
+            )
+        notice = (REPO / "NOTICE").read_text()
+        self.assertIn("design-system/fonts/LICENSE-*.txt", notice)
 
     def test_the_committed_notice_reproduces_the_license_text_of_every_bundled_font(self):
         notice = (REPO / "THIRD_PARTY_LICENSES.md").read_text()
         for name, _, _, licence in tpl.BUNDLED:
             text = (REPO / licence).read_text().strip()
             self.assertIn(text, notice, name)
+
+    def test_the_notice_names_the_license_file_of_every_bundled_entry(self):
+        notice = (REPO / "NOTICE").read_text()
+        for name, _, _, licence in tpl.BUNDLED:
+            self.assertIn(licence, notice, name)
 
     def test_the_noto_subset_does_not_claim_a_reserved_font_name_the_upstream_font_does_not_declare(self):
         text = (REPO / "crates/render-pdf/assets/OFL.txt").read_text()

@@ -95,3 +95,109 @@ ChordSketch's redistribution complies by retaining this NOTICE entry and by
 shipping the OFL text in `crates/render-pdf/assets/OFL.txt` (inside the
 `chordsketch-render-pdf` crate package) and in `THIRD_PARTY_LICENSES.md`
 (inside the binary distributions named above).
+
+
+===============================================================================
+ChordPro — charango chord voicings (The ChordPro Team)
+===============================================================================
+
+The `CHARANGO` table in `crates/chordpro/src/voicings.rs` (156 voicings,
+returned by `charango_voicing`) is taken from the charango instrument file of
+ChordPro, `lib/ChordPro/res/config/charango.json` (https://github.com/ChordPro/chordpro,
+commit 1e1d7249, release R6.100.0). The file was contributed to ChordPro by
+Edwin (GitHub user edwinjc). The tuning in the built-in `charango` configuration
+preset (`crates/chordpro/src/config.rs`) is the one that file declares.
+
+Copyright (c) 2010, 2018, 2023 The ChordPro Team (the notice in ChordPro's
+README). ChordPro states that it is licensed under the Artistic License 2.0;
+the voicings are redistributed under those terms. The license is copied in
+`crates/chordpro/LICENSE-ARTISTIC-2.0.txt` and at
+https://opensource.org/license/Artistic-2.0
+
+How this copy differs from the upstream file (Artistic License 2.0, section 4):
+
+  - The 156 entries keep the upstream chord names, base fret and fret
+    numbers unchanged; the upstream table has 221 entries.
+  - The 65 entries spelled with a flat root (Bb, Db, Eb, Gb, Ab), which repeat
+    the sharp-rooted entries, are left out. `charango_voicing` resolves a flat
+    spelling to the sharp-rooted entry instead.
+  - The finger numbers (`fingers`) are not carried over.
+  - A muted string, `x` upstream, is written `-1`.
+  - The data is a Rust `static` table inside `chordsketch-chordpro`, not a
+    JSON file read at run time.
+
+The rest of ChordSketch is not a copy of ChordPro and stays under the MIT
+License. ChordSketch is a different program with a different name, and
+installing it does not prevent installing or running ChordPro (section 4(b)).
+`crates/chordpro/src/chord.rs` reimplements in Rust ChordPro's rule for
+spelling too-sharp keys as flats (`is_key_toosharp` in
+`lib/ChordPro/Chords/Parser.pm`); that rule is covered by the same notice.
+Elsewhere ChordSketch follows the behavior, directive names and configuration
+keys of ChordPro R6.100 and R6.101 without containing its Perl source.
+
+The guitar, ukulele and keyboard voicings in the same file were written for
+ChordSketch and are not taken from ChordPro (the common open-position chords
+agree with ChordPro's because they are the standard shapes).
+
+ChordSketch's redistribution complies by retaining this NOTICE entry, shipping
+the license text in `crates/chordpro/LICENSE-ARTISTIC-2.0.txt` (inside the
+`chordsketch-chordpro` crate package) and in `THIRD_PARTY_LICENSES.md` (inside
+the binary distributions named above), and naming the source in the comments
+of `crates/chordpro/src/voicings.rs`.
+
+
+===============================================================================
+ireal-reader and accompaniser — iReal Pro URL de-obfuscation and test data (MIT)
+===============================================================================
+
+`unscramble` and `obfusc50` in `crates/ireal/src/parser.rs`, which undo the
+scrambling of an `irealb://` chart, are a Rust translation of `unscramble.js`
+from pianosnake/ireal-reader (https://github.com/pianosnake/ireal-reader).
+That routine follows `irealb_parser.lua` from ironss/accompaniser
+(https://github.com/ironss/accompaniser). Several test URLs
+(`crates/ireal/tests/fixtures/parser/`, the CLI tests, and the sample charts of
+the playground and the iReal editor) are taken from the test corpus of
+pianosnake/ireal-reader, some of them shortened or edited. The parser's
+handling of the chart body follows the behavior of its `Parser.js`; the code is
+ChordSketch's own.
+
+Both projects are under the MIT License:
+
+  - Copyright (c) Florin Alexandrescu (pianosnake/ireal-reader; the repository
+    has no license file, its package.json names this author and MIT)
+  - Copyright (C) 2013 Stephen Irons (ironss/accompaniser)
+
+The MIT text, with the copyright lines above, is in
+`crates/ireal/LICENSE-THIRD-PARTY.txt` (inside the `chordsketch-ireal` crate
+package) and in `THIRD_PARTY_LICENSES.md`.
+
+
+===============================================================================
+Web fonts — Inter, JetBrains Mono, Noto Sans JP, Roboto, Source Serif 4, Bravura Text
+===============================================================================
+
+The playground and documentation site (`packages/playground/`) serve Inter,
+JetBrains Mono, Noto Sans JP, Roboto and Bravura Text from their own files,
+bundled from the `@fontsource-variable/*` and `@fontsource/bravura-text` npm
+packages at build time. The design-system reference pages (`design-system/`)
+carry the Latin subsets of Inter, JetBrains Mono, Roboto, Source Serif 4 and
+Bravura Text in `design-system/fonts/`. No page requests a font from a
+third-party service.
+
+  - Inter           Copyright 2016 The Inter Project Authors
+                    (https://github.com/rsms/inter)
+  - JetBrains Mono  Copyright 2020 The JetBrains Mono Project Authors
+                    (https://github.com/JetBrains/JetBrainsMono)
+  - Noto Sans JP    Google Inc.
+  - Roboto          Copyright 2011 The Roboto Project Authors
+                    (https://github.com/googlefonts/roboto-classic)
+  - Source Serif 4  Google Inc. (as the font package states it)
+  - Bravura Text    Copyright © 2019, Steinberg Media Technologies GmbH
+                    (http://www.steinberg.net/), with Reserved Font Name
+                    "Bravura" (the same family as the Bravura entry above;
+                    the files are unmodified)
+
+All are licensed under the SIL Open Font License, Version 1.1. The license
+text ships next to the files: `font-licenses.txt` at the root of the deployed
+site, and `design-system/fonts/LICENSE-*.txt`. The same text is available with
+a FAQ at https://openfontlicense.org

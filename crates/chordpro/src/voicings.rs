@@ -4,8 +4,18 @@
 //! Provides 312 pre-defined chord voicings:
 //! - 60 guitar voicings (5 families × 12 roots)
 //! - 36 ukulele voicings (3 families × 12 roots)
-//! - 156 charango voicings (13 families × 12 roots, ported from upstream)
+//! - 156 charango voicings (13 families × 12 roots, taken from upstream
+//!   ChordPro; see below)
 //! - 60 keyboard/piano voicings (5 families × 12 roots: major, minor, dom7, maj7, min7)
+//!
+//! # Provenance
+//!
+//! Only the charango table is copied from ChordPro; it stays under ChordPro's
+//! Artistic License 2.0 (`LICENSE-ARTISTIC-2.0.txt` in this crate, `NOTICE` at
+//! the repository root). The guitar, ukulele and keyboard tables were written
+//! for this crate and follow only upstream's string order and fret encoding;
+//! the common open-position chords agree with upstream's because they are the
+//! standard shapes.
 //!
 //! All data is stored as compile-time static data — no external files, no runtime I/O.
 //! The lookup priority is:
@@ -620,10 +630,14 @@ const UKULELE_DOM7: &[StaticVoicing] = &[
 // ---------------------------------------------------------------------------
 // Charango voicings (5 strings, standard tuning G4 C5 E4 A4 E5)
 //
-// 156 voicings ported from upstream ChordPro
+// 156 voicings taken from upstream ChordPro
 // `lib/ChordPro/res/config/charango.json` (commit 1e1d7249, R6.100.0,
-// contributed by @edwinjc). Upstream stores 220+ entries including flat-
-// rooted duplicates (Bb / Db / Eb / Gb / Ab); the 65 flat duplicates are
+// Copyright (c) The ChordPro Team, contributed to ChordPro by edwinjc),
+// redistributed under the Artistic License 2.0 — see `NOTICE` and
+// `crates/chordpro/LICENSE-ARTISTIC-2.0.txt`. Changes from upstream: the
+// `fingers` arrays are not carried over, and the data is a Rust table.
+// Upstream stores 221 entries including flat-rooted duplicates
+// (Bb / Db / Eb / Gb / Ab); the 65 flat duplicates are
 // dropped on import — `flat_to_sharp` resolves cross-spelling at lookup,
 // matching the guitar/ukulele convention.
 //
@@ -1500,8 +1514,10 @@ pub fn ukulele_voicing(chord_name: &str) -> Option<DiagramData> {
 /// Accepts both sharp and flat spellings; flat-rooted lookups are
 /// resolved via `flat_to_sharp` before consulting the table.
 ///
-/// Data ported from upstream ChordPro `lib/ChordPro/res/config/charango.json`
-/// (commit `1e1d7249`, R6.100.0, contributed by [@edwinjc](https://github.com/edwinjc)).
+/// Data taken from upstream ChordPro `lib/ChordPro/res/config/charango.json`
+/// (commit `1e1d7249`, R6.100.0, contributed to ChordPro by
+/// [edwinjc](https://github.com/edwinjc)), under the Artistic License 2.0.
+/// See `NOTICE` for the changes.
 #[must_use]
 pub fn charango_voicing(chord_name: &str) -> Option<DiagramData> {
     let canonical = flat_to_sharp(chord_name);

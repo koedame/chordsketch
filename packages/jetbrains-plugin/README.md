@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo.svg" alt="ChordSketch" width="80" height="80">
 </p>
 
-# ChordPro (JetBrains Plugin)
+# ChordSketch for JetBrains IDEs
 
 Syntax highlighting for [ChordPro](https://www.chordpro.org/) files in
 JetBrains IDEs (IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, etc.).
@@ -21,7 +21,7 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project
 Install from the [JetBrains Marketplace](https://plugins.jetbrains.com/):
 
 1. Open **Settings** → **Plugins** → **Marketplace**
-2. Search for **ChordPro**
+2. Search for **ChordSketch**
 3. Click **Install**
 
 ## Requirements
@@ -74,6 +74,10 @@ cp ../../syntaxes/language-configuration.json textmate/chordpro/
 - [ChordSketch repository](https://github.com/koedame/chordsketch)
 - [Playground](https://chordsketch.koeda.me)
 - [Issue tracker](https://github.com/koedame/chordsketch/issues)
+
+## Other people's names
+
+ChordPro is the name of a file format and of its reference program by The ChordPro Team; iReal Pro is a product of Technimo LLC; MusicXML is published by the W3C Music Notation Community Group; Bravura is a font by Steinberg Media Technologies GmbH. These names belong to their owners. ChordSketch is not affiliated with or endorsed by any of them.
 
 ## License
 

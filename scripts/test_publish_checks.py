@@ -37,6 +37,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -56,6 +57,9 @@ def packed(path: str, data: bytes = b"", size: int | None = None) -> checks.Pack
 
 # A third-party notice as far as the checks look: it reproduces the OFL the fonts are under.
 NOTICE_WITH_OFL = b"# Third-Party Licenses\n\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n"
+
+# A third-party notice as far as the checks look: it reproduces the Artistic License the charango voicings are under.
+NOTICE_WITH_ARTISTIC = b"# Third-Party Licenses\n\nArtistic License Version 2.0\nSubmitted: March 14, 2007\n"
 
 
 def write_tarball(path: Path, top: str, files: dict[str, bytes]) -> None:
@@ -286,6 +290,20 @@ class CrateOflTest(unittest.TestCase):
 
     def test_when_a_crate_is_plain_mit_no_ofl_text_is_required(self) -> None:
         self.assertEqual(checks.crate_ofl_problems("chordsketch-chordpro", "MIT", [packed("src/lib.rs", b"//")]), [])
+
+
+class CrateArtisticTest(unittest.TestCase):
+    def test_when_a_crate_declares_the_artistic_license_and_packages_its_text_it_passes(self) -> None:
+        files = [packed("LICENSE-ARTISTIC-2.0.txt", NOTICE_WITH_ARTISTIC)]
+        self.assertEqual(checks.crate_artistic_problems("chordsketch-chordpro", "MIT AND Artistic-2.0", files), [])
+
+    def test_when_a_crate_declares_the_artistic_license_but_packages_no_text_it_is_reported(self) -> None:
+        problems = checks.crate_artistic_problems("chordsketch-chordpro", "MIT AND Artistic-2.0", [packed("src/lib.rs", b"//")])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("holds no copy of the Artistic License 2.0", problems[0])
+
+    def test_when_a_crate_is_plain_mit_no_artistic_text_is_required(self) -> None:
+        self.assertEqual(checks.crate_artistic_problems("chordsketch-render-pdf", "MIT AND OFL-1.1", [packed("src/lib.rs", b"//")]), [])
 
 
 class FormulaDeclaresTest(unittest.TestCase):
@@ -1351,6 +1369,45 @@ class XcframeworkArchiveTest(unittest.TestCase):
 
         problems = checks.xcframework_archive_problems(runner)
         self.assertTrue(any("no chordsketchFFI.xcframework at its root" in p for p in problems), problems)
+
+
+class JetbrainsNameProblemsTest(unittest.TestCase):
+    """The Marketplace approval guidelines bound <name> tighter than plugin.xml's own schema."""
+
+    @staticmethod
+    def runner(cmd, cwd, env=None):
+        return checks.subprocess.CompletedProcess(cmd, 0, "")
+
+    def problems(self, name: str) -> list[str]:
+        plugin_xml = (
+            "<idea-plugin><id>me.koeda.chordsketch</id>"
+            f"<name>{name}</name>"
+            "<version>0.1.0</version>"
+            "<vendor>koedame</vendor><description>d</description>"
+            '<idea-version since-build="241"/></idea-plugin>'
+        ).encode()
+        jar = io.BytesIO()
+        with zipfile.ZipFile(jar, "w") as archive:
+            archive.writestr("META-INF/plugin.xml", plugin_xml)
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            distributions = root / checks.JETBRAINS_DIR / "build/distributions"
+            distributions.mkdir(parents=True)
+            with zipfile.ZipFile(distributions / "chordsketch-0.1.0.zip", "w") as outer:
+                outer.writestr("chordsketch/lib/chordsketch.jar", jar.getvalue())
+            with mock.patch.object(checks, "REPO_ROOT", root):
+                return checks.jetbrains_problems(self.runner)
+
+    def test_when_the_name_is_within_limits_and_free_of_forbidden_words_there_is_no_problem(self) -> None:
+        self.assertEqual(self.problems("ChordSketch"), [])
+
+    def test_when_the_name_is_over_30_characters_it_is_a_problem(self) -> None:
+        problems = self.problems("A" * 31)
+        self.assertTrue(any("over the Marketplace's 30 characters" in p for p in problems), problems)
+
+    def test_when_the_name_contains_a_forbidden_word_it_is_a_problem(self) -> None:
+        problems = self.problems("ChordSketch IntelliJ Plugin")
+        self.assertTrue(any("contains 'Plugin', 'IntelliJ' or 'JetBrains'" in p for p in problems), problems)
 
 
 if __name__ == "__main__":
