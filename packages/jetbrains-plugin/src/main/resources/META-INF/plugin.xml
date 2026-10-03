@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>me.koeda.chordsketch</id>
-    <name>ChordPro</name>
+    <name>ChordSketch</name>
     <vendor email="noreply@koeda.me" url="https://github.com/koedame/chordsketch">koedame</vendor>
 
     <description><![CDATA[
@@ -9,6 +9,9 @@
 
 <p>Part of the <a href="https://github.com/koedame/chordsketch">ChordSketch</a>
 project &mdash; a Rust implementation of the ChordPro file format.</p>
+
+<p>ChordPro (The ChordPro Team) and iReal Pro (Technimo LLC) are names of
+their owners. This plugin is not affiliated with or endorsed by them.</p>
 
 <h3>Features</h3>
 <ul>
