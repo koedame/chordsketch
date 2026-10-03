@@ -696,8 +696,10 @@ fn nonempty(s: &str) -> Option<String> {
     }
 }
 
-/// Implements the iReal Pro obfusc50 unscramble described in
-/// `pianosnake/ireal-reader/unscramble.js`. The body is processed
+/// Implements the iReal Pro obfusc50 unscramble. This is a Rust translation of
+/// `pianosnake/ireal-reader/unscramble.js` (MIT, Copyright (c) Florin
+/// Alexandrescu), which follows `ironss/accompaniser` (MIT, Copyright (C) 2013
+/// Stephen Irons); see `NOTICE` and `LICENSE-THIRD-PARTY.txt`. The body is processed
 /// in 50-character chunks; each chunk is unscrambled by mirroring
 /// the byte ranges `0..5` ↔ `45..50` and `10..24` ↔ `26..40`
 /// around the chunk centre. The trailing-< 2-bytes carve-out

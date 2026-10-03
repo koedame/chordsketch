@@ -23,7 +23,8 @@ What goes in:
     playground and the VS Code extension. The tooling that only builds or
     tests them (`TOOLING`) is left out; anything not listed there is
     included, so a newly added dependency is covered by default
-  - the fonts and glyph outlines copied into the source (`BUNDLED`)
+  - the fonts, glyph outlines, data tables and translated code copied into
+    the source (`BUNDLED`)
 
 `--check` needs no Rust or Node toolchain. Both hashes in the header are
 recomputed from the files in the checkout: the first covers everything the
@@ -76,6 +77,25 @@ BUNDLED = [
         "in every binary that links it. It is redistributed under the SIL "
         "Open Font License 1.1.",
         "crates/render-pdf/assets/OFL.txt",
+    ),
+    (
+        "ChordPro charango chord voicings",
+        "https://github.com/ChordPro/chordpro",
+        "The 156 charango voicings in chordsketch-chordpro are taken from "
+        "ChordPro's charango.json (commit 1e1d7249, release R6.100.0). They are "
+        "redistributed under the Artistic License 2.0, with the changes "
+        "described in NOTICE.",
+        "crates/chordpro/LICENSE-ARTISTIC-2.0.txt",
+    ),
+    (
+        "pianosnake/ireal-reader and ironss/accompaniser",
+        "https://github.com/pianosnake/ireal-reader",
+        "The iReal Pro URL de-obfuscation in chordsketch-ireal is a Rust "
+        "translation of ireal-reader's unscramble.js, which follows "
+        "accompaniser's irealb_parser.lua, and some test URLs come from "
+        "ireal-reader's test corpus. Both are under the MIT License "
+        "(see also NOTICE).",
+        "crates/ireal/LICENSE-THIRD-PARTY.txt",
     ),
 ]
 
@@ -474,7 +494,7 @@ def render(cargo: dict, npm: dict) -> str:
             f = fence(text)
             out.append(f"{f}\n{text}\n{f}\n")
 
-    out.append("## Fonts and glyphs copied into the source\n")
+    out.append("## Fonts, data and code copied into the source\n")
     for title, url, note, rel in BUNDLED:
         text = normalize((ROOT / rel).read_text(encoding="utf-8"))
         f = fence(text)

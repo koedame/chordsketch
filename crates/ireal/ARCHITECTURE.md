@@ -24,10 +24,11 @@ For the AST shape itself — what fields a chart carries, how chords
 sit inside bars, how repeats and endings nest — the closest public
 artefact is the [`daumling/ireal-renderer`][daumling] JavaScript
 project, which the AC for #2055 explicitly nominates as the
-reference. We ported that data model and intentionally did **not**
-port the JS rendering code — rendering lives in
-`chordsketch-render-ireal` (#2058) and binds to the data model
-through this crate's public API.
+reference. The types here are designed independently of that project's data
+model (a flat list of cells, rather than this crate's chart of sections and
+bars); no code of it is used, and the JS rendering code is not ported either
+— rendering lives in `chordsketch-render-ireal` (#2058) and binds to the data
+model through this crate's public API.
 
 [spec]: https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol
 [devdocs]: https://www.irealpro.com/developer-docs
