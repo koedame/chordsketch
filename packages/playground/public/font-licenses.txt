@@ -2,7 +2,8 @@ Web fonts served by the ChordSketch playground and documentation site
 =====================================================================
 
 The site serves Inter, JetBrains Mono, Noto Sans JP, Roboto and Bravura Text
-from its own files (the @fontsource npm packages), not from a font service.
+from its own files (the @fontsource-variable npm packages, and the Bravura 1.392
+release for Bravura Text), not from a font service.
 All five are licensed under the SIL Open Font License, Version 1.1, reproduced
 below. Copyright notices, as the font packages state them:
 
@@ -19,7 +20,7 @@ Roboto
   Copyright 2011 The Roboto Project Authors (https://github.com/googlefonts/roboto-classic) Roboto-Italic[wdth,wght].ttf: Copyright 2011 The Roboto Project Authors (https://github.com/googlefonts/roboto-classic)
 
 Bravura Text
-  Copyright © 2019, Steinberg Media Technologies GmbH (http://www.steinberg.net/),
+  Copyright © 2015, Steinberg Media Technologies GmbH (http://www.steinberg.net/),
   with Reserved Font Name "Bravura".
 
 

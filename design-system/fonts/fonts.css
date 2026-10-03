@@ -13,7 +13,7 @@
 
 /* inter-latin-ext-wght-normal */
 @font-face {
-  font-family: 'Inter Variable';
+  font-family: 'Inter';
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
@@ -23,7 +23,7 @@
 
 /* inter-latin-wght-normal */
 @font-face {
-  font-family: 'Inter Variable';
+  font-family: 'Inter';
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
@@ -33,7 +33,7 @@
 
 /* jetbrains-mono-latin-ext-wght-normal */
 @font-face {
-  font-family: 'JetBrains Mono Variable';
+  font-family: 'JetBrains Mono';
   font-style: normal;
   font-display: swap;
   font-weight: 100 800;
@@ -43,7 +43,7 @@
 
 /* jetbrains-mono-latin-wght-normal */
 @font-face {
-  font-family: 'JetBrains Mono Variable';
+  font-family: 'JetBrains Mono';
   font-style: normal;
   font-display: swap;
   font-weight: 100 800;
@@ -53,7 +53,7 @@
 
 /* roboto-latin-ext-wght-normal */
 @font-face {
-  font-family: 'Roboto Variable';
+  font-family: 'Roboto';
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
@@ -63,7 +63,7 @@
 
 /* roboto-latin-wght-normal */
 @font-face {
-  font-family: 'Roboto Variable';
+  font-family: 'Roboto';
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
@@ -73,7 +73,7 @@
 
 /* source-serif-4-latin-wght-normal */
 @font-face {
-  font-family: 'Source Serif 4 Variable';
+  font-family: 'Source Serif 4';
   font-style: normal;
   font-display: swap;
   font-weight: 200 900;
@@ -83,7 +83,7 @@
 
 /* source-serif-4-latin-wght-italic */
 @font-face {
-  font-family: 'Source Serif 4 Variable';
+  font-family: 'Source Serif 4';
   font-style: italic;
   font-display: swap;
   font-weight: 200 900;
