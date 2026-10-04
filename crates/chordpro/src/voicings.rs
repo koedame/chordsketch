@@ -7,7 +7,7 @@
 //! - 60 keyboard/piano voicings (5 families × 12 roots: major, minor, dom7, maj7, min7)
 //!
 //! The charango has no table: its diagrams are searched out from the chord's
-//! tones by [`crate::voicing_synth`] (see [`charango_voicing`]).
+//! tones (see [`charango_voicing`]).
 //!
 //! # Provenance
 //!
