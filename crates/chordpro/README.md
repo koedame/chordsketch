@@ -39,7 +39,4 @@ assert_eq!(song.metadata.title.as_deref(), Some("Amazing Grace"));
 
 ## License
 
-[MIT](LICENSE) for the Rust source. The crate embeds the charango chord
-voicings from ChordPro's `charango.json` (156 entries in `src/voicings.rs`),
-which are under the [Artistic License 2.0](LICENSE-ARTISTIC-2.0.txt); see the
-repository's `NOTICE` for what was taken and how it differs.
+[MIT](LICENSE).

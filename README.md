@@ -534,7 +534,6 @@ directory, so a package you download carries its own copy.
 | `packages/playground/` (the web playground) | [AGPL-3.0-only](packages/playground/LICENSE) |
 | `packages/ui-irealb-editor/` (the iReal Pro editor the playground and the desktop app embed) | [AGPL-3.0-only](packages/ui-irealb-editor/LICENSE) |
 | `crates/`, the other `packages/`, `syntaxes/`, `design-system/`, `docs/`, `scripts/`, `packaging/` | [MIT](LICENSE) |
-| The charango chord voicings (`chordsketch-chordpro`) | [Artistic License 2.0](NOTICE) — taken from ChordPro; `chordsketch-chordpro` declares `MIT AND Artistic-2.0`, the rest of that crate is MIT |
 | The Bravura music font glyphs (`chordsketch-render-html`, `chordsketch-render-ireal`, `@chordsketch/react`) and the Noto Sans CJK JP subset (`chordsketch-render-pdf`) | [SIL OFL 1.1](NOTICE) — any crate or package that embeds one of these fonts, directly or by depending on one of these crates, declares `MIT AND OFL-1.1` |
 
 `@chordsketch/react` and the other published libraries are MIT, so you can

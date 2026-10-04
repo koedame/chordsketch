@@ -82,15 +82,6 @@ BUNDLED = [
         "crates/render-pdf/assets/OFL.txt",
     ),
     (
-        "ChordPro charango chord voicings",
-        "https://github.com/ChordPro/chordpro",
-        "The 156 charango voicings in chordsketch-chordpro are taken from "
-        "ChordPro's charango.json (commit 1e1d7249, release R6.100.0). They are "
-        "redistributed under the Artistic License 2.0, with the changes "
-        "described in NOTICE.",
-        "crates/chordpro/LICENSE-ARTISTIC-2.0.txt",
-    ),
-    (
         "pianosnake/ireal-reader and ironss/accompaniser",
         "https://github.com/pianosnake/ireal-reader",
         "The iReal Pro URL de-obfuscation in chordsketch-ireal is a Rust "

@@ -172,7 +172,6 @@ COMPILED_SUFFIXES = (".wasm", ".node", ".so", ".dylib", ".dll", ".pyd")
 
 
 OFL_TEXT = b"SIL OPEN FONT LICENSE Version 1.1"
-ARTISTIC_TEXT = b"Artistic License Version 2.0"
 
 
 def font_license_problems(label: str, files: list[PackedFile], notice: str) -> list[str]:
@@ -218,9 +217,8 @@ def license_problems(label: str, files: list[PackedFile], location: str = "LICEN
     """The MIT text a published package declares must be in the package itself.
 
     Every published package here is MIT (`AND OFL-1.1` for the three that carry
-    Bravura glyphs or the Noto Sans CJK JP subset, `AND Artistic-2.0` for
-    chordsketch-chordpro's charango voicings; the AGPL-3.0-only application
-    layer is never published).
+    Bravura glyphs or the Noto Sans CJK JP subset; the AGPL-3.0-only
+    application layer is never published).
     A registry tarball holds one directory, so a package that relies on the
     repository's root `LICENSE` ships a licence field with no licence text.
     `location` is where the artifact keeps it: the package root for crates,
@@ -386,13 +384,6 @@ def crate_ofl_problems(crate: str, license: str | None, files: list[PackedFile])
     return [f"{crate} declares `{license}` but the packaged crate holds no copy of the SIL Open Font License"]
 
 
-def crate_artistic_problems(crate: str, license: str | None, files: list[PackedFile]) -> list[str]:
-    """A crate that declares the Artistic License (it embeds ChordPro's charango voicings) packages the license text."""
-    if "Artistic-2.0" not in (license or "") or any(ARTISTIC_TEXT in packed.data for packed in files):
-        return []
-    return [f"{crate} declares `{license}` but the packaged crate holds no copy of the Artistic License 2.0"]
-
-
 def crates_problems(tree: Path, crates: tuple[str, ...], target_dir: Path, runner: Runner = run) -> list[str]:
     """Everything this module can check about publishing `crates` from `tree`.
 
@@ -440,7 +431,6 @@ def crates_problems(tree: Path, crates: tuple[str, ...], target_dir: Path, runne
         problems += license_problems(crate, files)
         problems += crate_readme_problems(crate, by_name[crate].get("readme"), files)
         problems += crate_ofl_problems(crate, by_name[crate].get("license"), files)
-        problems += crate_artistic_problems(crate, by_name[crate].get("license"), files)
     return problems + crate_size_problems(sizes)
 
 
