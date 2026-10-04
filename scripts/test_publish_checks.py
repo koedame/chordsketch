@@ -496,7 +496,18 @@ class VsixTest(unittest.TestCase):
         path = scratch / name
         vsixmanifest = f'<Identity Id="chordsketch" TargetPlatform="{target}" />'.encode() if target else b"<Identity />"
         engine = {glob: b"\0asm" for glob in checks.VSIX_LARGE_FILES}
-        write_zip(path, {"extension.vsixmanifest": vsixmanifest, "extension/package.json": json.dumps(manifest).encode(), "extension/icon.png": png(256, 256), "extension/THIRD_PARTY_LICENSES.md": NOTICE_WITH_OFL, **engine, **extra})
+        write_zip(
+            path,
+            {
+                "extension.vsixmanifest": vsixmanifest,
+                "extension/package.json": json.dumps(manifest).encode(),
+                "extension/icon.png": png(256, 256),
+                "extension/THIRD_PARTY_LICENSES.md": NOTICE_WITH_OFL,
+                "extension/LICENSE.txt": MIT_TEXT,
+                **engine,
+                **extra,
+            },
+        )
         return path
 
     def test_when_the_manifest_is_complete_and_the_icon_is_a_large_png_the_universal_vsix_passes(self) -> None:
@@ -507,10 +518,37 @@ class VsixTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as scratch:
             path = Path(scratch) / "chordsketch-1.2.0.vsix"
             engine = {glob: b"\0asm" for glob in checks.VSIX_LARGE_FILES}
-            write_zip(path, {"extension.vsixmanifest": b"<Identity />", "extension/package.json": json.dumps(self.MANIFEST).encode(), "extension/icon.png": png(256, 256), **engine})
+            write_zip(
+                path,
+                {
+                    "extension.vsixmanifest": b"<Identity />",
+                    "extension/package.json": json.dumps(self.MANIFEST).encode(),
+                    "extension/icon.png": png(256, 256),
+                    "extension/LICENSE.txt": MIT_TEXT,
+                    **engine,
+                },
+            )
             problems = checks.vsix_problems(path, None)
         self.assertEqual(len(problems), 1)
         self.assertIn("extension/THIRD_PARTY_LICENSES.md", problems[0])
+
+    def test_when_the_vsix_lacks_the_license_text_it_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            path = Path(scratch) / "chordsketch-1.2.0.vsix"
+            engine = {glob: b"\0asm" for glob in checks.VSIX_LARGE_FILES}
+            write_zip(
+                path,
+                {
+                    "extension.vsixmanifest": b"<Identity />",
+                    "extension/package.json": json.dumps(self.MANIFEST).encode(),
+                    "extension/icon.png": png(256, 256),
+                    "extension/THIRD_PARTY_LICENSES.md": NOTICE_WITH_OFL,
+                    **engine,
+                },
+            )
+            problems = checks.vsix_problems(path, None)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("extension/LICENSE.txt", problems[0])
 
     def test_when_the_version_carries_a_prerelease_suffix_the_marketplace_would_refuse_it(self) -> None:
         problems = checks.vsix_manifest_problems("x", {**self.MANIFEST, "version": "1.2.0-beta.1"}, [packed("extension/icon.png", png(256, 256))])
@@ -762,7 +800,7 @@ class MavenTest(unittest.TestCase):
         self.assertEqual(len(missing), len(checks.JAR_NATIVE_LIBRARIES))
 
 
-    def jar_problems(self, *, notice: bool) -> list[str]:
+    def jar_problems(self, *, notice: bool, license: bool = True) -> list[str]:
         pom = re.sub(rb"<dependencies>.*</dependencies>", b"", self.POM, flags=re.DOTALL)
         with tempfile.TemporaryDirectory() as scratch:
             repository = Path(scratch)
@@ -776,6 +814,8 @@ class MavenTest(unittest.TestCase):
             files = {path: b"lib" for path in checks.JAR_NATIVE_LIBRARIES}
             if notice:
                 files[f"META-INF/{checks.THIRD_PARTY_NOTICE}"] = NOTICE_WITH_OFL
+            if license:
+                files["META-INF/LICENSE"] = (checks.REPO_ROOT / "LICENSE").read_bytes()
             write_zip(directory / "chordsketch-1.2.0.jar", files)
             return checks.maven_repository_problems(repository, "1.2.0", runner=lambda cmd, cwd, env=None: checks.subprocess.CompletedProcess(cmd, 0, ""))
 
@@ -786,6 +826,11 @@ class MavenTest(unittest.TestCase):
         problems = self.jar_problems(notice=False)
         self.assertEqual(len(problems), 1)
         self.assertIn(f"META-INF/{checks.THIRD_PARTY_NOTICE}", problems[0])
+
+    def test_when_the_jar_lacks_the_license_text_it_is_reported(self) -> None:
+        problems = self.jar_problems(notice=True, license=False)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("META-INF/LICENSE", problems[0])
 
 
 class ContainerImageTest(unittest.TestCase):
@@ -1346,9 +1391,9 @@ class SwiftPackageProblemsTest(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("zip"), "the release step zips with `zip`")
 class XcframeworkArchiveTest(unittest.TestCase):
-    """The XCFramework zip is the binary SwiftPM and the pod download, so it carries the notice."""
+    """The XCFramework zip is the binary SwiftPM and the pod download, so it carries the notice and the MIT text."""
 
-    def test_when_the_release_step_zips_the_framework_with_the_third_party_notice_there_is_no_problem(self) -> None:
+    def test_when_the_release_step_zips_the_framework_with_the_license_and_the_third_party_notice_there_is_no_problem(self) -> None:
         self.assertEqual(checks.xcframework_archive_problems(), [])
 
     def test_when_the_release_step_leaves_the_third_party_notice_out_it_is_a_problem(self) -> None:
@@ -1360,6 +1405,16 @@ class XcframeworkArchiveTest(unittest.TestCase):
         problems = checks.xcframework_archive_problems(runner)
         self.assertEqual(len(problems), 1)
         self.assertIn(checks.THIRD_PARTY_NOTICE, problems[0])
+
+    def test_when_the_release_step_leaves_the_license_out_it_is_a_problem(self) -> None:
+        def runner(cmd, cwd, env=None):
+            script = Path(cmd[-1])
+            script.write_text(script.read_text().replace(" LICENSE", ""))
+            return checks.run(cmd, cwd, env)
+
+        problems = checks.xcframework_archive_problems(runner)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("`LICENSE`", problems[0])
 
     def test_when_the_release_step_leaves_the_framework_out_it_is_a_problem(self) -> None:
         def runner(cmd, cwd, env=None):
@@ -1378,7 +1433,7 @@ class JetbrainsNameProblemsTest(unittest.TestCase):
     def runner(cmd, cwd, env=None):
         return checks.subprocess.CompletedProcess(cmd, 0, "")
 
-    def problems(self, name: str) -> list[str]:
+    def problems(self, name: str, *, license: bool = True) -> list[str]:
         plugin_xml = (
             "<idea-plugin><id>me.koeda.chordsketch</id>"
             f"<name>{name}</name>"
@@ -1391,15 +1446,23 @@ class JetbrainsNameProblemsTest(unittest.TestCase):
             archive.writestr("META-INF/plugin.xml", plugin_xml)
         with tempfile.TemporaryDirectory() as scratch:
             root = Path(scratch)
+            (root / "LICENSE").write_bytes(MIT_TEXT)
             distributions = root / checks.JETBRAINS_DIR / "build/distributions"
             distributions.mkdir(parents=True)
             with zipfile.ZipFile(distributions / "chordsketch-0.1.0.zip", "w") as outer:
                 outer.writestr("chordsketch/lib/chordsketch.jar", jar.getvalue())
+                if license:
+                    outer.writestr("chordsketch/LICENSE", MIT_TEXT)
             with mock.patch.object(checks, "REPO_ROOT", root):
                 return checks.jetbrains_problems(self.runner)
 
     def test_when_the_name_is_within_limits_and_free_of_forbidden_words_there_is_no_problem(self) -> None:
         self.assertEqual(self.problems("ChordSketch"), [])
+
+    def test_when_the_plugin_zip_lacks_the_license_text_it_is_a_problem(self) -> None:
+        problems = self.problems("ChordSketch", license=False)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("chordsketch/LICENSE", problems[0])
 
     def test_when_the_name_is_over_30_characters_it_is_a_problem(self) -> None:
         problems = self.problems("A" * 31)

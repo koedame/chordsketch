@@ -883,6 +883,7 @@ def vsix_problems(path: Path, target: VscodeTarget | None) -> list[str]:
         return [f"{label} has no extension/package.json"]
     problems = vsix_manifest_problems(label, json.loads(manifest_file.data), files)
     problems += notice_problems(label, files, "extension/")
+    problems += license_problems(label, files, "extension/LICENSE.txt")
     large = VSIX_LARGE_FILES
     servers = sorted(f.path for f in files if f.path.startswith("extension/server/"))
     if target is None and servers:
@@ -1221,6 +1222,7 @@ def maven_repository_problems(repository: Path, version: str, runner: Runner = r
             problems.append(f"{base}.jar has no `{library}`, where JNA looks for the native library on that platform")
     problems += content_problems(f"{base}.jar", jar, JAR_LARGE_FILES)
     problems += notice_problems(f"{base}.jar", jar, "META-INF/")
+    problems += license_problems(f"{base}.jar", jar, "META-INF/LICENSE")
 
     with tempfile.TemporaryDirectory(prefix="maven-smoke-") as scratch:
         classpath = [str(directory / f"{base}.jar")]
@@ -1763,7 +1765,7 @@ def swift_package_problems(version: str, runner: Runner = run) -> list[str]:
 
 
 def xcframework_archive_problems(runner: Runner = run) -> list[str]:
-    """The XCFramework zip holds the framework at its root with the third-party notice beside it.
+    """The XCFramework zip holds the framework at its root with the MIT text and the third-party notice beside it.
 
     The zip is built on a macOS runner from five Rust targets, so it cannot be
     rebuilt here. The step that zips it is lifted out of `swift.yml` and run on
@@ -1775,6 +1777,7 @@ def xcframework_archive_problems(runner: Runner = run) -> list[str]:
         (directory / "chordsketchFFI.xcframework").mkdir()
         (directory / "chordsketchFFI.xcframework/Info.plist").write_text("<plist/>")
         shutil.copyfile(REPO_ROOT / THIRD_PARTY_NOTICE, directory / THIRD_PARTY_NOTICE)
+        shutil.copyfile(REPO_ROOT / "LICENSE", directory / "LICENSE")
         done = run_release_step("swift.yml", "assemble-xcframework", "Package XCFramework", directory, {}, runner)
         if done.returncode != 0:
             return [f"swift.yml `assemble-xcframework` / `Package XCFramework` failed:\n{tail(done.stdout)}"]
@@ -1784,7 +1787,7 @@ def xcframework_archive_problems(runner: Runner = run) -> list[str]:
         problems = []
         if not any(f.path.startswith("chordsketchFFI.xcframework/") for f in files):
             problems.append(f"{label} has no chordsketchFFI.xcframework at its root, where SwiftPM and the podspec look for it")
-        return problems + notice_problems(label, files, always=True)
+        return problems + notice_problems(label, files, always=True) + license_problems(label, files)
     finally:
         shutil.rmtree(directory, ignore_errors=True)
 
@@ -2210,7 +2213,7 @@ def jetbrains_problems(runner: Runner = run) -> list[str]:
     idea_version = root.find("idea-version")
     if idea_version is None or not idea_version.get("since-build"):
         problems.append("plugin.xml has no <idea-version since-build>")
-    return problems + content_problems(plugin.name, files, ())
+    return problems + license_problems(plugin.name, files, "chordsketch/LICENSE") + content_problems(plugin.name, files, ())
 
 
 # ---------------------------------------------------------------- nixpkgs
