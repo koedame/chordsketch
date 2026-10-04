@@ -36,11 +36,11 @@ import './codemirror-editor.css';
 // ships its own stylesheet which we load alongside.
 import '@chordsketch/ui-irealb-editor/style.css';
 import {
-  checkForUpdates,
-  isAutoUpdateOptedOut,
-  setAutoUpdateOptOut,
-  startAutoUpdateLoop,
+  armAutoUpdateLoop,
+  checkForUpdatesNow,
+  toggleAutoUpdate,
 } from './updater';
+import { buildUpdateMenuItems } from './update-menu';
 
 type ExportFormat = 'pdf' | 'html';
 
@@ -89,13 +89,6 @@ const EXPORT_FILTERS: Record<
 let currentPath: string | null = null;
 let lastSavedContent = '';
 let recents: string[] = [];
-
-/**
- * Cancel handle returned by `startAutoUpdateLoop`. Module-scoped
- * because the menu handlers need to stop the loop when the user
- * toggles the opt-out preference.
- */
-let autoUpdateCancel: (() => void) | null = null;
 
 // ---- Editor mode ---------------------------------------------------------
 //
@@ -733,6 +726,11 @@ async function buildAppMenu(rebuildMenu: MenuRebuilder): Promise<Menu> {
   ]);
 
   const recentsSubmenu = await buildRecentsSubmenu(rebuildMenu);
+  const updateItems = await buildUpdateMenuItems({
+    toggleAutoUpdate,
+    checkForUpdatesNow,
+    rebuildMenu,
+  });
 
   const appMenu = await Submenu.new({
     text: DEFAULT_WINDOW_TITLE,
@@ -802,7 +800,7 @@ async function buildAppMenu(rebuildMenu: MenuRebuilder): Promise<Menu> {
   });
   const helpMenu = await Submenu.new({
     text: 'Help',
-    items: [homepageItem],
+    items: [homepageItem, ...updateItems],
   });
 
   return Menu.new({
@@ -885,7 +883,7 @@ async function bootstrap(rootEl: HTMLElement): Promise<void> {
   // Fire the first update check + arm the 24-hour re-check loop.
   // Intentionally fire-and-forget: a failed check on a slow / no
   // network must not block the rest of the boot sequence.
-  autoUpdateCancel = startAutoUpdateLoop();
+  armAutoUpdateLoop();
 }
 
 /**
@@ -933,42 +931,6 @@ async function waitForBridge(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, interval));
     interval = Math.min(interval * 2, BRIDGE_WAIT_MAX_INTERVAL_MS);
   }
-}
-
-/**
- * Toggle the "Check for updates automatically" preference. Stops
- * the running loop when the user opts out, and restarts it on the
- * way back in so the next tick isn't a day away.
- *
- * If `setAutoUpdateOptOut` cannot persist the preference (e.g.
- * Safari private mode, full disk), surface a dialog so the user
- * knows their choice will need to be reapplied next launch.
- */
-export async function toggleAutoUpdate(): Promise<void> {
-  const nextOptedOut = !isAutoUpdateOptedOut();
-  const persisted = setAutoUpdateOptOut(nextOptedOut);
-  if (nextOptedOut) {
-    autoUpdateCancel?.();
-    autoUpdateCancel = null;
-  } else if (!autoUpdateCancel) {
-    autoUpdateCancel = startAutoUpdateLoop();
-  }
-  if (!persisted) {
-    await message(
-      'Your auto-update preference could not be saved and will need to ' +
-        'be reapplied on the next launch.',
-      { title: 'Could not save preference', kind: 'warning' },
-    );
-  }
-}
-
-/**
- * One-shot "Check for updates now" action — always runs, even if
- * auto-update is opted out, and shows the "up to date" dialog so
- * the user gets feedback on the explicit click.
- */
-export async function checkForUpdatesNow(): Promise<void> {
-  await checkForUpdates({ silent: false });
 }
 
 // `bootstrap()` drives the entire app startup — wasm init, React

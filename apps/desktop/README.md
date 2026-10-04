@@ -194,11 +194,16 @@ published to the `desktop-updater-manifest` branch by the
 for the signing-key management decision.
 
 Opt-out is stored in `localStorage` under
-`chordsketch-desktop-auto-update-opt-out/v1`. Users can toggle
-it by opening the (forthcoming; tracked in #2199) Preferences
-dialog; the `toggleAutoUpdate()` helper in
-`apps/desktop/src/main.tsx` is exported so a menu / settings
-surface can wire it in.
+`chordsketch-desktop-auto-update-opt-out/v1`. Users toggle it with
+**Help → Check for Updates Automatically** (a checkbox; checked means the
+app checks). **Help → Check for Updates Now** runs one check regardless
+of the preference. Neither item is shown in the Flatpak build, which
+never updates itself. The items are built in
+`apps/desktop/src/update-menu.ts` and call `toggleAutoUpdate()` /
+`checkForUpdatesNow()` in `apps/desktop/src/updater.ts`. `toggleAutoUpdate()`
+only starts or stops the 24-hour loop once the preference has actually
+persisted, so the checkbox (which reads the stored preference) never shows
+a state the running session has already diverged from.
 
 ### First-time updater setup (maintainer)
 

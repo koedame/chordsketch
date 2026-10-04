@@ -41,7 +41,7 @@ let selfUpdateEnabled: Promise<boolean> | null = null;
  * the updater plugin at all (`self_update_enabled` in `main.rs`). Asked
  * once: the answer cannot change while the app runs.
  */
-function isSelfUpdateEnabled(): Promise<boolean> {
+export function isSelfUpdateEnabled(): Promise<boolean> {
   selfUpdateEnabled ??= invoke<boolean>('self_update_enabled');
   return selfUpdateEnabled;
 }
@@ -63,9 +63,11 @@ export function isAutoUpdateOptedOut(): boolean {
 /**
  * Persist the user's opt-out preference. Returns `true` on success,
  * `false` if the write fails (e.g. private mode, quota exceeded).
- * Callers that need to inform the user about a lost preference can
- * react to the `false` return; the default in-process toggle still
- * applies for the current session even when persistence fails.
+ * {@link toggleAutoUpdate} reacts to the `false` return by leaving
+ * the running session's check loop exactly as it was and surfacing
+ * a dialog — changing in-session behaviour that the stored
+ * preference (and the Help-menu checkbox that reads it) disagrees
+ * with would desync what the user sees from what actually happens.
  */
 export function setAutoUpdateOptOut(optOut: boolean): boolean {
   try {
@@ -96,8 +98,8 @@ export function setAutoUpdateOptOut(optOut: boolean): boolean {
  * date" confirmation. The `silent: false` mode is used for a
  * menu-driven "Check for updates now" action: it bypasses the
  * opt-out preference so the user always gets feedback on an
- * explicit click even if auto-checking is disabled. #2199 tracks
- * the menu surface that calls this path.
+ * explicit click even if auto-checking is disabled. The Help menu
+ * ("Check for Updates Now") calls this path.
  */
 export async function checkForUpdates(
   options: { silent?: boolean } = {},
@@ -228,4 +230,66 @@ export function startAutoUpdateLoop(): () => void {
     void checkForUpdates();
   }, CHECK_INTERVAL_MS);
   return () => window.clearInterval(timer);
+}
+
+/**
+ * Cancel handle for the running loop, or `null` while opted out.
+ * Module-scoped so {@link toggleAutoUpdate} can stop/restart the
+ * same loop {@link armAutoUpdateLoop} started at boot.
+ */
+let autoUpdateCancel: (() => void) | null = null;
+
+/**
+ * Start the boot-time update loop. Call once during startup; the
+ * loop itself already re-checks `isAutoUpdateOptedOut()` on every
+ * tick, so it is safe — and intentional — to arm it unconditionally
+ * even for an opted-out user (`checkForUpdates` no-ops for them).
+ */
+export function armAutoUpdateLoop(): void {
+  autoUpdateCancel = startAutoUpdateLoop();
+}
+
+/**
+ * Toggle the "Check for updates automatically" preference. Stops
+ * the running loop when the user opts out, and restarts it on the
+ * way back in so the next tick isn't a day away.
+ *
+ * The loop is only started or stopped once the new preference is
+ * actually persisted. If `setAutoUpdateOptOut` cannot save it (e.g.
+ * full disk), the running session's behaviour must stay exactly
+ * what the stored preference says it is — `checkForUpdates` reads
+ * that same stored flag on every tick, and the Help-menu checkbox
+ * (`isAutoUpdateOptedOut`) reads it too. Changing the loop's
+ * running state on an unsaved toggle would desync "what the
+ * checkbox shows" from "whether checks actually still happen" for
+ * the rest of the session. Instead we surface a dialog so the user
+ * knows their click did not take effect and will need to be
+ * reapplied next launch.
+ */
+export async function toggleAutoUpdate(): Promise<void> {
+  const nextOptedOut = !isAutoUpdateOptedOut();
+  const persisted = setAutoUpdateOptOut(nextOptedOut);
+  if (!persisted) {
+    await message(
+      'Your auto-update preference could not be saved and will need to ' +
+        'be reapplied on the next launch.',
+      { title: 'Could not save preference', kind: 'warning' },
+    );
+    return;
+  }
+  if (nextOptedOut) {
+    autoUpdateCancel?.();
+    autoUpdateCancel = null;
+  } else if (!autoUpdateCancel) {
+    autoUpdateCancel = startAutoUpdateLoop();
+  }
+}
+
+/**
+ * One-shot "Check for updates now" action — always runs, even if
+ * auto-update is opted out, and shows the "up to date" dialog so
+ * the user gets feedback on the explicit click.
+ */
+export async function checkForUpdatesNow(): Promise<void> {
+  await checkForUpdates({ silent: false });
 }
