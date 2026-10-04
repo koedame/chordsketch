@@ -19,7 +19,10 @@ components, and tone. Implementation references the tokens defined in
   canonical asset is `assets/logo.svg` (vector, 180×180, `#BD1642`
   background); raster derivatives ship as `assets/logo-128.png` (VS Code
   extension icon) and `assets/logo-256.png` (high-DPI / Marketplace
-  README headers).
+  README headers). The mark is an original work, drawn by the author as
+  vector paths in Sketch; it is covered by the repository's MIT license.
+  The desktop app icons (`apps/desktop/src-tauri/icons/`) are renderings
+  of the same mark.
 - **Wordmark** — "ChordSketch" set in Noto Sans JP 700. The ja-JP
   localization name (romanized: "Koodo Suketchi") is documented in the
   locale resource file; it does not appear in default English UI surfaces.
