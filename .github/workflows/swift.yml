@@ -233,11 +233,12 @@ jobs:
 
       - name: Package XCFramework
         run: |
-          # The licenses of the Rust crates linked into the static libraries
-          # travel with them, beside the XCFramework: SwiftPM finds the
-          # `.xcframework` directory in the extracted archive wherever it is,
-          # and the podspec's `prepare_command` extracts only that directory.
-          zip -r chordsketch-xcframework.zip chordsketchFFI.xcframework THIRD_PARTY_LICENSES.md
+          # The MIT text and the licenses of the Rust crates linked into the
+          # static libraries travel with them, beside the XCFramework: SwiftPM
+          # finds the `.xcframework` directory in the extracted archive
+          # wherever it is, and the podspec's `prepare_command` extracts only
+          # that directory.
+          zip -r chordsketch-xcframework.zip chordsketchFFI.xcframework LICENSE THIRD_PARTY_LICENSES.md
 
       - name: Upload XCFramework
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

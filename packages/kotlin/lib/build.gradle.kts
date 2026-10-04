@@ -56,9 +56,13 @@ tasks.test {
     useJUnitPlatform()
 }
 
-// The licenses of the Rust crates linked into the native libraries the jar
-// bundles; their terms require the notices to travel with every copy.
+// The MIT text the POM names, and the licenses of the Rust crates linked into
+// the native libraries the jar bundles; the terms of both require the notices
+// to travel with every copy.
 tasks.jar {
+    from("${rootDir}/../../LICENSE") {
+        into("META-INF")
+    }
     from("${rootDir}/../../THIRD_PARTY_LICENSES.md") {
         into("META-INF")
     }

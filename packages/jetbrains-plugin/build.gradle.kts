@@ -45,6 +45,11 @@ tasks {
         from(layout.projectDirectory.dir("textmate")) {
             into("${rootProject.name}/textmate")
         }
+        // The MIT text the plugin is published under; the plugin zip takes
+        // files from this directory only, so the root file is copied in.
+        from("${rootDir}/../../LICENSE") {
+            into(rootProject.name)
+        }
     }
 
     buildSearchableOptions {
