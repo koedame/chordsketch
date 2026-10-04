@@ -7,8 +7,9 @@
     <title>ChordSketch</title>
     <authors>koedame</authors>
     <owners>koedame</owners>
+    <copyright>Copyright (c) 2025 koedame</copyright>
     <projectUrl>https://github.com/koedame/chordsketch</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo-128.png</iconUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/koedame/chordsketch@v{{VERSION}}/assets/logo-128.png</iconUrl>
     <licenseUrl>https://github.com/koedame/chordsketch/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <packageSourceUrl>https://github.com/koedame/chordsketch/tree/main/packaging/chocolatey</packageSourceUrl>

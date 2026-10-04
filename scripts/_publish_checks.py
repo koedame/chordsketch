@@ -1810,7 +1810,7 @@ def winget_problems(version: str) -> list[str]:
 # https://docs.chocolatey.org/en-us/create/create-packages/ and the
 # community repository's moderation requirements
 # (https://docs.chocolatey.org/en-us/community-repository/moderation/).
-REQUIRED_NUSPEC_FIELDS = ("id", "version", "title", "authors", "projectUrl", "packageSourceUrl", "description", "summary", "tags")
+REQUIRED_NUSPEC_FIELDS = ("id", "version", "title", "authors", "projectUrl", "packageSourceUrl", "copyright", "description", "summary", "tags")
 CHOCOLATEY_ID = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
 
 
@@ -1843,6 +1843,13 @@ def chocolatey_problems(workspace: Path, version: str, runner: Runner = run) -> 
         problems.append(f"the Chocolatey package is version {values.get('version')!r}, not {version}")
     if not (values.get("licenseUrl") or values.get("license")):
         problems.append("the Chocolatey nuspec declares no license")
+    expected_icon_url = f"https://cdn.jsdelivr.net/gh/koedame/chordsketch@v{version}/assets/logo-128.png"
+    if values.get("iconUrl") != expected_icon_url:
+        problems.append(
+            f"the Chocolatey `iconUrl` is {values.get('iconUrl')!r}, not {expected_icon_url!r}; "
+            f"the moderators reject raw.githubusercontent.com and an unpinned jsDelivr ref tracks "
+            f"the live default branch the same way"
+        )
     if install is None:
         problems.append(f"{nupkg.name} has no tools/chocolateyInstall.ps1")
     else:
