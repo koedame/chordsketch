@@ -1389,9 +1389,13 @@ duplicate side effects.
 
 The workflow is safe to dispatch repeatedly. It checks the Chocolatey
 v2 feed before pushing and exits successfully when the version is
-already on the repository, and it treats a `409 Conflict` from the push
-the same way, so re-running it after a push that actually landed does
-not produce a red run.
+already on the repository and approved. A version the feed lists as not
+approved (the one a moderator holds at "Waiting for Maintainer" and asks
+to have resubmitted), or one whose feed response doesn't carry a
+readable approval status at all, is pushed again rather than assumed
+landed. It treats a `409 Conflict` from the push the same way, so
+re-running it after a push that actually landed does not produce a red
+run.
 
 A failure on `chocolatey-retry.yml` itself names the HTTP status: `403
 Forbidden` means the moderation queue is refusing new versions (see

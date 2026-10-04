@@ -118,13 +118,38 @@ runs:
         # and 0.2.1 vs 0.4.0 and 0.2.2). Anything else means the feed
         # could not be read, which is not itself a reason to refuse to
         # push - fall through and let the push decide.
+        #
+        # The 200 also covers a version that was submitted but never
+        # approved (IsApproved false, PackageStatus Submitted). Those are
+        # the versions a moderator holds at "Waiting for Maintainer" and
+        # asks to have resubmitted with the same version number, so
+        # treating them as landed made this workflow report success
+        # without pushing the fix (0.6.0 and 0.7.0, 2026-10-04). Only an
+        # approved version short-circuits; an unapproved one is pushed.
+        #
+        # Approval is read from `<d:IsApproved>`, not just "false"
+        # vs. "anything else": a feed response that does not carry a
+        # recognisable IsApproved value at all (a schema change, a
+        # differently-shaped body) must not silently fall back to
+        # "approved" - that is the same unverified-200-means-landed
+        # assumption this check exists to remove. The `\b` after
+        # IsApproved keeps the match from also firing on an unrelated
+        # element whose name happens to start with the same word (e.g. a
+        # hypothetical IsApprovedBy).
         $feed = "https://community.chocolatey.org/api/v2/Packages(Id='chordsketch',Version='$env:VERSION')"
         try {
           $probe = Invoke-WebRequest -Uri $feed -SkipHttpErrorCheck
           switch ($probe.StatusCode) {
             200 {
-              Write-Host "::notice::chordsketch $env:VERSION is already on the Chocolatey Community Repository; nothing to push. $page"
-              exit 0
+              $content = "$($probe.Content)"
+              if ($content -match '<d:IsApproved\b[^>]*>\s*false\s*<') {
+                Write-Host "chordsketch $env:VERSION is on the repository but not approved yet; pushing so the moderators see the resubmission."
+              } elseif ($content -match '<d:IsApproved\b[^>]*>\s*true\s*<') {
+                Write-Host "::notice::chordsketch $env:VERSION is already on the Chocolatey Community Repository; nothing to push. $page"
+                exit 0
+              } else {
+                Write-Host "::warning::Chocolatey feed returned HTTP 200 for $env:VERSION but no readable IsApproved value; pushing without the pre-flight short-circuit."
+              }
             }
             404 {
               Write-Host "chordsketch $env:VERSION is not on the repository yet; pushing."
