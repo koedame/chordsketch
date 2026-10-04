@@ -124,6 +124,20 @@ class GenerateStepTest(unittest.TestCase):
         self.assertIn(f"checksum64     = '{SHA}'", install)
         self.assertIn(f"chordsketch-v{VERSION}-x86_64-pc-windows-msvc.zip", install)
 
+    def test_the_nuspec_carries_the_fields_the_moderators_required(self) -> None:
+        # Chocolatey's moderators held 0.6.0 and 0.7.0 for these: an icon on
+        # raw.githubusercontent.com is refused (cdn.jsdelivr.net pinned to the
+        # tag is accepted), and a nuspec without <copyright> is incomplete.
+        result = self.run_step(checksums=WINDOWS_ROW)
+        self.assertEqual(0, result.code, result.err)
+        nuspec = self.generated(result, "choco-pkg/chordsketch.nuspec")
+        self.assertIn(
+            f"<iconUrl>https://cdn.jsdelivr.net/gh/koedame/chordsketch@v{VERSION}/assets/logo-128.png</iconUrl>",
+            nuspec,
+        )
+        self.assertNotIn("raw.githubusercontent.com", nuspec)
+        self.assertIn("<copyright>Copyright (c) 2025 koedame</copyright>", nuspec)
+
     def test_no_placeholder_survives_in_either_generated_file(self) -> None:
         # Fails when a template grows a `{{...}}` the step has no sed rule
         # for — the drift this action exists to keep to one place.

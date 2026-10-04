@@ -898,6 +898,103 @@ class CliArchiveTest(unittest.TestCase):
         self.assertEqual(problems, ["chordsketch-v1.2.0-x86_64-pc-windows-msvc.zip lacks LICENSE, NOTICE, README.md, THIRD_PARTY_LICENSES.md, chordsketch-lsp.exe, chordsketch.exe"])
 
 
+class ChocolateyTemplateTest(unittest.TestCase):
+    """The committed nuspec template, checked without the pwsh-only pack step below."""
+
+    TEMPLATE = (checks.REPO_ROOT / "packaging/chocolatey/chordsketch.nuspec.template").read_text()
+
+    def test_the_copyright_matches_the_repositorys_license(self) -> None:
+        # The LICENSE line is the source of truth; a year bump there without
+        # a matching template edit is exactly the drift this test catches.
+        license_line = re.search(rb"^Copyright.*$", MIT_TEXT, re.MULTILINE).group(0).decode()
+        self.assertIn(f"<copyright>{license_line}</copyright>", self.TEMPLATE)
+
+    def test_the_icon_url_is_pinned_to_the_release_tag_on_jsdelivr(self) -> None:
+        self.assertIn(
+            "<iconUrl>https://cdn.jsdelivr.net/gh/koedame/chordsketch@v{{VERSION}}/assets/logo-128.png</iconUrl>",
+            self.TEMPLATE,
+        )
+        self.assertNotIn("raw.githubusercontent.com", self.TEMPLATE)
+
+
+class ChocolateyTest(unittest.TestCase):
+    """`chocolatey_problems`, with a fake pwsh that writes the nupkg the real Pack step would."""
+
+    VERSION = "1.2.0"
+    ASSET = f"chordsketch-v{VERSION}-x86_64-pc-windows-msvc.zip"
+
+    def nuspec(self, *, icon_url: str | None = None, copyright: str | None = "Copyright (c) 2025 koedame") -> bytes:
+        icon_url = icon_url if icon_url is not None else f"https://cdn.jsdelivr.net/gh/koedame/chordsketch@v{self.VERSION}/assets/logo-128.png"
+        copyright_element = f"<copyright>{copyright}</copyright>" if copyright else ""
+        return f"""<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>chordsketch</id>
+    <version>{self.VERSION}</version>
+    <title>ChordSketch</title>
+    <authors>koedame</authors>
+    <owners>koedame</owners>
+    {copyright_element}
+    <projectUrl>https://github.com/koedame/chordsketch</projectUrl>
+    <iconUrl>{icon_url}</iconUrl>
+    <licenseUrl>https://github.com/koedame/chordsketch/blob/main/LICENSE</licenseUrl>
+    <packageSourceUrl>https://github.com/koedame/chordsketch/tree/main/packaging/chocolatey</packageSourceUrl>
+    <description>d</description>
+    <summary>s</summary>
+    <tags>chordpro</tags>
+  </metadata>
+</package>""".encode()
+
+    def install_ps1(self) -> bytes:
+        return (
+            "$packageArgs = @{\n"
+            f"  url64bit = '{checks.RELEASE_REPOSITORY_URL}v{self.VERSION}/{self.ASSET}'\n"
+            f"  checksum64 = '{checks.fake_sha256(self.ASSET)}'\n"
+            "}\n"
+        ).encode()
+
+    def pack_with(self, nuspec: bytes):
+        def runner(cmd, cwd, env=None):
+            if cmd[0] == "pwsh":
+                write_zip(
+                    Path(cwd) / "choco-pkg" / f"chordsketch.{self.VERSION}.nupkg",
+                    {"chordsketch.nuspec": nuspec, "tools/chocolateyInstall.ps1": self.install_ps1()},
+                )
+            return checks.subprocess.CompletedProcess(cmd, 0, "")
+
+        return runner
+
+    def check(self, nuspec: bytes) -> list[str]:
+        with tempfile.TemporaryDirectory() as scratch:
+            workspace = Path(scratch)
+            (workspace / "choco-pkg").mkdir()
+            return checks.chocolatey_problems(workspace, self.VERSION, self.pack_with(nuspec))
+
+    def test_when_the_icon_is_pinned_to_the_release_tag_on_jsdelivr_it_passes(self) -> None:
+        self.assertEqual(self.check(self.nuspec()), [])
+
+    def test_when_the_icon_is_on_raw_githubusercontent_it_is_reported(self) -> None:
+        bad = "https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo-128.png"
+        problems = self.check(self.nuspec(icon_url=bad))
+        self.assertTrue(any("iconUrl" in p for p in problems), problems)
+
+    def test_when_the_icon_is_an_unpinned_jsdelivr_ref_it_is_reported(self) -> None:
+        # An unpinned ref resolves against the live default branch, the same
+        # mutability the moderators objected to on raw.githubusercontent.com.
+        unpinned = "https://cdn.jsdelivr.net/gh/koedame/chordsketch/assets/logo-128.png"
+        problems = self.check(self.nuspec(icon_url=unpinned))
+        self.assertTrue(any("iconUrl" in p for p in problems), problems)
+
+    def test_when_the_icon_is_pinned_to_a_different_version_than_the_package_it_is_reported(self) -> None:
+        mismatched = "https://cdn.jsdelivr.net/gh/koedame/chordsketch@v9.9.9/assets/logo-128.png"
+        problems = self.check(self.nuspec(icon_url=mismatched))
+        self.assertTrue(any("iconUrl" in p for p in problems), problems)
+
+    def test_when_the_nuspec_has_no_copyright_it_is_reported(self) -> None:
+        problems = self.check(self.nuspec(copyright=None))
+        self.assertTrue(any("copyright" in p for p in problems), problems)
+
+
 class ShippedManifestTest(unittest.TestCase):
     """The hand-maintained manifests in `packaging/`, as they are committed."""
 
