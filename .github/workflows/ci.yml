@@ -470,6 +470,10 @@ jobs:
         run: npm ci
         working-directory: apps/desktop
 
+      - name: Test desktop frontend
+        run: npm test
+        working-directory: apps/desktop
+
       - name: Build desktop frontend (prebuild + tsc + vite)
         # `npm run build` runs the `prebuild` hook which builds the
         # grammar wasm; then `tsc && vite build` produces the Vite
