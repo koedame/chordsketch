@@ -291,8 +291,18 @@ class PackTest(_StepTestCase):
         self.assertIn(f"::error::choco pack reported success but {NUPKG} is missing", r.out)
 
 
-def _feed(status: int | None) -> str:
-    """A stub `Invoke-WebRequest`; `None` means the host is unreachable."""
+def _feed(
+    status: int | None,
+    approved: bool | None = None,
+    raw_content: str | None = None,
+) -> str:
+    """A stub `Invoke-WebRequest`; `None` means the host is unreachable.
+
+    `approved` adds the feed entry's `IsApproved` element to the response,
+    as the real v2 feed returns it for a version the repository holds.
+    `raw_content`, mutually exclusive with `approved`, sets the response
+    body verbatim for tests that need a shape `approved` cannot express.
+    """
     if status is None:
         return (
             "function Invoke-WebRequest {\n"
@@ -300,10 +310,15 @@ def _feed(status: int | None) -> str:
             "  throw 'No such host is known.'\n"
             "}\n"
         )
+    if raw_content is not None:
+        assert approved is None, "approved and raw_content are mutually exclusive"
+        content = raw_content
+    else:
+        content = "" if approved is None else f"<d:IsApproved>{str(approved).lower()}</d:IsApproved>"
     return (
         "function Invoke-WebRequest {\n"
         "  [CmdletBinding()] param([string]$Uri, [switch]$SkipHttpErrorCheck)\n"
-        f"  [pscustomobject]@{{ StatusCode = {status} }}\n"
+        f"  [pscustomobject]@{{ StatusCode = {status}; Content = '{content}' }}\n"
         "}\n"
     )
 
@@ -318,11 +333,54 @@ class PushTest(_StepTestCase):
         kw.setdefault("make_nupkg", True)
         return self.run_step(env=env, **kw)
 
-    def test_version_already_on_the_feed_short_circuits_without_pushing(self):
-        r = self.push(feed=_feed(200))
+    def test_approved_version_on_the_feed_short_circuits_without_pushing(self):
+        r = self.push(feed=_feed(200, approved=True))
         self.assertEqual(r.code, 0, r.out)
         self.assertIn("::notice::chordsketch 0.6.0 is already on the Chocolatey", r.out)
-        self.assertEqual(r.choco_log, "", "choco must not be invoked when the feed already has it")
+        self.assertEqual(r.choco_log, "", "choco must not be invoked for an approved version")
+
+    def test_unapproved_version_on_the_feed_is_pushed_again(self):
+        # A moderator holds the version at "Waiting for Maintainer" and asks
+        # for the same version to be resubmitted; the feed still answers 200
+        # for it, so the 200 alone must not read as "already landed".
+        r = self.push(feed=_feed(200, approved=False), choco_push_exit=0)
+        self.assertEqual(r.code, 0, r.out)
+        self.assertIn("is on the repository but not approved yet; pushing", r.out)
+        self.assertNotIn("nothing to push", r.out)
+        self.assertIn("push", r.choco_log)
+        self.assertIn("::notice::Pushed chordsketch 0.6.0", r.out)
+
+    def test_feed_200_without_a_readable_approval_status_warns_and_pushes(self):
+        # The real feed always carries IsApproved for a version the
+        # repository holds, so this is a defensive case: a 200 whose body
+        # doesn't say either way must not fall back to "approved" - that is
+        # the exact unverified-200-means-landed assumption this check
+        # exists to remove, just one layer deeper (a schema change instead
+        # of an unapproved submission).
+        r = self.push(feed=_feed(200), choco_push_exit=0)
+        self.assertEqual(r.code, 0, r.out)
+        self.assertIn(
+            "::warning::Chocolatey feed returned HTTP 200 for 0.6.0 but no readable IsApproved value",
+            r.out,
+        )
+        self.assertIn("push", r.choco_log)
+        self.assertIn("::notice::Pushed chordsketch 0.6.0", r.out)
+
+    def test_unrelated_element_named_like_isapproved_does_not_short_circuit(self):
+        # A sibling element whose name merely starts with "IsApproved" (a
+        # hypothetical IsApprovedBy) must not satisfy the match just
+        # because the permissive [^>]* would otherwise swallow the rest
+        # of its name.
+        r = self.push(
+            feed=_feed(200, raw_content="<d:IsApprovedBy>false</d:IsApprovedBy>"),
+            choco_push_exit=0,
+        )
+        self.assertEqual(r.code, 0, r.out)
+        self.assertIn(
+            "::warning::Chocolatey feed returned HTTP 200 for 0.6.0 but no readable IsApproved value",
+            r.out,
+        )
+        self.assertIn("push", r.choco_log)
 
     def test_feed_404_proceeds_to_push(self):
         r = self.push(feed=_feed(404), choco_push_exit=0)
