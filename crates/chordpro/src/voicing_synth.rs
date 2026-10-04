@@ -33,8 +33,8 @@ const GUITAR_TUNING: &[i32] = &[40, 45, 50, 55, 59, 64];
 /// ukulele tables.
 const UKULELE_TUNING: &[i32] = &[67, 60, 64, 69];
 
-/// Charango tuning (G4 C5 E4 A4 E5) as absolute MIDI pitches, in upstream
-/// string order — matching the curated [`crate::voicings`] charango table.
+/// Charango tuning (G4 C5 E4 A4 E5) as absolute MIDI pitches, in the order of
+/// the physical strings (string 3, E4, is the lowest pitch).
 const CHARANGO_TUNING: &[i32] = &[67, 72, 64, 69, 76];
 
 /// Number of visible fret rows beyond the anchor fret the search spans (a
@@ -84,6 +84,11 @@ const W_OPEN: i64 = 150;
 const W_SOUNDED: i64 = 60;
 /// Penalty per interior muted gap (hard to mute cleanly, reads poorly).
 const W_GAP: i64 = 300;
+/// Penalty per muted string on an instrument that is strummed across all its
+/// strings (the charango). Above `W_FINGERS` so a fuller shape beats a sparser
+/// one that needs one finger fewer, below `W_COVERED` so a chord tone is never
+/// given up to fill a string.
+const W_STRUM_MUTED: i64 = 2_000;
 /// Penalty per fret summed across fretted strings — a light tie-breaker pulling
 /// otherwise-equal shapes toward lower frets.
 const W_FRET_SUM: i64 = 10;
@@ -178,6 +183,11 @@ pub(crate) fn synth_fretted_voicing(
     frets_shown: usize,
 ) -> Option<DiagramData> {
     let tuning = instrument_tuning(instrument);
+    let muted_penalty = if instrument.eq_ignore_ascii_case("charango") {
+        W_STRUM_MUTED
+    } else {
+        0
+    };
     let tones = chord_tones(chord_name)?;
     let target = pc_mask(&tones.pitch_classes);
     let essential = pc_mask(&tones.essential);
@@ -187,7 +197,14 @@ pub(crate) fn synth_fretted_voicing(
     // ukulele, where the lowest pitch is not the lowest-numbered string), pass
     // B relaxes to "the bass is sounded somewhere".
     for require_bass_low in [true, false] {
-        if let Some(frets) = search(tuning, target, essential, tones.bass_pc, require_bass_low) {
+        if let Some(frets) = search(
+            tuning,
+            target,
+            essential,
+            tones.bass_pc,
+            require_bass_low,
+            muted_penalty,
+        ) {
             return Some(to_diagram(chord_name, &frets, frets_shown, tuning.len()));
         }
     }
@@ -211,6 +228,8 @@ struct SearchCtx<'a> {
     bass_pc: u8,
     /// Whether the lowest-sounding string must be the bass.
     require_bass_low: bool,
+    /// Penalty per muted string (non-zero only for strummed-across instruments).
+    muted_penalty: i64,
     /// The anchor fret this search pass is built around (for scoring).
     position: i32,
 }
@@ -222,6 +241,7 @@ fn search(
     essential: u16,
     bass_pc: u8,
     require_bass_low: bool,
+    muted_penalty: i64,
 ) -> Option<Vec<i32>> {
     let n = tuning.len();
     let mut best: Option<(i64, Vec<i32>)> = None;
@@ -257,6 +277,7 @@ fn search(
             essential,
             bass_pc,
             require_bass_low,
+            muted_penalty,
             position,
         };
         let mut chosen = vec![-1i32; n];
@@ -296,6 +317,7 @@ fn evaluate(chosen: &[i32], ctx: &SearchCtx) -> Option<i64> {
         essential,
         bass_pc,
         require_bass_low,
+        muted_penalty,
         position,
     } = *ctx;
     let mut sounded_mask = 0u16;
@@ -374,6 +396,7 @@ fn evaluate(chosen: &[i32], ctx: &SearchCtx) -> Option<i64> {
             + open * W_OPEN
             + sounded * W_SOUNDED
             - gaps * W_GAP
+            - (chosen.len() as i64 - sounded) * muted_penalty
             - fret_sum * W_FRET_SUM,
     )
 }

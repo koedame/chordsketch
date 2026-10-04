@@ -949,11 +949,9 @@ static PRESET_UKULELE: &str = r#"{
 
 /// Charango preset configuration (5 strings, standard Andean tuning).
 ///
-/// Tuning matches upstream ChordPro's `lib/ChordPro/res/config/charango.json`
-/// (commit `1e1d7249`, R6.100.0, contributed to ChordPro by edwinjc; see
-/// `NOTICE`): physical string order G4, C5, E4, A4, E5 — re-entrant (string
-/// 3 = E4 is the lowest pitch). `crates/chordpro/src/voicings.rs` takes the
-/// upstream chord shapes in this same string order.
+/// Physical string order G4, C5, E4, A4, E5 — re-entrant (string 3 = E4 is
+/// the lowest pitch). `crates/chordpro/src/voicing_synth.rs` searches the
+/// charango chord shapes in this same string order.
 static PRESET_CHARANGO: &str = r#"{
     instrument: {
         type: "charango",
