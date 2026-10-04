@@ -49,6 +49,7 @@ jobs:
           github_token: ${{ secrets.CLAUDE_PAT }}
           track_progress: true
           claude_args: "--allowedTools Edit,Write,Read,Bash"
+          settings: '{"attribution": {"commit": "", "pr": "", "sessionUrl": false}}'
           prompt: |
             When working on a GitHub issue (not a PR review), after implementing the
             solution and pushing your changes to the branch, you MUST create a pull
