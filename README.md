@@ -304,10 +304,10 @@ it carries no identifier, no document content, and not even your app or OS
 version (the request header names only the updater library), but GitHub
 sees your IP address like any web server does. If a newer version exists,
 the app shows its release notes and installs it only after you accept. The
-Flatpak build never checks (the store delivers updates). The app has no
-settings switch for the check yet; until it does, block
-`raw.githubusercontent.com` for the app in your firewall to stop it. See
-[Privacy](#privacy).
+Flatpak build never checks (the store delivers updates). To stop the
+automatic check, turn off **Help → Check for Updates Automatically**; the
+choice is kept between launches. **Help → Check for Updates Now** still
+checks when you ask for it. See [Privacy](#privacy).
 
 The macOS app is not yet signed or notarized by Apple, so Gatekeeper
 blocks its first launch whether you installed it with the Homebrew cask
@@ -514,7 +514,7 @@ the other side can see:
 | When | Connects to | What is sent |
 |---|---|---|
 | You open the [playground or the docs site](https://koedame.github.io/chordsketch/) | GitHub Pages (`koedame.github.io`) | An ordinary page request. The fonts, scripts, and images are served from the same host: the site loads nothing from a font service or a CDN. GitHub sees your IP address, as for any page it hosts |
-| The desktop app starts, then every 24 hours | `raw.githubusercontent.com` | An update check, described under [Desktop application](#desktop-application). Not made by the Flatpak build |
+| The desktop app starts, then every 24 hours | `raw.githubusercontent.com` | An update check, described under [Desktop application](#desktop-application). Can be turned off in the Help menu. Not made by the Flatpak build |
 | A ChordPro file you open names a remote image (`{image: src="https://..."}`) | The host in that URL | A request for that image. Only your own document can cause it; none of the playground samples does |
 
 Installing ChordSketch through a package manager, `cargo`, or `npm` contacts

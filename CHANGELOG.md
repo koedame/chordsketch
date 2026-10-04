@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shapes for the same chord names differ from before (every one now sounds
   as many of the five strings as the chord allows).
 
+### Added
+
+- **The desktop app can turn off its automatic update check.** Help →
+  *Check for Updates Automatically* is a checkbox that stops the check at
+  launch and every 24 hours, and the choice is kept between launches. Help →
+  *Check for Updates Now* checks once when asked. Neither item appears in the
+  Flatpak build, which never checks.
+
 ### Fixed
 
 - **The Swift package installs from Swift Package Manager.** The manifest
