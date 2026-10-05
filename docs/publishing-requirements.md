@@ -311,9 +311,16 @@ The pull-request check runs the same build with a debug Linux CLI staged.
 ## CocoaPods and the Swift package
 
 The podspec is generated and pushed with `pod trunk push` by
-[`swift.yml`](../.github/workflows/swift.yml). Its source is the tag, which
-holds the Swift bindings; its `prepare_command` downloads the release's
-XCFramework and checks it against the checksum in the tag's `Package.swift`.
+[`swift.yml`](../.github/workflows/swift.yml). Its source is one release
+asset, `chordsketch-cocoapods.zip` (`:http`), built by the `publish` job from
+the XCFramework zip it has just checked against the checksum
+`Package.swift` pins, plus the tag's Swift bindings, tests and notices
+(`scripts/swift_package.py pod-archive`). The podspec has no
+`prepare_command`: CocoaPods trunk refuses one in a new pod and, through a
+bug in its own validation, answers the refusal with a generic
+`An internal server error occurred` instead of a message
+([ADR-0088](adr/0088-the-cocoapods-pod-installs-from-one-archive-without-a-prepare-command.md),
+amending [ADR-0081](adr/0081-the-cocoapods-pod-builds-the-tags-swift-sources.md)).
 The Swift package is the
 repository itself at the tag: the root `Package.swift` names the
 XCFramework zip and checksum, which `swift.yml`'s `pin` job commits to the
@@ -324,12 +331,12 @@ The tag-time job uploads that same zip to the Release.
 | Condition | Source | Checked by |
 |---|---|---|
 | The podspec has `name`, `version`, `summary` (at most 140 characters), `license`, `homepage`, `authors`, `source` | [Podspec syntax](https://guides.cocoapods.org/syntax/podspec.html) | `cocoapods_problems` via `pod ipc spec` |
-| The source is the git tag `vX.Y.Z` (the Swift bindings are a source file, so a pod built from the XCFramework zip alone has no `import ChordSketch`), and `source_files` match the committed bindings | [Podspec syntax](https://guides.cocoapods.org/syntax/podspec.html) | `cocoapods_problems` |
-| The XCFramework is downloaded from the asset the release uploads and verified against the checksum `Package.swift` pins | — | `cocoapods_problems` |
-| The XCFramework zip holds `chordsketchFFI.xcframework/`, `LICENSE` and `THIRD_PARTY_LICENSES.md` at its root, and the podspec's `prepare_command` extracts only `chordsketchFFI.xcframework/*` (a whole-zip `unzip` stops to ask before overwriting the tag's copy of the file, and nothing answers) | [ADR-0085](adr/0085-binaries-ship-a-generated-third-party-license-notice.md); SwiftPM leaves the archive alone when its one top-level directory is an `.xcframework` ([`Workspace+BinaryArtifacts.swift`](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/Workspace/Workspace%2BBinaryArtifacts.swift)) | `xcframework_archive_problems` runs the `Package XCFramework` step on a stand-in framework; `cocoapods_problems` |
-| The license can be found: `LICENSE` is at the root of the tag | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) (an open-source pod may have no lint warnings) | `cocoapods_problems` |
+| The podspec has no `prepare_command` | trunk's `app/models/specification_wrapper.rb` refuses one outside a fixed pod allow-list | `cocoapods_problems` |
+| The source is the release asset `chordsketch-cocoapods.zip`, pinned to its SHA-256 | [Podspec syntax](https://guides.cocoapods.org/syntax/podspec.html) (`:http` source's `:sha256` key) | `cocoapods_problems` |
+| `source_files`, the test spec's `source_files`, `vendored_frameworks` and the license file all match an entry of the archive `pod-archive` builds from the checkout (the Swift bindings are a source file, so a pod built from the XCFramework zip alone has no `import ChordSketch`) | [Podspec syntax](https://guides.cocoapods.org/syntax/podspec.html) | `cocoapods_problems` |
+| The XCFramework zip holds `chordsketchFFI.xcframework/`, `LICENSE` and `THIRD_PARTY_LICENSES.md` at its root, which the pod's archive carries over unchanged | [ADR-0085](adr/0085-binaries-ship-a-generated-third-party-license-notice.md); SwiftPM leaves the archive alone when its one top-level directory is an `.xcframework` ([`Workspace+BinaryArtifacts.swift`](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/Workspace/Workspace%2BBinaryArtifacts.swift)) | `xcframework_archive_problems` runs the `Package XCFramework` step on a stand-in framework; `cocoapods_problems` |
 | The root `Package.swift`'s `binaryTarget` points at this version's asset with a SHA-256 checksum, the bindings file is committed, and the manifest still parses | [SE-0272](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0272-swiftpm-binary-dependencies.md) | `swift_package_problems` via `swift package dump-package` |
-| `pod lib lint` (with the pod's tests, for frameworks and for static libraries) and `swift build` against the XCFramework | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) | need macOS and the built XCFramework: `swift.yml` builds, tests and lints it on the pull requests that touch its inputs (`lint-podspec`) |
+| `pod spec lint` (with the pod's tests, for frameworks and for static libraries) and `swift build` against the XCFramework, downloading the pod's source the way `pod trunk push` does | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) | need macOS and the built XCFramework: `swift.yml` builds, tests and lints it on the pull requests that touch its inputs (`lint-podspec`) |
 
 ## Desktop updater manifest
 
