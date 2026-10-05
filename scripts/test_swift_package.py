@@ -11,6 +11,7 @@ Stdlib `unittest` only.
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -166,8 +167,6 @@ class PodArchiveTest(unittest.TestCase):
                 self.assertEqual(archive.read("LICENSE"), b"zip license\n")
 
     def test_when_built_twice_from_checkouts_with_other_file_times_the_archives_are_identical(self) -> None:
-        import os
-
         with tempfile.TemporaryDirectory() as scratch:
             root, xcframework = self.layout(Path(scratch))
             first, second = Path(scratch) / "first.zip", Path(scratch) / "second.zip"

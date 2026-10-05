@@ -49,14 +49,15 @@ run on the machine and never ask trunk.
    that URL. The archive is byte-for-byte reproducible (fixed times and modes),
    so a re-run of `publish` uploads the archive a published pod already pins.
 3. **`lint-podspec` runs `pod spec lint`**, not `pod lib lint`, with the URL
-   rewritten to the archive that `pod-archive` builds from the pull request's
-   own XCFramework, with its checksum. `pod lib lint` builds the working directory and never
-   reads `s.source`; `pod spec lint` downloads the source the way
-   `pod trunk push` does.
-4. **`Publishable` checks the rule trunk applies** (`cocoapods_problems`): no
-   `prepare_command`; the source is the release asset, pinned to a checksum; `source_files`, the
-   test spec's `source_files`, `vendored_frameworks` and the license file all
-   match entries of the archive `pod-archive` builds from the checkout.
+   rewritten to the archive that `pod-archive` builds from the pull
+   request's own XCFramework, with its checksum. `pod lib lint` builds the
+   working directory and never reads `s.source`; `pod spec lint` downloads
+   the source the way `pod trunk push` does.
+4. **`Publishable` checks the rule trunk applies** (`cocoapods_problems`):
+   no `prepare_command`; the source is the release asset, pinned to a
+   checksum; `source_files`, the test spec's `source_files`,
+   `vendored_frameworks` and the license file all match entries of the
+   archive `pod-archive` builds from the checkout.
 
 ## Consequences
 
