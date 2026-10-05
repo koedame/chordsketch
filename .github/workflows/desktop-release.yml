@@ -449,7 +449,18 @@ jobs:
           # (a re-run on the same tag), which keeps the
           # workflow_dispatch idempotent.
           git commit --allow-empty -m "Update chordsketch desktop cask to ${VERSION}"
-          git push
+          # Other jobs of the same release push to this repository at the same
+          # time (the files they touch differ, so a rebase never conflicts);
+          # whoever pushes second is rejected as non-fast-forward. Rebase onto
+          # the new tip and push again.
+          for attempt in 1 2 3 4 5; do
+            git push && break
+            if [ "$attempt" -eq 5 ]; then
+              echo "ERROR: could not push to homebrew-tap after $attempt attempts" >&2
+              exit 1
+            fi
+            git pull --rebase
+          done
 
   update-desktop-formula:
     name: Update Homebrew Desktop Formula
@@ -539,7 +550,18 @@ jobs:
           # (a re-run on the same tag), which keeps the
           # workflow_dispatch idempotent.
           git commit --allow-empty -m "Update chordsketch-desktop formula to ${VERSION}"
-          git push
+          # Other jobs of the same release push to this repository at the same
+          # time (the files they touch differ, so a rebase never conflicts);
+          # whoever pushes second is rejected as non-fast-forward. Rebase onto
+          # the new tip and push again.
+          for attempt in 1 2 3 4 5; do
+            git push && break
+            if [ "$attempt" -eq 5 ]; then
+              echo "ERROR: could not push to homebrew-tap after $attempt attempts" >&2
+              exit 1
+            fi
+            git pull --rebase
+          done
 
   update-flathub:
     name: Update Flathub
