@@ -44,13 +44,17 @@ run on the machine and never ask trunk.
    The binary in the pod is therefore the one the bindings were generated
    for, as before; the check moves from the consumer's machine to `publish`.
    The XCFramework zip itself is unchanged, so SwiftPM's pin is unaffected.
+   `publish` also computes the archive's SHA-256, and `update-cocoapods` writes
+   it into the podspec as `:sha256`, so CocoaPods refuses any other archive at
+   that URL. The archive is byte-for-byte reproducible (fixed times and modes),
+   so a re-run of `publish` uploads the archive a published pod already pins.
 3. **`lint-podspec` runs `pod spec lint`**, not `pod lib lint`, with the URL
    rewritten to the archive that `pod-archive` builds from the pull request's
-   own XCFramework. `pod lib lint` builds the working directory and never
+   own XCFramework, with its checksum. `pod lib lint` builds the working directory and never
    reads `s.source`; `pod spec lint` downloads the source the way
    `pod trunk push` does.
 4. **`Publishable` checks the rule trunk applies** (`cocoapods_problems`): no
-   `prepare_command`; the source is the release asset; `source_files`, the
+   `prepare_command`; the source is the release asset, pinned to a checksum; `source_files`, the
    test spec's `source_files`, `vendored_frameworks` and the license file all
    match entries of the archive `pod-archive` builds from the checkout.
 
@@ -61,9 +65,6 @@ run on the machine and never ask trunk.
   next release. Versions up to 0.7.0 stay as they are.
 - The release has one more asset (`chordsketch-cocoapods.zip`), of about the
   size of the XCFramework zip.
-- The checksum of the pod's archive is not pinned anywhere: it is built
-  from a checked input in the job that uploads it, and CocoaPods records no
-  checksum for an `:http` source unless the podspec carries `:sha256`.
 - A future rule of trunk's that only its server applies is still invisible to a
   pull request. `cocoapods_problems` carries the one known now.
 

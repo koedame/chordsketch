@@ -1679,7 +1679,8 @@ def cocoapods_problems(version: str, runner: Runner = run) -> list[str]:
     pushes). So the binary cannot be fetched beside a git checkout; the
     archive `swift_package.pod_archive` builds carries both.
     """
-    outputs, problems, directory = generated("swift.yml", "update-cocoapods", "Generate podspec", ("ChordSketch.podspec",), version, runner)
+    checksum = fake_sha256(swift_package.POD_ASSET)
+    outputs, problems, directory = generated("swift.yml", "update-cocoapods", "Generate podspec", ("ChordSketch.podspec",), version, runner, extra_env={"POD_SHA256": checksum})
     try:
         if not outputs:
             return problems
@@ -1699,8 +1700,10 @@ def cocoapods_problems(version: str, runner: Runner = run) -> list[str]:
             )
         source = spec.get("source") or {}
         expected = f"{RELEASE_REPOSITORY_URL}v{version}/{swift_package.POD_ASSET}"
-        if source != {"http": expected}:
+        if source.get("http") != expected or set(source) - {"http", "sha256"}:
             problems.append(f"the podspec source is {source!r}, not the release asset {expected}: the Swift bindings and the XCFramework come in that one archive")
+        if source.get("sha256") != checksum:
+            problems.append("the podspec does not pin the archive to the SHA-256 `publish` computed for it: CocoaPods would install any archive served at that URL")
         archive = directory / swift_package.ASSET
         with zipfile.ZipFile(archive, "w") as stand_in:
             stand_in.writestr("chordsketchFFI.xcframework/Info.plist", "<plist/>")
