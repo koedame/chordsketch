@@ -27,8 +27,8 @@ chordsketch-render-ireal = { version = "0.8.0", path = "../render-ireal", featur
 # Caret ranges (`"3"`) would let a 3.5 release land via a casual `cargo
 # update` with potentially incompatible glue. Bump intentionally via
 # Dependabot or a tracked PR. See #1078.
-napi = { version = "=3.12.7", features = ["napi9"] }
-napi-derive = "=3.6.9"
+napi = { version = "=3.13.0", features = ["napi9"] }
+napi-derive = "=3.6.10"
 
 [build-dependencies]
-napi-build = "=2.5.0"
+napi-build = "=2.6.0"
