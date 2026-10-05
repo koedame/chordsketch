@@ -16,29 +16,19 @@ Pod::Spec.new do |s|
   # Kotlin POM's two `<license>` entries do. `:file` keeps the full MIT text;
   # the vendored chordsketchFFI XCFramework also embeds the Bravura SMuFL
   # outlines (NOTICE) under SIL OFL-1.1, reproduced in full in `NOTICE` and
-  # `THIRD_PARTY_LICENSES.md` in the same tag this pod's `s.source` checks out.
+  # `THIRD_PARTY_LICENSES.md`, which sit beside `LICENSE` in the same archive.
   s.license      = { :type => 'MIT AND OFL-1.1', :file => 'LICENSE' }
   s.author       = { 'koedame' => 'koedame@users.noreply.github.com' }
 
-  # The tag holds the UniFFI-generated Swift bindings (committed by the
-  # `pin` job, ADR-0080) but not the XCFramework, which is a release asset.
-  # `prepare_command` fetches it and refuses a zip whose SHA-256 is not the
-  # one the tag's Package.swift pins, so the binary is the one the bindings
-  # were generated for.
+  # One zip holds the UniFFI-generated Swift bindings (committed by the `pin`
+  # job, ADR-0080), the pod's tests and the XCFramework the bindings were
+  # generated for (`scripts/swift_package.py pod-archive`, run by `publish`).
+  # It is one archive because trunk refuses a `prepare_command` in a new pod,
+  # which is what used to fetch the XCFramework beside a git checkout of the
+  # tag (ADR-0088).
   s.source       = {
-    :git => 'https://github.com/koedame/chordsketch.git',
-    :tag => 'v{{VERSION}}'
+    :http => 'https://github.com/koedame/chordsketch/releases/download/v{{VERSION}}/chordsketch-cocoapods.zip'
   }
-  s.prepare_command = <<-'CMD'
-    set -euo pipefail
-    curl --fail --silent --show-error --location \
-      --output chordsketch-xcframework.zip \
-      'https://github.com/koedame/chordsketch/releases/download/v{{VERSION}}/chordsketch-xcframework.zip'
-    echo '{{SHA256}}  chordsketch-xcframework.zip' | shasum -a 256 -c -
-    rm -rf chordsketchFFI.xcframework
-    unzip -q chordsketch-xcframework.zip 'chordsketchFFI.xcframework/*'
-    rm chordsketch-xcframework.zip
-  CMD
 
   s.ios.deployment_target = '15.0'
   s.osx.deployment_target = '12.0'

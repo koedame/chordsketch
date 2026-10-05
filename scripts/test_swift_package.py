@@ -12,7 +12,9 @@ Stdlib `unittest` only.
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -113,6 +115,73 @@ class UseLocalTest(unittest.TestCase):
         self.assertIn('path: "chordsketchFFI.xcframework"', local)
         self.assertNotIn("checksum", local)
         self.assertIn('linkerSettings: [.linkedLibrary("z")]', local)
+
+
+class PodArchiveTest(unittest.TestCase):
+    """The pod installs from one zip that holds the XCFramework and the tag's Swift sources."""
+
+    def layout(self, directory: Path, *, bindings: bool = True, framework: bool = True, notice_in_zip: bool = False) -> tuple[Path, Path]:
+        root = directory / "checkout"
+        sources = root / "packages/swift/Sources/ChordSketch"
+        sources.mkdir(parents=True)
+        (root / "packages/swift/Tests").mkdir(parents=True)
+        if bindings:
+            (sources / "chordsketch.swift").write_text("// bindings\n")
+        (root / "packages/swift/Tests/ChordSketchTests.swift").write_text("// tests\n")
+        (root / "NOTICE").write_text("notice\n")
+        (root / "LICENSE").write_text("tag license\n")
+        xcframework = directory / swift_package.ASSET
+        with zipfile.ZipFile(xcframework, "w") as archive:
+            if framework:
+                archive.writestr("chordsketchFFI.xcframework/Info.plist", "<plist/>")
+            archive.writestr("LICENSE", "zip license\n")
+            if notice_in_zip:
+                archive.writestr("NOTICE", "zip notice\n")
+        return root, xcframework
+
+    def test_when_built_the_archive_holds_the_framework_the_bindings_the_tests_and_the_notices_at_its_root(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root, xcframework = self.layout(Path(scratch))
+            out = Path(scratch) / swift_package.POD_ASSET
+            names = swift_package.pod_archive(xcframework, out, root)
+            with zipfile.ZipFile(out) as archive:
+                self.assertEqual(sorted(archive.namelist()), names)
+            self.assertEqual(
+                names,
+                [
+                    "LICENSE",
+                    "NOTICE",
+                    "chordsketchFFI.xcframework/Info.plist",
+                    "packages/swift/Sources/ChordSketch/chordsketch.swift",
+                    "packages/swift/Tests/ChordSketchTests.swift",
+                ],
+            )
+
+    def test_when_built_the_xcframework_zips_own_files_are_kept_as_they_are(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root, xcframework = self.layout(Path(scratch))
+            out = Path(scratch) / swift_package.POD_ASSET
+            swift_package.pod_archive(xcframework, out, root)
+            with zipfile.ZipFile(out) as archive:
+                self.assertEqual(archive.read("LICENSE"), b"zip license\n")
+
+    def test_when_the_checkout_has_no_bindings_the_archive_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root, xcframework = self.layout(Path(scratch), bindings=False)
+            with self.assertRaisesRegex(swift_package.SwiftPackageError, "no Swift bindings"):
+                swift_package.pod_archive(xcframework, Path(scratch) / "out.zip", root)
+
+    def test_when_the_zip_has_no_framework_the_archive_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root, xcframework = self.layout(Path(scratch), framework=False)
+            with self.assertRaisesRegex(swift_package.SwiftPackageError, "no chordsketchFFI.xcframework"):
+                swift_package.pod_archive(xcframework, Path(scratch) / "out.zip", root)
+
+    def test_when_the_zip_already_holds_a_file_the_checkout_adds_the_archive_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root, xcframework = self.layout(Path(scratch), notice_in_zip=True)
+            with self.assertRaisesRegex(swift_package.SwiftPackageError, "already holds NOTICE"):
+                swift_package.pod_archive(xcframework, Path(scratch) / "out.zip", root)
 
 
 class CommandLineTest(unittest.TestCase):

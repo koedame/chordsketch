@@ -1366,53 +1366,77 @@ class NpmDryRunTest(unittest.TestCase):
 
 
 class CocoapodsProblemsTest(unittest.TestCase):
-    """The pod has to carry the Swift bindings the tag holds, and the binary pinned with them."""
+    """The pod installs from one archive that holds the tag's Swift bindings and the pinned binary."""
 
-    def problems(self, *, source: dict | None = None, drop_checksum: bool = False, unzip_everything: bool = False, source_files: str = "packages/swift/Sources/ChordSketch/*.swift") -> list[str]:
+    ASSET = "https://github.com/koedame/chordsketch/releases/download/v0.8.0/chordsketch-cocoapods.zip"
+
+    def problems(
+        self,
+        *,
+        source: dict | None = None,
+        prepare_command: str | None = None,
+        source_files: str = "packages/swift/Sources/ChordSketch/*.swift",
+        test_source_files: str = "packages/swift/Tests/*.swift",
+        vendored_frameworks: str = "chordsketchFFI.xcframework",
+        license_file: str = "LICENSE",
+    ) -> list[str]:
         def runner(cmd, cwd, env=None):
             if cmd[0] != "pod":
                 return checks.run(cmd, cwd, env)
             podspec = (cwd / "ChordSketch.podspec").read_text()
-            prepare = podspec.split("<<-'CMD'\n", 1)[1].split("  CMD\n", 1)[0]
-            if drop_checksum:
-                prepare = "\n".join(line for line in prepare.splitlines() if "shasum" not in line)
-            if unzip_everything:
-                prepare = prepare.replace(checks.XCFRAMEWORK_UNZIP, "unzip -q chordsketch-xcframework.zip")
+            from_podspec = re.search(r":http\s*=>\s*'([^']+)'", podspec)
             spec = {
                 "name": "ChordSketch",
                 "version": "0.8.0",
                 "summary": "s",
-                "license": {"type": "MIT", "file": "LICENSE"},
+                "license": {"type": "MIT", "file": license_file},
                 "homepage": "h",
                 "authors": {"koedame": "k"},
-                "source": source or {"git": "https://github.com/koedame/chordsketch.git", "tag": "v0.8.0"},
-                "prepare_command": prepare,
+                "source": source or {"http": from_podspec.group(1) if from_podspec else None},
                 "source_files": source_files,
+                "vendored_frameworks": vendored_frameworks,
+                "testspecs": [{"name": "Tests", "test_type": "unit", "source_files": test_source_files}],
             }
+            if prepare_command or "s.prepare_command" in podspec:
+                spec["prepare_command"] = prepare_command or "the template's own"
             return checks.subprocess.CompletedProcess(cmd, 0, json.dumps(spec))
 
         return checks.cocoapods_problems("0.8.0", runner)
 
-    def test_when_the_podspec_names_the_tag_and_verifies_the_pinned_xcframework_there_is_no_problem(self) -> None:
+    def test_when_the_podspec_installs_from_the_archive_that_holds_the_sources_and_the_binary_there_is_no_problem(self) -> None:
         self.assertEqual(self.problems(), [])
+
+    def test_when_the_podspec_has_a_prepare_command_it_is_a_problem(self) -> None:
+        problems = self.problems(prepare_command="curl --fail -o x https://github.com/koedame/chordsketch/releases/download/v0.8.0/chordsketch-xcframework.zip")
+        self.assertEqual(len(problems), 1)
+        self.assertIn("prepare_command", problems[0])
+        self.assertIn("refuses", problems[0])
 
     def test_when_the_source_is_the_xcframework_zip_the_missing_swift_api_is_a_problem(self) -> None:
         zip_source = {"http": "https://github.com/koedame/chordsketch/releases/download/v0.8.0/chordsketch-xcframework.zip"}
         problems = self.problems(source=zip_source)
-        self.assertTrue(any("not the git tag v0.8.0" in p for p in problems), problems)
+        self.assertTrue(any("not the release asset" in p for p in problems), problems)
 
-    def test_when_the_download_is_not_checked_against_the_pinned_checksum_it_is_a_problem(self) -> None:
-        problems = self.problems(drop_checksum=True)
-        self.assertTrue(any("does not verify the XCFramework" in p for p in problems), problems)
+    def test_when_the_source_is_the_git_tag_the_binary_missing_from_it_is_a_problem(self) -> None:
+        git_source = {"git": "https://github.com/koedame/chordsketch.git", "tag": "v0.8.0"}
+        problems = self.problems(source=git_source)
+        self.assertTrue(any("not the release asset" in p for p in problems), problems)
 
-    def test_when_the_prepare_command_unzips_the_whole_zip_over_the_tags_notice_it_is_a_problem(self) -> None:
-        problems = self.problems(unzip_everything=True)
-        self.assertEqual(len(problems), 1)
-        self.assertIn("unzipping the whole zip", problems[0])
-
-    def test_when_source_files_match_nothing_it_is_a_problem(self) -> None:
+    def test_when_source_files_match_nothing_in_the_archive_it_is_a_problem(self) -> None:
         problems = self.problems(source_files="packages/swift/Nothing/*.swift")
         self.assertTrue(any("match nothing" in p for p in problems), problems)
+
+    def test_when_the_test_spec_sources_match_nothing_in_the_archive_it_is_a_problem(self) -> None:
+        problems = self.problems(test_source_files="Tests/*.swift")
+        self.assertTrue(any("`Tests` test spec" in p and "match nothing" in p for p in problems), problems)
+
+    def test_when_the_framework_is_not_in_the_archive_it_is_a_problem(self) -> None:
+        problems = self.problems(vendored_frameworks="Other.xcframework")
+        self.assertTrue(any("vendored_frameworks" in p for p in problems), problems)
+
+    def test_when_the_license_file_is_not_in_the_archive_it_is_a_problem(self) -> None:
+        problems = self.problems(license_file="COPYING")
+        self.assertTrue(any("license file `COPYING`" in p for p in problems), problems)
 
 
 class SwiftPackageProblemsTest(unittest.TestCase):

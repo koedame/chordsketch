@@ -344,13 +344,16 @@ at post-release verification rather than before the tag is cut.
    Check that post-release.yml updates Homebrew, Scoop, AUR, Snap,
    and Chocolatey, and that the Swift Package jobs upload the XCFramework
    and push to CocoaPods. `Package.swift` needs no update after the tag: it
-   was pinned in step 3. The pod's source is the tag itself, which holds the
-   Swift bindings, and it downloads the XCFramework the release uploaded,
-   refusing a zip that is not the one `Package.swift` pins. So the pod, like
-   the Swift package, is only as good as the pin of step 3. A pull request
-   runs `pod lib lint` with the pod's tests against the XCFramework it
-   built (`lint-podspec` in `swift.yml`), which is where a pod that does not
-   install shows up. Docker pushes to both
+   was pinned in step 3. The pod's source is `chordsketch-cocoapods.zip`,
+   which `publish` builds from the XCFramework zip it has checked against the
+   checksum `Package.swift` pins plus the Swift bindings the tag holds
+   ([ADR-0088](adr/0088-the-cocoapods-pod-installs-from-one-archive-without-a-prepare-command.md)).
+   So the pod, like the Swift package, is only as good as the pin of step 3.
+   A pull request runs `pod spec lint` with the pod's tests against the
+   archive built from the XCFramework it built (`lint-podspec` in
+   `swift.yml`), which is where a pod that does not install shows up. What
+   only trunk checks, such as its refusal of a `prepare_command`, is checked
+   by `check-publishable.py cocoapods`. Docker pushes to both
    GHCR and Docker Hub. VS Code publishes **8 VSIXes per release**
    (1 universal + 7 platform-specific: `linux-x64`, `linux-arm64`,
    `darwin-x64`, `darwin-arm64`, `win32-x64`, `alpine-x64`,
@@ -1459,10 +1462,13 @@ needed for a file-processing CLI).
 ### CocoaPods
 
 Set up on 2026-04-15. Automated via `swift.yml` `update-cocoapods`, which
-runs after that workflow's `publish` job has uploaded the XCFramework the
-podspec downloads during `pod trunk push` validation.
+runs after that workflow's `publish` job has uploaded the archive
+(`chordsketch-cocoapods.zip`) the podspec downloads during `pod trunk push`
+validation.
 
-The pod ships a prebuilt XCFramework (same artifact as the Swift package).
+The pod ships the XCFramework (same binary as the Swift package) and the Swift
+bindings in that archive. The podspec must not have a `prepare_command`: trunk
+refuses one in a new pod and answers `An internal server error occurred`.
 
 1. Install CocoaPods: `gem install cocoapods`
 2. Register a trunk session:
