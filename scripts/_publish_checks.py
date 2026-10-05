@@ -1307,7 +1307,7 @@ def container_image_problems(image: str, version: str, runner: Runner = run) -> 
 
 # ---------------------------------------------------------------- package managers
 #
-# Homebrew, Scoop, Chocolatey, AUR, Snap, CocoaPods and the Swift
+# Homebrew, Scoop, Chocolatey, AUR, Snap and the Swift
 # package are published by filling a template with the release's version and
 # checksums. The checks below run the release's own generating step — lifted
 # out of the workflow, so there is no second copy to drift — against a
@@ -1665,55 +1665,6 @@ def snap_problems(version: str, binary: Path, runner: Runner = run) -> list[str]
         shutil.rmtree(directory, ignore_errors=True)
 
 
-# https://guides.cocoapods.org/syntax/podspec.html
-XCFRAMEWORK_UNZIP = "unzip -q chordsketch-xcframework.zip 'chordsketchFFI.xcframework/*'"
-REQUIRED_PODSPEC_ATTRIBUTES = ("name", "version", "summary", "license", "homepage", "authors", "source")
-
-
-def cocoapods_problems(version: str, runner: Runner = run) -> list[str]:
-    """The podspec is the tag's own source plus the XCFramework the release uploads.
-
-    A pod built from the XCFramework zip alone has no Swift API: the bindings
-    are a source file, so the podspec has to name the tag that holds them, and
-    fetch the binary that was pinned with them.
-    """
-    checksum = fake_sha256("chordsketch-xcframework.zip")
-    outputs, problems, directory = generated("swift.yml", "update-cocoapods", "Generate podspec", ("ChordSketch.podspec",), version, runner, extra_env={"SHA256": checksum})
-    try:
-        if not outputs:
-            return problems
-        spec_json = runner(["pod", "ipc", "spec", "ChordSketch.podspec"], directory)
-        if spec_json.returncode != 0:
-            return problems + [f"`pod ipc spec` cannot read the podspec:\n{tail(spec_json.stdout)}"]
-        spec = json.loads(spec_json.stdout[spec_json.stdout.find("{") :])
-        problems += [f"the podspec has no `{key}`" for key in REQUIRED_PODSPEC_ATTRIBUTES if not spec.get(key)]
-        if len(spec.get("summary", "")) > 140:
-            problems.append("the podspec summary is over 140 characters")
-        if spec.get("version") != version:
-            problems.append(f"the podspec version is {spec.get('version')!r}, not {version}")
-        source = spec.get("source") or {}
-        if source.get("git") != "https://github.com/koedame/chordsketch.git" or source.get("tag") != f"v{version}":
-            problems.append(f"the podspec source is {source!r}, not the git tag v{version}: the Swift bindings are a source file the tag holds")
-        prepare = spec.get("prepare_command", "")
-        problems += download_url_problems("podspec prepare_command", prepare, version)
-        if checksum not in prepare:
-            problems.append("the podspec's prepare_command does not verify the XCFramework against the checksum Package.swift pins")
-        if XCFRAMEWORK_UNZIP not in prepare:
-            problems.append(
-                f"the podspec's prepare_command does not run `{XCFRAMEWORK_UNZIP}`: unzipping the whole zip stops on the "
-                f"{THIRD_PARTY_NOTICE} the tag already holds (unzip asks before overwriting it and nothing answers)"
-            )
-        source_files = spec.get("source_files") or ""
-        if not source_files or not any(REPO_ROOT.glob(source_files)):
-            problems.append(f"the podspec's source_files {source_files!r} match nothing in the repository: the pod would have no Swift API")
-        license_entry = spec.get("license") or {}
-        if isinstance(license_entry, dict) and license_entry.get("file") and not (REPO_ROOT / license_entry["file"]).is_file():
-            problems.append(f"the podspec names license file `{license_entry['file']}`, which the tag does not contain")
-        return problems
-    finally:
-        shutil.rmtree(directory, ignore_errors=True)
-
-
 def swift_package_problems(version: str, runner: Runner = run) -> list[str]:
     """The `Package.swift` a consumer resolves from the tag names this release's XCFramework.
 
@@ -1776,7 +1727,7 @@ def xcframework_archive_problems(runner: Runner = run) -> list[str]:
         files = read_zip(directory / label)
         problems = []
         if not any(f.path.startswith("chordsketchFFI.xcframework/") for f in files):
-            problems.append(f"{label} has no chordsketchFFI.xcframework at its root, where SwiftPM and the podspec look for it")
+            problems.append(f"{label} has no chordsketchFFI.xcframework at its root, where SwiftPM looks for it")
         return problems + notice_problems(label, files, always=True) + license_problems(label, files)
     finally:
         shutil.rmtree(directory, ignore_errors=True)
@@ -2274,7 +2225,6 @@ CHANNEL_CHECKS: dict[str, str] = {
     "chocolatey": "check-publishable.py chocolatey",
     "aur": "check-publishable.py aur",
     "snap": "check-publishable.py snap",
-    "cocoapods": "check-publishable.py cocoapods",
     "nixpkgs": "./.github/workflows/nix.yml",
     "winget": "check-publishable.py winget",
     "macports": "./.github/workflows/macports-smoke.yml",

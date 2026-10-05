@@ -545,8 +545,8 @@ because it reads only the root `LICENSE`.
 Third-party dependency notices are in [NOTICE](NOTICE) and
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). They ship with the CLI
 archives, container images, the desktop app, the VS Code extension, the
-wasm and napi npm packages, and the PyPI, RubyGems, Maven, and Swift /
-CocoaPods packages — see
+wasm and napi npm packages, and the PyPI, RubyGems, Maven, and Swift
+packages — see
 [ADR-0085](docs/adr/0085-binaries-ship-a-generated-third-party-license-notice.md).
 
 ## Trademark

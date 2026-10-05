@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **ChordSketch is no longer published to CocoaPods.** CocoaPods trunk
+  becomes read-only on 2026-12-02, and the 0.8.0 push was rejected by it.
+  Use the Swift package. Version 0.7.0 stays on trunk.
+
 ## [0.8.0] - 2026-10-05
 
 ### Changed

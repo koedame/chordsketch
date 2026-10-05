@@ -1365,56 +1365,6 @@ class NpmDryRunTest(unittest.TestCase):
         self.assertEqual(self.problems("git+https://github.com/koedame/chordsketch.git"), [])
 
 
-class CocoapodsProblemsTest(unittest.TestCase):
-    """The pod has to carry the Swift bindings the tag holds, and the binary pinned with them."""
-
-    def problems(self, *, source: dict | None = None, drop_checksum: bool = False, unzip_everything: bool = False, source_files: str = "packages/swift/Sources/ChordSketch/*.swift") -> list[str]:
-        def runner(cmd, cwd, env=None):
-            if cmd[0] != "pod":
-                return checks.run(cmd, cwd, env)
-            podspec = (cwd / "ChordSketch.podspec").read_text()
-            prepare = podspec.split("<<-'CMD'\n", 1)[1].split("  CMD\n", 1)[0]
-            if drop_checksum:
-                prepare = "\n".join(line for line in prepare.splitlines() if "shasum" not in line)
-            if unzip_everything:
-                prepare = prepare.replace(checks.XCFRAMEWORK_UNZIP, "unzip -q chordsketch-xcframework.zip")
-            spec = {
-                "name": "ChordSketch",
-                "version": "0.8.0",
-                "summary": "s",
-                "license": {"type": "MIT", "file": "LICENSE"},
-                "homepage": "h",
-                "authors": {"koedame": "k"},
-                "source": source or {"git": "https://github.com/koedame/chordsketch.git", "tag": "v0.8.0"},
-                "prepare_command": prepare,
-                "source_files": source_files,
-            }
-            return checks.subprocess.CompletedProcess(cmd, 0, json.dumps(spec))
-
-        return checks.cocoapods_problems("0.8.0", runner)
-
-    def test_when_the_podspec_names_the_tag_and_verifies_the_pinned_xcframework_there_is_no_problem(self) -> None:
-        self.assertEqual(self.problems(), [])
-
-    def test_when_the_source_is_the_xcframework_zip_the_missing_swift_api_is_a_problem(self) -> None:
-        zip_source = {"http": "https://github.com/koedame/chordsketch/releases/download/v0.8.0/chordsketch-xcframework.zip"}
-        problems = self.problems(source=zip_source)
-        self.assertTrue(any("not the git tag v0.8.0" in p for p in problems), problems)
-
-    def test_when_the_download_is_not_checked_against_the_pinned_checksum_it_is_a_problem(self) -> None:
-        problems = self.problems(drop_checksum=True)
-        self.assertTrue(any("does not verify the XCFramework" in p for p in problems), problems)
-
-    def test_when_the_prepare_command_unzips_the_whole_zip_over_the_tags_notice_it_is_a_problem(self) -> None:
-        problems = self.problems(unzip_everything=True)
-        self.assertEqual(len(problems), 1)
-        self.assertIn("unzipping the whole zip", problems[0])
-
-    def test_when_source_files_match_nothing_it_is_a_problem(self) -> None:
-        problems = self.problems(source_files="packages/swift/Nothing/*.swift")
-        self.assertTrue(any("match nothing" in p for p in problems), problems)
-
-
 class SwiftPackageProblemsTest(unittest.TestCase):
     """The manifest a consumer resolves from the tag has to be pinned for the version being released."""
 
@@ -1471,7 +1421,7 @@ class SwiftPackageProblemsTest(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("zip"), "the release step zips with `zip`")
 class XcframeworkArchiveTest(unittest.TestCase):
-    """The XCFramework zip is the binary SwiftPM and the pod download, so it carries the notice and the MIT text."""
+    """The XCFramework zip is the binary SwiftPM downloads, so it carries the notice and the MIT text."""
 
     def test_when_the_release_step_zips_the_framework_with_the_license_and_the_third_party_notice_there_is_no_problem(self) -> None:
         self.assertEqual(checks.xcframework_archive_problems(), [])

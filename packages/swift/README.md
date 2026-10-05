@@ -48,22 +48,6 @@ let package = Package(
 Or add via Xcode: **File → Add Package Dependencies**, enter
 `https://github.com/koedame/chordsketch`.
 
-### CocoaPods
-
-[![CocoaPods](https://img.shields.io/cocoapods/v/ChordSketch)](https://cocoapods.org/pods/ChordSketch)
-
-Add to your `Podfile`:
-
-```ruby
-pod 'ChordSketch'
-```
-
-Then run:
-
-```bash
-pod install
-```
-
 ## Quick Start
 
 ```swift

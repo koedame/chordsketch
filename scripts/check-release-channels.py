@@ -779,44 +779,6 @@ def _check_snap(channel: Channel, version: str) -> CheckResult:
     return _compare(channel, version, ",".join(served))
 
 
-def _check_cocoapods(channel: Channel, version: str) -> CheckResult:
-    """Verify the CocoaPods trunk, which registers a push synchronously.
-
-    `pod trunk push` returns once trunk holds the version, so — as with
-    every registry other than Chocolatey — there is no moderation state to
-    model and the verdict is binary (ADR-0049).
-
-    `versions` is an array of `{name, created_at}` in push order, so the
-    last entry is the newest release: chordsketch reads 0.2.1 → 0.2.2 →
-    0.3.0 → 0.5.0 with ascending `created_at` (measured 2026-09-02). That
-    keeps this check the same "the registry's newest is the tag" assertion
-    every other channel makes, rather than the weaker "the tag is in there
-    somewhere", which would stay green through a publish that never
-    happened for the current release.
-    """
-    url = f"https://trunk.cocoapods.org/api/v1/pods/{urllib.parse.quote(channel.package)}"
-    try:
-        payload = _http_get_json(url)
-    except Exception as exc:  # noqa: BLE001
-        return _error(channel, version, f"CocoaPods trunk API error: {exc}")
-
-    names = [
-        str(entry.get("name") or "<missing>")
-        for entry in payload.get("versions") or []
-        if isinstance(entry, dict)
-    ]
-    if not names:
-        return _absent(
-            channel,
-            version,
-            f"the CocoaPods trunk holds no versions of {channel.package}. "
-            f"Re-run the publish with `gh workflow run post-release.yml -R "
-            f"koedame/chordsketch -f tag=v{version}`, which repeats the "
-            f"`pod trunk push` step.",
-        )
-    return _compare(channel, version, names[-1])
-
-
 def _check_manual(channel: Channel, version: str) -> CheckResult:
     # Manual channels are never verified — they are only in the manifest for
     # paper-trail reasons. This function exists so the dispatcher below does
@@ -896,7 +858,6 @@ _DISPATCH: dict[str, Callable[[Channel, str], CheckResult]] = {
     "chocolatey": _check_chocolatey,
     "aur": _check_aur,
     "snap": _check_snap,
-    "cocoapods": _check_cocoapods,
     "manual": _check_manual,
 }
 

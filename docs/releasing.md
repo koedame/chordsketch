@@ -91,8 +91,7 @@ publishing holds, and reports every failing one at once:
 - no registry already serves `X.Y.Z`;
 - every CI publish credential is accepted by its service —
   `.github/workflows/release-credentials.yml`, which the script dispatches,
-  asks Docker Hub, the Marketplace, Open VSX, the Central Portal, CocoaPods
-  trunk, GitHub, AUR and the Snap Store with read-only calls;
+  asks Docker Hub, the Marketplace, Open VSX, the Central Portal, GitHub, AUR and the Snap Store with read-only calls;
 - `.github/workflows/publish-registries.yml` passes in `check` mode for
   the release commit, which the script dispatches alongside
   `release-credentials.yml`. It runs, on a runner, what the publish will
@@ -299,8 +298,7 @@ at post-release verification rather than before the tag is cut.
 
 7. **Run the channel rollup.** Every CI-published channel has already
    run inside the release workflow (step 5) — Docker, VS Code / Open
-   VSX, napi tarballs, the Swift Package (its XCFramework upload and its
-   CocoaPods update), and the whole `post-release.yml` fan-out are
+   VSX, napi tarballs, the Swift Package (its XCFramework upload), and the whole `post-release.yml` fan-out are
    `needs: [release]` jobs in that single run, per
    [ADR-0039](adr/0039-release-fan-out-is-an-explicit-call-graph.md).
    Nothing needs dispatching to make the release happen.
@@ -332,9 +330,7 @@ at post-release verification rather than before the tag is cut.
    not publish to npm (step 6 does that). A `swift.yml` dispatch with `tag`
    uploads the XCFramework the tag's `Package.swift` pins to the release
    again; it never rebuilds it, since a rebuilt zip would not match that
-   checksum. To retry only a failed CocoaPods update, re-run that job
-   inside the release run instead
-   (`gh run rerun <run-id> --failed -R koedame/chordsketch`).
+   checksum.
 
 8. **Verify each channel.** The release run from step 5 covers every
    CI-published channel, so check that first:
@@ -342,15 +338,9 @@ at post-release verification rather than before the tag is cut.
    gh run list -R koedame/chordsketch --workflow release.yml --limit 5
    ```
    Check that post-release.yml updates Homebrew, Scoop, AUR, Snap,
-   and Chocolatey, and that the Swift Package jobs upload the XCFramework
-   and push to CocoaPods. `Package.swift` needs no update after the tag: it
-   was pinned in step 3. The pod's source is the tag itself, which holds the
-   Swift bindings, and it downloads the XCFramework the release uploaded,
-   refusing a zip that is not the one `Package.swift` pins. So the pod, like
-   the Swift package, is only as good as the pin of step 3. A pull request
-   runs `pod lib lint` with the pod's tests against the XCFramework it
-   built (`lint-podspec` in `swift.yml`), which is where a pod that does not
-   install shows up. Docker pushes to both
+   and Chocolatey, and that the Swift Package job uploads the XCFramework.
+   `Package.swift` needs no update after the tag: it was pinned in step 3,
+   so the Swift package is only as good as that pin. Docker pushes to both
    GHCR and Docker Hub. VS Code publishes **8 VSIXes per release**
    (1 universal + 7 platform-specific: `linux-x64`, `linux-arm64`,
    `darwin-x64`, `darwin-arm64`, `win32-x64`, `alpine-x64`,
@@ -433,7 +423,6 @@ together with the check in `scripts/_publish_checks.py`.
 | PyPI | `chordsketch` | `python.yml` on tag push | none (OIDC trusted publisher) | `pypi` rollup entry |
 | RubyGems | `chordsketch` | `ruby.yml` on tag push | none (OIDC trusted publisher) | `rubygems` rollup entry |
 | Maven Central | `me.koeda:chordsketch` | `kotlin.yml` on tag push | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, `SIGNING_PASSWORD` | `maven-central` rollup entry |
-| CocoaPods | `ChordSketch` | `swift.yml` (after its XCFramework `publish`), called by `release.yml` on tag push | `COCOAPODS_TRUNK_TOKEN` | `cocoapods` rollup entry |
 | JetBrains Marketplace | `me.koeda.chordsketch` | manual `./gradlew publishPlugin` | `JETBRAINS_MARKETPLACE_TOKEN` | not yet automated |
 | from source | `git clone` + `cargo install --path crates/cli` | always available | none | `source-build` job |
 | Library Usage (Rust) | crates.io snippet from README | implicit via crates.io | none | `library-smoke` job |
@@ -652,7 +641,6 @@ After the release workflow completes and the GitHub Release is published:
 | `CHOCOLATEY_API_KEY` | Chocolatey Community Repository API key | Authenticate `choco push` from `post-release.yml` (windows-latest runner) |
 | `AUR_SSH_KEY` | ed25519 SSH private key registered with AUR account `koedame` | Authenticate `git push` to `ssh://aur@aur.archlinux.org/chordsketch.git` from `post-release.yml` |
 | `SNAP_STORE_TOKEN` | Snapcraft exported credentials (`snapcraft export-login`) | Authenticate `snapcraft upload` + `snapcraft release` from `post-release.yml` |
-| `COCOAPODS_TRUNK_TOKEN` | CocoaPods trunk session token (from `~/.netrc` after `pod trunk register`) | Authenticate `pod trunk push` from `swift.yml` |
 | `OPEN_VSX_TOKEN` | Open VSX personal access token (**environment secret** in `open-vsx`, not repo-level) | Authenticate `ovsx publish` from `vscode-extension.yml` |
 | `FLATHUB_TOKEN` | Classic token with `public_repo`, from an account with write access to `flathub/io.github.koedame.chordsketch` | Open the update pull request from `desktop-release.yml`'s `update-flathub` job. Not set until the first submission is accepted ([Flathub](#flathub-desktop-app)) |
 | `GITHUB_TOKEN` | provided automatically | Used by `docker.yml` to push to GHCR, by `release.yml` to upload assets, by `npm-publish.yml` checkout |
@@ -678,7 +666,6 @@ following as the rotation policy:
 | `CHOCOLATEY_API_KEY` | Only if regenerated on chocolatey.org | <https://community.chocolatey.org/account> → API Key → copy, then `gh secret set CHOCOLATEY_API_KEY` |
 | `AUR_SSH_KEY` | Only if the key is compromised or the AUR account changes | <https://aur.archlinux.org/account/koedame> (replace SSH public key, then `gh secret set AUR_SSH_KEY < new_key`) |
 | `SNAP_STORE_TOKEN` | Before expiry date (check current expiry with `snapcraft whoami`) | `snapcraft export-login ~/snap-token.txt && gh secret set SNAP_STORE_TOKEN < ~/snap-token.txt && rm -f ~/snap-token.txt` |
-| `COCOAPODS_TRUNK_TOKEN` | Sessions last ~4 months; re-register if expired | `pod trunk register <email> <name>`, confirm email, then pipe token directly: `grep -A2 trunk.cocoapods.org ~/.netrc \| awk '/password/{print $2}' \| gh secret set COCOAPODS_TRUNK_TOKEN` |
 | `FLATHUB_TOKEN` | Every 90 days, like `TAP_GITHUB_TOKEN` | <https://github.com/settings/tokens>, then `gh secret set FLATHUB_TOKEN` |
 | `OPEN_VSX_TOKEN` | Only if revoked or compromised | <https://open-vsx.org/user-settings/tokens> → generate new token, then `gh secret set OPEN_VSX_TOKEN --env open-vsx` |
 | `DOCKERHUB_USERNAME` | Only if the Docker Hub namespace owner changes | n/a (string, not a credential) |
@@ -1454,33 +1441,6 @@ needed for a file-processing CLI).
    ```bash
    gh secret set SNAP_STORE_TOKEN -R koedame/chordsketch < ~/snap-token.txt
    rm -f ~/snap-token.txt
-   ```
-
-### CocoaPods
-
-Set up on 2026-04-15. Automated via `swift.yml` `update-cocoapods`, which
-runs after that workflow's `publish` job has uploaded the XCFramework the
-podspec downloads during `pod trunk push` validation.
-
-The pod ships a prebuilt XCFramework (same artifact as the Swift package).
-
-1. Install CocoaPods: `gem install cocoapods`
-2. Register a trunk session:
-   ```bash
-   pod trunk register <email> <name>
-   # Click the confirmation link in the email
-   ```
-3. Generate and push the podspec:
-   ```bash
-   sed -e "s/{{VERSION}}/X.Y.Z/g" \
-     packaging/cocoapods/ChordSketch.podspec.template > ChordSketch.podspec
-   pod trunk push ChordSketch.podspec --allow-warnings
-   ```
-4. Store the trunk token as a GitHub secret. The token is in `~/.netrc`.
-   Pipe it directly to avoid leaking the value into shell history:
-   ```bash
-   grep -A2 trunk.cocoapods.org ~/.netrc | awk '/password/{print $2}' \
-     | gh secret set COCOAPODS_TRUNK_TOKEN -R koedame/chordsketch
    ```
 
 ### Open VSX Registry
