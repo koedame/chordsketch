@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-09-14
 - **Amends**: [ADR-0039](0039-release-fan-out-is-an-explicit-call-graph.md)
-- **Amended by**: [ADR-0080](0080-swift-package-manifest-at-the-root-pins-the-xcframework-before-the-tag.md), [ADR-0081](0081-the-cocoapods-pod-builds-the-tags-swift-sources.md)
+- **Amended by**: [ADR-0080](0080-swift-package-manifest-at-the-root-pins-the-xcframework-before-the-tag.md), [ADR-0081](0081-the-cocoapods-pod-builds-the-tags-swift-sources.md), [ADR-0088](0088-chordsketch-is-no-longer-published-to-cocoapods.md)
 
 ## Context
 

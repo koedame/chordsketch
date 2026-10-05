@@ -1,6 +1,6 @@
 # 0081. The CocoaPods pod builds the tag's Swift sources on top of the pinned XCFramework
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-0088](0088-chordsketch-is-no-longer-published-to-cocoapods.md)
 - **Date**: 2026-09-19
 - **Amends**: [ADR-0067](0067-swift-package-joins-the-release-call-graph.md),
   [ADR-0080](0080-swift-package-manifest-at-the-root-pins-the-xcframework-before-the-tag.md)

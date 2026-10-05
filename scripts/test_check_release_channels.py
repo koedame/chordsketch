@@ -1245,53 +1245,6 @@ end
         self.assertEqual(result.observed, "<error>")
         self.assertIn("Snap Store API error", result.detail)
 
-    def test_cocoapods_newest_push_is_the_verdict(self) -> None:
-        # Trunk returns `versions` in push order, so the last entry is the
-        # newest release.
-        channel = _fake_channel(kind="cocoapods", package="ChordSketch")
-        payload = {
-            "versions": [
-                {"name": "0.3.0", "created_at": "2026-04-26 07:39:24 UTC"},
-                {"name": "0.5.0", "created_at": "2026-05-20 08:49:10 UTC"},
-            ]
-        }
-        with patch(
-            "check_release_channels._http_get_json", return_value=payload
-        ) as mock_http:
-            result = check_release_channels.verify_channel(
-                channel, "v0.5.0", force_stale=False
-            )
-        self.assertTrue(result.ok, f"expected OK, got {result}")
-        self.assertEqual(result.observed, "0.5.0")
-        self.assertEqual(
-            mock_http.call_args.args[0],
-            "https://trunk.cocoapods.org/api/v1/pods/ChordSketch",
-        )
-
-    def test_cocoapods_trunk_missing_the_release_is_red(self) -> None:
-        # The tag being absent from trunk is the whole failure this check
-        # exists to catch: `pod install` serves the previous release.
-        channel = _fake_channel(kind="cocoapods", package="ChordSketch")
-        payload = {"versions": [{"name": "0.3.0", "created_at": "2026-04-26"}]}
-        with patch("check_release_channels._http_get_json", return_value=payload):
-            result = check_release_channels.verify_channel(
-                channel, "v0.5.0", force_stale=False
-            )
-        self.assertFalse(result.ok)
-        self.assertEqual(result.observed, "0.3.0")
-
-    def test_cocoapods_pod_with_no_versions_is_absent(self) -> None:
-        channel = _fake_channel(kind="cocoapods", package="ChordSketch")
-        with patch(
-            "check_release_channels._http_get_json", return_value={"versions": []}
-        ):
-            result = check_release_channels.verify_channel(
-                channel, "v0.5.0", force_stale=False
-            )
-        self.assertFalse(result.ok)
-        self.assertEqual(result.observed, "<absent>")
-        self.assertIn("post-release.yml", result.detail)
-
 
 class CliOutputOrderingTests(unittest.TestCase):
     """Regression guard for #1853.
