@@ -50,6 +50,10 @@ cannot already get from the Swift package.
 
 - `pod 'ChordSketch'` resolves to 0.7.0, which has no Swift API
   (ADR-0081), and gets no later version.
+- The daily release rollup reads the manifest at the newest tag. Tags up to
+  v0.8.0 still list a `cocoapods` channel, so `RETIRED_KINDS` in
+  `scripts/_release_channels.py` makes the rollup skip it instead of failing
+  on a kind main no longer implements.
 - Releases no longer wait on a macOS job for the pod, and the macOS lint
   matrix on pull requests is gone.
 
