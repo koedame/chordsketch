@@ -5,6 +5,8 @@
 [Installation] npm install @chordsketch/react-ui react react-dom
 [Installation] brew install --formula koedame/tap/chordsketch
 [Installation] brew install --cask koedame/tap/chordsketch
+[Installation] brew install --formula koedame/tap/chordsketch-desktop
+[Installation] cp -R "$(brew --prefix chordsketch-desktop)/ChordSketch.app" /Applications/
 [Installation] sudo port install chordsketch
 [Installation] scoop bucket add koedame https://github.com/koedame/scoop-bucket
 [Installation] scoop install chordsketch
