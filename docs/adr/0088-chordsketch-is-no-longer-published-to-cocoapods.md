@@ -33,6 +33,19 @@ for a channel that has about two months left.
    cannot be removed. The `COCOAPODS_TRUNK_TOKEN` repository secret is no
    longer read by any workflow.
 
+## Rationale
+
+Restructuring the pod to work around trunk's `prepare_command` rejection
+(a second release asset, or dropping back to the XCFramework-only pod
+ADR-0081 replaced) buys at most two months of service before trunk stops
+taking pushes regardless. The cost is a new release asset shape plus the
+macOS `lint-podspec` matrix kept green against it; the benefit is a
+channel that cannot accept another version past 2026-12-02 even if the
+workaround succeeds. The Swift package already carries the same
+XCFramework (ADR-0080) and is the one channel the pod pulled its
+content from, so removing the pod loses no capability a CocoaPods user
+cannot already get from the Swift package.
+
 ## Consequences
 
 - `pod 'ChordSketch'` resolves to 0.7.0, which has no Swift API
@@ -40,6 +53,21 @@ for a channel that has about two months left.
 - Releases no longer wait on a macOS job for the pod, and the macOS lint
   matrix on pull requests is gone.
 
+## Alternatives considered
+
+- **Restructure the podspec around a second release asset** so
+  `prepare_command` stops triggering trunk's rejection. Rejected: the
+  fix is non-trivial (a new asset shape, re-verified `lint-podspec`
+  matrix) for a channel with about two months of life left before it
+  goes read-only regardless.
+- **Retry the push as-is, assuming the internal server error was
+  transient.** Rejected: it failed identically four times across the
+  0.8.0 release, which rules out a one-off trunk hiccup.
+- **Keep the `cocoapods` release channel definition but mark it
+  permanently stale instead of deleting it.** Rejected: a channel
+  nothing publishes to is dead configuration, not a paper trail — the
+  paper trail is this ADR and the superseded ADR-0081.
+
 ## References
 
-- [CocoaPods trunk read-only plan](https://blog.cocoapods.org)
+- [CocoaPods blog](https://blog.cocoapods.org)
