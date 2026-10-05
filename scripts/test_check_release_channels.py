@@ -205,6 +205,39 @@ expected_version = "tag"
                 load_channels(path)
             self.assertIn("unknown kind", str(ctx.exception))
 
+    def test_retired_kind_in_a_tag_manifest_is_dropped_only_on_request(self) -> None:
+        """A tag cut before a channel was retired still lists that channel.
+
+        The rollup reads the manifest at the tag but runs main's checkers, so
+        a retired kind there must not fail the whole rollup; main's own
+        manifest keeps the strict check.
+        """
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as td:
+            path = _write_manifest(
+                Path(td),
+                """
+[[channels]]
+id = "crates"
+display = "crates.io"
+kind = "crates-io"
+package = "chordsketch"
+expected_version = "tag"
+
+[[channels]]
+id = "cocoapods"
+display = "CocoaPods"
+kind = "cocoapods"
+package = "ChordSketch"
+expected_version = "tag"
+""",
+            )
+            with self.assertRaises(ManifestError):
+                load_channels(path)
+            ids = [c.id for c in load_channels(path, skip_retired=True)]
+            self.assertEqual(ids, ["crates"])
+
     def test_pinned_expected_version_is_rejected(self) -> None:
         """An explicit version is not a mode the verifier implements.
 

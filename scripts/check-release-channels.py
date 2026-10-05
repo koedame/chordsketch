@@ -931,7 +931,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    channels = load_channels(args.manifest) if args.manifest else load_channels()
+    channels = (
+        load_channels(args.manifest, skip_retired=True)
+        if args.manifest
+        else load_channels()
+    )
     try:
         channel = find_channel(channels, args.channel)
     except Exception as exc:  # noqa: BLE001

@@ -44,6 +44,14 @@ KNOWN_KINDS = frozenset(
     }
 )
 
+# Kinds that were once verified and have been retired. A manifest read from a
+# release tag cut before the retirement still lists them; the rollup checks
+# the tag against the checkers on main, which no longer implement these kinds,
+# and the retired channel never published that tag (ADR-0088). Only
+# `load_channels(skip_retired=True)` drops them, so main's own manifest still
+# fails loudly if a retired kind creeps back in.
+RETIRED_KINDS = frozenset({"cocoapods"})
+
 # The complete set of `expected_version` values, each naming a question the
 # rollup asks of the registry:
 #   "tag"    — is the newest published version equal to the release tag?
@@ -95,7 +103,9 @@ class ManifestError(Exception):
     """Raised when the manifest file is structurally invalid."""
 
 
-def load_channels(path: Path = MANIFEST_PATH) -> list[Channel]:
+def load_channels(
+    path: Path = MANIFEST_PATH, *, skip_retired: bool = False
+) -> list[Channel]:
     """Load and validate every channel entry from the manifest.
 
     Raises `ManifestError` on any structural problem: unknown `kind`, unknown
@@ -141,6 +151,9 @@ def load_channels(path: Path = MANIFEST_PATH) -> list[Channel]:
         if channel_id in seen_ids:
             raise ManifestError(f"duplicate channel id: {channel_id!r}")
         seen_ids.add(channel_id)
+
+        if skip_retired and kind in RETIRED_KINDS:
+            continue
 
         if kind not in KNOWN_KINDS:
             raise ManifestError(

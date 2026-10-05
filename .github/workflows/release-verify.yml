@@ -150,7 +150,7 @@ jobs:
           from pathlib import Path
           sys.path.insert(0, "scripts")
           from _release_channels import load_channels
-          ids = [c.id for c in load_channels(Path(sys.argv[1]))]
+          ids = [c.id for c in load_channels(Path(sys.argv[1]), skip_retired=True)]
           print(json.dumps(ids))
           ' "$RUNNER_TEMP/release-channels.toml" > /tmp/channels.json
           channels=$(cat /tmp/channels.json)
