@@ -1,9 +1,9 @@
 PackageIdentifier: koedame.chordsketch
-PackageVersion: 0.7.0
+PackageVersion: 0.8.0
 InstallerType: zip
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/koedame/chordsketch/releases/download/v0.7.0/chordsketch-v0.7.0-x86_64-pc-windows-msvc.zip
+    InstallerUrl: https://github.com/koedame/chordsketch/releases/download/v0.8.0/chordsketch-v0.8.0-x86_64-pc-windows-msvc.zip
     # SHA256 of the published zip. The release commit moves the URL; this is
     # recomputed after the tag (docs/releasing.md, Post-Release):
     # Run: curl -L <InstallerUrl> | sha256sum  (uppercase the hex output)

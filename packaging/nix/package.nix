@@ -23,7 +23,7 @@
 
 rustPlatform.buildRustPackage rec {
   pname = "chordsketch";
-  version = "0.7.0";
+  version = "0.8.0";
 
   src = fetchFromGitHub {
     owner = "koedame";
