@@ -40,7 +40,6 @@ KNOWN_KINDS = frozenset(
         "chocolatey",
         "aur",
         "snap",
-        "cocoapods",
         "manual",
     }
 )

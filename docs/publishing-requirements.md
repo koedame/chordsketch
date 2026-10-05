@@ -308,14 +308,9 @@ The pull-request check runs the same build with a debug Linux CLI staged.
 | `name` follows the store's rules; `version`, `summary` (at most 78 characters), `description`, `license`, `base`, `confinement`, `grade` are set | [Top-level metadata](https://snapcraft.io/docs/snapcraft-top-level-metadata) | `snap_problems` |
 | `snapcraft --destructive-mode` builds a `.snap` | [Releasing your app](https://snapcraft.io/docs/releasing-your-app) | `snap_problems` |
 
-## CocoaPods and the Swift package
+## The Swift package
 
-The podspec is generated and pushed with `pod trunk push` by
-[`swift.yml`](../.github/workflows/swift.yml). Its source is the tag, which
-holds the Swift bindings; its `prepare_command` downloads the release's
-XCFramework and checks it against the checksum in the tag's `Package.swift`.
-The Swift package is the
-repository itself at the tag: the root `Package.swift` names the
+The Swift package is the repository itself at the tag: the root `Package.swift` names the
 XCFramework zip and checksum, which `swift.yml`'s `pin` job commits to the
 release branch before the tag, together with the generated Swift bindings
 ([ADR-0080](adr/0080-swift-package-manifest-at-the-root-pins-the-xcframework-before-the-tag.md)).
@@ -323,13 +318,9 @@ The tag-time job uploads that same zip to the Release.
 
 | Condition | Source | Checked by |
 |---|---|---|
-| The podspec has `name`, `version`, `summary` (at most 140 characters), `license`, `homepage`, `authors`, `source` | [Podspec syntax](https://guides.cocoapods.org/syntax/podspec.html) | `cocoapods_problems` via `pod ipc spec` |
-| The source is the git tag `vX.Y.Z` (the Swift bindings are a source file, so a pod built from the XCFramework zip alone has no `import ChordSketch`), and `source_files` match the committed bindings | [Podspec syntax](https://guides.cocoapods.org/syntax/podspec.html) | `cocoapods_problems` |
-| The XCFramework is downloaded from the asset the release uploads and verified against the checksum `Package.swift` pins | — | `cocoapods_problems` |
-| The XCFramework zip holds `chordsketchFFI.xcframework/`, `LICENSE` and `THIRD_PARTY_LICENSES.md` at its root, and the podspec's `prepare_command` extracts only `chordsketchFFI.xcframework/*` (a whole-zip `unzip` stops to ask before overwriting the tag's copy of the file, and nothing answers) | [ADR-0085](adr/0085-binaries-ship-a-generated-third-party-license-notice.md); SwiftPM leaves the archive alone when its one top-level directory is an `.xcframework` ([`Workspace+BinaryArtifacts.swift`](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/Workspace/Workspace%2BBinaryArtifacts.swift)) | `xcframework_archive_problems` runs the `Package XCFramework` step on a stand-in framework; `cocoapods_problems` |
-| The license can be found: `LICENSE` is at the root of the tag | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) (an open-source pod may have no lint warnings) | `cocoapods_problems` |
+| The XCFramework zip holds `chordsketchFFI.xcframework/`, `LICENSE` and `THIRD_PARTY_LICENSES.md` at its root | [ADR-0085](adr/0085-binaries-ship-a-generated-third-party-license-notice.md); SwiftPM leaves the archive alone when its one top-level directory is an `.xcframework` ([`Workspace+BinaryArtifacts.swift`](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/Workspace/Workspace%2BBinaryArtifacts.swift)) | `xcframework_archive_problems` runs the `Package XCFramework` step on a stand-in framework |
 | The root `Package.swift`'s `binaryTarget` points at this version's asset with a SHA-256 checksum, the bindings file is committed, and the manifest still parses | [SE-0272](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0272-swiftpm-binary-dependencies.md) | `swift_package_problems` via `swift package dump-package` |
-| `pod lib lint` (with the pod's tests, for frameworks and for static libraries) and `swift build` against the XCFramework | [Getting setup with trunk](https://guides.cocoapods.org/making/getting-setup-with-trunk.html) | need macOS and the built XCFramework: `swift.yml` builds, tests and lints it on the pull requests that touch its inputs (`lint-podspec`) |
+| `swift build` and `swift test` against the XCFramework | — | need macOS and the built XCFramework: `swift.yml` builds and tests it on the pull requests that touch its inputs |
 
 ## Desktop updater manifest
 
