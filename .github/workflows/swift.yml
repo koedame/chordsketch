@@ -302,8 +302,9 @@ jobs:
           LOCAL_ZIP="${RUNNER_TEMP}/chordsketch-cocoapods.zip"
           python3 scripts/swift_package.py pod-archive \
             --xcframework chordsketch-xcframework.zip --out "$LOCAL_ZIP"
+          POD_SHA256=$(shasum -a 256 "$LOCAL_ZIP" | awk '{print $1}')
           RELEASE_URL="https://github.com/koedame/chordsketch/releases/download/v${VERSION}/chordsketch-cocoapods.zip"
-          sed -e "s/{{VERSION}}/${VERSION}/g" \
+          sed -e "s/{{VERSION}}/${VERSION}/g" -e "s/{{POD_SHA256}}/${POD_SHA256}/g" \
             -e "s#${RELEASE_URL}#file://${LOCAL_ZIP}#" \
             packaging/cocoapods/ChordSketch.podspec.template > ChordSketch.podspec
           grep -q "file://${LOCAL_ZIP}" ChordSketch.podspec
@@ -429,6 +430,9 @@ jobs:
       contents: write
       # Reads the artifact `pin` stored, from the run that made it.
       actions: read
+    outputs:
+      # The checksum the podspec pins the pod's archive to.
+      pod_sha256: ${{ steps.pod-archive.outputs.sha256 }}
     steps:
       # The tag's own checkout: its Package.swift is the manifest consumers
       # resolve, and it says which zip belongs to this release.
@@ -472,9 +476,12 @@ jobs:
       # `prepare_command` in a new pod, so the pod cannot fetch the
       # XCFramework itself (ADR-0088).
       - name: Build the CocoaPods archive
+        id: pod-archive
         run: |
           python3 scripts/swift_package.py pod-archive \
             --xcframework chordsketch-xcframework.zip --out chordsketch-cocoapods.zip
+          SHA=$(sha256sum chordsketch-cocoapods.zip | awk '{print $1}')
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Upload to release
         env:
@@ -517,8 +524,9 @@ jobs:
       - name: Generate podspec
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          POD_SHA256: ${{ needs.publish.outputs.pod_sha256 }}
         run: |
-          sed -e "s/{{VERSION}}/${VERSION}/g" \
+          sed -e "s/{{VERSION}}/${VERSION}/g" -e "s/{{POD_SHA256}}/${POD_SHA256}/g" \
             packaging/cocoapods/ChordSketch.podspec.template > ChordSketch.podspec
           cat ChordSketch.podspec
 

@@ -31,6 +31,7 @@ from pathlib import Path
 
 ASSET = "chordsketch-xcframework.zip"
 POD_ASSET = "chordsketch-cocoapods.zip"
+_ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 POD_FILES = ("packages/swift/Sources/ChordSketch/*.swift", "packages/swift/Tests/*.swift", "NOTICE")
 RELEASE_URL = "https://github.com/koedame/chordsketch/releases/download/"
 
@@ -120,7 +121,9 @@ def pod_archive(xcframework_zip: Path, out: Path, root: Path = Path(".")) -> lis
     CocoaPods trunk refuses a `prepare_command` in a new pod, so the pod cannot
     fetch the XCFramework next to the tag's Swift sources; both come in one
     archive instead. It is the XCFramework zip as it is, entry for entry, with
-    the files `POD_FILES` names added from `root`.
+    the files `POD_FILES` names added from `root`. The same inputs give the
+    same bytes (no file times or modes of the checkout), because the podspec
+    pins the archive's SHA-256 and a re-run of `publish` uploads it again.
     """
     with zipfile.ZipFile(xcframework_zip) as source:
         entries = [(info, source.read(info)) for info in source.infolist()]
@@ -137,7 +140,10 @@ def pod_archive(xcframework_zip: Path, out: Path, root: Path = Path(".")) -> lis
             name = path.relative_to(root).as_posix()
             if name in taken:
                 raise SwiftPackageError(f"{xcframework_zip} already holds {name}")
-            target.write(path, name)
+            info = zipfile.ZipInfo(name, date_time=_ZIP_EPOCH)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            target.writestr(info, path.read_bytes())
     return sorted(taken | {path.relative_to(root).as_posix() for path in added})
 
 

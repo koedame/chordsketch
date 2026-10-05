@@ -165,6 +165,18 @@ class PodArchiveTest(unittest.TestCase):
             with zipfile.ZipFile(out) as archive:
                 self.assertEqual(archive.read("LICENSE"), b"zip license\n")
 
+    def test_when_built_twice_from_checkouts_with_other_file_times_the_archives_are_identical(self) -> None:
+        import os
+
+        with tempfile.TemporaryDirectory() as scratch:
+            root, xcframework = self.layout(Path(scratch))
+            first, second = Path(scratch) / "first.zip", Path(scratch) / "second.zip"
+            swift_package.pod_archive(xcframework, first, root)
+            for path in root.rglob("*"):
+                os.utime(path, (1_900_000_000, 1_900_000_000))
+            swift_package.pod_archive(xcframework, second, root)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+
     def test_when_the_checkout_has_no_bindings_the_archive_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as scratch:
             root, xcframework = self.layout(Path(scratch), bindings=False)

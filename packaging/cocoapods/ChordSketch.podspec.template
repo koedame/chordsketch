@@ -25,9 +25,11 @@ Pod::Spec.new do |s|
   # generated for (`scripts/swift_package.py pod-archive`, run by `publish`).
   # It is one archive because trunk refuses a `prepare_command` in a new pod,
   # which is what used to fetch the XCFramework beside a git checkout of the
-  # tag (ADR-0088).
+  # tag (ADR-0088). CocoaPods refuses an archive that is not the one the
+  # podspec names by SHA-256, as `prepare_command` did for the XCFramework.
   s.source       = {
-    :http => 'https://github.com/koedame/chordsketch/releases/download/v{{VERSION}}/chordsketch-cocoapods.zip'
+    :http => 'https://github.com/koedame/chordsketch/releases/download/v{{VERSION}}/chordsketch-cocoapods.zip',
+    :sha256 => '{{POD_SHA256}}'
   }
 
   s.ios.deployment_target = '15.0'

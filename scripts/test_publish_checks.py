@@ -1385,6 +1385,7 @@ class CocoapodsProblemsTest(unittest.TestCase):
                 return checks.run(cmd, cwd, env)
             podspec = (cwd / "ChordSketch.podspec").read_text()
             from_podspec = re.search(r":http\s*=>\s*'([^']+)'", podspec)
+            sha_from_podspec = re.search(r":sha256\s*=>\s*'([^']+)'", podspec)
             spec = {
                 "name": "ChordSketch",
                 "version": "0.8.0",
@@ -1392,7 +1393,7 @@ class CocoapodsProblemsTest(unittest.TestCase):
                 "license": {"type": "MIT", "file": license_file},
                 "homepage": "h",
                 "authors": {"koedame": "k"},
-                "source": source or {"http": from_podspec.group(1) if from_podspec else None},
+                "source": source or {"http": from_podspec.group(1) if from_podspec else None, "sha256": sha_from_podspec.group(1) if sha_from_podspec else None},
                 "source_files": source_files,
                 "vendored_frameworks": vendored_frameworks,
                 "testspecs": [{"name": "Tests", "test_type": "unit", "source_files": test_source_files}],
@@ -1411,6 +1412,11 @@ class CocoapodsProblemsTest(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("prepare_command", problems[0])
         self.assertIn("refuses", problems[0])
+
+    def test_when_the_archive_is_not_pinned_to_its_checksum_it_is_a_problem(self) -> None:
+        problems = self.problems(source={"http": self.ASSET})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("does not pin the archive", problems[0])
 
     def test_when_the_source_is_the_xcframework_zip_the_missing_swift_api_is_a_problem(self) -> None:
         zip_source = {"http": "https://github.com/koedame/chordsketch/releases/download/v0.8.0/chordsketch-xcframework.zip"}
