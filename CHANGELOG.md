@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-05
+
 ### Changed
 
 - **The playground, docs site, and design-system reference pages serve their
@@ -34,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so is the `Artistic-2.0` in `chordsketch-chordpro`'s license field. The
   shapes for the same chord names differ from before (every one now sounds
   as many of the five strings as the chord allows).
+- **`<PdfExport>` and `usePdfExport` moved to `@chordsketch/react/pdf`.**
+  The main entry point no longer references `@chordsketch/wasm-export`, so
+  Next.js and other bundlers that resolve dynamic imports at build time no
+  longer need the optional peer installed for apps that never export a PDF.
+  `<RendererPreview>` and `<PreviewToolbar>` take the component through a new
+  `pdfExportComponent` prop (forwarded by `<ChordProPreview>` and
+  `<ChordProEditor>`); without it `format="pdf"` shows a hint and the Export
+  group is hidden. Import `PdfExport` from `@chordsketch/react/pdf` and pass
+  it as `pdfExportComponent` to keep the PDF button.
 
 ### Added
 
@@ -42,6 +53,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   launch and every 24 hours, and the choice is kept between launches. Help →
   *Check for Updates Now* checks once when asked. Neither item appears in the
   Flatpak build, which never checks.
+- **The macOS desktop app has a Quick Look extension.** Pressing Space on a
+  `.cho`, `.chopro`, `.crd` or `.chordpro` file in Finder shows the rendered
+  song. Release bundles are still not signed with a Developer ID, and whether
+  macOS loads the ad-hoc signed extension from such a bundle has not been
+  verified.
+- **A Homebrew formula, `chordsketch-desktop`, builds the desktop app from
+  source.** An app compiled on the user's machine is not quarantined, so it
+  opens without clearing the flag the downloaded DMG needs. The formula is
+  published to the tap on release and turns the app's own update check off.
 
 ### Fixed
 

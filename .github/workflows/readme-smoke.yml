@@ -220,7 +220,7 @@ jobs:
     # check (.github/workflows/readme-sync.yml) does not catch this
     # automatically because the version string lives only here.
     env:
-      WASM_VERSION: "0.7.0"
+      WASM_VERSION: "0.8.0"
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -319,7 +319,7 @@ jobs:
     # gzipped. Same pinning + release-cut tolerance pattern as the
     # `npm-wasm` job above.
     env:
-      WASM_EXPORT_VERSION: "0.7.0"
+      WASM_EXPORT_VERSION: "0.8.0"
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -1054,10 +1054,10 @@ jobs:
             # release or the daily smoke silently stops resolving the new
             # one. scripts/check-version-consistency.py holds them at the
             # workspace's major.minor, and its --set moves them.
-            CORE_DEP='chordsketch-chordpro = "^0.7"'
-            RENDER_DEP='chordsketch-render-text = "^0.7"'
-            IREAL_DEP='chordsketch-ireal = "^0.7"'
-            IREAL_RENDER_DEP='chordsketch-render-ireal = "^0.7"'
+            CORE_DEP='chordsketch-chordpro = "^0.8"'
+            RENDER_DEP='chordsketch-render-text = "^0.8"'
+            IREAL_DEP='chordsketch-ireal = "^0.8"'
+            IREAL_RENDER_DEP='chordsketch-render-ireal = "^0.8"'
             INCLUDE_IREAL=1
             MODE="crates.io published (ChordPro + iReal, ${CORE_DEP##* = })"
           fi
