@@ -319,7 +319,7 @@ jobs:
             scripts/test_desktop_security_config.py \
             scripts/test_third_party_licenses.py \
             scripts/test_appimage_bundled_libraries.py \
-            scripts/test_desktop_bundle_licenses.py
+            scripts/test_desktop_bundle_licenses.py \
             scripts/test_tap_push_retry.py
 
   test:
