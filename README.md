@@ -213,6 +213,20 @@ The cask installs `ChordSketch.app` into `/Applications/`. The app is
 not yet signed or notarized, so macOS blocks its first launch; see
 [Desktop application](#desktop-application) for how to open it.
 
+Desktop app, built on your machine (formula, macOS only):
+
+```bash
+brew install --formula koedame/tap/chordsketch-desktop
+cp -R "$(brew --prefix chordsketch-desktop)/ChordSketch.app" /Applications/
+```
+
+This compiles the app from the release source instead of downloading the
+prebuilt `.dmg`, so it differs from the cask in four ways: the build takes
+about 10 minutes, it needs the Xcode Command Line Tools
+(`xcode-select --install`), `/Applications/` gets the app only when you
+run the `cp` line yourself, and macOS does not block its first launch
+because no quarantined download is involved.
+
 Both commands name the tap in full so that Homebrew taps `koedame/tap`
 on demand and trusts just that one formula or cask; Homebrew 6.0.0 and
 later refuse to load anything from an untrusted third-party tap. The
@@ -290,8 +304,8 @@ cargo install --path crates/cli
 
 ChordSketch also ships a native desktop editor (Tauri v2) with
 live ChordPro preview, syntax highlighting, transpose, file
-open/save, and PDF / HTML export. Install via the Homebrew cask
-under `### Homebrew (macOS / Linux)` above.
+open/save, and PDF / HTML export. Install via the Homebrew cask or
+the build-it-yourself formula under `### Homebrew (macOS / Linux)` above.
 
 On Windows the installer also registers a File Explorer preview
 handler, so `.cho` / `.chopro` / `.crd` / `.chordpro` files render
@@ -311,7 +325,9 @@ checks when you ask for it. See [Privacy](#privacy).
 
 The macOS app is not yet signed or notarized by Apple, so Gatekeeper
 blocks its first launch whether you installed it with the Homebrew cask
-or downloaded the `.dmg` from a GitHub Release. Homebrew leaves the
+or downloaded the `.dmg` from a GitHub Release. (The
+`chordsketch-desktop` formula builds the app locally, so it is not
+quarantined and needs none of the steps below.) Homebrew leaves the
 quarantine flag on cask downloads so that Gatekeeper still makes its
 own checks. Do one of the following once, after installing:
 

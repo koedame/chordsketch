@@ -784,6 +784,48 @@ jobs:
           # install-and-bundle-check above.
           brew info --cask chordsketch
 
+  homebrew-desktop-formula:
+    name: Homebrew desktop formula (macOS)
+    # The formula compiles `ChordSketch.app` from the release source
+    # (Rust + wasm + Tauri), so it needs a real macOS host and far
+    # longer than the cask's download. Same host constraint as
+    # `homebrew-cask` above.
+    runs-on: macos-latest
+    # Headroom, not a budget. The README says the build takes about
+    # 10 minutes; this cap only bites if it hangs.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install formula
+        run: |
+          set -euo pipefail
+          # Run exactly the command the README documents, with no extra
+          # setup. The fully qualified name taps koedame/tap on demand
+          # and trusts just this formula (Homebrew 6.0.0 and later).
+          brew install --formula koedame/tap/chordsketch-desktop
+          APP="$(brew --prefix chordsketch-desktop)/ChordSketch.app"
+          # Verify the app bundle landed where the README's `cp` line
+          # reads it from.
+          if [ ! -d "$APP" ]; then
+            echo "::error::ChordSketch.app missing from $(brew --prefix chordsketch-desktop) after formula install" >&2
+            exit 1
+          fi
+          # Sanity-check the bundle metadata so a broken build (missing
+          # Info.plist) fails the job rather than passing on the
+          # directory check alone.
+          VERSION=$(/usr/bin/defaults read \
+            "$APP/Contents/Info.plist" \
+            CFBundleShortVersionString)
+          if [ -z "$VERSION" ]; then
+            echo "::error::CFBundleShortVersionString missing from Info.plist" >&2
+            exit 1
+          fi
+          echo "Installed ChordSketch.app version: $VERSION"
+          # `brew info --formula` exits non-zero if the formula is
+          # malformed, a second signal beyond the install above.
+          brew info --formula chordsketch-desktop
+
   macports:
     name: MacPorts (macOS)
     # `port install` needs a real macOS host; MacPorts targets darwin
@@ -1196,6 +1238,7 @@ jobs:
       - source-build
       - homebrew
       - homebrew-cask
+      - homebrew-desktop-formula
       - macports
       - scoop
       - winget
