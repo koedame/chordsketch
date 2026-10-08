@@ -222,9 +222,73 @@ path has stopped producing decisions.
   and it needs `issues: write` for the scheduled path, which `ci.yml`'s
   fail-closed `contents: read` default deliberately withholds.
 
+## Addendum (2026-10-09): npm lockfiles and Python requirements
+
+The Decision above covered `Cargo.lock` only, on the premise that the other
+detector — GitHub's Dependabot alerts — covers the rest. It does not.
+Dependabot alerts see only what GitHub's dependency graph indexes, and
+`.github/dependabot.yml` configures version updates for `github-actions` and
+`cargo` alone. The eleven `package-lock.json` files (`apps/desktop`, nine
+under `packages/`, and `syntaxes`) and `packaging/flatpak/requirements.txt`
+therefore had no advisory detector at all. A run of `npm audit
+--package-lock-only` on 2026-10-09 found **69 high or critical advisories in ten
+of the eleven lockfiles**, one of them (`brace-expansion` in
+`packages/vscode-extension`) in the runtime graph of a published extension.
+
+Two jobs join `dependency-audit.yml`, under the same four sub-decisions:
+
+1. **Tool: `npm audit --package-lock-only`**, driven by
+   `scripts/audit-npm.py`, and `pip-audit --no-deps --disable-pip` for the
+   requirements files. Both read the lockfile or pin list as written, so
+   nothing is installed.
+2. **Triggers:** the same daily schedule, dispatch and `paths`-scoped pull
+   request. The paths are the inputs that decide the verdict: every
+   `package-lock.json` and `requirements*.txt`, the script and its tests.
+3. **Reporting, npm:** the scheduled run maintains one rolling issue,
+   "Security advisories in npm dependencies", and never fails on a finding; a
+   pull request fails only for a high or critical advisory the base branch's
+   lockfile did not already carry, found by auditing the base ref's lockfile
+   the same way and subtracting. Moderate and lower advisories are counted in
+   the report but never fail a run or open the issue. An `npm audit` that
+   cannot produce a report (registry unreachable) exits 2 and fails the run;
+   it is never read as clean.
+4. **Scope:** a finding still present under `npm audit --omit=dev` is
+   `runtime`, otherwise `dev/test-only`. As with Cargo, the label sets triage
+   priority and does not exempt a dev-only advisory.
+
+Choices specific to this addendum:
+
+- **Lockfiles are found with `git ls-files`, not a list in the workflow**, so
+  a twelfth lockfile is scanned the day it lands. `audit-npm.py` also refuses
+  to report a clean result when it finds none.
+- **No ignore list for npm.** The Cargo list exists because `quick-xml` and
+  `time` were unfixable at adoption. The npm lockfiles were brought to zero
+  high advisories in the same change that added the job, and an advisory
+  with no patched release (`braces` has none) is inherited by the base
+  branch, so it neither blocks pull requests nor closes the issue. An
+  expiring ignore list is the next step if an unfixable one ever has to be
+  muted, built the way `.cargo/audit.toml` is.
+- **Python fails on every trigger.** The requirements file pins three
+  build-tool packages and a pin can always move to a patched release, so the
+  scheduled-run-must-stay-green argument above does not apply; an issue and
+  a base-branch subtraction would be machinery for a three-line file.
+- **`packages/vscode-extension` carries `overrides`** that point the
+  `@vscode/vsce` nested under `ovsx` and the `mocha` nested under
+  `@vscode/test-cli` at the versions the package already depends on
+  directly. Both upstreams still pin releases that reach the advisories
+  (`secretlint` → `globby` → `micromatch` → `braces`, and `mocha` →
+  `serialize-javascript`); the overrides are dev-tool only and drop out when
+  `ovsx` and `@vscode/test-cli` move.
+
+Dependabot version updates for npm are not turned on here: with eleven
+directories the five-open-PR limit this ADR already records would stall the
+ecosystem again. This addendum adds detection, not the updates.
+
 ## References
 
 - `.github/workflows/dependency-audit.yml` — the workflow this ADR backs.
+- `scripts/audit-npm.py` and `scripts/test_audit_npm.py` — the npm counterpart
+  (addendum).
 - `scripts/audit-advisories.py` and `scripts/test_audit_advisories.py` — the
   scope, base-branch subtraction, and ignore-hygiene logic.
 - `.cargo/audit.toml` — the ignore list and the contract for adding to it.
