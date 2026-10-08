@@ -163,12 +163,20 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/vscode": "^1.85.0",
-    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^2.4.1",
-    "@vscode/vsce": "^3.2.2",
+    "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.24.2",
-    "mocha": "^10.7.3",
-    "ovsx": "^0.10.10",
+    "mocha": "^12.0.3",
+    "ovsx": "^1.2.0",
     "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "ovsx": {
+      "@vscode/vsce": "$@vscode/vsce"
+    },
+    "@vscode/test-cli": {
+      "mocha": "$mocha"
+    }
   }
 }
