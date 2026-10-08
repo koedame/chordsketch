@@ -1,0 +1,143 @@
+name: Dependabot license notice
+
+# THIRD_PARTY_LICENSES.md is generated from Cargo.lock and the bundled
+# package-lock.json files (scripts/third-party-licenses.py, ADR-0085), and CI
+# fails when it is older than the lock files. Dependabot cannot run the script,
+# so every cargo update PR started red. This regenerates the file on the PR
+# branch and pushes it as one extra commit (ADR-0089).
+#
+# `pull_request_target` is used because a Dependabot run of `pull_request` gets
+# a read-only token. That event runs the workflow of the base branch with a
+# write token, so the PR branch is checked out only to be read, under three
+# guards: only Dependabot's own same-repository PRs, only when the PR touches
+# nothing but Cargo manifests and Cargo.lock, and the generation steps have no
+# token in their environment (`npm ci` runs without install scripts, `cargo
+# fetch` and `cargo about` do not run build scripts). No step restores or saves
+# a cache: a cache written from a `pull_request_target` run lands in the base
+# branch's scope, where the release builds would read it.
+#
+# The runs the push starts wait for approval (the pusher is the workflow's own
+# bot, not a collaborator), so they are approved here to get the PR's checks.
+# Dependabot stops rebasing a PR that someone else added a commit to; if it
+# falls behind, comment `@dependabot recreate`, which runs this again.
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-licenses-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    name: Regenerate the license notice
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    # `pull_request_target` stays off the LINUX_RUNNER pool: the pool is
+    # unprivileged build capacity and a job here holds a write token
+    # (.claude/rules/ci-parallelization.md §7).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: read
+      actions: write
+    steps:
+      - name: Check the PR only changes Cargo manifests and the lock file
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename' > "$RUNNER_TEMP/files.txt"
+          if grep -Ev '^([A-Za-z0-9_./-]+/)?Cargo\.(toml|lock)$' "$RUNNER_TEMP/files.txt"; then
+            echo "::error::The files above are not Cargo manifests or Cargo.lock; not regenerating."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: false
+
+      - name: Check whether the notice is out of date
+        id: stale
+        run: |
+          if python3 scripts/third-party-licenses.py --check; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust toolchain
+        if: steps.stale.outputs.stale == 'true'
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - name: Install cargo-about
+        if: steps.stale.outputs.stale == 'true'
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
+        with:
+          tool: cargo-about
+
+      - name: Setup Node.js
+        if: steps.stale.outputs.stale == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Install font tooling
+        if: steps.stale.outputs.stale == 'true'
+        run: python3 -m pip install fonttools==4.66.1 brotli==1.2.0
+
+      # `packages/react` goes first: the VS Code extension links it
+      # (`file:../react`) and npm builds a linked package even with
+      # `--ignore-scripts`, which fails without the dependencies of react.
+      - name: Install the bundled npm packages (no install scripts)
+        if: steps.stale.outputs.stale == 'true'
+        run: |
+          for dir in packages/react apps/desktop packages/playground packages/vscode-extension; do
+            (cd "$dir" && npm ci --ignore-scripts --no-audit --no-fund)
+          done
+
+      - name: Regenerate the notice
+        if: steps.stale.outputs.stale == 'true'
+        run: python3 scripts/third-party-licenses.py
+
+      - name: Check the regenerated notice
+        if: steps.stale.outputs.stale == 'true'
+        run: python3 scripts/third-party-licenses.py --check
+
+      - name: Commit and push
+        if: steps.stale.outputs.stale == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add THIRD_PARTY_LICENSES.md
+          git commit -m "chore(deps): regenerate the third-party license notice"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
+          sha=$(git rev-parse HEAD)
+          approved=0
+          for _ in 1 2 3 4 5 6; do
+            sleep 10
+            for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&event=pull_request&status=action_required" --jq '.workflow_runs[].id'); do
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/approve"
+              approved=$((approved + 1))
+            done
+          done
+          if [ "$approved" -eq 0 ]; then
+            echo "::error::No run of the new commit was waiting for approval."
+            exit 1
+          fi
