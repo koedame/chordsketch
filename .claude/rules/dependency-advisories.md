@@ -1,8 +1,9 @@
 # Dependency Advisories
 
 `.github/workflows/dependency-audit.yml` scans `Cargo.lock` against the
-RustSec database daily, on dispatch, and on any pull request that changes the
-dependency graph. [ADR-0048](../../docs/adr/0048-scheduled-rustsec-audit.md)
+RustSec database, every `package-lock.json` with `npm audit`, and every
+`requirements*.txt` with `pip-audit`, daily, on dispatch, and on any pull
+request that changes the dependency graph. [ADR-0048](../../docs/adr/0048-scheduled-rustsec-audit.md)
 records why it is shaped this way.
 
 ## Where a finding shows up
@@ -25,6 +26,25 @@ preference:
 2. **Pick a different version of the dependency you were bumping**, if the
    advisory arrived through a transitive edge you can route around.
 3. **Mute it** — only when neither of the above is reachable from this PR.
+
+## npm and Python
+
+The `npm` job runs `scripts/audit-npm.py` over every lockfile `git ls-files`
+returns (no list to extend). It follows the table above with its own issue,
+"Security advisories in npm dependencies", and only `high` / `critical`
+advisories count. When a pull request fails it:
+
+1. Run `npm audit fix` in the failing lockfile's directory (add
+   `--package-lock-only` if you do not want `node_modules` touched).
+2. If the fix needs a semver-major bump, make it in `package.json`. If a
+   transitive dependency of a dev tool is pinned upstream, an `overrides`
+   entry (see `packages/vscode-extension/package.json`) is acceptable;
+   write down in the PR which upstream release lets it go.
+3. There is no ignore list for npm. An advisory with no patched release is
+   inherited by the base branch and does not block pull requests.
+
+The `python` job fails on any `pip-audit` finding on every trigger; bump the
+pin in `requirements*.txt`.
 
 ## Muting an advisory
 
@@ -64,6 +84,7 @@ changes whether a finding blocks.
 ```bash
 cargo install cargo-audit --locked   # once
 cargo audit
+python3 scripts/audit-npm.py         # every package-lock.json
 ```
 
 The workflow's extra layers (scope, base-branch subtraction, ignore hygiene)
