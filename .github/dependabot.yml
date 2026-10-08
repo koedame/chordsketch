@@ -39,6 +39,9 @@ updates:
         update-types: ["major"]
         group-by: dependency-name
 
+  # A cargo PR changes `Cargo.lock`, which `THIRD_PARTY_LICENSES.md` is
+  # generated from; `.github/workflows/dependabot-licenses.yml` pushes the
+  # regenerated file to the PR branch as one commit (ADR-0089).
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
