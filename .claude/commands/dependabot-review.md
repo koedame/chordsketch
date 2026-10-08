@@ -199,10 +199,14 @@ appear; do not drop rows for crates that look transitive.
 >      ```
 >      The last command fails when the bump changed the set of
 >      third-party crates `THIRD_PARTY_LICENSES.md` lists (a version
->      bump of a crate in the lockfile does). Regenerate it with
->      `python3 scripts/third-party-licenses.py` (needs
->      `cargo install cargo-about --locked`) and push the result as the
->      fix commit. A bump that adds a dependency whose license
+>      bump of a crate in the lockfile does). Do not regenerate it for
+>      a Dependabot PR: `.github/workflows/dependabot-licenses.yml`
+>      pushes the regenerated file as one commit within minutes of the
+>      PR being opened or recreated (ADR-0089). If the PR branch does
+>      not have that commit yet, wait for the workflow run on the PR;
+>      if the run failed or the branch is behind `main`, post
+>      `@dependabot recreate` the way Step 3 spells out and wait again.
+>      Run the check again once the commit is there. A bump that adds a dependency whose license
 >      `deny.toml` does not allow (`cargo deny --all-features check
 >      licenses`, from `cargo install cargo-deny --locked`) is
 >      `BLOCKED`: the license is a decision for the maintainer, not
