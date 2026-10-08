@@ -272,13 +272,15 @@ Choices specific to this addendum:
   build-tool packages and a pin can always move to a patched release, so the
   scheduled-run-must-stay-green argument above does not apply; an issue and
   a base-branch subtraction would be machinery for a three-line file.
-- **`packages/vscode-extension` carries `overrides`** that point the
-  `@vscode/vsce` nested under `ovsx` and the `mocha` nested under
-  `@vscode/test-cli` at the versions the package already depends on
-  directly. Both upstreams still pin releases that reach the advisories
-  (`secretlint` → `globby` → `micromatch` → `braces`, and `mocha` →
-  `serialize-javascript`); the overrides are dev-tool only and drop out when
-  `ovsx` and `@vscode/test-cli` move.
+- **`packages/vscode-extension` carries `overrides`** for two dev-tool
+  chains whose upstreams still pin releases that reach an advisory: the
+  `@vscode/vsce` nested under `ovsx` follows the one the package depends on
+  directly (`secretlint` → `globby` → `micromatch` → `braces`, and `braces`
+  has no patched release), and `serialize-javascript` moves to 7.x, which
+  `mocha` only loads for its parallel mode. `mocha` itself stays on 11.x:
+  12.x is ESM-only and `@vscode/test-cli` `require()`s it inside the VS Code
+  1.85 extension host, so the integration tests cannot load it. The overrides
+  are dev-tool only and drop out when `ovsx` and `mocha` move.
 
 Dependabot version updates for npm are not turned on here: with eleven
 directories the five-open-PR limit this ADR already records would stall the
