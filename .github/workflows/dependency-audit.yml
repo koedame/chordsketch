@@ -1,6 +1,11 @@
 name: Dependency Audit
 
-# Scans `Cargo.lock` against the RustSec advisory database (ADR-0048).
+# Scans `Cargo.lock` against the RustSec advisory database (ADR-0048), and
+# every `package-lock.json` and `requirements*.txt` against the npm and PyPI
+# advisory databases (the "npm lockfiles" addendum to ADR-0048). Dependabot
+# version updates are configured for `github-actions` and `cargo` only, and
+# its alerts cover only what GitHub's dependency graph can see, so without
+# the `npm` and `python` jobs nothing watched those lockfiles.
 #
 # The schedule is the load-bearing trigger: an advisory is published
 # against a version this repo already depends on, so a dependency-change
@@ -35,6 +40,12 @@ on:
       - ".github/workflows/dependency-audit.yml"
       - "scripts/audit-advisories.py"
       - "scripts/test_audit_advisories.py"
+      - "package-lock.json"
+      - "**/package-lock.json"
+      - "requirements*.txt"
+      - "**/requirements*.txt"
+      - "scripts/audit-npm.py"
+      - "scripts/test_audit_npm.py"
   workflow_dispatch:
 
 concurrency:
@@ -219,6 +230,149 @@ jobs:
           else
             gh issue comment "$number" --body "The advisory list changed ([run]($RUN_URL))."
           fi
+
+  npm:
+    name: npm advisories
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Unit tests for the report script
+        run: python3 -m unittest scripts/test_audit_npm.py
+
+      - name: Fetch the base branch
+        if: github.event_name == 'pull_request'
+        run: git fetch --depth=1 origin "$GITHUB_BASE_REF"
+
+      - name: Audit every package-lock.json
+        id: report
+        # The lockfiles are listed by `git ls-files` inside the script, so a
+        # new `package-lock.json` is covered the day it lands. Exit code 1 is
+        # a verdict, not a step failure, so the default shell's `-e` has to
+        # be off; 2 means an audit could not be produced and must not be
+        # read as a clean result.
+        run: |
+          set -uo pipefail
+          set +e
+          args=(--output report.md)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            args+=(--mode pr --base-ref FETCH_HEAD)
+          else
+            args+=(--mode report)
+          fi
+          python3 scripts/audit-npm.py "${args[@]}"
+          code=$?
+          if [ "$code" -gt 1 ]; then
+            exit "$code"
+          fi
+          echo "needs_attention=$code" >> "$GITHUB_OUTPUT"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          cat report.md
+
+      - name: Fail on advisories introduced by this pull request
+        if: github.event_name == 'pull_request' && steps.report.outputs.needs_attention != '0'
+        run: |
+          echo "This pull request introduces a high or critical npm advisory." >&2
+          echo "See the job summary; \`npm audit fix\` in the lockfile's directory" >&2
+          echo "usually moves it onto a patched version." >&2
+          exit 1
+
+      - name: Open, update, or close the tracking issue
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEEDS_ATTENTION: ${{ steps.report.outputs.needs_attention }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: Security advisories in npm dependencies
+        run: |
+          set -euo pipefail
+
+          # One rolling issue, matched by exact title, as for the Cargo sweep.
+          number=$(gh issue list --state open --search "in:title \"$TITLE\"" \
+            --json number,title \
+            | jq -r --arg t "$TITLE" 'map(select(.title == $t)) | first | .number // empty')
+
+          if [ "$NEEDS_ATTENTION" = "0" ]; then
+            if [ -n "$number" ]; then
+              gh issue close "$number" --comment \
+                "No high or critical advisories remain in the npm lockfiles ([run]($RUN_URL))."
+            else
+              echo "Clean, and no tracking issue is open."
+            fi
+            exit 0
+          fi
+
+          {
+            cat report.md
+            echo
+            echo "---"
+            echo
+            echo "Maintained by \`.github/workflows/dependency-audit.yml\`: the body is"
+            echo "rewritten on every change and the issue closes itself once every"
+            echo "lockfile is clean. Run \`npm audit fix\` in the lockfile's directory"
+            echo "to move a package onto a patched version."
+          } > issue-body.md
+
+          if [ -z "$number" ]; then
+            gh issue create --title "$TITLE" --body-file issue-body.md \
+              --label dependencies --label priority:high
+            exit 0
+          fi
+
+          # GitHub returns issue bodies with CRLF line endings; compare
+          # against a normalised copy so an unchanged body is not rewritten.
+          gh issue view "$number" --json body --jq .body | tr -d '\r' > current-body.md
+          if cmp -s current-body.md issue-body.md; then
+            echo "#$number is already up to date."
+            exit 0
+          fi
+          gh issue edit "$number" --body-file issue-body.md
+          gh issue comment "$number" --body "The advisory list changed ([run]($RUN_URL))."
+
+  python:
+    name: Python requirements advisories
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.x"
+
+      - name: Install pip-audit
+        # Deliberately unpinned, for the reason `cargo-audit` is: the
+        # advisory database is queried at run time and a scanner that lags
+        # its own upstream is the failure mode this workflow exists to avoid.
+        run: python3 -m pip install pip-audit
+
+      - name: Audit every requirements file
+        # These files pin a handful of build-tool packages, and a pin can
+        # always move to a patched release, so unlike the sweeps above a
+        # finding fails the run on every trigger instead of opening an issue.
+        # `--no-deps --disable-pip` audits the pins as written: the files do
+        # not carry hashes, so pip-audit cannot resolve them without
+        # installing.
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git ls-files -- 'requirements*.txt' '*/requirements*.txt')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "no requirements file is tracked by git; refusing to report a clean result" >&2
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            echo "::group::$file"
+            pip-audit --requirement "$file" --no-deps --disable-pip
+            echo "::endgroup::"
+          done
 
   licenses:
     name: Dependency licenses
