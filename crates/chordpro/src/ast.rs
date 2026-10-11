@@ -170,6 +170,33 @@ impl Song {
         result
     }
 
+    /// Returns the `display` names set by `{define}` / `{chord}` directives,
+    /// keyed by chord name.
+    ///
+    /// Upstream ChordPro shows the `display` name both in the song body and as
+    /// the chord diagram's title. [`apply_define_displays`](Self::apply_define_displays)
+    /// covers the song body; the auto-generated diagrams (`{diagrams}`) look
+    /// the title up here. Later definitions override earlier ones; a later
+    /// definition without `display` leaves the earlier name in place, as
+    /// `apply_define_displays` does.
+    #[must_use]
+    pub fn define_displays(&self) -> std::collections::HashMap<String, String> {
+        let mut result = std::collections::HashMap::new();
+        for line in &self.lines {
+            if let Line::Directive(directive) = line
+                && (directive.kind == DirectiveKind::Define
+                    || directive.kind == DirectiveKind::ChordDirective)
+                && let Some(ref value) = directive.value
+            {
+                let def = ChordDefinition::parse_value(value);
+                if let Some(display) = def.display {
+                    result.insert(def.name, display);
+                }
+            }
+        }
+        result
+    }
+
     /// Returns keyboard chord definitions as `(name, keys)` pairs.
     ///
     /// Scans `{define}` / `{chord}` directives for entries that use the `keys`
@@ -1937,6 +1964,26 @@ mod tests {
     fn used_chord_names_order_and_dedup() {
         let song = crate::parse("[Am]one [G]two [Am]three [C]four").unwrap();
         assert_eq!(song.used_chord_names(), vec!["Am", "G", "C"]);
+    }
+
+    #[test]
+    fn define_displays_returns_display_names_by_chord_name() {
+        let input = "{define: Am base-fret 1 frets x 0 2 2 1 0 display=\"A minor\"}\n\
+                     {chord: G keys 7 11 14 display=\"G major\"}\n\
+                     {define: C base-fret 1 frets x 3 2 0 1 0}";
+        let displays = crate::parse(input).unwrap().define_displays();
+        assert_eq!(displays.len(), 2);
+        assert_eq!(displays.get("Am").map(String::as_str), Some("A minor"));
+        assert_eq!(displays.get("G").map(String::as_str), Some("G major"));
+    }
+
+    #[test]
+    fn define_displays_later_display_overrides_earlier_and_plain_redefine_keeps_it() {
+        let input = "{define: Am base-fret 1 frets x 0 2 2 1 0 display=\"one\"}\n\
+                     {define: Am base-fret 1 frets x 0 2 2 1 0 display=\"two\"}\n\
+                     {define: Am base-fret 1 frets x 0 2 2 1 0}";
+        let displays = crate::parse(input).unwrap().define_displays();
+        assert_eq!(displays.get("Am").map(String::as_str), Some("two"));
     }
 
     #[test]

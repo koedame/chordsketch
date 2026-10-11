@@ -643,12 +643,11 @@ pub fn render_songs_with_warnings(
     let mut toc_entries: Vec<(String, usize)> = Vec::new(); // (title, page_index)
 
     for (i, song) in songs.iter().enumerate() {
-        if i > 0 {
-            body_doc.new_page();
-        }
         // Apply per-song config overrides (e.g. pdf.margins.*), always
         // resetting to the base-config margins first so that song N's
-        // overrides do not bleed into song N+1.
+        // overrides do not bleed into song N+1. The margins are reset before
+        // the song's first page is opened so that page starts at the song's
+        // own top margin.
         let song_overrides = song.config_overrides();
         let song_config;
         let effective_config = if song_overrides.is_empty() {
@@ -660,6 +659,9 @@ pub fn render_songs_with_warnings(
             &song_config
         };
         body_doc.reset_margins_from_config(effective_config, &mut warnings);
+        if i > 0 {
+            body_doc.new_page();
+        }
         let start_page = body_doc.page_count();
         let title = song
             .metadata
@@ -1191,19 +1193,27 @@ fn render_song_into_doc(
 
         if instrument == "piano" {
             let kbd_defines = song.keyboard_defines();
+            let displays = song.define_displays();
             for name in chord_names {
-                if let Some(voicing) =
+                if let Some(mut voicing) =
                     chordsketch_chordpro::lookup_keyboard_voicing(&name, &kbd_defines)
                 {
+                    if let Some(display) = displays.get(&name) {
+                        voicing.display_name = Some(display.clone());
+                    }
                     render_keyboard_diagram_pdf(&voicing, doc);
                 }
             }
         } else {
             let defines = song.fretted_defines();
+            let displays = song.define_displays();
             for name in chord_names {
-                if let Some(diagram) =
+                if let Some(mut diagram) =
                     chordsketch_chordpro::lookup_diagram(&name, &defines, instrument, diagram_frets)
                 {
+                    if let Some(display) = displays.get(&name) {
+                        diagram.display_name = Some(display.clone());
+                    }
                     render_chord_diagram_pdf(&diagram, doc, diagram_orientation);
                 }
             }
@@ -3065,6 +3075,11 @@ impl PdfDocument {
     /// Reset the document margins from a config, falling back to the built-in
     /// defaults for any margin not explicitly set. Used in multi-song rendering
     /// so that per-song overrides from song N do not bleed into song N+1.
+    ///
+    /// When the current page is still empty the cursor moves to the new top
+    /// margin, so a song's first page honours its own `pdf.margins.top`. A
+    /// page that already has content keeps its cursor; call this before
+    /// [`new_page`](Self::new_page) to apply the margins to the next page.
     fn reset_margins_from_config(&mut self, config: &Config, warnings: &mut Vec<String>) {
         self.margin_top = config
             .get_path("pdf.margins.top")
@@ -3086,6 +3101,9 @@ impl PdfDocument {
             .as_f64()
             .map(|v| Self::validate_margin(v as f32, MARGIN_RIGHT, "right", warnings))
             .unwrap_or(MARGIN_RIGHT);
+        if self.pages.last().is_some_and(Vec::is_empty) {
+            self.y = PAGE_H - self.margin_top;
+        }
     }
 
     /// Returns the current Y position.
@@ -4587,6 +4605,24 @@ Sing along
         assert!(
             content.contains("A minor"),
             "display name should appear in rendered PDF output"
+        );
+    }
+
+    #[test]
+    fn test_define_display_name_in_pdf_auto_diagram_title() {
+        // `{diagrams: off}` keeps the define from drawing inline, so the
+        // chord's diagram comes from the end-of-song block. The display name
+        // then appears twice: once as the chord above the lyric, once as the
+        // diagram's title.
+        let input = "{diagrams: off}\n{define: Am base-fret 1 frets x 0 2 2 1 0 display=\"Aminor\"}\n\
+                     {diagrams: guitar}\n[Am]Hi";
+        let song = chordsketch_chordpro::parse(input).unwrap();
+        let bytes = render_song(&song);
+        let content = String::from_utf8_lossy(&bytes);
+        assert_eq!(
+            content.matches("Aminor").count(),
+            2,
+            "the auto diagram's title must use the define's display name"
         );
     }
 
@@ -7163,6 +7199,63 @@ mod jpeg_tests {
         let custom_pdf = render_song_with_transpose(&song, 0, &config);
         // Different margins produce different PDF output.
         assert_ne!(default_pdf, custom_pdf);
+    }
+
+    /// The text-positioning (`Td`) operators of a rendered PDF, in order.
+    /// Page content streams are written uncompressed.
+    fn td_operators(pdf: &[u8]) -> Vec<String> {
+        String::from_utf8_lossy(pdf)
+            .lines()
+            .filter(|l| l.ends_with(" Td"))
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn test_song_margin_override_on_first_song_starts_its_first_page_at_the_override() {
+        let songs = chordsketch_chordpro::parse_multi(
+            "{title: A}\n{+config.pdf.margins.top: 200}\nHello\n{new_song}\n{title: B}\nWorld",
+        )
+        .unwrap();
+        let pdf = render_songs_with_warnings(&songs, 0, &Config::defaults()).output;
+        let at_override = format!("56 {} Td", fmt_f32(PAGE_H - 200.0));
+        let at_base = format!("56 {} Td", fmt_f32(PAGE_H - MARGIN_TOP));
+        let ops = td_operators(&pdf);
+        // Song B (last) has no override and starts at the base margin; song A
+        // (before it) starts at the overridden one.
+        let override_pos = ops.iter().position(|op| *op == at_override);
+        let last_base_pos = ops.iter().rposition(|op| *op == at_base);
+        assert!(
+            override_pos.is_some() && override_pos < last_base_pos,
+            "song A's first line must sit at the overridden top margin and song B's at the base \
+             margin; got {ops:?}"
+        );
+    }
+
+    #[test]
+    fn test_song_margin_override_on_later_song_starts_its_first_page_at_the_override() {
+        let songs = chordsketch_chordpro::parse_multi(
+            "{title: A}\nHello\n{new_song}\n{title: B}\n{+config.pdf.margins.top: 200}\nWorld",
+        )
+        .unwrap();
+        let pdf = render_songs_with_warnings(&songs, 0, &Config::defaults()).output;
+        let at_override = format!("56 {} Td", fmt_f32(PAGE_H - 200.0));
+        let ops = td_operators(&pdf);
+        assert!(
+            ops.contains(&at_override),
+            "song B's first line must sit at the overridden top margin ({at_override}); got {ops:?}"
+        );
+    }
+
+    #[test]
+    fn test_reset_margins_from_config_on_empty_page_moves_cursor_to_new_top_margin() {
+        let mut warnings = Vec::new();
+        let mut doc = PdfDocument::new();
+        let config = Config::defaults()
+            .with_define("pdf.margins.top=200")
+            .unwrap();
+        doc.reset_margins_from_config(&config, &mut warnings);
+        assert!((doc.y() - (PAGE_H - 200.0)).abs() < 0.01);
     }
 
     #[test]

@@ -204,7 +204,7 @@ pub fn render_song_with_warnings(
         escape(title)
     );
     html.push_str("<style>\n");
-    html.push_str(&css_for_wraplines(read_wraplines(config)));
+    html.push_str(&css_for_wraplines(song_wraplines(song, config)));
     html.push_str("</style>\n</head>\n<body>\n");
     render_song_body_into(song, cli_transpose, config, &mut html, &mut warnings);
     html.push_str("</body>\n</html>\n");
@@ -883,10 +883,16 @@ fn render_song_body_into(
         if instrument == "piano" {
             // Keyboard instrument: use the piano voicing database.
             let kbd_defines = song.keyboard_defines();
+            let displays = song.define_displays();
             let voicings: Vec<_> = chord_names
                 .into_iter()
                 .filter_map(|name| {
-                    chordsketch_chordpro::lookup_keyboard_voicing(&name, &kbd_defines)
+                    let mut voicing =
+                        chordsketch_chordpro::lookup_keyboard_voicing(&name, &kbd_defines)?;
+                    if let Some(display) = displays.get(&name) {
+                        voicing.display_name = Some(display.clone());
+                    }
+                    Some(voicing)
                 })
                 .collect();
             if !voicings.is_empty() {
@@ -906,10 +912,20 @@ fn render_song_body_into(
         } else {
             // Fretted instruments (guitar, ukulele, etc.).
             let defines = song.fretted_defines();
+            let displays = song.define_displays();
             let diagrams: Vec<_> = chord_names
                 .into_iter()
                 .filter_map(|name| {
-                    chordsketch_chordpro::lookup_diagram(&name, &defines, instrument, diagram_frets)
+                    let mut diagram = chordsketch_chordpro::lookup_diagram(
+                        &name,
+                        &defines,
+                        instrument,
+                        diagram_frets,
+                    )?;
+                    if let Some(display) = displays.get(&name) {
+                        diagram.display_name = Some(display.clone());
+                    }
+                    Some(diagram)
                 })
                 .collect();
             if !diagrams.is_empty() {
@@ -997,7 +1013,10 @@ pub fn render_songs_with_warnings(
         escape(title)
     );
     html.push_str("<style>\n");
-    html.push_str(&css_for_wraplines(read_wraplines(config)));
+    html.push_str(&css_for_wraplines(songs.first().map_or_else(
+        || read_wraplines(config),
+        |s| song_wraplines(s, config),
+    )));
     html.push_str("</style>\n</head>\n<body>\n");
 
     for (i, song) in songs.iter().enumerate() {
@@ -1155,6 +1174,24 @@ pub fn render_html_css_with_config(config: &Config) -> String {
 /// missing or non-boolean.
 fn read_wraplines(config: &Config) -> bool {
     config.get_path("settings.wraplines").as_bool() != Some(false)
+}
+
+/// Read `settings.wraplines` as the song sees it: the config with the song's
+/// `{+config.*}` overrides applied. The embedded `<style>` is emitted before
+/// [`render_song_body_into`] applies the overrides, so the document needs
+/// this to match the song it wraps. The warnings the override pass produces
+/// are reported by `render_song_body_into`, so they are dropped here.
+fn song_wraplines(song: &Song, config: &Config) -> bool {
+    let overrides = song.config_overrides();
+    if overrides.is_empty() {
+        return read_wraplines(config);
+    }
+    let mut discarded = Vec::new();
+    read_wraplines(
+        &config
+            .clone()
+            .with_song_overrides(&overrides, &mut discarded),
+    )
 }
 
 /// Build the embedded CSS string with the supplied wraplines value
@@ -3553,6 +3590,32 @@ mod tests {
     }
 
     #[test]
+    fn test_wraplines_song_override_is_embedded_in_single_song_document() {
+        let song =
+            chordsketch_chordpro::parse("{title: t}\n{+config.settings.wraplines: false}\n[C]Hi")
+                .unwrap();
+        let full = render_song_with_warnings(&song, 0, &Config::defaults()).output;
+        assert!(
+            full.contains(".line { display: flex; flex-wrap: nowrap;"),
+            "a song-level settings.wraplines override must reach the embedded CSS"
+        );
+    }
+
+    #[test]
+    fn test_wraplines_song_override_is_embedded_in_multi_song_document() {
+        let songs = chordsketch_chordpro::parse_multi(
+            "{title: a}\n{+config.settings.wraplines: false}\n[C]Hi\n{new_song}\n{title: b}\n[D]Yo",
+        )
+        .unwrap();
+        let full = render_songs_with_warnings(&songs, 0, &Config::defaults()).output;
+        assert!(
+            full.contains(".line { display: flex; flex-wrap: nowrap;"),
+            "the shared CSS follows the first song's effective settings.wraplines, \
+             as a one-song document does"
+        );
+    }
+
+    #[test]
     fn test_wraplines_true_explicit_matches_default() {
         let cfg = Config::defaults()
             .with_define("settings.wraplines=true")
@@ -3836,6 +3899,40 @@ mod tests {
         // NOT capitalize "&amp;" -> "&Amp;test"
         assert!(html.contains("&amp;test"));
         assert!(!html.contains("&Amp;"));
+    }
+
+    #[test]
+    fn test_define_display_name_in_auto_diagram_grid_title() {
+        // `{diagrams: off}` keeps the define from rendering inline, so the
+        // chord is drawn by the end-of-song grid instead.
+        let html = render(
+            "{diagrams: off}\n{define: Am base-fret 1 frets x 0 2 2 1 0 display=\"Aminor\"}\n\
+             {diagrams: guitar}\n[Am]Hi",
+        );
+        let grid = html
+            .split("<div class=\"chord-diagrams-grid\">")
+            .nth(1)
+            .expect("auto diagram grid must be rendered");
+        assert!(
+            grid.contains("Aminor"),
+            "the auto diagram's title must use the define's display name; got: {grid}"
+        );
+    }
+
+    #[test]
+    fn test_define_display_name_in_auto_keyboard_diagram_grid_title() {
+        let html = render(
+            "{diagrams: off}\n{define: Am keys 57 60 64 display=\"Aminor\"}\n\
+             {diagrams: piano}\n[Am]Hi",
+        );
+        let grid = html
+            .split("<div class=\"chord-diagrams-grid\">")
+            .nth(1)
+            .expect("auto diagram grid must be rendered");
+        assert!(
+            grid.contains("Aminor"),
+            "the auto keyboard diagram's title must use the define's display name; got: {grid}"
+        );
     }
 
     #[test]
