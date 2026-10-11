@@ -191,6 +191,14 @@ export function renderHtmlBodyWithWarningsAndOptions(
 export function renderHtmlCss(): string;
 
 /**
+ * Variant of {@link renderHtmlCss} that honours `settings.wraplines` from
+ * `options.config`: when `wraplines` is false, `.line` emits
+ * `flex-wrap: nowrap` so chord/lyric runs keep the source line structure.
+ * Throws an `Error` (`InvalidArg`) when `options.config` cannot be resolved.
+ */
+export function renderHtmlCssWithOptions(options: RenderOptions): string;
+
+/**
  * Validates a ChordPro source document and returns a list of issues. An
  * empty array indicates the document parses cleanly.
  */
@@ -234,6 +242,48 @@ export function chordDiagramSvgWithDefines(
   chord: string,
   instrument: string,
   defines: Array<[string, string]>,
+): string | null;
+
+/**
+ * Layout orientation for the orientation-aware chord-diagram exports.
+ *
+ * `"horizontal"` renders the Japanese tablature layout (nut on the left,
+ * reader-view — high pitch on top); see ADR-0026. The value is matched
+ * case-insensitively; `null` / `undefined` / unrecognised strings fall back
+ * to `"vertical"`. Mirrors the WASM `ChordDiagramOrientation` type.
+ */
+export type ChordDiagramOrientation = "vertical" | "horizontal";
+
+/**
+ * Variant of {@link chordDiagramSvg} that renders the diagram in the
+ * requested `orientation`. Mirrors the WASM `chordDiagramSvgWithOrientation`
+ * export.
+ *
+ * Returns the inline SVG string, or `null` when the built-in voicing
+ * database has no entry for this `(chord, instrument)` pair. Throws an
+ * `Error` (`InvalidArg`) when `instrument` is not one of the supported
+ * values.
+ */
+export function chordDiagramSvgWithOrientation(
+  chord: string,
+  instrument: string,
+  orientation?: ChordDiagramOrientation | null,
+): string | null;
+
+/**
+ * Combination of {@link chordDiagramSvgWithDefines} and
+ * {@link chordDiagramSvgWithOrientation}: consults song-level `{define}`
+ * voicings first, then renders in the requested `orientation`. Mirrors the
+ * WASM `chordDiagramSvgWithDefinesOrientation` export.
+ *
+ * Throws an `Error` (`InvalidArg`) under the same conditions as
+ * {@link chordDiagramSvgWithDefines}.
+ */
+export function chordDiagramSvgWithDefinesOrientation(
+  chord: string,
+  instrument: string,
+  defines: Array<[string, string]>,
+  orientation?: ChordDiagramOrientation | null,
 ): string | null;
 
 /**
