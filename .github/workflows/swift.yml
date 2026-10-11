@@ -117,7 +117,7 @@ jobs:
         run: cargo build -p chordsketch-ffi --release --target ${{ matrix.target }}
 
       - name: Upload static library
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swift-lib-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/libchordsketch_ffi.a
@@ -128,7 +128,7 @@ jobs:
       # the assemble job to let uniffi-bindgen extract the library metadata.
       - name: Upload dylib (aarch64-apple-darwin only, for uniffi-bindgen)
         if: matrix.target == 'aarch64-apple-darwin'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swift-dylib-aarch64-apple-darwin
           path: target/aarch64-apple-darwin/release/libchordsketch_ffi.dylib
@@ -159,7 +159,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Download static libraries
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: swift-lib-*
           # Each artifact downloads to its own subdirectory, e.g.:
@@ -168,7 +168,7 @@ jobs:
           # etc.
 
       - name: Download dylib for uniffi-bindgen
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: swift-dylib-aarch64-apple-darwin
           # Downloads libchordsketch_ffi.dylib to CWD
@@ -235,7 +235,7 @@ jobs:
           zip -r chordsketch-xcframework.zip chordsketchFFI.xcframework LICENSE THIRD_PARTY_LICENSES.md
 
       - name: Upload XCFramework
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: xcframework
           path: chordsketch-xcframework.zip
@@ -247,7 +247,7 @@ jobs:
       # bindings against the XCFramework at start-up, so the two have to
       # come from the same build.
       - name: Upload Swift source
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swift-source
           path: generated/chordsketch.swift
@@ -307,11 +307,11 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: xcframework
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: swift-source
           path: swift-source
@@ -324,7 +324,7 @@ jobs:
           echo "Computed SHA256: ${SHA}"
 
       - name: Keep the zip for the release
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: xcframework-${{ steps.checksum.outputs.sha256 }}
           path: chordsketch-xcframework.zip
@@ -335,7 +335,7 @@ jobs:
       # bindings committed on the release branch are the ones this build
       # generated, not an edited or foreign copy.
       - name: Keep the bindings for the release
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swift-source-${{ steps.checksum.outputs.sha256 }}
           path: swift-source/chordsketch.swift
