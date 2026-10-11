@@ -35,6 +35,7 @@ use crate::{ConversionError, ConversionOutput};
 /// The [`ConversionError`] return type is preserved so future
 /// strictness-mode hooks can introduce
 /// [`ConversionError::InvalidSource`] without a breaking change.
+#[must_use = "callers must handle conversion errors"]
 pub fn convert(source: &Song) -> Result<ConversionOutput<IrealSong>, ConversionError> {
     let mut warnings = Vec::new();
     let mut ireal = IrealSong::new();

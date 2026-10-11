@@ -40,6 +40,7 @@ pub(crate) struct Element {
 
 impl Element {
     /// Returns the first child element with the given local name, if any.
+    #[must_use = "the lookup result must be used"]
     pub fn child(&self, name: &str) -> Option<&Element> {
         self.children.iter().find(|c| c.name == name)
     }
@@ -51,6 +52,7 @@ impl Element {
 
     /// Navigates `path` from this element and returns the element at that
     /// path, or `None` if any step is missing.
+    #[must_use = "the lookup result must be used"]
     pub fn at_path(&self, path: &[&str]) -> Option<&Element> {
         match path {
             [] => Some(self),
@@ -59,11 +61,13 @@ impl Element {
     }
 
     /// Returns the trimmed text content of the element at `path`.
+    #[must_use = "the lookup result must be used"]
     pub fn text_at(&self, path: &[&str]) -> Option<&str> {
         Some(self.at_path(path)?.text.trim())
     }
 
     /// Returns the value of the attribute with the given local name.
+    #[must_use = "the lookup result must be used"]
     pub fn attr(&self, name: &str) -> Option<&str> {
         self.attrs.get(name).map(String::as_str)
     }

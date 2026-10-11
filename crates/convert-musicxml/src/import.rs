@@ -50,6 +50,7 @@ impl std::error::Error for ImportError {}
 ///
 /// Returns an [`ImportError`] if the XML cannot be parsed or if the document
 /// is not a `<score-partwise>` MusicXML file.
+#[must_use = "callers must handle import errors"]
 pub fn from_musicxml(xml: &str) -> Result<Song, ImportError> {
     let root = parse(xml).map_err(|e| ImportError(format!("XML parse error: {e}")))?;
     if root.name != "score-partwise" {

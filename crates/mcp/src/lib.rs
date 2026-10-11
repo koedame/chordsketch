@@ -93,6 +93,7 @@ impl std::error::Error for ServeError {
 ///
 /// Returns [`ServeError`] when the runtime cannot start, the handshake
 /// fails, or the server task ends abnormally.
+#[must_use = "callers must handle server errors"]
 pub fn serve_stdio() -> Result<(), ServeError> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()

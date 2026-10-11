@@ -135,6 +135,7 @@ impl std::error::Error for ParseError {}
 /// # Errors
 ///
 /// See [`ParseError`].
+#[must_use = "callers must handle parse errors"]
 pub fn parse(url: &str) -> Result<IrealSong, ParseError> {
     let (songs, _name) = parse_collection(url)?;
     songs.into_iter().next().ok_or(ParseError::NoSongs)
@@ -149,6 +150,7 @@ pub fn parse(url: &str) -> Result<IrealSong, ParseError> {
 /// # Errors
 ///
 /// See [`ParseError`].
+#[must_use = "callers must handle parse errors"]
 pub fn parse_collection(url: &str) -> Result<(Vec<IrealSong>, Option<String>), ParseError> {
     if url.len() > MAX_INPUT_BYTES {
         return Err(ParseError::InputTooLarge(url.len()));
