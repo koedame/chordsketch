@@ -435,15 +435,18 @@ pub(crate) fn do_convert_irealb_to_chordpro_text(
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     let converted = chordsketch_convert::ireal_to_chordpro(&ireal)
         .map_err(|e| format!("conversion failed: {e}"))?;
-    let text = chordsketch_render_text::render_song(&converted.output);
-    Ok((
-        text,
-        converted
-            .warnings
-            .iter()
-            .map(format_conversion_warning)
-            .collect(),
-    ))
+    let rendered = chordsketch_render_text::render_song_with_warnings(
+        &converted.output,
+        0,
+        &chordsketch_chordpro::config::Config::defaults(),
+    );
+    let mut warnings: Vec<String> = converted
+        .warnings
+        .iter()
+        .map(format_conversion_warning)
+        .collect();
+    warnings.extend(rendered.warnings);
+    Ok((rendered.output, warnings))
 }
 
 /// Run the iReal SVG-render pipeline; native helper so the Rust
@@ -966,6 +969,16 @@ mod tests {
         assert!(
             text.contains('|'),
             "rendered text must preserve bar boundaries; got: {text}"
+        );
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_when_text_render_warns_returns_warning() {
+        let (url, _) = super::do_convert_chordpro_to_irealb("{title: T}\n[G13]Hello").unwrap();
+        let (_text, warnings) = super::do_convert_irealb_to_chordpro_text(&url).unwrap();
+        assert!(
+            warnings.iter().any(|w| w.contains("ambiguous")),
+            "text render warning must be returned; got: {warnings:?}"
         );
     }
 

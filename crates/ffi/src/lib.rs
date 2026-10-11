@@ -780,7 +780,7 @@ pub fn convert_chordpro_to_irealb(
 ///
 /// Pipeline: [`chordsketch_ireal::parse`] →
 /// [`chordsketch_convert::ireal_to_chordpro`] →
-/// [`chordsketch_render_text::render_song`].
+/// [`chordsketch_render_text::render_song_with_warnings`].
 ///
 /// The output is the rendered text representation of the
 /// converted song, not raw ChordPro source — there is no
@@ -806,14 +806,20 @@ pub fn convert_irealb_to_chordpro_text(
             reason: e.to_string(),
         }
     })?;
-    let text = chordsketch_render_text::render_song(&converted.output);
+    let rendered = chordsketch_render_text::render_song_with_warnings(
+        &converted.output,
+        0,
+        &chordsketch_chordpro::config::Config::defaults(),
+    );
+    let mut warnings: Vec<String> = converted
+        .warnings
+        .iter()
+        .map(format_conversion_warning)
+        .collect();
+    warnings.extend(rendered.warnings);
     Ok(ConversionWithWarnings {
-        output: text,
-        warnings: converted
-            .warnings
-            .iter()
-            .map(format_conversion_warning)
-            .collect(),
+        output: rendered.output,
+        warnings,
     })
 }
 
@@ -1341,6 +1347,22 @@ mod tests {
             result.output.contains('|'),
             "rendered text must preserve bar boundaries; got: {}",
             result.output
+        );
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_when_text_render_warns_returns_warning() {
+        // `G13` is ambiguous bare-stack notation: the text renderer
+        // flags it, and that warning must reach the caller instead of
+        // being printed to stderr only.
+        let url = convert_chordpro_to_irealb("{title: T}\n[G13]Hello".to_string())
+            .expect("conversion succeeds for valid ChordPro")
+            .output;
+        let result = convert_irealb_to_chordpro_text(url).expect("conversion succeeds");
+        assert!(
+            result.warnings.iter().any(|w| w.contains("ambiguous")),
+            "text render warning must be returned; got: {:?}",
+            result.warnings
         );
     }
 

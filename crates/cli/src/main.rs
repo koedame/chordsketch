@@ -240,6 +240,12 @@ enum Commands {
         /// Write output to a file instead of stdout.
         #[arg(short, long)]
         output: Option<String>,
+
+        /// Emit warnings as JSONL on stderr instead of the default
+        /// `warning: …` lines. Same format as the render mode's
+        /// `--warnings-json`.
+        #[arg(long = "warnings-json")]
+        warnings_json: bool,
     },
 }
 
@@ -314,9 +320,10 @@ fn main() -> ExitCode {
         from,
         to,
         output,
+        warnings_json,
     }) = cli.command
     {
-        return run_convert(&files, from, to, output.as_deref());
+        return run_convert(&files, from, to, output.as_deref(), warnings_json);
     }
 
     // Render mode: require at least one file (unless generating completions).
@@ -828,6 +835,7 @@ fn run_convert(
     from: ConvertFrom,
     to: Option<ConvertTo>,
     output_path: Option<&str>,
+    warnings_json: bool,
 ) -> ExitCode {
     use chordsketch_chordpro::{
         InputFormat, convert_abc, convert_plain_text, detect_format, parse_lenient,
@@ -970,9 +978,13 @@ fn run_convert(
                 } else {
                     file.as_str()
                 };
-                eprintln!(
-                    "warning: {label}: format could not be detected; \
-                     use --from plaintext, --from abc, or --from musicxml to force conversion"
+                emit_warning(
+                    warnings_json,
+                    "convert",
+                    &format!(
+                        "{label}: format could not be detected; \
+                         use --from plaintext, --from abc, or --from musicxml to force conversion"
+                    ),
                 );
                 had_error = true;
             }

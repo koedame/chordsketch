@@ -814,14 +814,20 @@ pub(crate) fn do_convert_irealb_to_chordpro_text(
     let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
     let converted = chordsketch_convert::ireal_to_chordpro(&ireal)
         .map_err(|e| format!("conversion failed: {e}"))?;
-    let text = chordsketch_render_text::render_song(&converted.output);
+    let rendered = chordsketch_render_text::render_song_with_warnings(
+        &converted.output,
+        0,
+        &chordsketch_chordpro::config::Config::defaults(),
+    );
+    let mut warnings: Vec<String> = converted
+        .warnings
+        .iter()
+        .map(format_conversion_warning)
+        .collect();
+    warnings.extend(rendered.warnings);
     Ok(ConversionWithWarnings {
-        output: text,
-        warnings: converted
-            .warnings
-            .iter()
-            .map(format_conversion_warning)
-            .collect(),
+        output: rendered.output,
+        warnings,
     })
 }
 
@@ -1213,6 +1219,19 @@ mod tests {
             payload.output.contains('|'),
             "rendered text must preserve bar boundaries; got: {}",
             payload.output
+        );
+    }
+
+    #[test]
+    fn test_convert_irealb_to_chordpro_text_when_text_render_warns_returns_warning() {
+        let url = do_convert_chordpro_to_irealb("{title: T}\n[G13]Hello")
+            .unwrap()
+            .output;
+        let payload = do_convert_irealb_to_chordpro_text(&url).unwrap();
+        assert!(
+            payload.warnings.iter().any(|w| w.contains("ambiguous")),
+            "text render warning must be returned; got: {:?}",
+            payload.warnings
         );
     }
 
