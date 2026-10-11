@@ -592,6 +592,72 @@ mod tests {
 
     const MINIMAL_INPUT: &str = "{title: Test}\n[C]Hello";
 
+    /// JS names of the `#[napi]` functions in `bindings.rs`: the `js_name`
+    /// when one is given, else the camelCase of the Rust name.
+    fn exported_function_names(bindings: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        let mut pending: Option<Option<String>> = None;
+        for line in bindings.lines().map(str::trim) {
+            if line.starts_with("#[napi") {
+                let js_name = line
+                    .split("js_name = \"")
+                    .nth(1)
+                    .and_then(|rest| rest.split('"').next())
+                    .map(str::to_string);
+                pending = Some(js_name);
+            } else if let Some(rest) = line
+                .strip_prefix("pub fn ")
+                .or_else(|| line.strip_prefix("pub async fn "))
+            {
+                if let Some(js_name) = pending.take() {
+                    let rust_name = rest.split(['(', '<']).next().unwrap_or(rest);
+                    names.push(js_name.unwrap_or_else(|| {
+                        let mut camel = String::new();
+                        let mut upper_next = false;
+                        for c in rust_name.chars() {
+                            if c == '_' {
+                                upper_next = true;
+                            } else if upper_next {
+                                camel.push(c.to_ascii_uppercase());
+                                upper_next = false;
+                            } else {
+                                camel.push(c);
+                            }
+                        }
+                        camel
+                    }));
+                }
+            } else if line.starts_with("pub struct ") || line.starts_with("pub enum ") {
+                pending = None;
+            }
+        }
+        names
+    }
+
+    #[test]
+    fn test_every_exported_function_is_declared_in_index_d_ts() {
+        let declared = include_str!("../index.d.ts");
+        let undeclared: Vec<String> = exported_function_names(include_str!("bindings.rs"))
+            .into_iter()
+            .filter(|name| !declared.contains(&format!("export function {name}(")))
+            .collect();
+        assert!(
+            undeclared.is_empty(),
+            "`#[napi]` functions missing from crates/napi/index.d.ts: {undeclared:?}"
+        );
+    }
+
+    #[test]
+    fn test_exported_function_names_reads_js_name_and_camel_cases_the_rest() {
+        let source = "#[napi(js_name = \"chordPitches\")]\npub fn pitches(x: u8) {}\n\
+                      #[must_use]\n#[napi]\npub fn render_html_css() {}\n\
+                      #[napi(object)]\npub struct S {}\npub fn helper() {}\n";
+        assert_eq!(
+            exported_function_names(source),
+            ["chordPitches", "renderHtmlCss"]
+        );
+    }
+
     #[test]
     fn test_render_text_returns_content() {
         // Drives the pure-Rust `do_render_string` helper that

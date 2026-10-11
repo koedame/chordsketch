@@ -315,15 +315,4 @@ describe("NAPI public API surface", () => {
   test("renderIrealPdf throws on invalid URL", () => {
     expect(() => m.renderIrealPdf("not a url")).toThrow();
   });
-
-  test("every function the addon exports is declared in index.d.ts", () => {
-    const dts = fs.readFileSync(path.join(__dirname, "..", "index.d.ts"), "utf8");
-    const declared = new Set(
-      [...dts.matchAll(/^export function (\w+)/gm)].map((match) => match[1]),
-    );
-    const undeclared = Object.keys(m)
-      .filter((name) => typeof m[name] === "function")
-      .filter((name) => !declared.has(name));
-    expect(undeclared).toEqual([]);
-  });
 });
