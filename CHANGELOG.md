@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
+  WebAssembly and UniFFI bindings). They were printed to stderr
+  and never reached the caller.
+- **`chordsketch convert --warnings-json`** now emits the "format could not be
+  detected" warning as JSONL like the render mode does.
+- **A song's `{+config.settings.wraplines}` override reaches the HTML
+  document's embedded CSS**, and **a song's `{+config.pdf.margins.top}` override
+  moves the first page of that song in a multi-song PDF** (it was applied only
+  from the second page on, and the previous song's margin leaked onto the next
+  song's first page).
+- **`{define}`'s `display` name titles the diagrams `{diagrams}` draws** in the
+  text, HTML and PDF renderers, for fretted and keyboard instruments.
+- **`@chordsketch/node` declares `renderHtmlCssWithOptions`,
+  `chordDiagramSvgWithOrientation` and `chordDiagramSvgWithDefinesOrientation`**
+  in `index.d.ts`; a test now fails when an exported function has no
+  declaration.
+- Song-level config override warnings now stop at the same cap as every other
+  renderer warning.
+
+### Changed
+
+- Every public function that returns a `Result` or an `Option` carries
+  `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
+
 ### Removed
 
 - **ChordSketch is no longer published to CocoaPods.** CocoaPods trunk

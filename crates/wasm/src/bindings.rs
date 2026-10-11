@@ -871,6 +871,7 @@ pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
 ///
 /// Returns a `JsValue` error string when `defines` is not a deserialisable
 /// `[[string, string], …]` array.
+#[must_use = "callers must handle input errors"]
 #[wasm_bindgen(js_name = diagramPitches)]
 pub fn diagram_pitches(
     chord: &str,
@@ -977,6 +978,7 @@ pub fn key_tonic_triad(key: &str) -> Option<Vec<u8>> {
 // `typescript_custom_section` block below. See #2018 for the rationale —
 // downstream TypeScript consumers of `@chordsketch/wasm` should see the
 // same `ValidationError[]` shape the NAPI binding already provides.
+#[must_use = "callers must handle validation errors"]
 #[wasm_bindgen(js_name = validate, skip_typescript)]
 pub fn validate(input: &str) -> Result<JsValue, JsValue> {
     to_js_value(&validate_inner(input))
@@ -1103,6 +1105,7 @@ export function chordStaffNotes(chord: string): StaffNote[] | undefined;
 ///
 /// Returns a `JsValue` error string only if serialisation fails — a
 /// defensive path callers can treat as infallible in normal use.
+#[must_use = "callers must handle serialisation errors"]
 #[wasm_bindgen(js_name = listDirectives, skip_typescript)]
 pub fn list_directives() -> Result<JsValue, JsValue> {
     to_js_value(&do_list_directives())
@@ -1115,6 +1118,7 @@ pub fn list_directives() -> Result<JsValue, JsValue> {
 /// # Errors
 ///
 /// Returns a `JsValue` error string only if serialisation fails.
+#[must_use = "callers must handle serialisation errors"]
 #[wasm_bindgen(js_name = directiveValueOptions, skip_typescript)]
 pub fn directive_value_options(name: &str) -> Result<JsValue, JsValue> {
     to_js_value(&do_directive_value_options(name))

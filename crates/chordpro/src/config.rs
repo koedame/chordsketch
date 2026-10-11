@@ -20,6 +20,7 @@
 //! assert!(!config.get("pdf").is_null());
 //! ```
 
+use crate::render_result::push_warning;
 use crate::rrjson::{self, NULL, Value};
 
 use std::fmt;
@@ -386,11 +387,14 @@ impl Config {
 
         let mut config = self;
         if overrides.len() > MAX_SONG_OVERRIDES {
-            warnings.push(format!(
-                "too many song-level config overrides ({}, max {}); excess ignored",
-                overrides.len(),
-                MAX_SONG_OVERRIDES
-            ));
+            push_warning(
+                warnings,
+                format!(
+                    "too many song-level config overrides ({}, max {}); excess ignored",
+                    overrides.len(),
+                    MAX_SONG_OVERRIDES
+                ),
+            );
         }
         for &(key, value) in overrides.iter().take(MAX_SONG_OVERRIDES) {
             let allowed = ALLOWED_PREFIXES
@@ -398,13 +402,17 @@ impl Config {
                 .any(|prefix| key.starts_with(prefix))
                 || ALLOWED_EXACT_KEYS.contains(&key);
             if !allowed {
-                warnings.push(format!(
-                    "{key} cannot be overridden from a song-level config directive"
-                ));
+                push_warning(
+                    warnings,
+                    format!("{key} cannot be overridden from a song-level config directive"),
+                );
                 continue;
             }
             if let Err(e) = config.apply_define(&format!("{key}={value}")) {
-                warnings.push(format!("failed to apply song override {key}={value}: {e}"));
+                push_warning(
+                    warnings,
+                    format!("failed to apply song override {key}={value}: {e}"),
+                );
             }
         }
         config
@@ -1860,6 +1868,19 @@ mod tests {
         let config = config.with_song_overrides(&[], &mut warnings);
         assert_eq!(config.get_path("pdf.margins.top"), &original_top);
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_song_overrides_when_warning_cap_reached_stops_adding_warnings() {
+        use crate::render_result::MAX_WARNINGS;
+        let mut warnings = vec!["earlier warning".to_string(); MAX_WARNINGS];
+        let overrides = [("not.allowed.a", "1"), ("not.allowed.b", "2")];
+        let _ = Config::defaults().with_song_overrides(&overrides, &mut warnings);
+        assert_eq!(
+            warnings.len(),
+            MAX_WARNINGS + 1,
+            "only the single suppression notice may be added past the cap"
+        );
     }
 
     #[test]

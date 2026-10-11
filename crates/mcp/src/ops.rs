@@ -223,6 +223,7 @@ pub fn render(source: &str, format: RenderFormat, transpose: i8) -> Rendered {
 /// Returns a message when a serialised tree is not valid JSON, which
 /// would mean a defect in the serialiser rather than anything the caller
 /// did.
+#[must_use = "callers must handle serialisation errors"]
 pub fn parse_ast(source: &str) -> Result<Parsed, String> {
     let mut songs = Vec::new();
     for song in parse_songs(source) {

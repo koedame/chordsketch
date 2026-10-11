@@ -407,11 +407,17 @@ fn render_song_impl(
             // Plain-text rendering of keyboard diagrams is not supported; emit a note
             // listing the chord names so the reader knows which chords are in use.
             let kbd_defines = song.keyboard_defines();
+            let displays = song.define_displays();
             let voicings: Vec<_> = song
                 .used_chord_names()
                 .into_iter()
                 .filter_map(|name| {
-                    chordsketch_chordpro::lookup_keyboard_voicing(&name, &kbd_defines)
+                    let mut voicing =
+                        chordsketch_chordpro::lookup_keyboard_voicing(&name, &kbd_defines)?;
+                    if let Some(display) = displays.get(&name) {
+                        voicing.display_name = Some(display.clone());
+                    }
+                    Some(voicing)
                 })
                 .collect();
             if !voicings.is_empty() {
@@ -440,11 +446,21 @@ fn render_song_impl(
                 |n| (n as usize).max(1),
             );
             let defines = song.fretted_defines();
+            let displays = song.define_displays();
             let diagrams: Vec<_> = song
                 .used_chord_names()
                 .into_iter()
                 .filter_map(|name| {
-                    chordsketch_chordpro::lookup_diagram(&name, &defines, instrument, frets_shown)
+                    let mut diagram = chordsketch_chordpro::lookup_diagram(
+                        &name,
+                        &defines,
+                        instrument,
+                        frets_shown,
+                    )?;
+                    if let Some(display) = displays.get(&name) {
+                        diagram.display_name = Some(display.clone());
+                    }
+                    Some(diagram)
                 })
                 .collect();
             if !diagrams.is_empty() {
@@ -1799,6 +1815,46 @@ Second chorus
             non_empty_count, 6,
             "expected 6 non-empty output lines (3 original + 3 recall), got {non_empty_count}; \
              output:\n{output}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod define_display_tests {
+    use super::*;
+
+    #[test]
+    fn test_auto_diagram_title_uses_define_display_name() {
+        let song = chordsketch_chordpro::parse(
+            "{define: Am base-fret 1 frets x 0 2 2 1 0 display=\"Aminor\"}\n\
+             {diagrams: guitar}\n[Am]Hi",
+        )
+        .unwrap();
+        let output = render_song(&song);
+        let diagrams = output
+            .split("[Chord Diagrams]")
+            .nth(1)
+            .expect("auto diagram block must be rendered");
+        assert!(
+            diagrams.contains("Aminor"),
+            "the auto diagram's title must use the define's display name; got: {diagrams}"
+        );
+    }
+
+    #[test]
+    fn test_auto_keyboard_diagram_title_uses_define_display_name() {
+        let song = chordsketch_chordpro::parse(
+            "{define: Am keys 57 60 64 display=\"Aminor\"}\n{diagrams: piano}\n[Am]Hi",
+        )
+        .unwrap();
+        let output = render_song(&song);
+        let diagrams = output
+            .split("[Chord Diagrams]")
+            .nth(1)
+            .expect("auto diagram block must be rendered");
+        assert!(
+            diagrams.contains("Aminor"),
+            "the auto keyboard diagram's title must use the define's display name; got: {diagrams}"
         );
     }
 }

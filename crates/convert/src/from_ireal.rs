@@ -45,6 +45,7 @@ use crate::{ConversionError, ConversionOutput};
 /// [`IrealSong`] produces a well-formed [`Song`]. The
 /// [`ConversionError`] return type is preserved for future
 /// strictness-mode hooks.
+#[must_use = "callers must handle conversion errors"]
 pub fn convert(source: &IrealSong) -> Result<ConversionOutput<Song>, ConversionError> {
     let mut warnings = Vec::new();
     let mut song = Song::new();

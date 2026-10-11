@@ -728,6 +728,30 @@ fn test_convert_nonexistent_file() {
 }
 
 #[test]
+fn test_convert_undetectable_format_with_warnings_json_emits_jsonl() {
+    // The "format could not be detected" warning must honour
+    // `--warnings-json` like the render mode's warnings do.
+    let mut file = NamedTempFile::new_in(std::env::temp_dir()).unwrap();
+    file.write_all(b"\x01\x02\x03 ??? \x04\n").unwrap();
+    let output = Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args(["convert", file.path().to_str().unwrap(), "--warnings-json"])
+        .assert()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).unwrap();
+    let line = stderr
+        .lines()
+        .find(|l| l.contains("could not be detected"))
+        .unwrap_or_else(|| panic!("expected a detection warning; got:\n{stderr}"));
+    assert!(
+        line.starts_with("{\"source\":\"convert\",\"message\":\""),
+        "warning must be a JSONL object with source `convert`; got: {line}"
+    );
+}
+
+#[test]
 fn test_convert_musicxml_import_wrong_format() {
     // Feeding a plaintext file with --from musicxml should fail.
     Command::cargo_bin("chordsketch")

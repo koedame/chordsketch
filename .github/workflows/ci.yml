@@ -199,6 +199,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/check-zero-deps.py
 
+      # Every public `Result` / `Option` function carries `#[must_use]`
+      # (`.claude/rules/defensive-inputs.md`), so a dropped parse / conversion
+      # outcome is flagged at the call site.
+      - name: Public Result/Option functions carry #[must_use]
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-must-use.py
+
       # The Windows preview handler and the desktop app ship in one installer
       # and embed WebView2 through the same `wry` / `windows` / `windows-core`,
       # so the handler's requirements are held at the versions Tauri resolves
@@ -309,6 +316,7 @@ jobs:
             scripts/test_check_fixture_counts.py \
             scripts/test_check_design_system_tertiary.py \
             scripts/test_check_zero_deps.py \
+            scripts/test_check_must_use.py \
             scripts/test_check_webview_lockstep.py \
             scripts/test_check_glibc_floor.py \
             scripts/test_macports_regen_cargo_crates.py \
