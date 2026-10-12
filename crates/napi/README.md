@@ -33,8 +33,12 @@ as optional dependencies:
 
 ## Quick Start
 
+The package is CommonJS, so use `require` (or, from an ES module,
+`import pkg from '@chordsketch/node'; const { renderHtml } = pkg;` — Node
+cannot detect named exports of a CommonJS module).
+
 ```js
-import { renderHtml, renderText, renderPdf, version } from '@chordsketch/node';
+const { renderHtml, renderText, renderPdf, version } = require('@chordsketch/node');
 
 const source = `{title: Amazing Grace}
 {key: G}
@@ -110,7 +114,7 @@ ChordPro source. The `warnings` array contains
 `approximated`, or `unsupported`).
 
 ```js
-import { convertChordproToIrealb, convertIrealbToChordproText } from '@chordsketch/node';
+const { convertChordproToIrealb, convertIrealbToChordproText } = require('@chordsketch/node');
 
 const { output: url, warnings } = convertChordproToIrealb(`{title: Test}\n[C]Hello`);
 console.log(url);       // "irealb://..."
@@ -137,7 +141,7 @@ console.log(text);
 | `validate(source)` | `ValidationError[]` (`{ line: number, column: number, message: string }`, line / column one-based) | Validate ChordPro input and return any parse errors as structured records (empty array if clean). Mirrors the WASM `validate` shape and the FFI `ValidationError` dictionary. |
 
 ```js
-import { validate } from '@chordsketch/node';
+const { validate } = require('@chordsketch/node');
 
 const errors = validate(source); // ValidationError[] — empty array if clean
 for (const { line, column, message } of errors) {
@@ -181,7 +185,7 @@ interface RenderOptions {
 ### Rendering with options
 
 ```js
-import { renderHtmlWithOptions, renderTextWithOptions } from '@chordsketch/node';
+const { renderHtmlWithOptions, renderTextWithOptions } = require('@chordsketch/node');
 
 // Transpose up 2 semitones using the ukulele preset
 const html = renderHtmlWithOptions(source, { transpose: 2, config: 'ukulele' });
@@ -198,7 +202,7 @@ Functions throw a JavaScript `Error` if the `config` option is not a known
 preset name and is also not valid RRJSON.
 
 ```js
-import { renderHtml } from '@chordsketch/node';
+const { renderHtml } = require('@chordsketch/node');
 
 try {
   renderHtml(source);
