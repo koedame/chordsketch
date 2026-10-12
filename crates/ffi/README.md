@@ -21,6 +21,10 @@ pip install chordsketch
 
 Requires Python 3.8+ (CPython or PyPy).
 
+On Debian / Ubuntu the system Python refuses `pip install` outside a virtual
+environment (`externally-managed-environment`); create one first:
+`python3 -m venv .venv && . .venv/bin/activate`.
+
 ## Quick Start
 
 ```python
@@ -31,9 +35,9 @@ source = """{title: Amazing Grace}
 
 [G]Amazing [G7]grace, how [C]sweet the [G]sound"""
 
-html = chordsketch.parse_and_render_html(source)
-text = chordsketch.parse_and_render_text(source)
-pdf  = chordsketch.parse_and_render_pdf(source)   # bytes
+html = chordsketch.parse_and_render_html(source, None, None)
+text = chordsketch.parse_and_render_text(source, None, None)
+pdf  = chordsketch.parse_and_render_pdf(source, None, None)   # bytes
 
 print(chordsketch.version())
 ```
