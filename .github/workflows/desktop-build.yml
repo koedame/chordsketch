@@ -203,7 +203,7 @@ jobs:
         # What the preview looked like — the check above proves the
         # extension ran, the picture shows what it drew.
         if: always() && matrix.platform.quicklook-smoke
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: quicklook-preview-${{ matrix.platform.label }}
           path: ${{ runner.temp }}/quicklook/
@@ -229,7 +229,7 @@ jobs:
           fi
 
       - name: Upload bundle artefacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: chordsketch-desktop-${{ matrix.platform.label }}
           # Glob every native installer format Tauri produces on

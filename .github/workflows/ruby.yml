@@ -62,7 +62,7 @@ jobs:
         # `GLIBC_2.39' not found" on every older distribution. `cross`
         # builds inside a pinned container whose sysroot is glibc 2.23.
         # See ADR-0046.
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2
         with:
           tool: cross
 
@@ -82,7 +82,7 @@ jobs:
         run: python3 scripts/check-glibc-floor.py --target x86_64-unknown-linux-gnu target/x86_64-unknown-linux-gnu/release/libchordsketch_ffi.so
 
       - name: Upload native library
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-x86_64-unknown-linux-gnu
           path: target/x86_64-unknown-linux-gnu/release/libchordsketch_ffi.so
@@ -140,7 +140,7 @@ jobs:
         # already built with `cross`, sits at 2.18. Same pin as
         # `kotlin.yml`, which has used `cross` for this target all along.
         if: matrix.cross
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2
         with:
           tool: cross
 
@@ -167,7 +167,7 @@ jobs:
         run: python3 scripts/check-glibc-floor.py --target "$TARGET" "target/${TARGET}/release/libchordsketch_ffi.so"
 
       - name: Upload native library
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.lib }}
@@ -201,7 +201,7 @@ jobs:
         run: packages/ruby/scripts/generate-bindings.sh target/debug/libchordsketch_ffi.so
 
       - name: Download native library (linux-x86-64)
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: native-x86_64-unknown-linux-gnu
           path: packages/ruby/lib/x86_64-linux/
@@ -224,7 +224,7 @@ jobs:
         # the FFI crate and re-running uniffi-bindgen. See #1448.
         # 7-day retention is sufficient; the artifact is only consumed within
         # the same workflow run by the publish job. See #1452.
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ruby-bindings
           path: packages/ruby/lib/chordsketch_uniffi.rb
@@ -310,14 +310,14 @@ jobs:
         # re-running uniffi-bindgen. Eliminates the cargo build + bindgen
         # steps from this job. See #1448.
         if: steps.oidc.outputs.available == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ruby-bindings
           path: packages/ruby/lib/
 
       - name: Download all native libraries
         if: steps.oidc.outputs.available == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: native-*
           path: native-artifacts/
