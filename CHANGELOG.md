@@ -7,13 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`chordsketch-chordpro` exposes the section heading table**:
-  `DirectiveKind::section_label`, `Directive::section_heading` and
-  `grid::heading_value`, which the text, HTML and PDF renderers now share.
-  Rendered output is unchanged.
-
 ### Fixed
 
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
