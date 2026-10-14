@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`chordsketch-convert::strings`** — `chordpro_text_to_irealb` and
+  `irealb_to_chordpro_text`, the string-in / string-out conversion pipeline the
+  WebAssembly, Node.js and UniFFI bindings share, plus
+  `ConversionWarning::tagged` and `WarningKind::tag` for the
+  `"<kind>: <message>"` warning form. `chordsketch-convert` now depends on
+  `chordsketch-render-text`. Behaviour of the bindings is unchanged.
+
 ### Fixed
 
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
