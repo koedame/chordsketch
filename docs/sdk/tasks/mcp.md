@@ -65,7 +65,7 @@ hangs — it is waiting for a client on stdin. Ctrl-D ends it.)
 
 `render_chordpro` takes `format` (`text`, the default, or `html`) and
 `transpose` (semitones, negative to go down). `chord_diagram_svg` takes
-`instrument` (`guitar`, the default, `ukulele`, or `piano`).
+`instrument` (`guitar`, the default, `ukulele`, `charango`, or `piano`).
 
 Every tool that reads a song takes its **source text**, not a path:
 

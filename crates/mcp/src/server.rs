@@ -53,7 +53,7 @@ pub struct ChordDiagramParams {
     /// Chord name, as it would appear between brackets in ChordPro
     /// (`Am`, `G7(13)`, `F#m7b5`).
     pub chord: String,
-    /// One of `guitar`, `ukulele`, or `piano`. Defaults to `guitar`.
+    /// One of `guitar`, `ukulele`, `charango`, or `piano`. Defaults to `guitar`.
     #[serde(default)]
     pub instrument: Option<String>,
 }
@@ -199,7 +199,7 @@ impl ChordSketchServer {
     }
 
     /// Draw a chord diagram as an SVG fragment, for embedding in a page
-    /// or a document. Fretted instruments (`guitar`, `ukulele`) get a
+    /// or a document. Fretted instruments (`guitar`, `ukulele`, `charango`) get a
     /// fingering grid; `piano` gets a keyboard with the chord tones
     /// highlighted.
     #[tool(name = "chord_diagram_svg")]

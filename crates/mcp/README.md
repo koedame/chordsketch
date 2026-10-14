@@ -39,7 +39,7 @@ disconnects. There is nothing to run by hand.
 | `parse_chordpro` | `source` | JSON with `songs` (one syntax tree per song) and `errors` |
 | `validate_chordpro` | `source` | JSON with `errors` (line / column / message) and `warnings` |
 | `format_chordpro` | `source` | Normalised ChordPro source |
-| `chord_diagram_svg` | `chord`, `instrument` (`guitar` \| `ukulele` \| `piano`) | An SVG fragment |
+| `chord_diagram_svg` | `chord`, `instrument` (`guitar` \| `ukulele` \| `charango` \| `piano`) | An SVG fragment |
 | `list_directives` | — | Every known directive with its aliases and allowed values |
 
 `source` is ChordPro **text**, not a path: the server has no filesystem

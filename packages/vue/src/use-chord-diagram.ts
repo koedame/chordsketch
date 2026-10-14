@@ -24,7 +24,7 @@ interface DiagramRenderer {
    * render a "chord not found" fallback without try/catch.
    *
    * Throws a `JsError` when `instrument` is not one of the
-   * supported values (`"guitar"`, `"ukulele"`, `"piano"` +
+   * supported values (`"guitar"`, `"ukulele"`, `"charango"`, `"piano"` +
    * aliases).
    */
   chord_diagram_svg: (chord: string, instrument: string) => string | null | undefined;
@@ -82,6 +82,7 @@ export type ChordDiagramInstrument =
   | 'guitar'
   | 'ukulele'
   | 'uke'
+  | 'charango'
   | 'piano'
   | 'keyboard'
   | 'keys';

@@ -114,7 +114,7 @@ println(result.warnings) // [lossy-drop: lyrics are dropped, ...]
 
 | Function | Returns | Throws | Description |
 |----------|---------|--------|-------------|
-| `chordDiagramSvg(chord, instrument)` | `String?` (SVG markup) | `ChordSketchException` | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws `InvalidConfig` on unknown instrument. |
+| `chordDiagramSvg(chord, instrument)` | `String?` (SVG markup) | `ChordSketchException` | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), `"charango"`, or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `null` when the chord is not in the built-in voicing database; throws `InvalidConfig` on unknown instrument. |
 | `chordDiagramSvgWithDefines(chord, instrument, defines)` | `String?` | `ChordSketchException` | Like `chordDiagramSvg` but consults song-level `{define}` voicings first. `defines` is `List<ChordDefine>`. |
 | `chordDiagramSvgWithOrientation(chord, instrument, orientation)` | `String?` | `ChordSketchException` | Orientation-aware variant. `orientation` (`String?`) accepts `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention); `null` or an unrecognised value falls back to vertical. Horizontal mode is reader-view only; see ADR-0026. |
 | `chordDiagramSvgWithDefinesOrientation(chord, instrument, defines, orientation)` | `String?` | `ChordSketchException` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |

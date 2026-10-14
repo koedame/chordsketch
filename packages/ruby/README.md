@@ -109,7 +109,7 @@ errors.each { |e| puts "line #{e.line}, column #{e.column}: #{e.message}" }
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `Chordsketch.chord_diagram_svg(chord, instrument)` | `String \| nil` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `nil` when the chord is not in the built-in voicing database; raises `Chordsketch::ChordSketchError` on unknown instrument. |
+| `Chordsketch.chord_diagram_svg(chord, instrument)` | `String \| nil` (SVG markup) | Render a chord diagram as inline SVG. `instrument` is case-insensitive: `"guitar"`, `"ukulele"` (alias `"uke"`), `"charango"`, or `"piano"` (aliases `"keyboard"`, `"keys"`). Returns `nil` when the chord is not in the built-in voicing database; raises `Chordsketch::ChordSketchError` on unknown instrument. |
 | `Chordsketch.chord_diagram_svg_with_defines(chord, instrument, defines)` | `String \| nil` | Like `chord_diagram_svg` but consults song-level `{define}` voicings first. `defines` is `Array<ChordDefine>`. |
 | `Chordsketch.chord_diagram_svg_with_orientation(chord, instrument, orientation)` | `String \| nil` | Orientation-aware variant. `orientation` (`String \| nil`) accepts `"vertical"` (default) or `"horizontal"` (nut on the left, Japanese tablature convention); `nil` or an unrecognised value falls back to vertical. Horizontal mode is reader-view only; see ADR-0026. |
 | `Chordsketch.chord_diagram_svg_with_defines_orientation(chord, instrument, defines, orientation)` | `String \| nil` | Combined surface — accepts both song-level `{define}` voicings and the orientation knob. |
