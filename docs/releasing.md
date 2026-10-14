@@ -373,13 +373,14 @@ Publishing order:
 5. `chordsketch-render-pdf` (depends on `chordsketch-chordpro`)
 6. `chordsketch-render-ireal` (depends on `chordsketch-ireal`)
 7. `chordsketch-convert-musicxml` (depends on `chordsketch-chordpro`)
-8. `chordsketch-convert` (depends on `chordsketch-chordpro` + `chordsketch-ireal`)
+8. `chordsketch-convert` (depends on `chordsketch-chordpro` + `chordsketch-ireal` +
+   `chordsketch-render-text`)
 9. `chordsketch-mcp` (depends on `chordsketch-chordpro` +
    `chordsketch-render-text` + `chordsketch-render-html`)
 10. `chordsketch` (depends on 1–7 and 9; does not depend on `chordsketch-convert`)
 
 Steps 3-7 can be published in any order among themselves. All of steps 1-7 and
-step 9 must complete before step 10. Step 8 only requires steps 1-2 and is
+step 9 must complete before step 10. Step 8 only requires steps 1-3 and is
 independent of step 10.
 
 ## Distribution Channels

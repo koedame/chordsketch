@@ -653,31 +653,16 @@ pub struct ChordDefine {
 /// Mirrors the WASM and NAPI `ConversionWithWarnings` shape so
 /// every binding presents the same surface — `output` plus a
 /// `warnings` list of human-readable diagnostics. Warning
-/// strings are rendered via [`chordsketch_convert::ConversionWarning`]'s
-/// `Display` impl so callers see one stable text format
-/// regardless of which language they consume the binding from.
+/// strings are rendered via
+/// [`chordsketch_convert::ConversionWarning::tagged`] so callers see
+/// one stable text format regardless of which language they consume
+/// the binding from.
 #[derive(Debug)]
 pub struct ConversionWithWarnings {
     /// Converted output string.
     pub output: String,
     /// Warnings captured during conversion.
     pub warnings: Vec<String>,
-}
-
-/// Format a [`chordsketch_convert::ConversionWarning`] as a stable
-/// `"<kind>: <message>"` string for FFI consumers.
-fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> String {
-    let kind = match w.kind {
-        chordsketch_convert::WarningKind::LossyDrop => "lossy-drop",
-        chordsketch_convert::WarningKind::Approximated => "approximated",
-        chordsketch_convert::WarningKind::Unsupported => "unsupported",
-        // `WarningKind` is `#[non_exhaustive]`; this catch-all keeps
-        // the binding compiling if a future variant is added without
-        // a matching arm here, falling back to the variant's `Debug`
-        // form. Sister-binding fallback in WASM/NAPI does the same.
-        _ => "warning",
-    };
-    format!("{kind}: {}", w.message)
 }
 
 /// Convert a ChordPro source string into an `irealb://` URL
@@ -699,31 +684,21 @@ fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> Stri
 pub fn convert_chordpro_to_irealb(
     input: String,
 ) -> Result<ConversionWithWarnings, ChordSketchError> {
-    let parse_result = chordsketch_chordpro::parse_multi_lenient(&input);
-    // `split_at_new_song` unconditionally pushes `&input[seg_start..]`
-    // last, so `parse_multi_lenient` always returns at least one result;
-    // `next()` is provably `Some` — use `expect` to make the invariant
-    // explicit and catch any future regression immediately.
-    let song = parse_result
-        .results
-        .into_iter()
-        .next()
-        .map(|r| r.song)
-        .expect("parse_multi_lenient always returns at least one result");
-    let converted = chordsketch_convert::chordpro_to_ireal(&song).map_err(|e| {
-        ChordSketchError::ConversionFailed {
-            reason: e.to_string(),
-        }
-    })?;
-    let url = chordsketch_ireal::irealb_serialize(&converted.output);
-    Ok(ConversionWithWarnings {
-        output: url,
-        warnings: converted
-            .warnings
-            .iter()
-            .map(format_conversion_warning)
-            .collect(),
-    })
+    conversion_result(chordsketch_convert::strings::chordpro_text_to_irealb(
+        &input,
+    ))
+}
+
+/// Map a core conversion result onto the FFI surface.
+fn conversion_result(
+    result: Result<chordsketch_convert::strings::ConvertedText, String>,
+) -> Result<ConversionWithWarnings, ChordSketchError> {
+    result
+        .map(|c| ConversionWithWarnings {
+            output: c.output,
+            warnings: c.warnings,
+        })
+        .map_err(|reason| ChordSketchError::ConversionFailed { reason })
 }
 
 /// Convert an `irealb://` URL into rendered ChordPro text
@@ -748,30 +723,9 @@ pub fn convert_chordpro_to_irealb(
 pub fn convert_irealb_to_chordpro_text(
     input: String,
 ) -> Result<ConversionWithWarnings, ChordSketchError> {
-    let ireal =
-        chordsketch_ireal::parse(&input).map_err(|e| ChordSketchError::ConversionFailed {
-            reason: e.to_string(),
-        })?;
-    let converted = chordsketch_convert::ireal_to_chordpro(&ireal).map_err(|e| {
-        ChordSketchError::ConversionFailed {
-            reason: e.to_string(),
-        }
-    })?;
-    let rendered = chordsketch_render_text::render_song_with_warnings(
-        &converted.output,
-        0,
-        &chordsketch_chordpro::config::Config::defaults(),
-    );
-    let mut warnings: Vec<String> = converted
-        .warnings
-        .iter()
-        .map(format_conversion_warning)
-        .collect();
-    warnings.extend(rendered.warnings);
-    Ok(ConversionWithWarnings {
-        output: rendered.output,
-        warnings,
-    })
+    conversion_result(chordsketch_convert::strings::irealb_to_chordpro_text(
+        &input,
+    ))
 }
 
 /// Render an `irealb://` URL as an iReal Pro-style SVG chart

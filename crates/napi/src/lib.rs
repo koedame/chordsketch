@@ -15,7 +15,7 @@
 //!   measurement for exactly this reason (issue #2352).
 //! - **`lib`** (this file) — pure-Rust helpers (`do_*`, `*_inner`
 //!   for the parse + render + validate pipeline; `parse_songs`,
-//!   `flush_warnings`, `try_parse_transpose`, `format_conversion_warning`
+//!   `flush_warnings`, `try_parse_transpose`
 //!   for the support utilities) plus the unit-test suite that drives
 //!   them. Every `#[napi]` function in `bindings.rs` is a 1–3 line
 //!   wrapper around one of these helpers, so the tests here cover the
@@ -320,21 +320,6 @@ pub(crate) fn chord_diagram_svg_inner_with_orientation(
     .map_err(|e| e.to_string())
 }
 
-/// Format a [`chordsketch_convert::ConversionWarning`] as a stable
-/// `"<kind>: <message>"` string. Keeps WASM / NAPI / FFI in lockstep.
-fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> String {
-    let kind = match w.kind {
-        chordsketch_convert::WarningKind::LossyDrop => "lossy-drop",
-        chordsketch_convert::WarningKind::Approximated => "approximated",
-        chordsketch_convert::WarningKind::Unsupported => "unsupported",
-        // `WarningKind` is `#[non_exhaustive]`; fall back to a generic
-        // tag so a future variant addition does not silently break
-        // this binding's compilation. Sister bindings do the same.
-        _ => "warning",
-    };
-    format!("{kind}: {}", w.message)
-}
-
 /// Run the ChordPro → iReal pipeline and return `(url, warnings)`.
 ///
 /// Returns `Result<_, String>` (not `napi::Result`) so the Rust unit
@@ -349,27 +334,9 @@ fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> Stri
 pub(crate) fn do_convert_chordpro_to_irealb(
     input: &str,
 ) -> std::result::Result<(String, Vec<String>), String> {
-    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
-    // `split_at_new_song` unconditionally pushes `&input[seg_start..]`
-    // last, so `parse_multi_lenient` always returns at least one result;
-    // `next()` is provably `Some`.
-    let song = parse_result
-        .results
-        .into_iter()
-        .next()
-        .map(|r| r.song)
-        .expect("parse_multi_lenient always returns at least one result");
-    let converted = chordsketch_convert::chordpro_to_ireal(&song)
-        .map_err(|e| format!("conversion failed: {e}"))?;
-    let url = chordsketch_ireal::irealb_serialize(&converted.output);
-    Ok((
-        url,
-        converted
-            .warnings
-            .iter()
-            .map(format_conversion_warning)
-            .collect(),
-    ))
+    chordsketch_convert::strings::chordpro_text_to_irealb(input)
+        .map(|c| (c.output, c.warnings))
+        .map_err(|e| format!("conversion failed: {e}"))
 }
 
 /// Run the iReal → ChordPro pipeline and return `(rendered_text, warnings)`.
@@ -380,21 +347,9 @@ pub(crate) fn do_convert_chordpro_to_irealb(
 pub(crate) fn do_convert_irealb_to_chordpro_text(
     input: &str,
 ) -> std::result::Result<(String, Vec<String>), String> {
-    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
-    let converted = chordsketch_convert::ireal_to_chordpro(&ireal)
-        .map_err(|e| format!("conversion failed: {e}"))?;
-    let rendered = chordsketch_render_text::render_song_with_warnings(
-        &converted.output,
-        0,
-        &chordsketch_chordpro::config::Config::defaults(),
-    );
-    let mut warnings: Vec<String> = converted
-        .warnings
-        .iter()
-        .map(format_conversion_warning)
-        .collect();
-    warnings.extend(rendered.warnings);
-    Ok((rendered.output, warnings))
+    chordsketch_convert::strings::irealb_to_chordpro_text(input)
+        .map(|c| (c.output, c.warnings))
+        .map_err(|e| format!("conversion failed: {e}"))
 }
 
 /// Run the iReal SVG-render pipeline; native helper so the Rust
