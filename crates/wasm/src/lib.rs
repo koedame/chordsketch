@@ -82,10 +82,7 @@ pub(crate) fn resolve_config_inner(
 /// effect, called by both [`do_render_string`] and [`do_render_bytes`].
 /// See #1109.
 pub(crate) fn flush_warnings<T>(result: RenderResult<T>) -> T {
-    for w in &result.warnings {
-        bindings::console_warn(&format!("chordsketch: {w}"));
-    }
-    result.output
+    result.forward_warnings(bindings::console_warn)
 }
 
 /// Parse input and render songs.
@@ -109,8 +106,7 @@ pub(crate) fn do_render_string(
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
 ) -> String {
-    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
-    let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
+    let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
     flush_warnings(render_fn(&songs, transpose, config))
 }
 
@@ -131,8 +127,7 @@ pub(crate) fn do_render_bytes(
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
 ) -> Vec<u8> {
-    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
-    let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
+    let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
     flush_warnings(render_fn(&songs, transpose, config))
 }
 
@@ -149,8 +144,7 @@ pub(crate) fn render_string_with_warnings_core(
     ) -> RenderResult<String>,
 ) -> std::result::Result<(String, Vec<String>), String> {
     let config = resolve_config_inner(opts)?;
-    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
-    let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
+    let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
     let result = render_fn(&songs, opts.transpose, &config);
     Ok((result.output, result.warnings))
 }
@@ -171,8 +165,7 @@ pub(crate) fn render_bytes_with_warnings_core(
     ) -> RenderResult<Vec<u8>>,
 ) -> std::result::Result<(Vec<u8>, Vec<String>), String> {
     let config = resolve_config_inner(opts)?;
-    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
-    let songs: Vec<_> = parse_result.results.into_iter().map(|r| r.song).collect();
+    let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
     let result = render_fn(&songs, opts.transpose, &config);
     Ok((result.output, result.warnings))
 }

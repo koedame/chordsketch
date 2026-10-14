@@ -356,11 +356,7 @@ fn diagnostics(source: &str) -> Vec<Diagnostic> {
 /// Parses `source` into the song list every renderer takes, splitting at
 /// `{new_song}` boundaries the way the CLI does.
 fn parse_songs(source: &str) -> Vec<chordsketch_chordpro::ast::Song> {
-    chordsketch_chordpro::parse_multi_lenient(source)
-        .results
-        .into_iter()
-        .map(|r| r.song)
-        .collect()
+    chordsketch_chordpro::parse_multi_lenient(source).into_songs()
 }
 
 #[cfg(test)]

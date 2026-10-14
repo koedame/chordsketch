@@ -64,9 +64,7 @@ fn resolve_config(
 /// future-proofing in case the lenient parser ever changes its
 /// always-returns-one-segment behavior.
 fn parse_songs(input: &str) -> Result<Vec<chordsketch_chordpro::ast::Song>, ChordSketchError> {
-    let result = chordsketch_chordpro::parse_multi_lenient(input);
-    let songs: Vec<_> = result.results.into_iter().map(|r| r.song).collect();
-    Ok(songs)
+    Ok(chordsketch_chordpro::parse_multi_lenient(input).into_songs())
 }
 
 /// Forward each warning in a [`RenderResult`] to `eprintln!` and unwrap the output.
@@ -77,10 +75,7 @@ fn parse_songs(input: &str) -> Result<Vec<chordsketch_chordpro::ast::Song>, Chor
 /// (`sys.stderr` in Python, `NSLog`/`stderr` in Swift, `System.err` in Kotlin,
 /// `$stderr` in Ruby). This matches the NAPI binding's pattern. See #1541.
 fn flush_warnings<T>(result: RenderResult<T>) -> T {
-    for w in &result.warnings {
-        eprintln!("chordsketch: {w}");
-    }
-    result.output
+    result.forward_warnings(|w| eprintln!("{w}"))
 }
 
 /// Parse ChordPro input and render as plain text.

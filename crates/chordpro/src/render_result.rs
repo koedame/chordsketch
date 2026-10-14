@@ -258,6 +258,20 @@ impl<T> RenderResult<T> {
     pub fn has_warnings(&self) -> bool {
         !self.warnings.is_empty()
     }
+
+    /// Hand every warning to `sink` as `chordsketch: <warning>` and return
+    /// the output.
+    ///
+    /// For entry points that have no structured warnings channel: each one
+    /// supplies the stream warnings belong on (standard error, a browser
+    /// console) and gets the same message form on every surface.
+    #[must_use = "the rendered output is returned here"]
+    pub fn forward_warnings(self, mut sink: impl FnMut(&str)) -> T {
+        for w in &self.warnings {
+            sink(&format!("chordsketch: {w}"));
+        }
+        self.output
+    }
 }
 
 #[cfg(test)]
@@ -270,6 +284,23 @@ mod tests {
         assert_eq!(result.output, "hello");
         assert!(result.warnings.is_empty());
         assert!(!result.has_warnings());
+    }
+
+    #[test]
+    fn forward_warnings_hands_each_prefixed_warning_to_the_sink_and_returns_the_output() {
+        let result =
+            RenderResult::with_warnings("output", vec!["first".to_string(), "second".to_string()]);
+        let mut seen = Vec::new();
+        let output = result.forward_warnings(|m| seen.push(m.to_string()));
+        assert_eq!(output, "output");
+        assert_eq!(seen, ["chordsketch: first", "chordsketch: second"]);
+    }
+
+    #[test]
+    fn forward_warnings_does_not_call_the_sink_when_there_are_no_warnings() {
+        let mut calls = 0;
+        let output = RenderResult::new(7).forward_warnings(|_| calls += 1);
+        assert_eq!((output, calls), (7, 0));
     }
 
     #[test]

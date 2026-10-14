@@ -1181,7 +1181,15 @@ pub struct MultiParseResult {
 }
 
 impl MultiParseResult {
-    /// Returns all successfully parsed songs.
+    /// Consumes the result and returns its songs, one per segment, in
+    /// order. The list is never empty: an empty input is one empty song.
+    #[must_use]
+    pub fn into_songs(self) -> Vec<Song> {
+        self.results.into_iter().map(|r| r.song).collect()
+    }
+
+    /// Returns every song of the parse, borrowed, one per segment (a
+    /// segment with errors still yields its partial song).
     #[must_use]
     pub fn songs(&self) -> Vec<&Song> {
         self.results.iter().map(|r| &r.song).collect()
@@ -4076,6 +4084,20 @@ mod delegate_tests {
         assert_eq!(songs.len(), 2);
         assert_eq!(songs[0].metadata.title, Some("A".to_string()));
         assert_eq!(songs[1].metadata.title, Some("B".to_string()));
+    }
+
+    #[test]
+    fn into_songs_gives_one_song_per_new_song_segment_in_order() {
+        let songs = parse_multi_lenient("{title: A}\n{new_song}\n{title: B}").into_songs();
+        let titles: Vec<_> = songs.iter().map(|s| s.metadata.title.as_deref()).collect();
+        assert_eq!(titles, [Some("A"), Some("B")]);
+    }
+
+    #[test]
+    fn into_songs_gives_one_empty_song_for_empty_input() {
+        let songs = parse_multi_lenient("").into_songs();
+        assert_eq!(songs.len(), 1);
+        assert!(songs[0].lines.is_empty());
     }
 
     #[test]

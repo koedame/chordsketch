@@ -14,8 +14,8 @@
 //!   binary. `codecov.yml` excludes `bindings.rs` from coverage
 //!   measurement for exactly this reason (issue #2352).
 //! - **`lib`** (this file) — pure-Rust helpers (`do_*`, `*_inner`
-//!   for the parse + render + validate pipeline; `parse_songs`,
-//!   `flush_warnings`, `try_parse_transpose`
+//!   for the parse + render + validate pipeline; `flush_warnings`,
+//!   `try_parse_transpose`
 //!   for the support utilities) plus the unit-test suite that drives
 //!   them. Every `#[napi]` function in `bindings.rs` is a 1–3 line
 //!   wrapper around one of these helpers, so the tests here cover the
@@ -47,18 +47,6 @@ fn resolve_config_inner(
         .map_err(|e| format!("invalid config: {e}"))
 }
 
-/// Parse input into songs.
-///
-/// `parse_multi_lenient` always returns at least one `ParseResult`
-/// (`split_at_new_song` unconditionally pushes the trailing segment, even
-/// for empty input — see `chordsketch_chordpro::parser`), so the resulting
-/// `Vec<Song>` is never empty. The previous `is_empty()` guard was dead
-/// code (#1083) and the previous `Result` return type was vestigial.
-fn parse_songs(input: &str) -> Vec<chordsketch_chordpro::ast::Song> {
-    let result = chordsketch_chordpro::parse_multi_lenient(input);
-    result.results.into_iter().map(|r| r.song).collect()
-}
-
 /// Forward each warning in a [`RenderResult`] to `eprintln!` and unwrap the
 /// output.
 ///
@@ -68,10 +56,7 @@ fn parse_songs(input: &str) -> Vec<chordsketch_chordpro::ast::Song> {
 /// bindings now explicitly capture warnings via `render_songs_with_warnings`
 /// rather than relying on the renderer's internal eprintln paths. See #1541.
 fn flush_warnings<T>(result: RenderResult<T>) -> T {
-    for w in &result.warnings {
-        eprintln!("chordsketch: {w}");
-    }
-    result.output
+    result.forward_warnings(|w| eprintln!("{w}"))
 }
 
 /// Parse and render songs as a string, forwarding any render warnings to stderr.
@@ -92,7 +77,7 @@ pub(crate) fn do_render_string(
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
 ) -> String {
-    let songs = parse_songs(input);
+    let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
     flush_warnings(render_fn(&songs, transpose, config))
 }
 
@@ -109,7 +94,7 @@ pub(crate) fn do_render_bytes(
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<Vec<u8>>,
 ) -> Vec<u8> {
-    let songs = parse_songs(input);
+    let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
     flush_warnings(render_fn(&songs, transpose, config))
 }
 
@@ -134,7 +119,7 @@ pub(crate) fn do_render_string_with_warnings(
         &chordsketch_chordpro::config::Config,
     ) -> RenderResult<String>,
 ) -> (String, Vec<String>) {
-    let songs = parse_songs(input);
+    let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
     let result = render_fn(&songs, transpose, config);
     (result.output, result.warnings)
 }
@@ -150,7 +135,7 @@ pub(crate) fn do_render_pdf_with_warnings(
     config: &chordsketch_chordpro::config::Config,
     transpose: i8,
 ) -> (Vec<u8>, Vec<String>) {
-    let songs = parse_songs(input);
+    let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
     let result = chordsketch_render_pdf::render_songs_with_warnings(&songs, transpose, config);
     (result.output, result.warnings)
 }
@@ -1440,15 +1425,15 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_songs_always_returns_at_least_one() {
+    fn test_into_songs_always_returns_at_least_one() {
         // Lenient parser contract pinned at the binding boundary: the
         // `*_with_options` wrappers rely on this to skip an `is_empty`
         // guard. See #1083 for the prior dead-code removal.
         for input in ["", "no directives", MINIMAL_INPUT] {
-            let songs = parse_songs(input);
+            let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
             assert!(
                 !songs.is_empty(),
-                "parse_songs({input:?}) returned an empty Vec"
+                "into_songs({input:?}) returned an empty Vec"
             );
         }
     }
