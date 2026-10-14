@@ -23,7 +23,10 @@
 //! resolves short aliases (e.g., `t` → `title`) and performs case-insensitive
 //! matching per the ChordPro specification.
 
+use std::borrow::Cow;
+
 use crate::inline_markup::TextSpan;
+use crate::notation::NotationKind;
 
 // ---------------------------------------------------------------------------
 // Song (root node)
@@ -1748,6 +1751,35 @@ impl DirectiveKind {
         )
     }
 
+    /// The heading of a chorus: what `{start_of_chorus}` and a `{chorus}`
+    /// recall both show, so a recalled chorus reads like the one it repeats.
+    pub const CHORUS_LABEL: &'static str = "Chorus";
+
+    /// The heading word a renderer shows for a section start directive
+    /// (`"Chorus"`, `"Verse"`, `"ABC"`, a custom section's capitalised name,
+    /// …), or `None` for every other directive.
+    ///
+    /// This is the single table every renderer takes its section heading
+    /// from; the label may be followed by `: <value>` when the directive
+    /// carries one (see [`Directive::section_heading`]).
+    #[must_use]
+    pub fn section_label(&self) -> Option<Cow<'static, str>> {
+        match self {
+            Self::StartOfChorus => Some(Cow::Borrowed(Self::CHORUS_LABEL)),
+            Self::StartOfVerse => Some(Cow::Borrowed("Verse")),
+            Self::StartOfBridge => Some(Cow::Borrowed("Bridge")),
+            Self::StartOfTab => Some(Cow::Borrowed("Tab")),
+            Self::StartOfGrid => Some(Cow::Borrowed("Grid")),
+            Self::StartOfTextblock => Some(Cow::Borrowed("Textblock")),
+            Self::StartOfAbc => Some(Cow::Borrowed(NotationKind::Abc.label())),
+            Self::StartOfLy => Some(Cow::Borrowed(NotationKind::Lilypond.label())),
+            Self::StartOfMusicxml => Some(Cow::Borrowed(NotationKind::MusicXml.label())),
+            Self::StartOfSvg => Some(Cow::Borrowed(NotationKind::Svg.label())),
+            Self::StartOfSection(name) => Some(Cow::Owned(crate::capitalize(name))),
+            _ => None,
+        }
+    }
+
     /// Returns `true` if this is a section end directive.
     #[must_use]
     pub fn is_section_end(&self) -> bool {
@@ -1847,7 +1879,34 @@ pub struct Directive {
     pub selector: Option<String>,
 }
 
+/// The heading of a section: the word from [`DirectiveKind::section_label`]
+/// plus the optional text that follows it (`Chorus: Last time`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SectionHeading {
+    /// The heading word.
+    pub label: Cow<'static, str>,
+    /// The text after the label, if the directive supplied any.
+    pub value: Option<String>,
+}
+
 impl Directive {
+    /// The heading to show for this directive when it starts a section, or
+    /// `None` when it is not a section start.
+    ///
+    /// For `{start_of_grid}` the value is resolved through
+    /// [`crate::grid::heading_value`] so an attribute payload
+    /// (`shape="1+4x4+1" label="Intro"`) never leaks into the heading.
+    #[must_use]
+    pub fn section_heading(&self) -> Option<SectionHeading> {
+        let label = self.kind.section_label()?;
+        let value = if self.kind == DirectiveKind::StartOfGrid {
+            crate::grid::heading_value(self.value.as_deref())
+        } else {
+            self.value.clone()
+        };
+        Some(SectionHeading { label, value })
+    }
+
     /// Creates a directive with both a name and a value.
     ///
     /// The name is resolved to its canonical form and the [`DirectiveKind`]
@@ -4095,5 +4154,64 @@ mod expand_format_tests {
         let chord = Chord::new("Am");
         let result = chord.expand_format("just text");
         assert_eq!(result, Some("just text".to_string()));
+    }
+
+    // -- Section headings ---------------------------------------------------
+
+    #[test]
+    fn section_label_names_every_section_start_and_nothing_else() {
+        let cases = [
+            (DirectiveKind::StartOfChorus, "Chorus"),
+            (DirectiveKind::StartOfVerse, "Verse"),
+            (DirectiveKind::StartOfBridge, "Bridge"),
+            (DirectiveKind::StartOfTab, "Tab"),
+            (DirectiveKind::StartOfGrid, "Grid"),
+            (DirectiveKind::StartOfTextblock, "Textblock"),
+            (DirectiveKind::StartOfAbc, "ABC"),
+            (DirectiveKind::StartOfLy, "Lilypond"),
+            (DirectiveKind::StartOfMusicxml, "MusicXML"),
+            (DirectiveKind::StartOfSvg, "SVG"),
+            (DirectiveKind::StartOfSection("intro".to_string()), "Intro"),
+        ];
+        for (kind, label) in cases {
+            assert!(kind.is_section_start(), "{kind:?} is a section start");
+            assert_eq!(kind.section_label().as_deref(), Some(label), "{kind:?}");
+        }
+        for kind in [
+            DirectiveKind::EndOfChorus,
+            DirectiveKind::Title,
+            DirectiveKind::Chorus,
+            DirectiveKind::EndOfSection("intro".to_string()),
+        ] {
+            assert_eq!(kind.section_label(), None, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn section_heading_carries_the_value_after_the_label() {
+        let d = Directive::with_value("start_of_verse", "Verse 2");
+        let h = d.section_heading().expect("verse start has a heading");
+        assert_eq!(h.label, "Verse");
+        assert_eq!(h.value.as_deref(), Some("Verse 2"));
+        assert_eq!(Directive::name_only("end_of_verse").section_heading(), None);
+    }
+
+    #[test]
+    fn section_heading_of_a_grid_prefers_the_label_attribute_and_hides_other_attributes() {
+        let labelled = Directive::with_value("start_of_grid", "shape=\"1+4x4+1\" label=\"Intro\"");
+        assert_eq!(
+            labelled.section_heading().and_then(|h| h.value).as_deref(),
+            Some("Intro")
+        );
+        let shape_only = Directive::with_value("start_of_grid", "shape=\"1+4x4+1\"");
+        assert_eq!(shape_only.section_heading().expect("grid").value, None);
+        let colon_form = Directive::with_value("start_of_grid", "Coda");
+        assert_eq!(
+            colon_form
+                .section_heading()
+                .and_then(|h| h.value)
+                .as_deref(),
+            Some("Coda")
+        );
     }
 }

@@ -12,9 +12,11 @@
 //! [`NotationKind`] from here so adding a fifth notation kind is a
 //! one-line change — new variant, new entry in each helper's match.
 //!
-//! The HTML renderer does not depend on this module because it
-//! handles every notation kind via bespoke rendering paths in its
-//! own source (see `crates/render-html/src/lib.rs`).
+//! The HTML renderer handles every notation kind via bespoke
+//! rendering paths in its own source (see
+//! `crates/render-html/src/lib.rs`); it uses this module only for
+//! [`NotationKind::label`], so the section heading stays the same
+//! word in every renderer.
 
 use crate::ast::DirectiveKind;
 

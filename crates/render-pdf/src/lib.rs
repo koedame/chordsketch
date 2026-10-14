@@ -1298,46 +1298,10 @@ fn render_span_list(
 
 /// Render the section label for a start-of-section directive.
 fn render_section_label(directive: &chordsketch_chordpro::ast::Directive, doc: &mut PdfDocument) {
-    let label: Option<String> = match &directive.kind {
-        DirectiveKind::StartOfChorus => Some("Chorus".to_string()),
-        DirectiveKind::StartOfVerse => Some("Verse".to_string()),
-        DirectiveKind::StartOfBridge => Some("Bridge".to_string()),
-        DirectiveKind::StartOfTab => Some("Tab".to_string()),
-        DirectiveKind::StartOfGrid => Some("Grid".to_string()),
-        DirectiveKind::StartOfAbc => Some("ABC".to_string()),
-        DirectiveKind::StartOfLy => Some("Lilypond".to_string()),
-        DirectiveKind::StartOfSvg => Some("SVG".to_string()),
-        DirectiveKind::StartOfTextblock => Some("Textblock".to_string()),
-        DirectiveKind::StartOfMusicxml => Some("MusicXML".to_string()),
-        DirectiveKind::StartOfSection(section_name) => {
-            Some(chordsketch_chordpro::capitalize(section_name))
-        }
-        _ => None,
-    };
-    if let Some(label) = label {
-        // For grid sections the `value` may carry an attribute
-        // payload (`shape="..." label="Intro"`) — prefer the
-        // structured `label="..."` attribute, otherwise pass
-        // through plain colon-form labels. Suppress raw
-        // attribute payloads (any value containing `=`).
-        // Sister-site to the HTML and text renderers.
-        let resolved_value: Option<String> = if matches!(directive.kind, DirectiveKind::StartOfGrid)
-        {
-            directive.value.as_ref().and_then(|v| {
-                if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
-                    Some(label)
-                } else if !v.contains('=') {
-                    Some(v.clone())
-                } else {
-                    None
-                }
-            })
-        } else {
-            directive.value.clone()
-        };
-        let text = match resolved_value {
-            Some(v) if !v.is_empty() => format!("{label}: {v}"),
-            _ => label,
+    if let Some(heading) = directive.section_heading() {
+        let text = match heading.value {
+            Some(v) if !v.is_empty() => format!("{}: {v}", heading.label),
+            _ => heading.label.into_owned(),
         };
         doc.ensure_space(SECTION_SIZE + LINE_GAP);
         doc.text(&text, Font::HelveticaBoldOblique, SECTION_SIZE);
@@ -2282,8 +2246,8 @@ struct ChorusRecallCtx<'a> {
 
 fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, doc: &mut PdfDocument) {
     let text = match value {
-        Some(v) if !v.is_empty() => format!("Chorus: {v}"),
-        _ => "Chorus".to_string(),
+        Some(v) if !v.is_empty() => format!("{}: {v}", DirectiveKind::CHORUS_LABEL),
+        _ => DirectiveKind::CHORUS_LABEL.to_string(),
     };
     doc.ensure_space(SECTION_SIZE + LINE_GAP);
     doc.text(&text, Font::HelveticaBoldOblique, SECTION_SIZE);
