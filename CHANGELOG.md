@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`chordsketch-chordpro::input_limit`**: `MAX_INPUT_BYTES` (10 MiB, the
-  parser's default `max_input_size`) and `read_to_string_limited`, the bounded
-  reader the CLI and the desktop app now share.
-
 ### Fixed
 
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
@@ -36,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`chordsketch-chordpro` exposes `song_walk`**, the transpose, chorus-recall and
+  notation-block bookkeeping the text, HTML and PDF renderers share
+  (`SongTranspose`, `ChorusTracker`, `NotationSkip`, `replay_chorus_body`).
+  Rendered output is unchanged.
+- Every public function that returns a `Result` or an `Option` carries
+  `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
 - **The CLI refuses ChordPro input over 10 MiB up front** (`input exceeds the
   10 MiB limit`), from a file and from stdin, instead of reading up to 50 MiB
   and then failing in the parser with a parse error — the parser has always
@@ -45,8 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `chordsketch_convert_musicxml::MAX_INPUT_BYTES` instead of being copied into
   the CLI. The desktop app, its Explorer preview and the MCP server already used
   10 MiB, and now read it from one constant.
-- Every public function that returns a `Result` or an `Option` carries
-  `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
 
 ### Removed
 
