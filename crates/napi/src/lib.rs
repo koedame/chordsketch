@@ -15,7 +15,7 @@
 //!   measurement for exactly this reason (issue #2352).
 //! - **`lib`** (this file) — pure-Rust helpers (`do_*`, `*_inner`
 //!   for the parse + render + validate pipeline; `parse_songs`,
-//!   `flush_warnings`, `try_parse_transpose`, `format_conversion_warning`
+//!   `flush_warnings`, `try_parse_transpose`
 //!   for the support utilities) plus the unit-test suite that drives
 //!   them. Every `#[napi]` function in `bindings.rs` is a 1–3 line
 //!   wrapper around one of these helpers, so the tests here cover the

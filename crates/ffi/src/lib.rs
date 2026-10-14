@@ -702,9 +702,10 @@ pub struct ChordDefine {
 /// Mirrors the WASM and NAPI `ConversionWithWarnings` shape so
 /// every binding presents the same surface — `output` plus a
 /// `warnings` list of human-readable diagnostics. Warning
-/// strings are rendered via [`chordsketch_convert::ConversionWarning`]'s
-/// `Display` impl so callers see one stable text format
-/// regardless of which language they consume the binding from.
+/// strings are rendered via
+/// [`chordsketch_convert::ConversionWarning::tagged`] so callers see
+/// one stable text format regardless of which language they consume
+/// the binding from.
 #[derive(Debug)]
 pub struct ConversionWithWarnings {
     /// Converted output string.
