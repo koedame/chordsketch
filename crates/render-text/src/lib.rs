@@ -3,7 +3,7 @@
 //! This crate converts a parsed ChordPro AST (from `chordsketch-chordpro`) into
 //! formatted plain text with chords aligned above their corresponding lyrics.
 
-use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
+use chordsketch_chordpro::ast::{CommentStyle, Directive, DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
@@ -11,15 +11,14 @@ use chordsketch_chordpro::render_result::{
     validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
+use chordsketch_chordpro::song_walk::{
+    ChorusReplay, ChorusTracker, NotationSkip, SongTranspose, replay_chorus_body,
+};
 use chordsketch_chordpro::transpose::{
     canonical_key_for_display, transpose_chord_with_style, transposed_key_prefers_flat,
 };
 use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
 use unicode_width::UnicodeWidthStr;
-
-/// Maximum number of chorus recall directives allowed per song.
-/// Prevents output amplification from malicious inputs with many `{chorus}` lines.
-const MAX_CHORUS_RECALLS: usize = 1000;
 
 /// Maximum number of warnings the renderer will accumulate for a single
 /// render pass. Re-exported from the canonical location in
@@ -100,38 +99,14 @@ fn render_song_impl(
             .with_song_overrides(&song_overrides, warnings);
         &song_config
     };
-    // Extract song-level transpose delta from {+config.settings.transpose}.
-    // The base config transpose is already folded into cli_transpose by the caller.
-    let song_transpose_delta = Config::song_transpose_delta(&song_overrides);
     let mut output = Vec::new();
     // ADR-0023: capo subtracts from the effective transpose so the
     // displayed chord names match the shapes a guitarist holds at fret N.
-    let song_capo = match song.metadata.capo_validated() {
-        chordsketch_chordpro::ast::CapoValidation::Valid(n) => n,
-        _ => 0,
-    };
-    let top = chordsketch_chordpro::transpose::effective_transpose(
-        cli_transpose,
-        song_transpose_delta,
-        song_capo,
-    );
-    if top.saturated {
-        push_warning(
-            warnings,
-            format!(
-                "transpose offset {cli_transpose} + {song_transpose_delta} - capo \
-                 {song_capo} exceeds i8 range, clamped to {}",
-                top.offset
-            ),
-        );
-    }
-    let mut transpose_offset: i8 = top.offset;
-    // Stores the AST lines of the most recently defined chorus body.
-    // Re-rendered at recall time so the current transpose offset is applied.
-    let mut chorus_body: Vec<Line> = Vec::new();
-    // Temporary buffer for collecting chorus AST lines.
-    let mut chorus_buf: Option<Vec<Line>> = None;
-    let mut chorus_recall_count: usize = 0;
+    // The base config transpose is already folded into cli_transpose by the caller.
+    let mut transpose = SongTranspose::new(song, cli_transpose, warnings);
+    // The most recently defined chorus body, re-rendered at recall time so
+    // the current transpose offset is applied.
+    let mut chorus = ChorusTracker::default();
 
     // #1971: parity with the PDF renderer (#1825). When inside a
     // `{start_of_<tag>} … {end_of_<tag>}` pair for a notation block
@@ -140,7 +115,7 @@ fn render_song_impl(
     // notation source as plain text (as this renderer did before)
     // was just as unhelpful as in the PDF renderer — readers get a
     // wall of `X:1` / `K:C` / `\relative c' {` with no context.
-    let mut in_notation_block: Option<NotationKind> = None;
+    let mut notation_skip = NotationSkip::default();
 
     // Instrument for the auto-inject ASCII diagram block.
     // Set by {diagrams: guitar/ukulele/on}; cleared by {diagrams: off} / {no_diagrams}.
@@ -162,21 +137,14 @@ fn render_song_impl(
         // #1971: inside a notation block, discard every line until
         // the matching EndOf directive. Mirrors the PDF renderer's
         // skip-until-end window introduced in #1825/#1968.
-        if let Some(kind) = in_notation_block {
-            if let Line::Directive(d) = line
-                && kind.is_end_directive(&d.kind)
-            {
-                in_notation_block = None;
-            }
+        if notation_skip.consume(line) {
             continue;
         }
         match line {
             Line::Lyrics(lyrics_line) => {
-                if let Some(buf) = chorus_buf.as_mut() {
-                    buf.push(line.clone());
-                }
-                let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_offset);
-                render_lyrics(lyrics_line, transpose_offset, prefer_flat, &mut output);
+                chorus.record(line);
+                let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose.offset());
+                render_lyrics(lyrics_line, transpose.offset(), prefer_flat, &mut output);
             }
             Line::Directive(directive) => {
                 // Metadata directives are already rendered via song.metadata;
@@ -232,10 +200,10 @@ fn render_song_impl(
                                 // authored value when it isn't a key (chord
                                 // extensions, no note root).
                                 let prefer_flat =
-                                    transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                                    transposed_key_prefers_flat(&song.metadata, transpose.offset());
                                 let displayed = canonical_key_for_display(
                                     Some(value),
-                                    transpose_offset,
+                                    transpose.offset(),
                                     prefer_flat,
                                 )
                                 .unwrap_or_else(|| value.to_string());
@@ -268,20 +236,8 @@ fn render_song_impl(
                 // renders so readers see where the block was.
                 if let Some(kind) = NotationKind::from_start_directive(&directive.kind) {
                     render_section_header(kind.label(), &directive.value, &mut output);
-                    let label = kind.label();
-                    let tag = kind.tag();
-                    push_warning(
-                        warnings,
-                        format!(
-                            "Text renderer does not support {label} blocks; body of the \
-                             `{{start_of_{tag}}} … {{end_of_{tag}}}` section has been \
-                             omitted. Use the HTML renderer for full {label} support.",
-                        ),
-                    );
-                    output.push(format!(
-                        "[{label} block omitted — use the HTML renderer to view it]",
-                    ));
-                    in_notation_block = Some(kind);
+                    let placeholder = notation_skip.begin(kind, "Text", warnings);
+                    output.push(placeholder);
                     continue;
                 }
                 if directive.kind == DirectiveKind::Diagrams {
@@ -297,75 +253,28 @@ fn render_song_impl(
                 }
                 if directive.kind == DirectiveKind::Transpose {
                     // {transpose: N} sets the in-file transposition amount.
-                    // A missing or empty value silently resets to 0; only a
-                    // non-empty value that cannot be parsed as i8 emits a warning.
-                    let file_offset: i8 = match directive.value.as_deref() {
-                        None | Some("") => 0,
-                        Some(raw) => match raw.parse() {
-                            Ok(v) => v,
-                            Err(_) => {
-                                push_warning(
-                                    warnings,
-                                    format!(
-                                        "{{transpose}} value {raw:?} cannot be \
-                                         parsed as i8, ignored (using 0)"
-                                    ),
-                                );
-                                0
-                            }
-                        },
-                    };
-                    let combined = chordsketch_chordpro::transpose::effective_transpose(
-                        file_offset,
-                        cli_transpose,
-                        song_capo,
-                    );
-                    if combined.saturated {
-                        push_warning(
-                            warnings,
-                            format!(
-                                "transpose offset {file_offset} + {cli_transpose} - capo \
-                                 {song_capo} exceeds i8 range, clamped to {}",
-                                combined.offset
-                            ),
-                        );
-                    }
-                    transpose_offset = combined.offset;
+                    transpose.apply_directive(directive.value.as_deref(), warnings);
                     continue;
                 }
                 match &directive.kind {
                     DirectiveKind::StartOfChorus => {
                         render_section_header("Chorus", &directive.value, &mut output);
                         // Begin collecting chorus content lines.
-                        chorus_buf = Some(Vec::new());
+                        chorus.start();
                     }
-                    DirectiveKind::EndOfChorus => {
-                        if let Some(buf) = chorus_buf.take() {
-                            chorus_body = buf;
-                        }
-                    }
+                    DirectiveKind::EndOfChorus => chorus.end(),
                     DirectiveKind::Chorus => {
-                        if chorus_recall_count < MAX_CHORUS_RECALLS {
-                            let prefer_flat =
-                                transposed_key_prefers_flat(&song.metadata, transpose_offset);
+                        if chorus.try_recall(warnings) {
+                            let offset = transpose.offset();
+                            let prefer_flat = transposed_key_prefers_flat(&song.metadata, offset);
                             render_chorus_recall(
                                 &directive.value,
-                                &chorus_body,
-                                transpose_offset,
+                                chorus.body(),
+                                offset,
                                 prefer_flat,
                                 &mut output,
                                 warnings,
                             );
-                            chorus_recall_count += 1;
-                        } else if chorus_recall_count == MAX_CHORUS_RECALLS {
-                            push_warning(
-                                warnings,
-                                format!(
-                                    "chorus recall limit ({MAX_CHORUS_RECALLS}) reached, \
-                                     further recalls suppressed"
-                                ),
-                            );
-                            chorus_recall_count += 1;
                         }
                     }
                     // All page-layout directives are intentionally excluded from the
@@ -377,9 +286,7 @@ fn render_song_impl(
                     | DirectiveKind::ColumnBreak
                     | DirectiveKind::Columns => {}
                     _ => {
-                        if let Some(buf) = chorus_buf.as_mut() {
-                            buf.push(line.clone());
-                        }
+                        chorus.record(line);
                         let mut target = Vec::new();
                         render_directive(directive, &mut target, warnings);
                         output.extend(target);
@@ -387,15 +294,11 @@ fn render_song_impl(
                 }
             }
             Line::Comment(style, text) => {
-                if let Some(buf) = chorus_buf.as_mut() {
-                    buf.push(line.clone());
-                }
+                chorus.record(line);
                 render_comment(*style, text, &mut output);
             }
             Line::Empty => {
-                if let Some(buf) = chorus_buf.as_mut() {
-                    buf.push(line.clone());
-                }
+                chorus.record(line);
                 output.push(String::new());
             }
         }
@@ -771,16 +674,40 @@ fn render_chorus_recall(
     warnings: &mut Vec<String>,
 ) {
     render_section_header("Chorus", value, output);
-    for line in chorus_body {
-        match line {
-            Line::Lyrics(lyrics) => render_lyrics(lyrics, transpose_offset, prefer_flat, output),
-            Line::Comment(style, text) => render_comment(*style, text, output),
-            Line::Empty => output.push(String::new()),
-            Line::Directive(d) if !d.kind.is_metadata() => {
-                render_directive(d, output, warnings);
-            }
-            _ => {}
-        }
+    replay_chorus_body(
+        chorus_body,
+        &mut TextReplay {
+            transpose_offset,
+            prefer_flat,
+            output,
+            warnings,
+        },
+    );
+}
+
+/// [`ChorusReplay`] sink that appends the recalled chorus as text lines.
+struct TextReplay<'a> {
+    transpose_offset: i8,
+    prefer_flat: bool,
+    output: &'a mut Vec<String>,
+    warnings: &'a mut Vec<String>,
+}
+
+impl ChorusReplay for TextReplay<'_> {
+    fn lyrics(&mut self, line: &LyricsLine) {
+        render_lyrics(line, self.transpose_offset, self.prefer_flat, self.output);
+    }
+
+    fn comment(&mut self, style: CommentStyle, text: &str) {
+        render_comment(style, text, self.output);
+    }
+
+    fn empty(&mut self) {
+        self.output.push(String::new());
+    }
+
+    fn directive(&mut self, directive: &Directive) {
+        render_directive(directive, self.output, self.warnings);
     }
 }
 
@@ -1769,7 +1696,7 @@ Second chorus
         let recall_count = output.matches("[Chorus]\nChorus").count() - 1; // subtract original
         assert_eq!(
             recall_count,
-            super::MAX_CHORUS_RECALLS,
+            chordsketch_chordpro::song_walk::MAX_CHORUS_RECALLS,
             "should stop at MAX_CHORUS_RECALLS"
         );
     }
