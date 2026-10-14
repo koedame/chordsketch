@@ -2471,17 +2471,6 @@ fn render_image(attrs: &chordsketch_chordpro::ast::ImageAttributes, html: &mut S
     html.push_str("></div>\n");
 }
 
-/// Open a `<section>` with a class and optional label.
-///
-/// The label is emitted as an `<h3 class="section-label">` so
-/// screen readers recognise it as the section's heading (HTML5
-/// implicitly names a sectioning element by its first descendant
-/// heading). Sister-site to the React JSX walker's `<h3>` /
-/// `aria-labelledby` pair. The Rust renderer skips the explicit
-/// `aria-labelledby` because the renderer does not currently
-/// thread per-section unique IDs (a separate enhancement) — the
-/// implicit "first heading is the accessible name" rule still
-/// applies.
 /// Open the `<section>` of a section-start directive: the CSS class comes
 /// from the directive name (`start_of_verse` → `verse`, a custom section →
 /// `section-<name>`), the heading from [`DirectiveKind::section_label`].
@@ -2499,6 +2488,17 @@ fn render_section_start(directive: &chordsketch_chordpro::ast::Directive, html: 
     render_section_open(&class, &escape(&heading.label), &heading.value, html);
 }
 
+/// Open a `<section>` with a class and optional label.
+///
+/// The label is emitted as an `<h3 class="section-label">` so
+/// screen readers recognise it as the section's heading (HTML5
+/// implicitly names a sectioning element by its first descendant
+/// heading). Sister-site to the React JSX walker's `<h3>` /
+/// `aria-labelledby` pair. The Rust renderer skips the explicit
+/// `aria-labelledby` because the renderer does not currently
+/// thread per-section unique IDs (a separate enhancement) — the
+/// implicit "first heading is the accessible name" rule still
+/// applies.
 fn render_section_open(class: &str, label: &str, value: &Option<String>, html: &mut String) {
     let safe_class = sanitize_css_class(class);
     let _ = writeln!(html, "<section class=\"{safe_class}\">");
@@ -2843,8 +2843,8 @@ fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html:
     let diagram_orientation = ctx.diagram_orientation;
     html.push_str("<div class=\"chorus-recall\">\n");
     let display_label = match value {
-        Some(v) if !v.is_empty() => format!("Chorus: {}", escape(v)),
-        _ => "Chorus".to_string(),
+        Some(v) if !v.is_empty() => format!("{}: {}", DirectiveKind::CHORUS_LABEL, escape(v)),
+        _ => DirectiveKind::CHORUS_LABEL.to_string(),
     };
     let _ = writeln!(html, "<h3 class=\"section-label\">{display_label}</h3>");
     // Use a local copy of fmt_state so in-chorus formatting directives

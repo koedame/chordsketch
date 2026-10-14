@@ -2246,8 +2246,8 @@ struct ChorusRecallCtx<'a> {
 
 fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, doc: &mut PdfDocument) {
     let text = match value {
-        Some(v) if !v.is_empty() => format!("Chorus: {v}"),
-        _ => "Chorus".to_string(),
+        Some(v) if !v.is_empty() => format!("{}: {v}", DirectiveKind::CHORUS_LABEL),
+        _ => DirectiveKind::CHORUS_LABEL.to_string(),
     };
     doc.ensure_space(SECTION_SIZE + LINE_GAP);
     doc.text(&text, Font::HelveticaBoldOblique, SECTION_SIZE);

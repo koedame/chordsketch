@@ -1751,6 +1751,10 @@ impl DirectiveKind {
         )
     }
 
+    /// The heading of a chorus: what `{start_of_chorus}` and a `{chorus}`
+    /// recall both show, so a recalled chorus reads like the one it repeats.
+    pub const CHORUS_LABEL: &'static str = "Chorus";
+
     /// The heading word a renderer shows for a section start directive
     /// (`"Chorus"`, `"Verse"`, `"ABC"`, a custom section's capitalised name,
     /// …), or `None` for every other directive.
@@ -1761,15 +1765,16 @@ impl DirectiveKind {
     #[must_use]
     pub fn section_label(&self) -> Option<Cow<'static, str>> {
         match self {
-            Self::StartOfChorus => Some(Cow::Borrowed("Chorus")),
+            Self::StartOfChorus => Some(Cow::Borrowed(Self::CHORUS_LABEL)),
             Self::StartOfVerse => Some(Cow::Borrowed("Verse")),
             Self::StartOfBridge => Some(Cow::Borrowed("Bridge")),
             Self::StartOfTab => Some(Cow::Borrowed("Tab")),
             Self::StartOfGrid => Some(Cow::Borrowed("Grid")),
             Self::StartOfTextblock => Some(Cow::Borrowed("Textblock")),
-            Self::StartOfAbc | Self::StartOfLy | Self::StartOfMusicxml | Self::StartOfSvg => {
-                NotationKind::from_start_directive(self).map(|k| Cow::Borrowed(k.label()))
-            }
+            Self::StartOfAbc => Some(Cow::Borrowed(NotationKind::Abc.label())),
+            Self::StartOfLy => Some(Cow::Borrowed(NotationKind::Lilypond.label())),
+            Self::StartOfMusicxml => Some(Cow::Borrowed(NotationKind::MusicXml.label())),
+            Self::StartOfSvg => Some(Cow::Borrowed(NotationKind::Svg.label())),
             Self::StartOfSection(name) => Some(Cow::Owned(crate::capitalize(name))),
             _ => None,
         }

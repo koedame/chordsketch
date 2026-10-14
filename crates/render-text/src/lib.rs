@@ -258,7 +258,7 @@ fn render_song_impl(
                 }
                 match &directive.kind {
                     DirectiveKind::StartOfChorus => {
-                        render_section_header("Chorus", &directive.value, &mut output);
+                        render_section_start(directive, &mut output);
                         // Begin collecting chorus content lines.
                         chorus.start();
                     }
@@ -586,8 +586,8 @@ fn render_directive(
     // so they never reach this function. The `{start_of_textblock}`
     // directive is NOT a notation block — it's documented text so
     // it renders its section header here like any other section.
-    if let Some(heading) = directive.section_heading() {
-        render_section_header(&heading.label, &heading.value, output);
+    if directive.kind.is_section_start() {
+        render_section_start(directive, output);
         return;
     }
     match &directive.kind {
@@ -637,7 +637,7 @@ fn render_chorus_recall(
     output: &mut Vec<String>,
     warnings: &mut Vec<String>,
 ) {
-    render_section_header("Chorus", value, output);
+    render_section_header(DirectiveKind::CHORUS_LABEL, value, output);
     replay_chorus_body(
         chorus_body,
         &mut TextReplay {
@@ -672,6 +672,13 @@ impl ChorusReplay for TextReplay<'_> {
 
     fn directive(&mut self, directive: &Directive) {
         render_directive(directive, self.output, self.warnings);
+    }
+}
+
+/// Render the header of a section-start directive.
+fn render_section_start(directive: &Directive, output: &mut Vec<String>) {
+    if let Some(heading) = directive.section_heading() {
+        render_section_header(&heading.label, &heading.value, output);
     }
 }
 
