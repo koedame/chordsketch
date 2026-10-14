@@ -57,7 +57,7 @@ assert_eq!(reimported.metadata.title.as_deref(), Some("My Song"));
 ## Links
 
 - [ChordSketch repository](https://github.com/koedame/chordsketch)
-- [Playground](https://chordsketch.koeda.me)
+- [Playground](https://koedame.github.io/chordsketch/)
 - [Issue tracker](https://github.com/koedame/chordsketch/issues)
 
 ## License

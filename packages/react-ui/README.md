@@ -101,7 +101,7 @@ itself remains the source of truth.
 ## Links
 
 - Repository: <https://github.com/koedame/chordsketch>
-- Playground: <https://chordsketch.koeda.me>
+- Playground: <https://koedame.github.io/chordsketch/>
 - Editor components (wasm-backed): [`@chordsketch/react`](https://www.npmjs.com/package/@chordsketch/react)
 - Issues: <https://github.com/koedame/chordsketch/issues>
 

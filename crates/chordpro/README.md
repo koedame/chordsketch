@@ -33,7 +33,7 @@ assert_eq!(song.metadata.title.as_deref(), Some("Amazing Grace"));
 ## Links
 
 - Project repository: <https://github.com/koedame/chordsketch>
-- Live playground: <https://chordsketch.koeda.me>
+- Live playground: <https://koedame.github.io/chordsketch/>
 - API docs: <https://docs.rs/chordsketch-chordpro>
 - Issue tracker: <https://github.com/koedame/chordsketch/issues>
 

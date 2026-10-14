@@ -1,7 +1,7 @@
 # Embed ChordPro and iReal Pro in your React app
 
 `@chordsketch/react` ships the same parser + renderer pipeline that
-powers <https://chordsketch.koeda.me> as a published React component
+powers <https://koedame.github.io/chordsketch/> as a published React component
 library. This page is the recipe collection for the most common
 embedding scenarios; copy-paste into a fresh Vite + React app
 (or Next.js, see [§Server-side rendering / Next.js](#recipe-10-server-side-rendering-nextjs)
@@ -283,7 +283,7 @@ narrower hosts; pass `source` + `onChange` for controlled mode.
 > structural section / bar editing, ARIA-grid keyboard navigation,
 > and a popover-based per-bar chord editor with a chord-row
 > editor, N-th ending input, and symbol picker. The playground
-> at <https://chordsketch.koeda.me/chordsketch/irealpro/> still
+> at <https://koedame.github.io/chordsketch/irealpro/> still
 > hosts the DOM editor for reference comparison.
 
 ## Recipe 9 — Custom iReal Pro rendering

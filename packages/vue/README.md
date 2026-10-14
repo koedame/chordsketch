@@ -98,8 +98,8 @@ The component and prop names match [`@chordsketch/react`](https://www.npmjs.com/
 ## Links
 
 - Repository: <https://github.com/koedame/chordsketch>
-- Playground: <https://chordsketch.koeda.me>
-- Documentation: <https://chordsketch.koeda.me/docs/>
+- Playground: <https://koedame.github.io/chordsketch/>
+- Documentation: <https://koedame.github.io/chordsketch/docs/>
 - Issues: <https://github.com/koedame/chordsketch/issues>
 
 ## License

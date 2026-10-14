@@ -3,7 +3,7 @@
 The fastest path to embedding a ChordPro editor — one component
 with editor + preview + transpose + PDF export. Mounts the same
 chrome as
-[`https://chordsketch.koeda.me/chordsketch/chordpro/`](https://chordsketch.koeda.me/chordsketch/chordpro/).
+[`https://koedame.github.io/chordsketch/chordpro/`](https://koedame.github.io/chordsketch/chordpro/).
 
 ```tsx
 import { ChordProEditor } from '@chordsketch/react';

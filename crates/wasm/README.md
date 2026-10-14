@@ -178,7 +178,7 @@ instead.
 
 - Project repository: <https://github.com/koedame/chordsketch>
 - npm package: <https://www.npmjs.com/package/@chordsketch/wasm>
-- Live playground: <https://chordsketch.koeda.me>
+- Live playground: <https://koedame.github.io/chordsketch/>
 - API docs: <https://docs.rs/chordsketch-wasm>
 - Issue tracker: <https://github.com/koedame/chordsketch/issues>
 

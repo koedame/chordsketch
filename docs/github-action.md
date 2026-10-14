@@ -110,5 +110,5 @@ and are created alongside regular ChordSketch release tags.
 
 - [ChordSketch repository](https://github.com/koedame/chordsketch)
 - [ChordPro format reference](https://www.chordpro.org/chordpro/)
-- [ChordSketch Playground](https://chordsketch.koeda.me)
+- [ChordSketch Playground](https://koedame.github.io/chordsketch/)
 - [Issue tracker](https://github.com/koedame/chordsketch/issues)

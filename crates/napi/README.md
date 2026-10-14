@@ -218,7 +218,7 @@ diagnostics without rendering.
 ## Links
 
 - **Project**: https://github.com/koedame/chordsketch
-- **Playground**: https://chordsketch.koeda.me
+- **Playground**: https://koedame.github.io/chordsketch/
 - **Issues**: https://github.com/koedame/chordsketch/issues
 - **WASM package** (browser): [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm)
 

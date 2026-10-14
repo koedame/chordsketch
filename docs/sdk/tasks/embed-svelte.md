@@ -1,7 +1,7 @@
 # Embed ChordPro in your Svelte app
 
 `@chordsketch/svelte` ships the same parser + renderer pipeline that
-powers <https://chordsketch.koeda.me> as a published Svelte 5
+powers <https://koedame.github.io/chordsketch/> as a published Svelte 5
 component library. This page is the recipe collection for the most
 common embedding scenarios; copy-paste into a fresh Vite + Svelte 5
 app (or SvelteKit, see
@@ -18,7 +18,7 @@ counterpart for a React recipe, that is called out in
 
 > **Try it first.** Recipes 1 and 4 — `<ChordTextarea>` and
 > `<Transpose>` — are running as an editable page at
-> <https://chordsketch.koeda.me/svelte/>, built on this package. Type
+> <https://koedame.github.io/chordsketch/svelte/>, built on this package. Type
 > ChordPro there and watch the engine render it before you install
 > anything ([ADR-0053](../../adr/0053-framework-demos-live-in-the-playground.md)).
 

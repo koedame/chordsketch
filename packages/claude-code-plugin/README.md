@@ -57,7 +57,7 @@ installed client; `/plugin update chordsketch@chordsketch` pulls it in.
 ## Links
 
 - [ChordSketch](https://github.com/koedame/chordsketch) — the project
-- [Playground](https://chordsketch.koeda.me) — try the renderer in a browser
+- [Playground](https://koedame.github.io/chordsketch/) — try the renderer in a browser
 - [Documentation](https://koedame.github.io/chordsketch/docs/)
 - [Issues](https://github.com/koedame/chordsketch/issues)
 

@@ -86,7 +86,7 @@ it would be a breaking change that does not block v0.3.0.
 ## Links
 
 - [Project repository](https://github.com/koedame/chordsketch)
-- [Playground](https://chordsketch.koeda.me)
+- [Playground](https://koedame.github.io/chordsketch/)
 - [API docs (docs.rs)](https://docs.rs/chordsketch-convert)
 - [Issue tracker](https://github.com/koedame/chordsketch/issues)
 
