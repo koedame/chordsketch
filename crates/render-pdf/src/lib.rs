@@ -11,7 +11,7 @@
 //! directives trigger explicit page breaks.
 
 use chordsketch_chordpro::ast::{
-    CommentStyle, DirectiveKind, ImageAttributes, Line, LyricsLine, Song,
+    CommentStyle, Directive, DirectiveKind, ImageAttributes, Line, LyricsLine, Song,
 };
 use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
@@ -22,6 +22,9 @@ use chordsketch_chordpro::render_result::{
     validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
+use chordsketch_chordpro::song_walk::{
+    ChorusReplay, ChorusTracker, NotationSkip, SongTranspose, replay_chorus_body,
+};
 use chordsketch_chordpro::transpose::{
     canonical_key_for_display, transpose_chord_with_style, transposed_key_prefers_flat,
 };
@@ -480,9 +483,6 @@ const MAX_IMAGE_PIXELS: u32 = 10_000;
 /// Maximum number of images that can be embedded in a single PDF document.
 /// Prevents memory exhaustion from documents with many large image directives.
 const MAX_IMAGES: usize = 1_000;
-/// Maximum number of chorus recall directives allowed per song.
-/// Prevents output amplification from malicious inputs with many `{chorus}` lines.
-const MAX_CHORUS_RECALLS: usize = 1000;
 
 /// Maximum number of warnings the renderer accumulates per render pass.
 /// Re-exported from `chordsketch-chordpro::render_result` so callers can
@@ -746,32 +746,10 @@ fn render_song_into_doc(
     doc: &mut PdfDocument,
     warnings: &mut Vec<String>,
 ) {
-    // Extract song-level transpose delta from {+config.settings.transpose}.
-    // The base config transpose is already folded into cli_transpose by the caller.
-    let song_overrides = song.config_overrides();
-    let song_transpose_delta = Config::song_transpose_delta(&song_overrides);
     // ADR-0023: capo subtracts from the effective transpose so the
     // displayed chord names match the shapes a guitarist holds at fret N.
-    let song_capo = match song.metadata.capo_validated() {
-        chordsketch_chordpro::ast::CapoValidation::Valid(n) => n,
-        _ => 0,
-    };
-    let top = chordsketch_chordpro::transpose::effective_transpose(
-        cli_transpose,
-        song_transpose_delta,
-        song_capo,
-    );
-    if top.saturated {
-        push_warning(
-            warnings,
-            format!(
-                "transpose offset {cli_transpose} + {song_transpose_delta} - capo \
-                 {song_capo} exceeds i8 range, clamped to {}",
-                top.offset
-            ),
-        );
-    }
-    let mut transpose_offset: i8 = top.offset;
+    // The base config transpose is already folded into cli_transpose by the caller.
+    let mut transpose = SongTranspose::new(song, cli_transpose, warnings);
     let mut fmt_state = PdfFormattingState::default();
 
     // Read configurable frets_shown for chord diagrams.
@@ -832,12 +810,9 @@ fn render_song_into_doc(
     // auto-inject grid and avoid duplicates.
     let mut inline_defined: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    // Stores the AST lines of the most recently defined chorus body for replay.
-    let mut chorus_body: Vec<Line> = Vec::new();
-    // Temporary buffer for collecting chorus content while inside a chorus section.
-    let mut chorus_buf: Option<Vec<Line>> = None;
+    // The most recently defined chorus body, replayed on `{chorus}`.
+    let mut chorus = ChorusTracker::default();
     let mut saved_fmt_state: Option<PdfFormattingState> = None;
-    let mut chorus_recall_count: usize = 0;
 
     // #1825: the HTML renderer invokes external tools (abc2svg / lilypond /
     // musescore) to render notation blocks into embedded SVG. The PDF
@@ -850,16 +825,16 @@ fn render_song_into_doc(
     // retained so the reader can at least see where the notation would
     // have been.
     //
-    // When `in_notation_block` is `Some(kind)` the main loop is inside
+    // While `notation_skip` has a block open the main loop is inside
     // a `{start_of_<kind>} … {end_of_<kind>}` pair and must discard
     // every non-End-directive line until the matching End.
-    let mut in_notation_block: Option<NotationKind> = None;
+    let mut notation_skip = NotationSkip::default();
 
     // True while the loop is inside a `{start_of_tab}`, `{start_of_grid}`,
     // or `{start_of_textblock}` block. Body lines in those sections render
     // through `render_lyrics` with `verbatim = true` so column alignment
     // (fret rows, chord-grid bars) is preserved by Courier. The body of
-    // ABC/Lilypond/SVG/MusicXML blocks is suppressed via `in_notation_block`
+    // ABC/Lilypond/SVG/MusicXML blocks is suppressed via `notation_skip`
     // (#1825), so they don't need the same treatment here.
     let mut in_verbatim_section = false;
 
@@ -869,20 +844,13 @@ fn render_song_into_doc(
         // has already been emitted at StartOf…; the body cannot be
         // rendered (no SVG→PDF pipeline yet — see #1825), so spilling
         // the raw notation source into the PDF would just be noise.
-        if let Some(kind) = in_notation_block {
-            match line {
-                Line::Directive(d) if kind.is_end_directive(&d.kind) => {
-                    in_notation_block = None;
-                }
-                _ => {}
-            }
+        if notation_skip.consume(line) {
             continue;
         }
         match line {
             Line::Lyrics(lyrics) => {
-                if let Some(buf) = chorus_buf.as_mut() {
-                    buf.push(line.clone());
-                }
+                chorus.record(line);
+                let transpose_offset = transpose.offset();
                 let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_offset);
                 render_lyrics(
                     lyrics,
@@ -939,6 +907,7 @@ fn render_song_into_doc(
                             // input, canonical `Gm` / `G` / `C dorian` output,
                             // with the song-wide flat/sharp side applied under
                             // transpose. Verbatim fallback when not a key.
+                            let transpose_offset = transpose.offset();
                             let prefer_flat =
                                 transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             let displayed = canonical_key_for_display(
@@ -980,40 +949,7 @@ fn render_song_into_doc(
                     continue;
                 }
                 if d.kind == DirectiveKind::Transpose {
-                    // A missing or empty value silently resets to 0; only a
-                    // non-empty value that cannot be parsed as i8 emits a warning.
-                    let file_offset: i8 = match d.value.as_deref() {
-                        None | Some("") => 0,
-                        Some(raw) => match raw.parse() {
-                            Ok(v) => v,
-                            Err(_) => {
-                                push_warning(
-                                    warnings,
-                                    format!(
-                                        "{{transpose}} value {raw:?} cannot be \
-                                         parsed as i8, ignored (using 0)"
-                                    ),
-                                );
-                                0
-                            }
-                        },
-                    };
-                    let combined = chordsketch_chordpro::transpose::effective_transpose(
-                        file_offset,
-                        cli_transpose,
-                        song_capo,
-                    );
-                    if combined.saturated {
-                        push_warning(
-                            warnings,
-                            format!(
-                                "transpose offset {file_offset} + {cli_transpose} - capo \
-                                 {song_capo} exceeds i8 range, clamped to {}",
-                                combined.offset
-                            ),
-                        );
-                    }
-                    transpose_offset = combined.offset;
+                    transpose.apply_directive(d.value.as_deref(), warnings);
                     continue;
                 }
                 if d.kind.is_font_size_color() {
@@ -1028,48 +964,33 @@ fn render_song_into_doc(
                 // text.
                 if let Some(kind) = NotationKind::from_start_directive(&d.kind) {
                     render_section_label(d, doc);
-                    let label = kind.label();
-                    let tag = kind.tag();
-                    push_warning(
-                        warnings,
-                        format!(
-                            "PDF renderer does not support {label} blocks; body of the \
-                             `{{start_of_{tag}}} … {{end_of_{tag}}}` section has been \
-                             omitted. Use the HTML renderer for full {label} support.",
-                        ),
-                    );
-                    let placeholder = format!(
-                        "[{} block omitted — use the HTML renderer to view it]",
-                        label
-                    );
+                    let placeholder = notation_skip.begin(kind, "PDF", warnings);
                     doc.ensure_space(LYRICS_SIZE + LINE_GAP);
                     doc.text(&placeholder, Font::HelveticaOblique, LYRICS_SIZE);
                     doc.newline(LYRICS_SIZE + LINE_GAP);
-                    in_notation_block = Some(kind);
                     continue;
                 }
                 match &d.kind {
                     DirectiveKind::StartOfChorus => {
                         render_section_label(d, doc);
-                        chorus_buf = Some(Vec::new());
+                        chorus.start();
                         saved_fmt_state = Some(fmt_state.clone());
                     }
                     DirectiveKind::EndOfChorus => {
-                        if let Some(buf) = chorus_buf.take() {
-                            chorus_body = buf;
-                        }
+                        chorus.end();
                         if let Some(saved) = saved_fmt_state.take() {
                             fmt_state = saved;
                         }
                     }
                     DirectiveKind::Chorus => {
-                        if chorus_recall_count < MAX_CHORUS_RECALLS {
+                        if chorus.try_recall(warnings) {
+                            let transpose_offset = transpose.offset();
                             let prefer_flat =
                                 transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &d.value,
                                 &ChorusRecallCtx {
-                                    chorus_body: &chorus_body,
+                                    chorus_body: chorus.body(),
                                     transpose_offset,
                                     prefer_flat,
                                     fmt_state: &fmt_state,
@@ -1079,16 +1000,6 @@ fn render_song_into_doc(
                                 },
                                 doc,
                             );
-                            chorus_recall_count += 1;
-                        } else if chorus_recall_count == MAX_CHORUS_RECALLS {
-                            push_warning(
-                                warnings,
-                                format!(
-                                    "chorus recall limit ({MAX_CHORUS_RECALLS}) reached, \
-                                     further recalls suppressed"
-                                ),
-                            );
-                            chorus_recall_count += 1;
                         }
                     }
                     // All page control directives ({new_page}, {new_physical_page},
@@ -1126,30 +1037,24 @@ fn render_song_into_doc(
                         doc.column_break();
                     }
                     // Verbatim sections (#1825 covers ABC/Lilypond/SVG/MusicXML
-                    // separately via `in_notation_block`; tab/grid/textblock
+                    // separately via `notation_skip`; tab/grid/textblock
                     // bodies still flow through the lyrics path and need the
                     // mono-font flag flipped so column alignment survives).
                     DirectiveKind::StartOfTab
                     | DirectiveKind::StartOfGrid
                     | DirectiveKind::StartOfTextblock => {
-                        if let Some(buf) = chorus_buf.as_mut() {
-                            buf.push(line.clone());
-                        }
+                        chorus.record(line);
                         in_verbatim_section = true;
                         render_directive(d, show_diagrams, diagram_frets, diagram_orientation, doc);
                     }
                     DirectiveKind::EndOfTab
                     | DirectiveKind::EndOfGrid
                     | DirectiveKind::EndOfTextblock => {
-                        if let Some(buf) = chorus_buf.as_mut() {
-                            buf.push(line.clone());
-                        }
+                        chorus.record(line);
                         in_verbatim_section = false;
                     }
                     _ => {
-                        if let Some(buf) = chorus_buf.as_mut() {
-                            buf.push(line.clone());
-                        }
+                        chorus.record(line);
                         // Track {define} chords that are rendered inline so the
                         // auto-inject grid can skip them (dedup for #1211/#1245/#1246).
                         if d.kind == DirectiveKind::Define
@@ -1167,15 +1072,11 @@ fn render_song_into_doc(
                 }
             }
             Line::Comment(style, text) => {
-                if let Some(buf) = chorus_buf.as_mut() {
-                    buf.push(line.clone());
-                }
+                chorus.record(line);
                 render_comment(*style, text, doc);
             }
             Line::Empty => {
-                if let Some(buf) = chorus_buf.as_mut() {
-                    buf.push(line.clone());
-                }
+                chorus.record(line);
                 doc.newline(LINE_GAP * 2.0);
             }
             _ => {}
@@ -2389,31 +2290,43 @@ fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, doc: 
     doc.newline(SECTION_SIZE + LINE_GAP);
 
     // Replay the stored chorus body lines.
-    for line in ctx.chorus_body {
-        match line {
-            Line::Lyrics(lyrics) => {
-                render_lyrics(
-                    lyrics,
-                    ctx.transpose_offset,
-                    ctx.prefer_flat,
-                    ctx.fmt_state,
-                    doc,
-                    false,
-                );
-            }
-            Line::Comment(style, text) => render_comment(*style, text, doc),
-            Line::Empty => doc.newline(LINE_GAP * 2.0),
-            Line::Directive(d) if !d.kind.is_metadata() => {
-                render_directive(
-                    d,
-                    ctx.show_diagrams,
-                    ctx.diagram_frets,
-                    ctx.diagram_orientation,
-                    doc,
-                );
-            }
-            _ => {}
-        }
+    replay_chorus_body(ctx.chorus_body, &mut PdfReplay { ctx, doc });
+}
+
+/// [`ChorusReplay`] sink that draws the recalled chorus into the PDF.
+struct PdfReplay<'a, 'b> {
+    ctx: &'a ChorusRecallCtx<'b>,
+    doc: &'a mut PdfDocument,
+}
+
+impl ChorusReplay for PdfReplay<'_, '_> {
+    fn lyrics(&mut self, line: &LyricsLine) {
+        render_lyrics(
+            line,
+            self.ctx.transpose_offset,
+            self.ctx.prefer_flat,
+            self.ctx.fmt_state,
+            self.doc,
+            false,
+        );
+    }
+
+    fn comment(&mut self, style: CommentStyle, text: &str) {
+        render_comment(style, text, self.doc);
+    }
+
+    fn empty(&mut self) {
+        self.doc.newline(LINE_GAP * 2.0);
+    }
+
+    fn directive(&mut self, directive: &Directive) {
+        render_directive(
+            directive,
+            self.ctx.show_diagrams,
+            self.ctx.diagram_frets,
+            self.ctx.diagram_orientation,
+            self.doc,
+        );
     }
 }
 
