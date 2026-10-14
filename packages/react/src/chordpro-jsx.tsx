@@ -2977,7 +2977,7 @@ export interface RenderChordproAstOptions {
    *   `top` at the head of `<div class="song">`; the other three
    *   stay at the tail (CSS in `styles.css` distinguishes
    *   `bottom` vs `below` vs `right` visually).
-   * - **Instrument**: `guitar`, `ukulele` / `uke`, `piano` /
+   * - **Instrument**: `guitar`, `ukulele` / `uke`, `charango`, `piano` /
    *   `keys` / `keyboard` override the `instrument` field below
    *   for the remainder of the song (mirrors
    *   `chordsketch_chordpro::resolve_diagrams_instrument`).
@@ -3415,6 +3415,8 @@ function diagramsValueAsInstrument(
     case 'ukulele':
     case 'uke':
       return 'ukulele';
+    case 'charango':
+      return 'charango';
     case 'piano':
     case 'keyboard':
     case 'keys':

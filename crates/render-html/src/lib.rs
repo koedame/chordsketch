@@ -295,7 +295,7 @@ fn render_song_body_into(
         chordsketch_chordpro::chord_diagram::resolve_orientation(raw_orientation);
 
     // Instrument for the auto-inject diagram block at end of song.
-    // Set by {diagrams: guitar/ukulele/on}; cleared by {diagrams: off} / {no_diagrams}.
+    // Set by {diagrams: guitar/ukulele/charango/on}; cleared by {diagrams: off} / {no_diagrams}.
     // None means no auto-inject grid is rendered.
     let default_instrument = config
         .get_path("diagrams.instrument")
@@ -756,7 +756,7 @@ fn render_song_body_into(
         html.push_str("</div>\n");
     }
 
-    // Auto-inject diagram grid when {diagrams} (or {diagrams: guitar/ukulele/piano/on}) was seen.
+    // Auto-inject diagram grid when {diagrams} (or {diagrams: guitar/ukulele/charango/piano/on}) was seen.
     if let Some(ref instrument) = auto_diagrams_instrument {
         // Skip chords that were actually rendered inline via {define} (i.e., show_diagrams
         // was true at the time).  Compare in canonical sharp form to catch enharmonic
@@ -5142,6 +5142,29 @@ Verse text\n\
         );
         // Ukulele Am has 4 strings so the SVG will differ from guitar
         assert!(html.contains(">Am<"), "Am diagram expected");
+    }
+
+    #[test]
+    fn test_diagrams_charango_directive_draws_charango_diagrams() {
+        // `{diagrams: charango}` must select charango regardless of the
+        // configured default, and match what the charango preset draws.
+        let song = chordsketch_chordpro::parse("{diagrams: charango}\n[Am]Hello").unwrap();
+        let from_directive =
+            render_song_with_transpose(&song, 0, &chordsketch_chordpro::config::Config::defaults());
+        let from_config = render_song_with_transpose(
+            &chordsketch_chordpro::parse("{diagrams}\n[Am]Hello").unwrap(),
+            0,
+            &chordsketch_chordpro::config::Config::defaults()
+                .with_define("diagrams.instrument=charango")
+                .unwrap(),
+        );
+        assert!(
+            from_directive.contains("class=\"chord-diagrams\""),
+            "charango diagrams section expected"
+        );
+        assert_eq!(from_directive, from_config);
+        assert_ne!(from_directive, render("{diagrams: guitar}\n[Am]Hello"));
+        assert_ne!(from_directive, render("{diagrams: ukulele}\n[Am]Hello"));
     }
 
     #[test]
