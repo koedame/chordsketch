@@ -73,7 +73,7 @@ pub(crate) struct RenderOptions {
 pub(crate) fn resolve_config_inner(
     opts: &RenderOptions,
 ) -> std::result::Result<chordsketch_chordpro::config::Config, String> {
-    chordsketch_chordpro::config::Config::from_spec(opts.config.as_deref())
+    chordsketch_chordpro::config::Config::preset_or_inline(opts.config.as_deref())
         .map_err(|e| format!("invalid config: {e}"))
 }
 

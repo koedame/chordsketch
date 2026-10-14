@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`Config::from_spec`** resolves a configuration from an optional preset name
+- **`Config::preset_or_inline`** resolves a configuration from an optional preset name
   or inline RRJSON string; the WebAssembly, Node.js and UniFFI bindings share
   it.
 

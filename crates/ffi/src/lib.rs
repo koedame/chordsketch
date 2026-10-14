@@ -45,7 +45,7 @@ pub enum ChordSketchError {
 fn resolve_config(
     config_json: Option<String>,
 ) -> Result<chordsketch_chordpro::config::Config, ChordSketchError> {
-    chordsketch_chordpro::config::Config::from_spec(config_json.as_deref())
+    chordsketch_chordpro::config::Config::preset_or_inline(config_json.as_deref())
         .map_err(|reason| ChordSketchError::InvalidConfig { reason })
 }
 

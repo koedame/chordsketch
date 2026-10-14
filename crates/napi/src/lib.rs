@@ -43,7 +43,7 @@ pub mod bindings;
 fn resolve_config_inner(
     config: Option<&str>,
 ) -> std::result::Result<chordsketch_chordpro::config::Config, String> {
-    chordsketch_chordpro::config::Config::from_spec(config)
+    chordsketch_chordpro::config::Config::preset_or_inline(config)
         .map_err(|e| format!("invalid config: {e}"))
 }
 
