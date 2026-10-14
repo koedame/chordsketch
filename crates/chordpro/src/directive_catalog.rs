@@ -43,8 +43,8 @@ pub struct DirectiveInfo {
 /// Completable value set for `{diagrams: …}`.
 ///
 /// `on` / `off` are the standard ChordPro values; `guitar` / `ukulele` /
-/// `charango` / `piano` are the instrument-name extension; `top` / `bottom` / `right` / `below` are the section-position
-/// keywords; `section` is the default end-of-song diagram grid mode;
+/// `charango` / `piano` are the instrument-name extension; `top` / `bottom` /
+/// `right` / `below` are the section-position keywords; `section` is the default end-of-song diagram grid mode;
 /// `inline` / `hover` are the chordsketch surfacing-mode extension
 /// (ADR-0027). The parser also accepts the aliases `uke` / `keyboard` /
 /// `keys`, but completion offers the canonical forms only.
