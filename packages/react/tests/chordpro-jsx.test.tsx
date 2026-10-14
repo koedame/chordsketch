@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -342,6 +342,21 @@ describe('renderChordproAst', () => {
     expect(container.querySelector('.chord-diagrams')?.getAttribute('data-position')).toBe('bottom');
     // Visibility intact: the section did render.
     expect(container.querySelector('.chord-diagrams')).not.toBeNull();
+  });
+
+  test('{diagrams: charango} draws the grid as charango diagrams', async () => {
+    const { container } = render(
+      renderChordproAst(songWithDiagramsValue('charango'), {
+        chordDiagrams: { instrument: 'guitar' },
+      }),
+    );
+    // `<ChordDiagram>` labels the loaded SVG with the instrument it drew.
+    await waitFor(() =>
+      expect(
+        container.querySelector('.chord-diagrams [aria-label="Am chord diagram (charango)"]'),
+      ).not.toBeNull(),
+    );
+    expect(container.querySelector('.chord-diagrams')?.getAttribute('data-position')).toBe('bottom');
   });
 
   test('multiple {diagrams: …} lines apply last-wins for position', () => {
