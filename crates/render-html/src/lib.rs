@@ -236,7 +236,7 @@ fn render_song_body_into(
     // ADR-0023: capo subtracts from the effective transpose so the
     // displayed chord names match the shapes a guitarist holds at fret N.
     // The base config transpose is already folded into cli_transpose by the caller.
-    let mut transpose = SongTranspose::new(song, cli_transpose, &song_overrides, warnings);
+    let mut transpose = SongTranspose::new(song, cli_transpose, warnings);
     let mut fmt_state = FormattingState::default();
     // `<article>` is the semantic root for a self-contained song —
     // a single ChordPro document is a "composition complete in
@@ -329,7 +329,8 @@ fn render_song_body_into(
     // auto-inject grid and avoid duplicates.
     let mut inline_defined: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    // Re-rendered at recall time so the current transpose offset is applied.
+    // The most recently defined chorus body, re-rendered at recall time so
+    // the current transpose offset is applied.
     let mut chorus = ChorusTracker::default();
     // Saved fmt_state before entering a chorus, restored on EndOfChorus
     // to prevent in-chorus formatting directives from leaking outward.

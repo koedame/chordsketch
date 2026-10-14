@@ -749,8 +749,7 @@ fn render_song_into_doc(
     // ADR-0023: capo subtracts from the effective transpose so the
     // displayed chord names match the shapes a guitarist holds at fret N.
     // The base config transpose is already folded into cli_transpose by the caller.
-    let song_overrides = song.config_overrides();
-    let mut transpose = SongTranspose::new(song, cli_transpose, &song_overrides, warnings);
+    let mut transpose = SongTranspose::new(song, cli_transpose, warnings);
     let mut fmt_state = PdfFormattingState::default();
 
     // Read configurable frets_shown for chord diagrams.
@@ -835,7 +834,7 @@ fn render_song_into_doc(
     // or `{start_of_textblock}` block. Body lines in those sections render
     // through `render_lyrics` with `verbatim = true` so column alignment
     // (fret rows, chord-grid bars) is preserved by Courier. The body of
-    // ABC/Lilypond/SVG/MusicXML blocks is suppressed via `in_notation_block`
+    // ABC/Lilypond/SVG/MusicXML blocks is suppressed via `notation_skip`
     // (#1825), so they don't need the same treatment here.
     let mut in_verbatim_section = false;
 
@@ -1038,7 +1037,7 @@ fn render_song_into_doc(
                         doc.column_break();
                     }
                     // Verbatim sections (#1825 covers ABC/Lilypond/SVG/MusicXML
-                    // separately via `in_notation_block`; tab/grid/textblock
+                    // separately via `notation_skip`; tab/grid/textblock
                     // bodies still flow through the lyrics path and need the
                     // mono-font flag flipped so column alignment survives).
                     DirectiveKind::StartOfTab

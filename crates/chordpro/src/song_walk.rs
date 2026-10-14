@@ -4,9 +4,9 @@
 //! and have to agree on four pieces of bookkeeping that are not about the
 //! output format at all:
 //!
-//! - how the capo, the CLI offset, `{+config.settings.transpose}` and every
-//!   in-file `{transpose}` compose into one displayed offset
-//!   ([`SongTranspose`], ADR-0023);
+//! - how the capo, the CLI offset and the in-file transpose (the
+//!   `{+config.settings.transpose}` delta, replaced by each `{transpose}`)
+//!   compose into one displayed offset ([`SongTranspose`], ADR-0023);
 //! - which lines make up the most recent chorus and how many times it may
 //!   be recalled ([`ChorusTracker`]);
 //! - how the body of an unsupported notation block is skipped
@@ -44,15 +44,10 @@ pub struct SongTranspose {
 impl SongTranspose {
     /// Compute the offset in force at the top of `song`.
     ///
-    /// `song_overrides` is `song.config_overrides()`. An offset that does
-    /// not fit in `i8` is clamped and reported through `warnings`.
-    pub fn new(
-        song: &Song,
-        cli_transpose: i8,
-        song_overrides: &[(&str, &str)],
-        warnings: &mut Vec<String>,
-    ) -> Self {
-        let song_transpose_delta = Config::song_transpose_delta(song_overrides);
+    /// An offset that does not fit in `i8` is clamped and reported through
+    /// `warnings`.
+    pub fn new(song: &Song, cli_transpose: i8, warnings: &mut Vec<String>) -> Self {
+        let song_transpose_delta = Config::song_transpose_delta(&song.config_overrides());
         let song_capo = match song.metadata.capo_validated() {
             CapoValidation::Valid(n) => n,
             _ => 0,
@@ -272,7 +267,7 @@ mod tests {
     fn song_transpose_new_composes_cli_offset_and_capo_when_capo_is_set() {
         let s = song("{capo: 2}\n[C]La");
         let mut warnings = Vec::new();
-        let t = SongTranspose::new(&s, 5, &s.config_overrides(), &mut warnings);
+        let t = SongTranspose::new(&s, 5, &mut warnings);
         assert_eq!(t.offset(), 3, "5 - capo 2");
         assert!(warnings.is_empty());
     }
@@ -281,7 +276,7 @@ mod tests {
     fn song_transpose_new_warns_and_clamps_when_the_sum_overflows_i8() {
         let s = song("{+config.settings.transpose: 100}\n[C]La");
         let mut warnings = Vec::new();
-        let t = SongTranspose::new(&s, 100, &s.config_overrides(), &mut warnings);
+        let t = SongTranspose::new(&s, 100, &mut warnings);
         assert_eq!(t.offset(), i8::MAX);
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("exceeds i8 range"), "{warnings:?}");
@@ -291,7 +286,7 @@ mod tests {
     fn apply_directive_replaces_the_file_offset_and_keeps_cli_and_capo() {
         let s = song("{capo: 1}\n[C]La");
         let mut warnings = Vec::new();
-        let mut t = SongTranspose::new(&s, 2, &s.config_overrides(), &mut warnings);
+        let mut t = SongTranspose::new(&s, 2, &mut warnings);
         t.apply_directive(Some("4"), &mut warnings);
         assert_eq!(t.offset(), 5, "4 + cli 2 - capo 1");
         t.apply_directive(None, &mut warnings);
@@ -305,7 +300,7 @@ mod tests {
     fn apply_directive_warns_and_uses_zero_when_the_value_is_not_an_i8() {
         let s = song("[C]La");
         let mut warnings = Vec::new();
-        let mut t = SongTranspose::new(&s, 3, &s.config_overrides(), &mut warnings);
+        let mut t = SongTranspose::new(&s, 3, &mut warnings);
         t.apply_directive(Some("up"), &mut warnings);
         assert_eq!(t.offset(), 3);
         assert_eq!(warnings.len(), 1);
@@ -319,7 +314,7 @@ mod tests {
     fn apply_directive_warns_and_clamps_when_the_sum_overflows_i8() {
         let s = song("[C]La");
         let mut warnings = Vec::new();
-        let mut t = SongTranspose::new(&s, 100, &s.config_overrides(), &mut warnings);
+        let mut t = SongTranspose::new(&s, 100, &mut warnings);
         t.apply_directive(Some("100"), &mut warnings);
         assert_eq!(t.offset(), i8::MAX);
         assert_eq!(warnings.len(), 1);
@@ -430,5 +425,46 @@ mod tests {
         let mut r = Recorder::default();
         replay_chorus_body(&s.lines, &mut r);
         assert_eq!(r.0, ["lyrics", "comment", "empty", "directive"]);
+    }
+
+    #[test]
+    fn apply_directive_replaces_the_config_delta_instead_of_adding_to_it() {
+        let s = song("{+config.settings.transpose: 5}\n[C]La");
+        let mut warnings = Vec::new();
+        let mut t = SongTranspose::new(&s, 1, &mut warnings);
+        assert_eq!(t.offset(), 6, "cli 1 + config delta 5");
+        t.apply_directive(Some("2"), &mut warnings);
+        assert_eq!(
+            t.offset(),
+            3,
+            "{{transpose: 2}} + cli 1; the config delta is gone"
+        );
+    }
+
+    #[test]
+    fn chorus_tracker_start_inside_an_open_chorus_discards_the_partial_body() {
+        let kept = Line::Empty;
+        let dropped = Line::Comment(CommentStyle::Normal, "dropped".to_string());
+        let mut c = ChorusTracker::default();
+        c.start();
+        c.record(&dropped);
+        c.start();
+        c.record(&kept);
+        c.end();
+        assert_eq!(c.body(), std::slice::from_ref(&kept));
+    }
+
+    #[test]
+    fn notation_skip_keeps_skipping_when_another_kinds_end_directive_appears() {
+        let s = song("{start_of_abc}\n{end_of_ly}\nX:1\n{end_of_abc}\n[C]La");
+        let mut skip = NotationSkip::default();
+        let mut warnings = Vec::new();
+        let _ = skip.begin(NotationKind::Abc, "Text", &mut warnings);
+        let consumed: Vec<bool> = s.lines[1..].iter().map(|l| skip.consume(l)).collect();
+        assert_eq!(
+            consumed,
+            [true, true, true, false],
+            "{{end_of_ly}} and the body are skipped, {{end_of_abc}} closes the block, the lyrics line is kept"
+        );
     }
 }

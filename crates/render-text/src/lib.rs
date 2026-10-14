@@ -103,8 +103,9 @@ fn render_song_impl(
     // ADR-0023: capo subtracts from the effective transpose so the
     // displayed chord names match the shapes a guitarist holds at fret N.
     // The base config transpose is already folded into cli_transpose by the caller.
-    let mut transpose = SongTranspose::new(song, cli_transpose, &song_overrides, warnings);
-    // Re-rendered at recall time so the current transpose offset is applied.
+    let mut transpose = SongTranspose::new(song, cli_transpose, warnings);
+    // The most recently defined chorus body, re-rendered at recall time so
+    // the current transpose offset is applied.
     let mut chorus = ChorusTracker::default();
 
     // #1971: parity with the PDF renderer (#1825). When inside a
