@@ -5,11 +5,13 @@ pub mod ast;
 pub mod chord;
 pub mod chord_diagram;
 pub mod config;
+pub mod diagram_instrument;
 pub mod directive_catalog;
 pub mod escape;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod external_tool;
 pub mod formatter;
+pub mod formatting;
 pub mod grid;
 pub mod heuristic;
 pub mod image_path;

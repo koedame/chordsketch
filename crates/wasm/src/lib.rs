@@ -73,19 +73,8 @@ pub(crate) struct RenderOptions {
 pub(crate) fn resolve_config_inner(
     opts: &RenderOptions,
 ) -> std::result::Result<chordsketch_chordpro::config::Config, String> {
-    match &opts.config {
-        Some(name) => {
-            // Try as a preset first, then as inline RRJSON.
-            if let Some(preset) = chordsketch_chordpro::config::Config::preset(name) {
-                Ok(preset)
-            } else {
-                chordsketch_chordpro::config::Config::parse(name).map_err(|e| {
-                    format!("invalid config (not a known preset and not valid RRJSON): {e}")
-                })
-            }
-        }
-        None => Ok(chordsketch_chordpro::config::Config::defaults()),
-    }
+    chordsketch_chordpro::config::Config::preset_or_inline(opts.config.as_deref())
+        .map_err(|e| format!("invalid config: {e}"))
 }
 
 /// Forward each warning in a [`RenderResult`] to `console.warn` and
@@ -238,56 +227,21 @@ pub(crate) fn chord_diagram_svg_inner_with_options(
     orientation: Option<&str>,
     compact: bool,
 ) -> std::result::Result<Option<String>, String> {
-    use chordsketch_chordpro::chord_diagram::{
-        DiagramSize, render_keyboard_svg_with_size, render_svg_with_options, resolve_orientation,
-    };
-    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+    use chordsketch_chordpro::chord_diagram::DiagramSize;
 
-    let resolved = resolve_orientation(orientation);
     let size = if compact {
         DiagramSize::Compact
     } else {
         DiagramSize::Regular
     };
-
-    match instrument.to_ascii_lowercase().as_str() {
-        "piano" | "keyboard" | "keys" => {
-            // `lookup_keyboard_voicing` takes its defines as
-            // `&[(String, Vec<i32>)]` (keys form), not the
-            // fretted `&[(String, String)]` form. Bridging
-            // between the two requires re-parsing each raw
-            // string via `ChordDefinition::parse_value` and
-            // promoting `keys` entries into the Vec<i32> shape.
-            // The Rust HTML renderer does that work inside
-            // `render-html`'s keyboard branch — replicating it
-            // here would mean a sister-site helper in
-            // `chordsketch-chordpro`. Tracked as a follow-up;
-            // for now the wasm boundary passes an empty defines
-            // slice for keyboards (same behaviour as before
-            // this commit), and only the fretted branch
-            // benefits from the new API.
-            //
-            // Keyboard diagrams have no orientation knob — the
-            // argument is accepted but ignored here.
-            let _ = defines;
-            Ok(
-                lookup_keyboard_voicing(chord, &[])
-                    .map(|v| render_keyboard_svg_with_size(&v, size)),
-            )
-        }
-        "guitar" | "ukulele" | "uke" => {
-            // `frets_shown = 5` matches the default ChordPro HTML
-            // renderer (`crates/render-html` emits 5-fret diagrams
-            // when no `{chordfrets}` directive is set) so diagrams
-            // produced by `<ChordDiagram>` visually match the
-            // sheet output from `<ChordSheet>` for the same chord.
-            Ok(lookup_diagram(chord, defines, instrument, 5)
-                .map(|d| render_svg_with_options(&d, resolved, size)))
-        }
-        other => Err(format!(
-            "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
-        )),
-    }
+    chordsketch_chordpro::diagram_instrument::render_svg(
+        chord,
+        instrument,
+        defines,
+        orientation,
+        size,
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Pure-Rust core of [`bindings::chord_pitches`]. Returns the chord's
@@ -317,36 +271,17 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
 /// `diagram_pitches_inner` and the FFI binding's `diagram_pitches`
 /// (`.claude/rules/fix-propagation.md` §Bindings).
 ///
-/// The accepted instrument set is kept in lockstep with
-/// [`chord_diagram_svg_inner_with_options`]: only the instruments the SVG
-/// binding surface exposes (`guitar` / `ukulele` / `uke` + `piano` /
-/// `keyboard` / `keys`) yield pitches. Anything else — e.g. `charango`, which
-/// the core voicing layer supports but the binding SVG path does not draw —
-/// returns `None`, so the audio surface never sounds an instrument that has no
-/// drawable diagram on the same binding.
+/// The accepted instrument set is the core's
+/// [`chordsketch_chordpro::diagram_instrument`], the same one the SVG surface
+/// uses, so the audio surface never sounds an instrument that has no drawable
+/// diagram on the same binding.
 #[must_use]
 pub(crate) fn diagram_pitches_inner(
     chord: &str,
     instrument: &str,
     defines: &[(String, String)],
 ) -> Option<Vec<u8>> {
-    if !is_binding_diagram_instrument(instrument) {
-        return None;
-    }
-    chordsketch_chordpro::voicings::diagram_pitches(chord, defines, instrument, 5)
-}
-
-/// Whether `instrument` is one the binding diagram surface (SVG *and* audio)
-/// exposes — the lockstep instrument allowlist shared by
-/// [`chord_diagram_svg_inner_with_options`] and [`diagram_pitches_inner`].
-///
-/// Kept as one predicate so the SVG and audio surfaces cannot drift on which
-/// instruments they accept (`.claude/rules/fix-propagation.md`).
-fn is_binding_diagram_instrument(instrument: &str) -> bool {
-    matches!(
-        instrument.to_ascii_lowercase().as_str(),
-        "guitar" | "ukulele" | "uke" | "piano" | "keyboard" | "keys"
-    )
+    chordsketch_chordpro::diagram_instrument::pitches(chord, instrument, defines)
 }
 
 /// Pure-Rust core of [`bindings::key_scale_pitches`]. Returns the ascending
@@ -758,45 +693,10 @@ pub(crate) struct ConversionWithWarnings {
     pub(crate) warnings: Vec<String>,
 }
 
-/// Format a [`chordsketch_convert::ConversionWarning`] as a stable
-/// `"<kind>: <message>"` string. Mirror of NAPI / FFI's helper.
-fn format_conversion_warning(w: &chordsketch_convert::ConversionWarning) -> String {
-    let kind = match w.kind {
-        chordsketch_convert::WarningKind::LossyDrop => "lossy-drop",
-        chordsketch_convert::WarningKind::Approximated => "approximated",
-        chordsketch_convert::WarningKind::Unsupported => "unsupported",
-        // `WarningKind` is `#[non_exhaustive]`; falling back to a
-        // generic tag here keeps the binding compiling against a
-        // future variant. Sister bindings do the same.
-        _ => "warning",
-    };
-    format!("{kind}: {}", w.message)
-}
-
 /// Run the ChordPro → iReal pipeline; native-test helper used by
 /// the wasm wrapper and by Rust unit tests in this file.
 pub(crate) fn do_convert_chordpro_to_irealb(input: &str) -> Result<ConversionWithWarnings, String> {
-    let parse_result = chordsketch_chordpro::parse_multi_lenient(input);
-    // `split_at_new_song` unconditionally pushes `&input[seg_start..]`
-    // last, so `parse_multi_lenient` always returns at least one result;
-    // `next()` is provably `Some`.
-    let song = parse_result
-        .results
-        .into_iter()
-        .next()
-        .map(|r| r.song)
-        .expect("parse_multi_lenient always returns at least one result");
-    let converted = chordsketch_convert::chordpro_to_ireal(&song)
-        .map_err(|e| format!("conversion failed: {e}"))?;
-    let url = chordsketch_ireal::irealb_serialize(&converted.output);
-    Ok(ConversionWithWarnings {
-        output: url,
-        warnings: converted
-            .warnings
-            .iter()
-            .map(format_conversion_warning)
-            .collect(),
-    })
+    conversion_result(chordsketch_convert::strings::chordpro_text_to_irealb(input))
 }
 
 /// Run the iReal → ChordPro pipeline; native-test helper used by
@@ -804,24 +704,19 @@ pub(crate) fn do_convert_chordpro_to_irealb(input: &str) -> Result<ConversionWit
 pub(crate) fn do_convert_irealb_to_chordpro_text(
     input: &str,
 ) -> Result<ConversionWithWarnings, String> {
-    let ireal = chordsketch_ireal::parse(input).map_err(|e| format!("conversion failed: {e}"))?;
-    let converted = chordsketch_convert::ireal_to_chordpro(&ireal)
-        .map_err(|e| format!("conversion failed: {e}"))?;
-    let rendered = chordsketch_render_text::render_song_with_warnings(
-        &converted.output,
-        0,
-        &chordsketch_chordpro::config::Config::defaults(),
-    );
-    let mut warnings: Vec<String> = converted
-        .warnings
-        .iter()
-        .map(format_conversion_warning)
-        .collect();
-    warnings.extend(rendered.warnings);
-    Ok(ConversionWithWarnings {
-        output: rendered.output,
-        warnings,
-    })
+    conversion_result(chordsketch_convert::strings::irealb_to_chordpro_text(input))
+}
+
+/// Map a core conversion result onto the wasm surface.
+fn conversion_result(
+    result: Result<chordsketch_convert::strings::ConvertedText, String>,
+) -> Result<ConversionWithWarnings, String> {
+    result
+        .map(|c| ConversionWithWarnings {
+            output: c.output,
+            warnings: c.warnings,
+        })
+        .map_err(|e| format!("conversion failed: {e}"))
 }
 
 /// Run the iReal SVG-render pipeline; native helper used by the

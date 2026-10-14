@@ -66,6 +66,7 @@
 pub mod error;
 pub mod from_ireal;
 pub mod ireal;
+pub mod strings;
 pub mod to_ireal;
 
 pub use error::{ConversionError, ConversionWarning, WarningKind};

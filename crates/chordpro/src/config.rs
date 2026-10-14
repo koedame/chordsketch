@@ -223,6 +223,31 @@ impl Config {
         &self.root
     }
 
+    /// Resolve the configuration an entry point was asked for: the defaults
+    /// when `spec` is `None`, otherwise the built-in preset of that name, or —
+    /// when no preset has that name — `spec` parsed as inline RRJSON.
+    ///
+    /// For callers that receive the configuration as a string argument (the
+    /// WebAssembly, Node.js and UniFFI bindings). It never touches the file
+    /// system; [`Config::resolve`] is the preset-or-file-path variant the CLI
+    /// uses.
+    ///
+    /// # Errors
+    ///
+    /// A caller-facing message when `spec` is neither a preset name nor valid
+    /// RRJSON.
+    #[must_use = "an invalid configuration must be reported to the caller"]
+    pub fn preset_or_inline(spec: Option<&str>) -> Result<Self, String> {
+        let Some(name) = spec else {
+            return Ok(Self::defaults());
+        };
+        match Self::preset(name) {
+            Some(preset) => Ok(preset),
+            None => Self::parse(name)
+                .map_err(|e| format!("not a known preset and not valid RRJSON: {e}")),
+        }
+    }
+
     /// Load a built-in preset configuration by short name.
     ///
     /// Returns `None` if the name does not match a built-in preset.
@@ -2019,6 +2044,34 @@ mod tests {
         assert!(
             warnings.iter().any(|w| w.contains("cannot be overridden")),
             "delegate override should be blocked: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn preset_or_inline_without_a_spec_gives_the_defaults() {
+        let c = Config::preset_or_inline(None).expect("defaults resolve");
+        assert_eq!(c, Config::defaults());
+    }
+
+    #[test]
+    fn preset_or_inline_prefers_a_preset_name_case_insensitively() {
+        let c = Config::preset_or_inline(Some("Ukulele")).expect("preset resolves");
+        assert_eq!(c, Config::preset("ukulele").unwrap());
+    }
+
+    #[test]
+    fn preset_or_inline_parses_inline_rrjson_when_the_spec_is_not_a_preset() {
+        let c = Config::preset_or_inline(Some("{ settings: { transpose: 3 } }"))
+            .expect("rrjson resolves");
+        assert_eq!(c.get_path("settings.transpose").as_f64(), Some(3.0));
+    }
+
+    #[test]
+    fn preset_or_inline_reports_a_spec_that_is_neither_a_preset_nor_rrjson() {
+        let err = Config::preset_or_inline(Some("{ not rrjson")).expect_err("must not resolve");
+        assert!(
+            err.starts_with("not a known preset and not valid RRJSON: "),
+            "{err}"
         );
     }
 }

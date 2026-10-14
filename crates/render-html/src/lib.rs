@@ -28,7 +28,11 @@ use chordsketch_chordpro::ast::{CommentStyle, Directive, DirectiveKind, Line, Ly
 use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::escape::escape_xml as escape;
+use chordsketch_chordpro::formatting::{
+    StyleElement, StyleProperty, parse_font_size, style_target,
+};
 use chordsketch_chordpro::inline_markup::{SpanAttributes, TextSpan};
+use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
     RenderResult, push_warning, validate_ambiguous_chords, validate_capo, validate_keys,
     validate_multiple_capo, validate_strict_key,
@@ -51,13 +55,6 @@ pub use chordsketch_chordpro::render_result::MAX_WARNINGS;
 /// Maximum number of CSS columns allowed.
 /// Matches `MAX_COLUMNS` in the PDF renderer.
 const MAX_COLUMNS: u32 = 32;
-
-/// Minimum font size (in points) accepted from user directives.
-/// Matches `MIN_FONT_SIZE` in the PDF renderer.
-const MIN_FONT_SIZE: f32 = 0.5;
-/// Maximum font size (in points) accepted from user directives.
-/// Matches `MAX_FONT_SIZE` in the PDF renderer.
-const MAX_FONT_SIZE: f32 = 200.0;
 
 // ---------------------------------------------------------------------------
 // Formatting state
@@ -87,7 +84,7 @@ impl ElementStyle {
         }
         if let Some(ref size) = self.size {
             let safe = sanitize_css_value(size);
-            if safe.chars().all(|c| c.is_ascii_digit()) {
+            if safe.parse::<f32>().is_ok() {
                 let _ = write!(css, "font-size: {safe}pt;");
             } else {
                 let _ = write!(css, "font-size: {safe};");
@@ -115,41 +112,29 @@ struct FormattingState {
 impl FormattingState {
     /// Apply a formatting directive, updating the appropriate style.
     ///
-    /// Font size values are clamped to `[MIN_FONT_SIZE, MAX_FONT_SIZE]` to
-    /// prevent degenerate CSS output from extreme values. This matches the
-    /// clamping applied in the PDF renderer per `renderer-parity.md`.
+    /// Font size values are clamped to the core crate's
+    /// `[MIN_FONT_SIZE, MAX_FONT_SIZE]` to prevent degenerate CSS output from
+    /// extreme values, the same range the PDF renderer applies.
     fn apply(&mut self, kind: &DirectiveKind, value: &Option<String>) {
-        let val = value.clone();
-        let clamped_size = || -> Option<String> {
-            value
-                .as_deref()
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|s| s.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE).to_string())
+        // Header/Footer/TOC directives are not rendered in the main body
+        let Some((element, property)) = style_target(kind) else {
+            return;
         };
-        match kind {
-            DirectiveKind::TextFont => self.text.font = val,
-            DirectiveKind::TextSize => self.text.size = clamped_size(),
-            DirectiveKind::TextColour => self.text.colour = val,
-            DirectiveKind::ChordFont => self.chord.font = val,
-            DirectiveKind::ChordSize => self.chord.size = clamped_size(),
-            DirectiveKind::ChordColour => self.chord.colour = val,
-            DirectiveKind::TabFont => self.tab.font = val,
-            DirectiveKind::TabSize => self.tab.size = clamped_size(),
-            DirectiveKind::TabColour => self.tab.colour = val,
-            DirectiveKind::TitleFont => self.title.font = val,
-            DirectiveKind::TitleSize => self.title.size = clamped_size(),
-            DirectiveKind::TitleColour => self.title.colour = val,
-            DirectiveKind::ChorusFont => self.chorus.font = val,
-            DirectiveKind::ChorusSize => self.chorus.size = clamped_size(),
-            DirectiveKind::ChorusColour => self.chorus.colour = val,
-            DirectiveKind::LabelFont => self.label.font = val,
-            DirectiveKind::LabelSize => self.label.size = clamped_size(),
-            DirectiveKind::LabelColour => self.label.colour = val,
-            DirectiveKind::GridFont => self.grid.font = val,
-            DirectiveKind::GridSize => self.grid.size = clamped_size(),
-            DirectiveKind::GridColour => self.grid.colour = val,
-            // Header/Footer/TOC directives are not rendered in the main body
-            _ => {}
+        let style = match element {
+            StyleElement::Text => &mut self.text,
+            StyleElement::Chord => &mut self.chord,
+            StyleElement::Tab => &mut self.tab,
+            StyleElement::Title => &mut self.title,
+            StyleElement::Chorus => &mut self.chorus,
+            StyleElement::Label => &mut self.label,
+            StyleElement::Grid => &mut self.grid,
+        };
+        match property {
+            StyleProperty::Font => style.font = value.clone(),
+            StyleProperty::Size => {
+                style.size = parse_font_size(value.as_deref()).map(|s| s.to_string());
+            }
+            StyleProperty::Colour => style.colour = value.clone(),
         }
     }
 }
@@ -538,7 +523,7 @@ fn render_song_body_into(
                 }
                 match &directive.kind {
                     DirectiveKind::StartOfChorus => {
-                        render_section_open("chorus", "Chorus", &directive.value, html);
+                        render_section_start(directive, html);
                         chorus.start();
                         // Save fmt_state so in-chorus formatting directives
                         // do not leak into sections after the chorus.
@@ -723,16 +708,7 @@ fn render_song_body_into(
                         // `shape="..."`), suppress it entirely
                         // so the heading reads "Grid" instead of
                         // the raw attribute string.
-                        let label_value = directive.value.as_ref().and_then(|v| {
-                            if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
-                                Some(label)
-                            } else if !v.contains('=') {
-                                Some(v.clone())
-                            } else {
-                                None
-                            }
-                        });
-                        render_section_open("grid", "Grid", &label_value, html);
+                        render_section_start(directive, html);
                         in_grid = true;
                     }
                     DirectiveKind::EndOfGrid => {
@@ -2193,53 +2169,10 @@ fn render_directive_inner(
     html: &mut String,
 ) {
     match &directive.kind {
-        DirectiveKind::StartOfChorus => {
-            render_section_open("chorus", "Chorus", &directive.value, html);
-        }
-        DirectiveKind::StartOfVerse => {
-            render_section_open("verse", "Verse", &directive.value, html);
-        }
-        DirectiveKind::StartOfBridge => {
-            render_section_open("bridge", "Bridge", &directive.value, html);
-        }
-        DirectiveKind::StartOfTab => {
-            render_section_open("tab", "Tab", &directive.value, html);
-        }
-        DirectiveKind::StartOfGrid => {
-            // See the outer body-loop arm for the full
-            // selection logic. This fallback exists for
-            // callers (e.g. chorus replay) that route
-            // `StartOfGrid` through this helper without the
-            // surrounding body context.
-            let label_value = directive.value.as_ref().and_then(|v| {
-                if let Some(label) = chordsketch_chordpro::grid::extract_grid_label(v) {
-                    Some(label)
-                } else if !v.contains('=') {
-                    Some(v.clone())
-                } else {
-                    None
-                }
-            });
-            render_section_open("grid", "Grid", &label_value, html);
-        }
-        DirectiveKind::StartOfAbc => {
-            render_section_open("abc", "ABC", &directive.value, html);
-        }
-        DirectiveKind::StartOfLy => {
-            render_section_open("ly", "Lilypond", &directive.value, html);
-        }
         // StartOfSvg is handled in the main rendering loop with raw HTML
         // embedding (<div class="svg-section">), not via render_section_open.
-        DirectiveKind::StartOfTextblock => {
-            render_section_open("textblock", "Textblock", &directive.value, html);
-        }
-        DirectiveKind::StartOfMusicxml => {
-            render_section_open("musicxml", "MusicXML", &directive.value, html);
-        }
-        DirectiveKind::StartOfSection(section_name) => {
-            let class = format!("section-{}", sanitize_css_class(section_name));
-            let label = escape(&chordsketch_chordpro::capitalize(section_name));
-            render_section_open(&class, &label, &directive.value, html);
+        kind if kind.is_section_start() && *kind != DirectiveKind::StartOfSvg => {
+            render_section_start(directive, html);
         }
         DirectiveKind::EndOfChorus
         | DirectiveKind::EndOfVerse
@@ -2327,14 +2260,14 @@ fn render_abc_with_fallback(
 ) {
     match chordsketch_chordpro::external_tool::invoke_abc2svg(abc_content) {
         Ok(svg_fragment) => {
-            render_section_open("abc", "ABC", label, html);
+            render_section_open("abc", NotationKind::Abc.label(), label, html);
             html.push_str(&sanitize_svg_content(&svg_fragment));
             html.push('\n');
             html.push_str("</section>\n");
         }
         Err(e) => {
             push_warning(warnings, format!("abc2svg invocation failed: {e}"));
-            render_section_open("abc", "ABC", label, html);
+            render_section_open("abc", NotationKind::Abc.label(), label, html);
             html.push_str("<pre>");
             html.push_str(&escape(abc_content));
             html.push_str("</pre>\n");
@@ -2353,7 +2286,7 @@ fn render_abc_with_fallback(
     html: &mut String,
     _warnings: &mut Vec<String>,
 ) {
-    render_section_open("abc", "ABC", label, html);
+    render_section_open("abc", NotationKind::Abc.label(), label, html);
     html.push_str("<pre>");
     html.push_str(&escape(abc_content));
     html.push_str("</pre>\n");
@@ -2383,14 +2316,14 @@ fn render_ly_with_fallback(
 ) {
     match chordsketch_chordpro::external_tool::invoke_lilypond(ly_content) {
         Ok(svg) => {
-            render_section_open("ly", "Lilypond", label, html);
+            render_section_open("ly", NotationKind::Lilypond.label(), label, html);
             html.push_str(&sanitize_svg_content(&svg));
             html.push('\n');
             html.push_str("</section>\n");
         }
         Err(e) => {
             push_warning(warnings, format!("lilypond invocation failed: {e}"));
-            render_section_open("ly", "Lilypond", label, html);
+            render_section_open("ly", NotationKind::Lilypond.label(), label, html);
             html.push_str("<pre>");
             html.push_str(&escape(ly_content));
             html.push_str("</pre>\n");
@@ -2409,7 +2342,7 @@ fn render_ly_with_fallback(
     html: &mut String,
     _warnings: &mut Vec<String>,
 ) {
-    render_section_open("ly", "Lilypond", label, html);
+    render_section_open("ly", NotationKind::Lilypond.label(), label, html);
     html.push_str("<pre>");
     html.push_str(&escape(ly_content));
     html.push_str("</pre>\n");
@@ -2430,14 +2363,14 @@ fn render_musicxml_with_fallback(
 ) {
     match chordsketch_chordpro::external_tool::invoke_musescore(musicxml_content) {
         Ok(svg) => {
-            render_section_open("musicxml", "MusicXML", label, html);
+            render_section_open("musicxml", NotationKind::MusicXml.label(), label, html);
             html.push_str(&sanitize_svg_content(&svg));
             html.push('\n');
             html.push_str("</section>\n");
         }
         Err(e) => {
             push_warning(warnings, format!("musescore invocation failed: {e}"));
-            render_section_open("musicxml", "MusicXML", label, html);
+            render_section_open("musicxml", NotationKind::MusicXml.label(), label, html);
             html.push_str("<pre>");
             html.push_str(&escape(musicxml_content));
             html.push_str("</pre>\n");
@@ -2456,7 +2389,7 @@ fn render_musicxml_with_fallback(
     html: &mut String,
     _warnings: &mut Vec<String>,
 ) {
-    render_section_open("musicxml", "MusicXML", label, html);
+    render_section_open("musicxml", NotationKind::MusicXml.label(), label, html);
     html.push_str("<pre>");
     html.push_str(&escape(musicxml_content));
     html.push_str("</pre>\n");
@@ -2520,6 +2453,23 @@ fn render_image(attrs: &chordsketch_chordpro::ast::ImageAttributes, html: &mut S
         let _ = write!(html, " style=\"{}\"", escape(&style));
     }
     html.push_str("></div>\n");
+}
+
+/// Open the `<section>` of a section-start directive: the CSS class comes
+/// from the directive name (`start_of_verse` → `verse`, a custom section →
+/// `section-<name>`), the heading from [`DirectiveKind::section_label`].
+fn render_section_start(directive: &chordsketch_chordpro::ast::Directive, html: &mut String) {
+    let Some(heading) = directive.section_heading() else {
+        return;
+    };
+    let class = match &directive.kind {
+        DirectiveKind::StartOfSection(name) => format!("section-{}", sanitize_css_class(name)),
+        kind => kind
+            .canonical_name()
+            .trim_start_matches("start_of_")
+            .to_string(),
+    };
+    render_section_open(&class, &escape(&heading.label), &heading.value, html);
 }
 
 /// Open a `<section>` with a class and optional label.
@@ -2877,8 +2827,8 @@ fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html:
     let diagram_orientation = ctx.diagram_orientation;
     html.push_str("<div class=\"chorus-recall\">\n");
     let display_label = match value {
-        Some(v) if !v.is_empty() => format!("Chorus: {}", escape(v)),
-        _ => "Chorus".to_string(),
+        Some(v) if !v.is_empty() => format!("{}: {}", DirectiveKind::CHORUS_LABEL, escape(v)),
+        _ => DirectiveKind::CHORUS_LABEL.to_string(),
     };
     let _ = writeln!(html, "<h3 class=\"section-label\">{display_label}</h3>");
     // Use a local copy of fmt_state so in-chorus formatting directives
@@ -3753,6 +3703,29 @@ mod tests {
     // --- Custom sections (#108) ---
 
     #[test]
+    fn test_each_section_start_opens_a_section_with_its_class_and_heading() {
+        for (start, class, heading) in [
+            ("chorus", "chorus", "Chorus"),
+            ("verse", "verse", "Verse"),
+            ("bridge", "bridge", "Bridge"),
+            ("tab", "tab", "Tab"),
+            ("grid", "grid", "Grid"),
+            ("textblock", "textblock", "Textblock"),
+            ("abc", "abc", "ABC"),
+            ("ly", "ly", "Lilypond"),
+            ("musicxml", "musicxml", "MusicXML"),
+        ] {
+            let html = render(&format!("{{start_of_{start}}}\nx\n{{end_of_{start}}}"));
+            assert!(
+                html.contains(&format!(
+                    "<section class=\"{class}\">\n<h3 class=\"section-label\">{heading}</h3>"
+                )),
+                "{{start_of_{start}}} must open <section class=\"{class}\"> headed {heading}: {html}"
+            );
+        }
+    }
+
+    #[test]
     fn test_render_custom_section_intro() {
         let html = render("{start_of_intro}\n[Am]Da da\n{end_of_intro}");
         assert!(html.contains("<section class=\"section-intro\">"));
@@ -4238,6 +4211,19 @@ mod transpose_tests {
     fn test_textfont_directive_applies_css() {
         let html = render("{textfont: Courier}\nHello world");
         assert!(html.contains("font-family: Courier;"));
+    }
+
+    #[test]
+    fn test_fractional_textsize_gets_the_pt_unit() {
+        let html = render("{textsize: 12.5}\nHello world");
+        assert!(html.contains("font-size: 12.5pt;"), "{html}");
+    }
+
+    #[test]
+    fn test_nan_textsize_is_ignored_like_any_non_numeric_size() {
+        let html = render("{textsize: NaN}\nHello world");
+        assert!(!html.contains("NaN"), "{html}");
+        assert!(!html.contains("font-size: pt"), "{html}");
     }
 
     #[test]
