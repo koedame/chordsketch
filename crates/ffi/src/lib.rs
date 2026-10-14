@@ -438,7 +438,8 @@ pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
 /// the SVG path). `frets_shown` is fixed at `5` to match the SVG path so a
 /// diagram and its audio resolve to the same voicing.
 ///
-/// The accepted instrument set is kept in lockstep with
+/// The accepted instrument set is the core's
+/// [`chordsketch_chordpro::diagram_instrument`] set, shared with
 /// [`chord_diagram_svg_with_defines_orientation`]: anything outside the set
 /// above — e.g. `"charango"`, which the core voicing layer supports but the
 /// binding SVG path does not draw — returns `None`, so the audio surface never
@@ -450,24 +451,9 @@ pub fn diagram_pitches(
     instrument: String,
     defines: Vec<ChordDefine>,
 ) -> Option<Vec<u8>> {
-    if !is_binding_diagram_instrument(&instrument) {
-        return None;
-    }
     let defines_pairs: Vec<(String, String)> =
         defines.into_iter().map(|d| (d.name, d.raw)).collect();
-    chordsketch_chordpro::voicings::diagram_pitches(&chord, &defines_pairs, &instrument, 5)
-}
-
-/// Whether `instrument` is one the binding diagram surface (SVG *and* audio)
-/// exposes — the lockstep instrument allowlist shared by
-/// [`chord_diagram_svg_with_defines_orientation`] and [`diagram_pitches`] so
-/// the two surfaces cannot drift on which instruments they accept
-/// (`.claude/rules/fix-propagation.md`).
-fn is_binding_diagram_instrument(instrument: &str) -> bool {
-    matches!(
-        instrument.to_ascii_lowercase().as_str(),
-        "guitar" | "ukulele" | "uke" | "piano" | "keyboard" | "keys"
-    )
+    chordsketch_chordpro::diagram_instrument::pitches(&chord, &instrument, &defines_pairs)
 }
 
 /// One staff-placed chord tone returned by [`chord_staff_notes`].
@@ -636,43 +622,20 @@ pub fn chord_diagram_svg_with_defines_orientation(
     defines: Vec<ChordDefine>,
     orientation: Option<String>,
 ) -> Result<Option<String>, ChordSketchError> {
-    use chordsketch_chordpro::chord_diagram::{
-        render_keyboard_svg, render_svg_with_orientation, resolve_orientation,
-    };
-    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+    use chordsketch_chordpro::chord_diagram::DiagramSize;
 
     let defines_pairs: Vec<(String, String)> =
         defines.into_iter().map(|d| (d.name, d.raw)).collect();
-    let resolved = resolve_orientation(orientation.as_deref());
-
-    match instrument.to_ascii_lowercase().as_str() {
-        "piano" | "keyboard" | "keys" => {
-            // Keyboard voicings have their own `{define: … keys …}`
-            // shape that the wasm surface doesn't yet thread through
-            // either — match that gap here so the FFI behaviour
-            // is at least consistent across bindings while keyboard
-            // voicings remain a TODO.
-            //
-            // Keyboard diagrams have no orientation knob — the argument
-            // is accepted but ignored here.
-            Ok(lookup_keyboard_voicing(&chord, &[]).map(|v| render_keyboard_svg(&v)))
-        }
-        "guitar" | "ukulele" | "uke" => {
-            // `frets_shown = 5` matches the default ChordPro HTML
-            // renderer (`crates/render-html` emits 5-fret diagrams
-            // when no `{chordfrets}` directive is set), keeping
-            // diagrams produced via UniFFI bindings (Python /
-            // Swift / Kotlin / Ruby) visually consistent with
-            // sheets rendered through the same binding.
-            Ok(lookup_diagram(&chord, &defines_pairs, &instrument, 5)
-                .map(|d| render_svg_with_orientation(&d, resolved)))
-        }
-        other => Err(ChordSketchError::InvalidConfig {
-            reason: format!(
-                "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
-            ),
-        }),
-    }
+    chordsketch_chordpro::diagram_instrument::render_svg(
+        &chord,
+        &instrument,
+        &defines_pairs,
+        orientation.as_deref(),
+        DiagramSize::Regular,
+    )
+    .map_err(|e| ChordSketchError::InvalidConfig {
+        reason: e.to_string(),
+    })
 }
 
 /// A single `{define: <name> <raw>}` voicing entry — the
