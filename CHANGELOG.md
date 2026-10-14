@@ -7,13 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`MultiParseResult::into_songs`** and **`RenderResult::forward_warnings`** in
-  `chordsketch-chordpro`: the song list a multi-song parse yields, and the
-  `chordsketch: <warning>` form the entry points without a structured warnings
-  channel (WebAssembly, Node.js, UniFFI) print. Behaviour is unchanged.
-
 ### Fixed
 
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
@@ -37,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`chordsketch-chordpro` exposes `song_walk`**, the transpose, chorus-recall and
+  notation-block bookkeeping the text, HTML and PDF renderers share
+  (`SongTranspose`, `ChorusTracker`, `NotationSkip`, `replay_chorus_body`).
+  Rendered output is unchanged.
 - Every public function that returns a `Result` or an `Option` carries
   `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
 
