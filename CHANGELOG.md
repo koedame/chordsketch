@@ -16,10 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   include it. The core already drew and sounded charango voicings; the
   entry points were the only place that refused the name.
 
-- **`chordsketch-chordpro` exposes `diagram_instrument`**, the instrument names
-  and the SVG / pitch lookup the standalone chord-diagram entry points
-  (WebAssembly, Node.js, UniFFI and MCP) share. Behaviour is unchanged.
-
 ### Fixed
 
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
@@ -43,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`chordsketch-chordpro` exposes `song_walk`**, the transpose, chorus-recall and
+  notation-block bookkeeping the text, HTML and PDF renderers share
+  (`SongTranspose`, `ChorusTracker`, `NotationSkip`, `replay_chorus_body`).
+  Rendered output is unchanged.
 - Every public function that returns a `Result` or an `Option` carries
   `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
 
