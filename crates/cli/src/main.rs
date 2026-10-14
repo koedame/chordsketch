@@ -8,54 +8,22 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
+use chordsketch_chordpro::input_limit::{MAX_INPUT_BYTES, read_to_string_limited};
 use tempfile::NamedTempFile;
-
-/// Maximum input size accepted at the I/O layer (50 MiB), matching the
-/// parser-level guard in `chordsketch-convert-musicxml`. Files or stdin
-/// streams larger than this limit are rejected before the content is fully
-/// buffered into memory.
-const MAX_INPUT_BYTES: u64 = 52_428_800;
 
 /// Reads `path` into a [`String`], returning an error string if the file is
 /// larger than [`MAX_INPUT_BYTES`] or if any I/O error occurs.
-///
-/// [`fs::metadata`] is used for an early, cheap size check that avoids
-/// loading oversized files into memory at all.
 #[must_use = "I/O errors from reading the file must be handled"]
 fn read_file_clamped(path: &str) -> Result<String, String> {
-    match fs::metadata(path) {
-        Ok(meta) if meta.len() > MAX_INPUT_BYTES => {
-            return Err(format!(
-                "file exceeds the {} MiB input limit",
-                MAX_INPUT_BYTES / (1024 * 1024)
-            ));
-        }
-        Err(e) => return Err(e.to_string()),
-        Ok(_) => {}
-    }
-    fs::read_to_string(path).map_err(|e| e.to_string())
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    read_to_string_limited(file, MAX_INPUT_BYTES).map_err(|e| e.to_string())
 }
 
 /// Reads stdin into a [`String`], rejecting streams that exceed
 /// [`MAX_INPUT_BYTES`].
-///
-/// Uses [`Read::take`] to avoid buffering more than `MAX_INPUT_BYTES + 1`
-/// bytes; if the read fills the cap the stream is rejected without consuming
-/// the remainder.
 #[must_use = "I/O errors from reading stdin must be handled"]
 fn read_stdin_clamped() -> Result<String, String> {
-    let mut buf = String::new();
-    io::stdin()
-        .take(MAX_INPUT_BYTES + 1)
-        .read_to_string(&mut buf)
-        .map_err(|e| e.to_string())?;
-    if buf.len() as u64 > MAX_INPUT_BYTES {
-        return Err(format!(
-            "input exceeds the {} MiB input limit",
-            MAX_INPUT_BYTES / (1024 * 1024)
-        ));
-    }
-    Ok(buf)
+    read_to_string_limited(io::stdin(), MAX_INPUT_BYTES).map_err(|e| e.to_string())
 }
 
 /// Minimal JSON string escape for the `--warnings-json` output stream.

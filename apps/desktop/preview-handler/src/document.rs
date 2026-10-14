@@ -14,16 +14,14 @@ use chordsketch_chordpro::escape::escape_xml;
 use chordsketch_chordpro::parse_multi_lenient;
 use chordsketch_render_html::{render_html_css, render_songs_body_with_transpose};
 
-/// Largest ChordPro source the preview pane will render.
-///
-/// Matches `MAX_OPEN_SIZE_BYTES` / `MAX_EXPORT_CHORDPRO_BYTES` in
-/// `apps/desktop/src-tauri/src/main.rs`: a file the desktop app refuses
-/// to open is a file the preview pane refuses to draw, so a user never
-/// meets two different size ceilings for the same document. Per
-/// `.claude/rules/code-style.md` §"Resource Limits" the parse + render
-/// pipeline has no internal cap, so the boundary check lives here, at
-/// the point where bytes enter the crate.
-pub const MAX_PREVIEW_SOURCE_BYTES: usize = 10 * 1024 * 1024;
+/// Largest ChordPro source the preview pane will render: the limit the
+/// parser, the CLI and the desktop app's open / export commands share, so a
+/// file the app refuses to open is a file the preview pane refuses to draw
+/// and a user never meets two different size ceilings for the same
+/// document. Per `.claude/rules/code-style.md` §"Resource Limits" the
+/// parse + render pipeline has no internal cap, so the boundary check lives
+/// here, at the point where bytes enter the crate.
+pub const MAX_PREVIEW_SOURCE_BYTES: usize = chordsketch_chordpro::input_limit::MAX_INPUT_BYTES;
 
 /// Content Security Policy applied to every previewed document.
 ///
