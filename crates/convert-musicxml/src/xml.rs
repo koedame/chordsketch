@@ -97,7 +97,7 @@ const MAX_DEPTH: usize = 200;
 /// This limit also makes the `i32` bracket-depth counter in `skip_doctype`
 /// overflow-safe: even if the entire input consists of `[` characters, 50 MiB
 /// is well below `i32::MAX` (≈ 2 GiB).
-const MAX_INPUT_BYTES: usize = 50 * 1024 * 1024; // 50 MiB
+pub const MAX_INPUT_BYTES: usize = 50 * 1024 * 1024; // 50 MiB
 
 /// Parse an XML string into an element tree.
 ///

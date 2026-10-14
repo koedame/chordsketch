@@ -48,6 +48,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Rendered output is unchanged.
 - Every public function that returns a `Result` or an `Option` carries
   `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
+- **The CLI refuses ChordPro input over 10 MiB up front** (`input exceeds the
+  10 MiB limit`), from a file and from stdin, instead of reading up to 50 MiB
+  and then failing in the parser with a parse error — the parser has always
+  refused a source over 10 MiB. This covers rendering and `fmt` (which used to
+  accept up to 50 MiB); `convert` still reads up to 50 MiB, the MusicXML
+  converter's own limit, which is now exported as
+  `chordsketch_convert_musicxml::MAX_INPUT_BYTES` instead of being copied into
+  the CLI. The desktop app, its Explorer preview and the MCP server already used
+  10 MiB, and now read it from one constant.
 
 ### Removed
 

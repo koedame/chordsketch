@@ -133,7 +133,7 @@ Open Recent` (last 10 files, persisted in `localStorage`) route
 through two Tauri commands in `src-tauri/src/main.rs`:
 
 - `open_file(path)` → reads the UTF-8 source at `path`, enforces
-  `MAX_OPEN_SIZE_BYTES` (10 MiB) before the full read so a stray
+  the shared 10 MiB input limit (`MAX_INPUT_BYTES` in `chordsketch-chordpro`) while reading so a stray
   2 GB binary selected in the picker fails fast instead of
   wedging the WebView, and returns the string to the frontend.
 - `save_file(path, content)` → `std::fs::write` the given content

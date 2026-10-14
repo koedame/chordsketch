@@ -44,6 +44,84 @@ fn test_output_to_file() {
     assert!(content.contains("Hello world"));
 }
 
+/// Writes `len` bytes of a one-line ChordPro song to a temp file.
+fn song_file_of_len(len: usize) -> NamedTempFile {
+    let mut file = NamedTempFile::new().unwrap();
+    let header = b"{title: Sized}\n";
+    file.write_all(header).unwrap();
+    file.write_all(&vec![b'a'; len - header.len()]).unwrap();
+    file
+}
+
+#[test]
+fn test_file_over_the_input_limit_is_rejected_before_parsing() {
+    let limit = chordsketch_chordpro::input_limit::MAX_INPUT_BYTES;
+    let file = song_file_of_len(limit + 1);
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("input exceeds the 10 MiB limit"))
+        .stderr(predicate::str::contains("parse error").not());
+}
+
+#[test]
+fn test_file_of_exactly_the_input_limit_is_rendered() {
+    let limit = chordsketch_chordpro::input_limit::MAX_INPUT_BYTES;
+    let file = song_file_of_len(limit);
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg(file.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Sized"));
+}
+
+#[test]
+fn test_fmt_refuses_a_file_over_the_input_limit() {
+    let limit = chordsketch_chordpro::input_limit::MAX_INPUT_BYTES;
+    let file = song_file_of_len(limit + 1);
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .arg("fmt")
+        .arg(file.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("input exceeds the 10 MiB limit"));
+}
+
+#[test]
+fn test_convert_reads_inputs_over_the_chordpro_limit_up_to_the_musicxml_limit() {
+    // `convert` may be handed MusicXML, whose converter accepts far larger
+    // documents than a ChordPro source, so its limit is the converter's.
+    let limit = chordsketch_chordpro::input_limit::MAX_INPUT_BYTES;
+    let mut file = NamedTempFile::new().unwrap();
+    let line = b"Hello world la la la\n";
+    for _ in 0..(limit / line.len() + 1) {
+        file.write_all(line).unwrap();
+    }
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args(["convert", "--from", "plaintext"])
+        .arg(file.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("input exceeds").not());
+}
+
+#[test]
+fn test_stdin_over_the_input_limit_is_rejected() {
+    let limit = chordsketch_chordpro::input_limit::MAX_INPUT_BYTES;
+    Command::cargo_bin("chordsketch")
+        .unwrap()
+        .args(["fmt", "-"])
+        .write_stdin(vec![b'a'; limit + 1])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("input exceeds the 10 MiB limit"));
+}
+
 #[test]
 fn test_nonexistent_file() {
     // Use a NamedTempFile that is immediately dropped to guarantee

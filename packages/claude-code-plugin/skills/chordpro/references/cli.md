@@ -28,7 +28,8 @@ chordsketch convert [--from FMT] [--to musicxml] [-o FILE] <FILES>...
 Several files may be given at once; they render into a single document, one
 after another.
 
-Input is capped at 50 MiB, from a file or from stdin.
+ChordPro input is capped at 10 MiB, from a file or from stdin (`convert` reads up to
+50 MiB, the MusicXML converter's own limit).
 
 ## Exit codes and streams
 

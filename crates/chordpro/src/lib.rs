@@ -16,6 +16,7 @@ pub mod grid;
 pub mod heuristic;
 pub mod image_path;
 pub mod inline_markup;
+pub mod input_limit;
 pub mod json;
 pub mod key;
 pub mod lexer;

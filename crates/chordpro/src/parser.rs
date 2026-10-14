@@ -1067,7 +1067,7 @@ pub struct ParseOptions {
     /// Maximum input size in bytes. Inputs exceeding this limit are rejected
     /// with a [`ParseError`] before lexing begins. Set to `0` to disable.
     ///
-    /// Default: 10 MB (10 × 1024 × 1024 bytes).
+    /// Default: [`MAX_INPUT_BYTES`](crate::input_limit::MAX_INPUT_BYTES) (10 MiB).
     pub max_input_size: usize,
 
     /// Maximum number of errors to collect in lenient parsing mode.
@@ -1082,7 +1082,7 @@ pub struct ParseOptions {
 impl Default for ParseOptions {
     fn default() -> Self {
         Self {
-            max_input_size: 10 * 1024 * 1024, // 10 MB
+            max_input_size: crate::input_limit::MAX_INPUT_BYTES,
             max_errors: 1000,
         }
     }
