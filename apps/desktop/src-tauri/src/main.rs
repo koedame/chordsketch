@@ -132,7 +132,7 @@ fn open_file(path: String) -> Result<String, String> {
     let file = File::open(Path::new(&path)).map_err(|e| format!("Failed to open {path}: {e}"))?;
     read_to_string_limited(BufReader::new(file), MAX_INPUT_BYTES).map_err(|e| match e {
         ReadLimitedError::TooLarge { limit } => format!("File is too large (> {limit} bytes)"),
-        ReadLimitedError::Io(e) => format!("Failed to read {path}: {e}"),
+        other => format!("Failed to read {path}: {other}"),
     })
 }
 

@@ -50,6 +50,7 @@
 
 pub use export::to_musicxml;
 pub use import::{ImportError, from_musicxml};
+pub use xml::MAX_INPUT_BYTES;
 
 mod export;
 mod import;

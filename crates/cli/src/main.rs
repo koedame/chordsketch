@@ -11,19 +11,24 @@ use std::process::ExitCode;
 use chordsketch_chordpro::input_limit::{MAX_INPUT_BYTES, read_to_string_limited};
 use tempfile::NamedTempFile;
 
+/// Input limit of the `convert` subcommand: the MusicXML converter's own
+/// ceiling, since a converted file may be MusicXML (its documents are far
+/// larger than a ChordPro source).
+const CONVERT_MAX_INPUT_BYTES: usize = chordsketch_convert_musicxml::MAX_INPUT_BYTES;
+
 /// Reads `path` into a [`String`], returning an error string if the file is
-/// larger than [`MAX_INPUT_BYTES`] or if any I/O error occurs.
+/// larger than `limit` bytes or if any I/O error occurs.
 #[must_use = "I/O errors from reading the file must be handled"]
-fn read_file_clamped(path: &str) -> Result<String, String> {
+fn read_file_clamped(path: &str, limit: usize) -> Result<String, String> {
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
-    read_to_string_limited(file, MAX_INPUT_BYTES).map_err(|e| e.to_string())
+    read_to_string_limited(file, limit).map_err(|e| e.to_string())
 }
 
-/// Reads stdin into a [`String`], rejecting streams that exceed
-/// [`MAX_INPUT_BYTES`].
+/// Reads stdin into a [`String`], rejecting streams that exceed `limit`
+/// bytes.
 #[must_use = "I/O errors from reading stdin must be handled"]
-fn read_stdin_clamped() -> Result<String, String> {
-    read_to_string_limited(io::stdin(), MAX_INPUT_BYTES).map_err(|e| e.to_string())
+fn read_stdin_clamped(limit: usize) -> Result<String, String> {
+    read_to_string_limited(io::stdin(), limit).map_err(|e| e.to_string())
 }
 
 /// Minimal JSON string escape for the `--warnings-json` output stream.
@@ -420,7 +425,7 @@ fn main() -> ExitCode {
     let mut had_error = false;
 
     for path in &cli.files {
-        let input = match read_file_clamped(path) {
+        let input = match read_file_clamped(path, MAX_INPUT_BYTES) {
             Ok(content) => content,
             Err(e) => {
                 eprintln!("error: {path}: {e}");
@@ -672,7 +677,7 @@ fn read_ireal_input(arg: &str) -> Result<String, String> {
     if trimmed_arg.starts_with("irealb://") || trimmed_arg.starts_with("irealbook://") {
         return Ok(trimmed_arg.to_owned());
     }
-    read_file_clamped(arg).map(|s| s.trim().to_owned())
+    read_file_clamped(arg, MAX_INPUT_BYTES).map(|s| s.trim().to_owned())
 }
 
 /// Write text output to a file or stdout.
@@ -734,7 +739,7 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
     for file in files {
         if file == "-" {
             // stdin → stdout (always, regardless of --check).
-            let input = match read_stdin_clamped() {
+            let input = match read_stdin_clamped(MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("error: reading stdin: {e}");
@@ -753,7 +758,7 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
                 had_error = true;
             }
         } else {
-            let input = match read_file_clamped(file) {
+            let input = match read_file_clamped(file, MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("error: {file}: {e}");
@@ -819,7 +824,7 @@ fn run_convert(
         }
         let file = &files[0];
         let input = if file == "-" {
-            match read_stdin_clamped() {
+            match read_stdin_clamped(MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("error: reading stdin: {e}");
@@ -827,7 +832,7 @@ fn run_convert(
                 }
             }
         } else {
-            match read_file_clamped(file) {
+            match read_file_clamped(file, MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("error: {file}: {e}");
@@ -850,7 +855,7 @@ fn run_convert(
 
     for file in files {
         let input = if file == "-" {
-            match read_stdin_clamped() {
+            match read_stdin_clamped(CONVERT_MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("error: reading stdin: {e}");
@@ -859,7 +864,7 @@ fn run_convert(
                 }
             }
         } else {
-            match read_file_clamped(file) {
+            match read_file_clamped(file, CONVERT_MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("error: {file}: {e}");
