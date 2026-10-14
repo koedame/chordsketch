@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`Config::from_spec`** resolves a configuration from an optional preset name
+  or inline RRJSON string; the WebAssembly, Node.js and UniFFI bindings share
+  it.
+
 ### Fixed
 
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
@@ -30,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The WebAssembly and Node.js bindings report an invalid `config` as
+  `invalid config: not a known preset and not valid RRJSON: …`**, the wording
+  the UniFFI bindings already used (it was `invalid config (not a known preset
+  and not valid RRJSON): …`).
 - Every public function that returns a `Result` or an `Option` carries
   `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
 
