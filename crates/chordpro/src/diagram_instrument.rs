@@ -5,8 +5,10 @@
 //! instrument name as a string and has to decide three things the same way:
 //! which names are accepted, how a diagram is looked up and drawn for each,
 //! and what an unknown name is reported as. This module is that decision, so
-//! adding or changing an instrument is one edit here instead of one per entry
-//! point.
+//! changing the accepted set is one edit here instead of one per entry point.
+//! (The `{diagrams: <instrument>}` directive resolves names separately, in
+//! [`resolve_diagrams_instrument`](crate::chord_diagram::resolve_diagrams_instrument),
+//! and the voicing lookup in [`crate::voicings`] has its own dispatch.)
 //!
 //! `{define}` overrides reach the fretted instruments only: the keyboard
 //! voicing lookup takes its defines in a different shape and is called with
@@ -56,12 +58,6 @@ impl fmt::Display for UnknownInstrument {
 }
 
 impl std::error::Error for UnknownInstrument {}
-
-/// Whether `instrument` (case-insensitive) is one the entry points accept.
-#[must_use]
-pub fn is_supported(instrument: &str) -> bool {
-    family(instrument).is_some()
-}
 
 /// Render the diagram of `chord` on `instrument` as an SVG fragment.
 ///
@@ -119,14 +115,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn is_supported_accepts_every_alias_case_insensitively_and_nothing_else() {
+    fn render_svg_accepts_every_alias_case_insensitively() {
         for name in [
             "guitar", "Guitar", "ukulele", "UKULELE", "uke", "piano", "Keyboard", "keys",
         ] {
-            assert!(is_supported(name), "{name}");
+            assert!(
+                render_svg("C", name, &[], None, DiagramSize::Regular).is_ok(),
+                "{name}"
+            );
         }
         for name in ["charango", "theremin", "", "gui tar"] {
-            assert!(!is_supported(name), "{name}");
+            assert!(
+                render_svg("C", name, &[], None, DiagramSize::Regular).is_err(),
+                "{name}"
+            );
         }
     }
 

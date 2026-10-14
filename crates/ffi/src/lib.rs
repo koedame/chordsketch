@@ -438,7 +438,8 @@ pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
 /// the SVG path). `frets_shown` is fixed at `5` to match the SVG path so a
 /// diagram and its audio resolve to the same voicing.
 ///
-/// The accepted instrument set is kept in lockstep with
+/// The accepted instrument set is the core's
+/// [`chordsketch_chordpro::diagram_instrument`] set, shared with
 /// [`chord_diagram_svg_with_defines_orientation`]: anything outside the set
 /// above — e.g. `"charango"`, which the core voicing layer supports but the
 /// binding SVG path does not draw — returns `None`, so the audio surface never
