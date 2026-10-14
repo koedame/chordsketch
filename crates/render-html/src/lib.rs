@@ -84,7 +84,7 @@ impl ElementStyle {
         }
         if let Some(ref size) = self.size {
             let safe = sanitize_css_value(size);
-            if safe.chars().all(|c| c.is_ascii_digit()) {
+            if safe.parse::<f32>().is_ok() {
                 let _ = write!(css, "font-size: {safe}pt;");
             } else {
                 let _ = write!(css, "font-size: {safe};");
@@ -4270,6 +4270,19 @@ mod transpose_tests {
     fn test_textfont_directive_applies_css() {
         let html = render("{textfont: Courier}\nHello world");
         assert!(html.contains("font-family: Courier;"));
+    }
+
+    #[test]
+    fn test_fractional_textsize_gets_the_pt_unit() {
+        let html = render("{textsize: 12.5}\nHello world");
+        assert!(html.contains("font-size: 12.5pt;"), "{html}");
+    }
+
+    #[test]
+    fn test_nan_textsize_is_ignored_like_any_non_numeric_size() {
+        let html = render("{textsize: NaN}\nHello world");
+        assert!(!html.contains("NaN"), "{html}");
+        assert!(!html.contains("font-size: pt"), "{html}");
     }
 
     #[test]

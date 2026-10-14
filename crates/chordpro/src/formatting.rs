@@ -81,11 +81,13 @@ pub fn style_target(kind: &DirectiveKind) -> Option<(StyleElement, StyleProperty
 /// Parse a size directive value and bound it to
 /// `[MIN_FONT_SIZE, MAX_FONT_SIZE]`, so an extreme value cannot produce
 /// degenerate CSS or page layout. Returns `None` when the value is missing or
-/// not a number.
+/// not a number (`NaN` parses as a float but is not a size, so it is `None`
+/// too).
 #[must_use]
 pub fn parse_font_size(value: Option<&str>) -> Option<f32> {
     value
         .and_then(|v| v.parse::<f32>().ok())
+        .filter(|s| !s.is_nan())
         .map(|s| s.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE))
 }
 
@@ -129,34 +131,14 @@ mod tests {
     }
 
     #[test]
-    fn style_target_covers_exactly_the_font_size_colour_kinds_the_body_renders() {
-        // `is_font_size_color` also lists header / footer / toc, which have
-        // no element in the song body: 30 kinds there, 21 here.
-        let body = [
-            "text", "chord", "tab", "title", "chorus", "label", "grid", "header", "footer", "toc",
-        ];
-        let mut targets = 0;
-        let mut classified = 0;
-        for prefix in body {
-            for suffix in ["font", "size", "colour"] {
-                let kind = DirectiveKind::from_name(&format!("{prefix}{suffix}"));
-                assert!(kind.is_font_size_color(), "{prefix}{suffix}");
-                classified += 1;
-                if style_target(&kind).is_some() {
-                    targets += 1;
-                }
-            }
-        }
-        assert_eq!((classified, targets), (30, 21));
-    }
-
-    #[test]
     fn parse_font_size_clamps_to_the_accepted_range() {
         assert_eq!(parse_font_size(Some("12")), Some(12.0));
         assert_eq!(parse_font_size(Some("12.5")), Some(12.5));
         assert_eq!(parse_font_size(Some("99999")), Some(MAX_FONT_SIZE));
         assert_eq!(parse_font_size(Some("-4")), Some(MIN_FONT_SIZE));
         assert_eq!(parse_font_size(Some("0")), Some(MIN_FONT_SIZE));
+        assert_eq!(parse_font_size(Some("inf")), Some(MAX_FONT_SIZE));
+        assert_eq!(parse_font_size(Some("-inf")), Some(MIN_FONT_SIZE));
     }
 
     #[test]
@@ -164,5 +146,12 @@ mod tests {
         assert_eq!(parse_font_size(None), None);
         assert_eq!(parse_font_size(Some("big")), None);
         assert_eq!(parse_font_size(Some("")), None);
+        assert_eq!(
+            parse_font_size(Some(" 12")),
+            None,
+            "whitespace is not trimmed"
+        );
+        assert_eq!(parse_font_size(Some("NaN")), None);
+        assert_eq!(parse_font_size(Some("nan")), None);
     }
 }

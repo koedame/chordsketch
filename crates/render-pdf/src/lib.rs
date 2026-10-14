@@ -5245,6 +5245,20 @@ mod formatting_directive_tests {
     }
 
     #[test]
+    fn test_nan_textsize_is_ignored_like_any_non_numeric_size() {
+        let song = chordsketch_chordpro::parse("{textsize: NaN}\nHello").unwrap();
+        let default = render_song(&chordsketch_chordpro::parse("Hello").unwrap());
+        let bytes = render_song(&song);
+        let content = String::from_utf8_lossy(&bytes);
+        assert!(!content.contains("NaN"), "NaN must not reach the page");
+        assert_eq!(
+            content.matches(" Tf").count(),
+            String::from_utf8_lossy(&default).matches(" Tf").count(),
+            "a NaN size leaves the default font size in force"
+        );
+    }
+
+    #[test]
     fn test_chordsize_clamped_to_max() {
         let input = "{chordsize: 500}\n[Am]Hello";
         let song = chordsketch_chordpro::parse(input).unwrap();
