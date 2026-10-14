@@ -118,7 +118,7 @@ fn render_song_impl(
     let mut notation_skip = NotationSkip::default();
 
     // Instrument for the auto-inject ASCII diagram block.
-    // Set by {diagrams: guitar/ukulele/on}; cleared by {diagrams: off} / {no_diagrams}.
+    // Set by {diagrams: guitar/ukulele/charango/on}; cleared by {diagrams: off} / {no_diagrams}.
     let default_instrument = _config
         .get_path("diagrams.instrument")
         .as_str()
@@ -304,7 +304,7 @@ fn render_song_impl(
         }
     }
 
-    // Auto-inject ASCII diagram block when {diagrams} (or {diagrams: guitar/ukulele/piano}) was seen.
+    // Auto-inject ASCII diagram block when {diagrams} (or {diagrams: guitar/ukulele/charango/piano}) was seen.
     if let Some(ref instrument) = auto_diagrams_instrument {
         if instrument == "piano" {
             // Plain-text rendering of keyboard diagrams is not supported; emit a note
@@ -2214,6 +2214,35 @@ mod delegate_tests {
         assert!(
             !output.contains("[Chord Diagrams]"),
             "{{diagrams: off}} should suppress ASCII diagram block"
+        );
+    }
+
+    #[test]
+    fn test_diagrams_charango_directive_draws_charango_diagrams() {
+        // `{diagrams: charango}` picks the instrument, so the list matches the one
+        // drawn when charango is the configured default instrument.
+        let from_directive = render("{diagrams: charango}\n[Am]Hello");
+        let from_config = render_song_with_transpose(
+            &chordsketch_chordpro::parse("{diagrams}\n[Am]Hello").unwrap(),
+            0,
+            &Config::defaults()
+                .with_define("diagrams.instrument=charango")
+                .unwrap(),
+        );
+        assert!(
+            from_directive.contains("[Chord Diagrams]"),
+            "{from_directive}"
+        );
+        assert_eq!(from_directive, from_config);
+        assert_ne!(
+            from_directive,
+            render("{diagrams: guitar}\n[Am]Hello"),
+            "charango diagrams are not the guitar diagrams"
+        );
+        assert_ne!(
+            from_directive,
+            render("{diagrams: ukulele}\n[Am]Hello"),
+            "charango diagrams are not the ukulele diagrams"
         );
     }
 

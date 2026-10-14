@@ -42,15 +42,16 @@ pub struct DirectiveInfo {
 
 /// Completable value set for `{diagrams: …}`.
 ///
-/// `on` / `off` / `guitar` / `ukulele` / `piano` are the standard ChordPro
-/// values; `top` / `bottom` / `right` / `below` are the section-position
-/// keywords; `section` is the default end-of-song diagram grid mode;
-/// `inline` / `hover` are the chordsketch surfacing-mode extension
-/// (ADR-0027). The parser also accepts the aliases `uke` / `keyboard` /
-/// `keys`, but completion offers the canonical forms only.
+/// `on` / `off` are the standard ChordPro values; `guitar` / `ukulele` /
+/// `charango` / `piano` are the instrument-name extension; `top` / `bottom` /
+/// `right` / `below` are the section-position keywords; `section` is the
+/// default end-of-song diagram grid mode; `inline` / `hover` are the
+/// chordsketch surfacing-mode extension (ADR-0027). The parser also accepts
+/// the aliases `uke` / `keyboard` / `keys`, but completion offers the
+/// canonical forms only.
 const DIAGRAMS_VALUES: &[&str] = &[
-    "on", "off", "guitar", "ukulele", "piano", "top", "bottom", "right", "below", "section",
-    "inline", "hover",
+    "on", "off", "guitar", "ukulele", "charango", "piano", "top", "bottom", "right", "below",
+    "section", "inline", "hover",
 ];
 
 /// Completable value set for the legacy `{pagetype: …}` directive.
@@ -744,7 +745,7 @@ mod tests {
     fn diagrams_enum_includes_section_inline_and_hover_values() {
         let values = directive_value_options("diagrams").expect("diagrams is an enum directive");
         for expected in [
-            "on", "off", "guitar", "ukulele", "piano", "inline", "hover", "section",
+            "on", "off", "guitar", "ukulele", "charango", "piano", "inline", "hover", "section",
         ] {
             assert!(
                 values.contains(&expected),

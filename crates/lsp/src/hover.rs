@@ -490,7 +490,7 @@ const DIRECTIVE_DOCS: &[(&str, &str, &str)] = &[
     ),
     (
         "diagrams",
-        "{diagrams: on|off|guitar|ukulele}",
+        "{diagrams: on|off|guitar|ukulele|charango|piano}",
         "Controls chord diagram rendering.",
     ),
     // Generic metadata

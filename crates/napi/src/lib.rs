@@ -1161,10 +1161,18 @@ mod tests {
             diagram_pitches_inner("XYZ-not-a-chord", "guitar", &[]),
             None
         );
-        // Lockstep with the SVG dispatch: instruments the binding SVG path does
-        // not expose (charango, typos) yield no pitches.
-        assert_eq!(diagram_pitches_inner("C", "charango", &[]), None);
+        // The audio surface accepts exactly the instruments the SVG surface
+        // draws: a charango chord sounds, a typo yields no pitches.
+        assert!(diagram_pitches_inner("C", "charango", &[]).is_some());
         assert_eq!(diagram_pitches_inner("C", "theremin", &[]), None);
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_charango_returns_a_diagram() {
+        let svg = chord_diagram_svg_inner("C", "Charango", &[])
+            .unwrap()
+            .unwrap();
+        assert!(svg.starts_with("<svg"), "{svg}");
     }
 
     #[test]

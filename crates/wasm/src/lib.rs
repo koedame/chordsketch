@@ -175,7 +175,7 @@ pub(crate) fn render_bytes_with_warnings_core(
 /// [`bindings::chord_diagram_svg_with_defines`] both delegate to.
 ///
 /// `instrument` accepts (case-insensitive): `"guitar"`, `"ukulele"`
-/// (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`).
+/// (alias `"uke"`), `"charango"`, or `"piano"` (aliases `"keyboard"`, `"keys"`).
 ///
 /// Returns `Result<_, String>` (not `Result<_, JsValue>`) so unit
 /// tests can exercise every match arm without constructing a
@@ -1764,13 +1764,20 @@ mod tests {
 
     #[test]
     fn test_diagram_pitches_inner_rejects_instruments_the_svg_binding_rejects() {
-        // Lockstep with the SVG dispatch: charango (core-supported but not
-        // exposed by the binding SVG path) and unknown instruments yield no
-        // pitches, so the audio surface never sounds an instrument that has no
-        // drawable diagram on this binding.
-        assert_eq!(diagram_pitches_inner("C", "charango", &[]), None);
+        // The audio surface accepts exactly the instruments the SVG surface
+        // draws, so it never sounds an instrument that has no drawable
+        // diagram on this binding: charango sounds, a typo yields no pitches.
+        assert!(diagram_pitches_inner("C", "charango", &[]).is_some());
         assert_eq!(diagram_pitches_inner("C", "theremin", &[]), None);
         assert!(diagram_pitches_inner("C", "ukulele", &[]).is_some());
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_inner_charango_returns_a_diagram() {
+        let svg = chord_diagram_svg_inner("C", "Charango", &[])
+            .unwrap()
+            .unwrap();
+        assert!(svg.starts_with("<svg"), "{svg}");
     }
 
     #[test]

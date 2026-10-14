@@ -1079,7 +1079,7 @@ fn render_song_into_doc(
         }
     }
 
-    // Auto-inject diagram block when {diagrams} (or {diagrams: piano/guitar/ukulele}) was seen.
+    // Auto-inject diagram block when {diagrams} (or {diagrams: piano/guitar/ukulele/charango}) was seen.
     if let Some(ref instrument) = auto_diagrams_instrument {
         // Skip chords rendered inline via {define} while show_diagrams was true.
         let chord_names: Vec<String> = song
@@ -5851,6 +5851,31 @@ mod chord_diagram_pdf_tests {
         let bytes = render_song(&song);
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(bytes.ends_with(b"%%EOF\n"));
+    }
+
+    #[test]
+    fn test_diagrams_charango_directive_draws_charango_diagrams_pdf() {
+        let render_with = |input: &str, config: &Config| {
+            render_song_with_transpose(&chordsketch_chordpro::parse(input).unwrap(), 0, config)
+        };
+        let defaults = Config::defaults();
+        let from_directive = render_with("{diagrams: charango}\n[Am]Hello", &defaults);
+        let from_config = render_with(
+            "{diagrams}\n[Am]Hello",
+            &Config::defaults()
+                .with_define("diagrams.instrument=charango")
+                .unwrap(),
+        );
+        assert!(from_directive.starts_with(b"%PDF-1.4"));
+        assert_eq!(from_directive, from_config);
+        assert_ne!(
+            from_directive,
+            render_with("{diagrams: guitar}\n[Am]Hello", &defaults)
+        );
+        assert_ne!(
+            from_directive,
+            render_with("{diagrams: ukulele}\n[Am]Hello", &defaults)
+        );
     }
 
     #[test]

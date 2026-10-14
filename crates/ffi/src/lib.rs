@@ -413,7 +413,7 @@ pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
 /// `diagramPitches` and NAPI `diagramPitches` exports
 /// (`.claude/rules/fix-propagation.md` §Bindings).
 ///
-/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`) return one pitch
+/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`, `"charango"`) return one pitch
 /// per non-muted string in string (strum) order, keeping octave doublings;
 /// keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`) return the
 /// highlighted keys. `defines` is the same `(name, raw)` list
@@ -423,11 +423,10 @@ pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
 ///
 /// The accepted instrument set is the core's
 /// [`chordsketch_chordpro::diagram_instrument`] set, shared with
-/// [`chord_diagram_svg_with_defines_orientation`]: anything outside the set
-/// above — e.g. `"charango"`, which the core voicing layer supports but the
-/// binding SVG path does not draw — returns `None`, so the audio surface never
-/// sounds an instrument that has no drawable diagram on the same binding.
-/// Returns `None` when no diagram is available for the chord.
+/// [`chord_diagram_svg_with_defines_orientation`], so the audio surface never
+/// sounds an instrument that has no drawable diagram on the same binding; any
+/// other instrument returns `None`. Also `None` when no diagram is available
+/// for the chord.
 #[must_use]
 pub fn diagram_pitches(
     chord: String,
@@ -518,7 +517,7 @@ pub fn key_tonic_triad(key: String) -> Option<Vec<u8>> {
 /// in #2167.
 ///
 /// `instrument` accepts (case-insensitive): `"guitar"`,
-/// `"ukulele"` (alias `"uke"`), or `"piano"` (aliases
+/// `"ukulele"` (alias `"uke"`), `"charango"`, or `"piano"` (aliases
 /// `"keyboard"`, `"keys"`). `chord` is a standard ChordPro
 /// chord name. Flat spellings are normalised to sharps via the
 /// same path the core voicing-database lookup uses.
@@ -1453,16 +1452,21 @@ mod tests {
             ),
             None,
         );
-        // Lockstep with the SVG dispatch: instruments the binding SVG path does
-        // not expose (charango, typos) yield no pitches.
-        assert_eq!(
-            diagram_pitches("C".to_string(), "charango".to_string(), Vec::new()),
-            None,
-        );
+        // The audio surface accepts exactly the instruments the SVG surface
+        // draws: a charango chord sounds, a typo yields no pitches.
+        assert!(diagram_pitches("C".to_string(), "charango".to_string(), Vec::new()).is_some());
         assert_eq!(
             diagram_pitches("C".to_string(), "theremin".to_string(), Vec::new()),
             None,
         );
+    }
+
+    #[test]
+    fn test_chord_diagram_svg_charango_returns_a_diagram() {
+        let svg = chord_diagram_svg("C".to_string(), "Charango".to_string())
+            .unwrap()
+            .unwrap();
+        assert!(svg.starts_with("<svg"), "{svg}");
     }
 
     #[test]

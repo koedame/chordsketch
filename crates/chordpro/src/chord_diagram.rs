@@ -2279,6 +2279,7 @@ pub fn render_keyboard_svg_with_size(voicing: &KeyboardVoicing, size: DiagramSiz
 /// assert_eq!(resolve_diagrams_instrument(None, "guitar"), Some("guitar".to_string()));
 /// assert_eq!(resolve_diagrams_instrument(Some("off"), "guitar"), None);
 /// assert_eq!(resolve_diagrams_instrument(Some("uke"), "guitar"), Some("ukulele".to_string()));
+/// assert_eq!(resolve_diagrams_instrument(Some("charango"), "guitar"), Some("charango".to_string()));
 /// assert_eq!(resolve_diagrams_instrument(Some("piano"), "guitar"), Some("piano".to_string()));
 /// assert_eq!(resolve_diagrams_instrument(Some("keys"), "guitar"), Some("piano".to_string()));
 /// assert_eq!(resolve_diagrams_instrument(Some("keyboard"), "guitar"), Some("piano".to_string()));
@@ -2296,6 +2297,7 @@ pub fn resolve_diagrams_instrument(
     let instr = match val.to_ascii_lowercase().as_str() {
         "ukulele" | "uke" => "ukulele",
         "guitar" => "guitar",
+        "charango" => "charango",
         "piano" | "keyboard" | "keys" => "piano",
         _ => default_instrument,
     };
@@ -3861,6 +3863,18 @@ mod tests {
             root_key: 67,
         };
         assert_eq!(v2.title(), "G");
+    }
+
+    #[test]
+    fn test_resolve_diagrams_instrument_charango() {
+        assert_eq!(
+            resolve_diagrams_instrument(Some("charango"), "guitar"),
+            Some("charango".to_string())
+        );
+        assert_eq!(
+            resolve_diagrams_instrument(Some("Charango"), "ukulele"),
+            Some("charango".to_string())
+        );
     }
 
     #[test]
