@@ -3733,6 +3733,38 @@ describe('renderChordproAst', () => {
     expect(lyrics?.style.fontSize).toBe('200pt');
   });
 
+  test.each([
+    ['12.5', '12.5pt'],
+    ['NaN', ''],
+    ['big', ''],
+    ['0x10', ''],
+    [' 12 ', ''],
+    ['inf', '200pt'],
+  ])('font-size directive %s renders as %j (fractional gets pt, non-numeric ignored)', (value, expected) => {
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'textsize',
+              value,
+              kind: { tag: 'textSize' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'x', spans: [] }] },
+          },
+        ],
+      }),
+    );
+    const lyrics = container.querySelector('.lyrics') as HTMLElement | null;
+    expect(lyrics?.style.fontSize ?? '').toBe(expected);
+  });
+
   test('CSS-value sanitiser drops unsafe characters from directive payloads', () => {
     // Sister-site to `sanitize_css_value` in the Rust renderer —
     // a payload like `red;background:url(x)` must NOT smuggle the

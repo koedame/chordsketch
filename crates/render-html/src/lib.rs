@@ -28,6 +28,9 @@ use chordsketch_chordpro::ast::{CommentStyle, Directive, DirectiveKind, Line, Ly
 use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::escape::escape_xml as escape;
+use chordsketch_chordpro::formatting::{
+    StyleElement, StyleProperty, parse_font_size, style_target,
+};
 use chordsketch_chordpro::inline_markup::{SpanAttributes, TextSpan};
 use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
@@ -52,13 +55,6 @@ pub use chordsketch_chordpro::render_result::MAX_WARNINGS;
 /// Maximum number of CSS columns allowed.
 /// Matches `MAX_COLUMNS` in the PDF renderer.
 const MAX_COLUMNS: u32 = 32;
-
-/// Minimum font size (in points) accepted from user directives.
-/// Matches `MIN_FONT_SIZE` in the PDF renderer.
-const MIN_FONT_SIZE: f32 = 0.5;
-/// Maximum font size (in points) accepted from user directives.
-/// Matches `MAX_FONT_SIZE` in the PDF renderer.
-const MAX_FONT_SIZE: f32 = 200.0;
 
 // ---------------------------------------------------------------------------
 // Formatting state
@@ -88,7 +84,7 @@ impl ElementStyle {
         }
         if let Some(ref size) = self.size {
             let safe = sanitize_css_value(size);
-            if safe.chars().all(|c| c.is_ascii_digit()) {
+            if safe.parse::<f32>().is_ok() {
                 let _ = write!(css, "font-size: {safe}pt;");
             } else {
                 let _ = write!(css, "font-size: {safe};");
@@ -116,41 +112,29 @@ struct FormattingState {
 impl FormattingState {
     /// Apply a formatting directive, updating the appropriate style.
     ///
-    /// Font size values are clamped to `[MIN_FONT_SIZE, MAX_FONT_SIZE]` to
-    /// prevent degenerate CSS output from extreme values. This matches the
-    /// clamping applied in the PDF renderer per `renderer-parity.md`.
+    /// Font size values are clamped to the core crate's
+    /// `[MIN_FONT_SIZE, MAX_FONT_SIZE]` to prevent degenerate CSS output from
+    /// extreme values, the same range the PDF renderer applies.
     fn apply(&mut self, kind: &DirectiveKind, value: &Option<String>) {
-        let val = value.clone();
-        let clamped_size = || -> Option<String> {
-            value
-                .as_deref()
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|s| s.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE).to_string())
+        // Header/Footer/TOC directives are not rendered in the main body
+        let Some((element, property)) = style_target(kind) else {
+            return;
         };
-        match kind {
-            DirectiveKind::TextFont => self.text.font = val,
-            DirectiveKind::TextSize => self.text.size = clamped_size(),
-            DirectiveKind::TextColour => self.text.colour = val,
-            DirectiveKind::ChordFont => self.chord.font = val,
-            DirectiveKind::ChordSize => self.chord.size = clamped_size(),
-            DirectiveKind::ChordColour => self.chord.colour = val,
-            DirectiveKind::TabFont => self.tab.font = val,
-            DirectiveKind::TabSize => self.tab.size = clamped_size(),
-            DirectiveKind::TabColour => self.tab.colour = val,
-            DirectiveKind::TitleFont => self.title.font = val,
-            DirectiveKind::TitleSize => self.title.size = clamped_size(),
-            DirectiveKind::TitleColour => self.title.colour = val,
-            DirectiveKind::ChorusFont => self.chorus.font = val,
-            DirectiveKind::ChorusSize => self.chorus.size = clamped_size(),
-            DirectiveKind::ChorusColour => self.chorus.colour = val,
-            DirectiveKind::LabelFont => self.label.font = val,
-            DirectiveKind::LabelSize => self.label.size = clamped_size(),
-            DirectiveKind::LabelColour => self.label.colour = val,
-            DirectiveKind::GridFont => self.grid.font = val,
-            DirectiveKind::GridSize => self.grid.size = clamped_size(),
-            DirectiveKind::GridColour => self.grid.colour = val,
-            // Header/Footer/TOC directives are not rendered in the main body
-            _ => {}
+        let style = match element {
+            StyleElement::Text => &mut self.text,
+            StyleElement::Chord => &mut self.chord,
+            StyleElement::Tab => &mut self.tab,
+            StyleElement::Title => &mut self.title,
+            StyleElement::Chorus => &mut self.chorus,
+            StyleElement::Label => &mut self.label,
+            StyleElement::Grid => &mut self.grid,
+        };
+        match property {
+            StyleProperty::Font => style.font = value.clone(),
+            StyleProperty::Size => {
+                style.size = parse_font_size(value.as_deref()).map(|s| s.to_string());
+            }
+            StyleProperty::Colour => style.colour = value.clone(),
         }
     }
 }
@@ -4227,6 +4211,19 @@ mod transpose_tests {
     fn test_textfont_directive_applies_css() {
         let html = render("{textfont: Courier}\nHello world");
         assert!(html.contains("font-family: Courier;"));
+    }
+
+    #[test]
+    fn test_fractional_textsize_gets_the_pt_unit() {
+        let html = render("{textsize: 12.5}\nHello world");
+        assert!(html.contains("font-size: 12.5pt;"), "{html}");
+    }
+
+    #[test]
+    fn test_nan_textsize_is_ignored_like_any_non_numeric_size() {
+        let html = render("{textsize: NaN}\nHello world");
+        assert!(!html.contains("NaN"), "{html}");
+        assert!(!html.contains("font-size: pt"), "{html}");
     }
 
     #[test]

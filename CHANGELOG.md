@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`{textsize: NaN}` (and the other size directives) is ignored like any
+  non-numeric size** instead of reaching the HTML as `font-size: NaN;` and the
+  PDF as a NaN font size, and the React renderer drops a non-numeric size the
+  same way.
+- **A fractional size such as `{textsize: 12.5}` gets its `pt` unit in the HTML
+  renderer** (and in the React renderer); it was emitted as the invalid
+  unitless `font-size: 12.5;`.
+
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
   WebAssembly and UniFFI bindings). They were printed to stderr
   and never reached the caller.
