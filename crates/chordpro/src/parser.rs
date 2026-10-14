@@ -1188,7 +1188,8 @@ impl MultiParseResult {
         self.results.into_iter().map(|r| r.song).collect()
     }
 
-    /// Returns all successfully parsed songs.
+    /// Returns every song of the parse, borrowed, one per segment (a
+    /// segment with errors still yields its partial song).
     #[must_use]
     pub fn songs(&self) -> Vec<&Song> {
         self.results.iter().map(|r| &r.song).collect()

@@ -1522,7 +1522,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_songs_always_returns_at_least_one() {
+    fn test_into_songs_always_returns_at_least_one() {
         // Lenient parser contract pinned at the binding boundary: the
         // `*_with_options` wrappers rely on this to skip an `is_empty`
         // guard. See #1083 for the prior dead-code removal.
@@ -1530,7 +1530,7 @@ mod tests {
             let songs = chordsketch_chordpro::parse_multi_lenient(input).into_songs();
             assert!(
                 !songs.is_empty(),
-                "parse_songs({input:?}) returned an empty Vec"
+                "into_songs({input:?}) returned an empty Vec"
             );
         }
     }

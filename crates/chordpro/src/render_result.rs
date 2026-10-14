@@ -265,6 +265,7 @@ impl<T> RenderResult<T> {
     /// For entry points that have no structured warnings channel: each one
     /// supplies the stream warnings belong on (standard error, a browser
     /// console) and gets the same message form on every surface.
+    #[must_use = "the rendered output is returned here"]
     pub fn forward_warnings(self, mut sink: impl FnMut(&str)) -> T {
         for w in &self.warnings {
             sink(&format!("chordsketch: {w}"));
