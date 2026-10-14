@@ -33,7 +33,7 @@ enum Family {
 /// points do not accept it.
 fn family(instrument: &str) -> Option<Family> {
     match instrument.to_ascii_lowercase().as_str() {
-        "guitar" | "ukulele" | "uke" => Some(Family::Fretted),
+        "guitar" | "ukulele" | "uke" | "charango" => Some(Family::Fretted),
         "piano" | "keyboard" | "keys" => Some(Family::Keyboard),
         _ => None,
     }
@@ -51,7 +51,7 @@ impl fmt::Display for UnknownInstrument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "unknown instrument {:?}; expected one of \"guitar\", \"ukulele\", \"piano\"",
+            "unknown instrument {:?}; expected one of \"guitar\", \"ukulele\", \"charango\", \"piano\"",
             self.name
         )
     }
@@ -117,14 +117,15 @@ mod tests {
     #[test]
     fn render_svg_accepts_every_alias_case_insensitively() {
         for name in [
-            "guitar", "Guitar", "ukulele", "UKULELE", "uke", "piano", "Keyboard", "keys",
+            "guitar", "Guitar", "ukulele", "UKULELE", "uke", "charango", "Charango", "piano",
+            "Keyboard", "keys",
         ] {
             assert!(
                 render_svg("C", name, &[], None, DiagramSize::Regular).is_ok(),
                 "{name}"
             );
         }
-        for name in ["charango", "theremin", "", "gui tar"] {
+        for name in ["theremin", "", "gui tar"] {
             assert!(
                 render_svg("C", name, &[], None, DiagramSize::Regular).is_err(),
                 "{name}"
@@ -142,6 +143,11 @@ mod tests {
             .unwrap()
             .expect("C has a ukulele voicing");
         assert_ne!(uke, guitar, "ukulele is not drawn as a guitar");
+        let charango = render_svg("C", "Charango", &[], None, DiagramSize::Regular)
+            .unwrap()
+            .expect("C has a charango voicing");
+        assert_ne!(charango, uke, "charango is not drawn as a ukulele");
+        assert!(charango.starts_with("<svg"), "{charango}");
         let piano = render_svg("C", "Keys", &[], None, DiagramSize::Regular)
             .unwrap()
             .expect("C has a keyboard voicing");
@@ -170,7 +176,7 @@ mod tests {
         let err = render_svg("C", "Harmonica", &[], None, DiagramSize::Regular).unwrap_err();
         assert_eq!(
             err.to_string(),
-            "unknown instrument \"harmonica\"; expected one of \"guitar\", \"ukulele\", \"piano\""
+            "unknown instrument \"harmonica\"; expected one of \"guitar\", \"ukulele\", \"charango\", \"piano\""
         );
     }
 
@@ -214,6 +220,13 @@ mod tests {
     #[test]
     fn pitches_sound_the_drawn_shape_and_reject_what_render_svg_rejects() {
         assert!(pitches("C", "guitar", &[]).is_some());
+        let charango = pitches("C", "charango", &[]).expect("C has a charango voicing");
+        assert!(!charango.is_empty());
+        assert_eq!(
+            Some(charango),
+            crate::voicings::diagram_pitches("C", &[], "charango", DEFAULT_FRETS_SHOWN),
+            "the audio is the core's own charango voicing"
+        );
         assert_eq!(pitches("C", "piano", &[]), Some(vec![60, 64, 67]));
         assert_eq!(pitches("XYZ-not-a-chord", "guitar", &[]), None);
         assert_eq!(pitches("C", "theremin", &[]), None);

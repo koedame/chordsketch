@@ -210,7 +210,7 @@ export function validate(source: string): ValidationError[];
  * (#2164).
  *
  * `instrument` accepts (case-insensitive): `"guitar"`,
- * `"ukulele"` (alias `"uke"`), or `"piano"` (aliases
+ * `"ukulele"` (alias `"uke"`), `"charango"`, or `"piano"` (aliases
  * `"keyboard"`, `"keys"`). `chord` is a standard ChordPro
  * chord name.
  *
@@ -305,15 +305,14 @@ export function chordPitches(chord: string): Buffer | null;
  * {@link chordPitches} returns from the chord *name* (#2736). Mirrors the
  * WASM `diagramPitches` and FFI `diagram_pitches` exports.
  *
- * Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`) return one pitch
+ * Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`, `"charango"`) return one pitch
  * per non-muted string in string (strum) order, keeping octave doublings;
  * keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`) return the
  * highlighted keys. `defines` is the same `[name, raw]` tuple list
  * {@link chordDiagramSvgWithDefines} accepts (ignored for keyboard, matching
- * the SVG path). The accepted instrument set is kept in lockstep with
- * {@link chordDiagramSvgWithDefines}; anything outside it (e.g. `"charango"`,
- * not drawn by the binding SVG path) returns `null`. Also `null` when no
- * diagram is available for the chord.
+ * the SVG path). The accepted instrument set is the same as
+ * {@link chordDiagramSvgWithDefines}'s; any other instrument returns `null`.
+ * Also `null` when no diagram is available for the chord.
  *
  * Throws an `Error` (`InvalidArg`) when any inner array in `defines` does not
  * have exactly two elements.

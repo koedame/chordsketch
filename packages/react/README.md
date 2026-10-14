@@ -332,8 +332,8 @@ renderer uses (156 built-in voicings: 60 guitar, 36 ukulele,
 `currentColor`, so the diagram picks up the host text colour and
 works in dark/light themes without extra styling.
 
-`instrument` accepts `"guitar"`, `"ukulele"` (alias `"uke"`), or
-`"piano"` (aliases `"keyboard"`, `"keys"`). Unknown chords — or
+`instrument` accepts `"guitar"`, `"ukulele"` (alias `"uke"`),
+`"charango"`, or `"piano"` (aliases `"keyboard"`, `"keys"`). Unknown chords — or
 known chords the database has no voicing for — render
 `notFoundFallback` (default: an inline `role="note"` that
 surfaces the chord name so page readers still see "Am — no

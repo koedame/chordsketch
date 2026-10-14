@@ -454,7 +454,7 @@ pub fn version() -> String {
 /// added in #2164.
 ///
 /// `instrument` accepts (case-insensitive): `"guitar"`,
-/// `"ukulele"` (alias `"uke"`), or `"piano"` (aliases
+/// `"ukulele"` (alias `"uke"`), `"charango"`, or `"piano"` (aliases
 /// `"keyboard"`, `"keys"`). `chord` is a standard ChordPro
 /// chord name. Flat spellings are normalised to sharps via the
 /// same path the core voicing-database lookup uses.
@@ -527,15 +527,14 @@ pub fn chord_pitches(chord: String) -> Option<Buffer> {
 /// depicts, rather than the instrument-agnostic block voicing
 /// [`chord_pitches`] returns from the chord *name* (#2736).
 ///
-/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`) return one pitch
+/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`, `"charango"`) return one pitch
 /// per non-muted string in string (strum) order, keeping octave doublings;
 /// keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`) return the
 /// highlighted keys. `defines` is the same `[name, raw]` tuple list
 /// [`chord_diagram_svg_with_defines`] accepts (ignored for keyboard, matching
-/// the SVG path). The accepted instrument set is kept in lockstep with
-/// [`chord_diagram_svg_with_defines`]; anything outside it (e.g. `"charango"`,
-/// not drawn by the binding SVG path) returns `null`. Also `null` when no
-/// diagram is available for the chord.
+/// the SVG path). The accepted instrument set is the same as
+/// [`chord_diagram_svg_with_defines`]'s; any other instrument returns `null`.
+/// Also `null` when no diagram is available for the chord.
 ///
 /// Thin wrapper over the pure-Rust `diagram_pitches_inner`. Sister-site to the
 /// wasm `diagramPitches` export and the FFI `diagram_pitches` function

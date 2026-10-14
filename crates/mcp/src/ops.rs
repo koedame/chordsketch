@@ -276,8 +276,8 @@ pub fn format_source(source: &str) -> String {
 /// Renders a chord diagram for `chord` on `instrument` as an SVG
 /// fragment.
 ///
-/// `instrument` accepts `guitar`, `ukulele` (alias `uke`), and `piano`
-/// (aliases `keyboard`, `keys`), case-insensitively. Returns `Ok(None)`
+/// `instrument` accepts `guitar`, `ukulele` (alias `uke`), `charango`, and
+/// `piano` (aliases `keyboard`, `keys`), case-insensitively. Returns `Ok(None)`
 /// when the chord is known but no voicing can be drawn for it on that
 /// instrument.
 ///

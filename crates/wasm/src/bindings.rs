@@ -664,7 +664,7 @@ pub fn version() -> String {
 /// instrument.
 ///
 /// `instrument` accepts (case-insensitive): `"guitar"`, `"ukulele"`
-/// (alias `"uke"`), or `"piano"` (aliases `"keyboard"`, `"keys"`).
+/// (alias `"uke"`), `"charango"`, or `"piano"` (aliases `"keyboard"`, `"keys"`).
 /// `chord` is a standard ChordPro chord name (e.g. `"Am"`, `"C#m7"`,
 /// `"Bb"`). Flat spellings are normalised to sharps via the same
 /// path the core crate uses for its built-in voicing database
@@ -715,7 +715,7 @@ pub fn chord_diagram_svg(chord: &str, instrument: &str) -> Result<Option<String>
 ///
 /// Returns a `JsValue` error string when:
 ///   * `instrument` is not one of `"guitar"` / `"ukulele"` /
-///     `"piano"` (or their aliases).
+///     `"charango"` / `"piano"` (or their aliases).
 ///   * `defines` is not a deserialisable `[[string, string], …]`
 ///     array.
 #[must_use = "callers must handle the unknown-instrument error"]
@@ -764,8 +764,8 @@ pub fn chord_diagram_svg_with_orientation(
 /// # Errors
 ///
 /// Returns a `JsValue` error string when:
-///   * `instrument` is not one of `"guitar"` / `"ukulele"` / `"piano"`
-///     (or their aliases).
+///   * `instrument` is not one of `"guitar"` / `"ukulele"` / `"charango"` /
+///     `"piano"` (or their aliases).
 ///   * `defines` is not a deserialisable `[[string, string], …]` array.
 #[must_use = "callers must handle the unknown-instrument error"]
 #[wasm_bindgen(js_name = chordDiagramSvgWithDefinesOrientation, skip_typescript)]
@@ -803,8 +803,8 @@ pub fn chord_diagram_svg_with_defines_orientation(
 /// # Errors
 ///
 /// Returns a `JsValue` error string when:
-///   * `instrument` is not one of `"guitar"` / `"ukulele"` / `"piano"`
-///     (or their aliases).
+///   * `instrument` is not one of `"guitar"` / `"ukulele"` / `"charango"` /
+///     `"piano"` (or their aliases).
 ///   * `defines` is not a deserialisable `[[string, string], …]` array.
 #[must_use = "callers must handle the unknown-instrument error"]
 #[wasm_bindgen(js_name = chordDiagramSvgWithDefinesOrientationCompact, skip_typescript)]
@@ -853,15 +853,14 @@ pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
 /// depicts, rather than the instrument-agnostic block voicing
 /// [`chord_pitches`] returns from the chord *name*.
 ///
-/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`) return one pitch
+/// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`, `"charango"`) return one pitch
 /// per non-muted string in string (strum) order, keeping octave doublings;
 /// keyboard instruments (`"piano"`, `"keyboard"`, `"keys"`) return the
 /// highlighted keys. `defines` is the same `[[name, raw], …]` shape
 /// [`chord_diagram_svg_with_defines`] accepts (ignored for keyboard, matching
-/// the SVG path). The accepted instrument set is kept in lockstep with
-/// [`chord_diagram_svg_with_defines`]; anything outside it (e.g. `"charango"`,
-/// not drawn by the binding SVG path) returns `undefined`. Also `undefined`
-/// when no diagram is available for the chord.
+/// the SVG path). The accepted instrument set is the same as
+/// [`chord_diagram_svg_with_defines`]'s; any other instrument returns
+/// `undefined`. Also `undefined` when no diagram is available for the chord.
 ///
 /// Thin wrapper over the pure-Rust `diagram_pitches_inner`. Sister-site to the
 /// NAPI `diagramPitches` export and the FFI `diagram_pitches` function

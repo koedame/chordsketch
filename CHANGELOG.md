@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Chord diagrams for the charango** from the WebAssembly, Node.js and UniFFI
+  bindings and the MCP server: `chordDiagramSvg` / `chord_diagram_svg` and
+  `diagramPitches` / `diagram_pitches` accept `"charango"` next to `"guitar"`,
+  `"ukulele"` and `"piano"`, and the React, Vue and Svelte `instrument` types
+  include it. The core already drew and sounded charango voicings; the
+  entry points were the only place that refused the name.
+
 ### Fixed
 
 - **`{textsize: NaN}` (and the other size directives) is ignored like any
