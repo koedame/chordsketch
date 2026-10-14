@@ -3316,8 +3316,16 @@ function cloneFormattingState(s: FormattingState): FormattingState {
  * `parse_font_size` in `crates/chordpro/src/formatting.rs`. */
 function clampSize(raw: string | null): string | null {
   if (raw === null) return null;
-  const n = Number(raw);
-  if (raw.trim() === '' || Number.isNaN(n)) return null;
+  // Accept exactly what Rust's `f32::from_str` accepts (no surrounding
+  // whitespace, no hex/binary literals; `inf` / `infinity` in any case).
+  let n: number;
+  if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(raw)) {
+    n = Number(raw);
+  } else if (/^[+-]?(inf|infinity)$/i.test(raw)) {
+    n = raw.startsWith('-') ? -Infinity : Infinity;
+  } else {
+    return null;
+  }
   const clamped = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, n));
   return String(clamped);
 }

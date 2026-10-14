@@ -3737,6 +3737,9 @@ describe('renderChordproAst', () => {
     ['12.5', '12.5pt'],
     ['NaN', ''],
     ['big', ''],
+    ['0x10', ''],
+    [' 12 ', ''],
+    ['inf', '200pt'],
   ])('font-size directive %s renders as %j (fractional gets pt, non-numeric ignored)', (value, expected) => {
     const { container } = render(
       renderChordproAst({
