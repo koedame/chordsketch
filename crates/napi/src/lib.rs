@@ -256,34 +256,17 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
 /// FFI binding's `diagram_pitches` (`.claude/rules/fix-propagation.md`
 /// §Bindings).
 ///
-/// The accepted instrument set is kept in lockstep with
-/// [`chord_diagram_svg_inner_with_orientation`]: only the instruments the SVG
-/// binding surface exposes (`guitar` / `ukulele` / `uke` + `piano` /
-/// `keyboard` / `keys`) yield pitches. Anything else — e.g. `charango`, which
-/// the core voicing layer supports but the binding SVG path does not draw —
-/// returns `None`, so the audio surface never sounds an instrument that has no
-/// drawable diagram on the same binding.
+/// The accepted instrument set is the core's
+/// [`chordsketch_chordpro::diagram_instrument`], the same one the SVG surface
+/// uses, so the audio surface never sounds an instrument that has no drawable
+/// diagram on the same binding.
 #[must_use]
 pub(crate) fn diagram_pitches_inner(
     chord: &str,
     instrument: &str,
     defines: &[(String, String)],
 ) -> Option<Vec<u8>> {
-    if !is_binding_diagram_instrument(instrument) {
-        return None;
-    }
-    chordsketch_chordpro::voicings::diagram_pitches(chord, defines, instrument, 5)
-}
-
-/// Whether `instrument` is one the binding diagram surface (SVG *and* audio)
-/// exposes — the lockstep instrument allowlist shared by the SVG dispatch and
-/// [`diagram_pitches_inner`] so the two surfaces cannot drift on which
-/// instruments they accept (`.claude/rules/fix-propagation.md`).
-fn is_binding_diagram_instrument(instrument: &str) -> bool {
-    matches!(
-        instrument.to_ascii_lowercase().as_str(),
-        "guitar" | "ukulele" | "uke" | "piano" | "keyboard" | "keys"
-    )
+    chordsketch_chordpro::diagram_instrument::pitches(chord, instrument, defines)
 }
 
 /// Pure-Rust core of [`bindings::chord_staff_notes`]. Returns the chord's
@@ -335,41 +318,16 @@ pub(crate) fn chord_diagram_svg_inner_with_orientation(
     defines: &[(String, String)],
     orientation: Option<&str>,
 ) -> std::result::Result<Option<String>, String> {
-    use chordsketch_chordpro::chord_diagram::{
-        render_keyboard_svg, render_svg_with_orientation, resolve_orientation,
-    };
-    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+    use chordsketch_chordpro::chord_diagram::DiagramSize;
 
-    let resolved = resolve_orientation(orientation);
-
-    match instrument.to_ascii_lowercase().as_str() {
-        "piano" | "keyboard" | "keys" => {
-            // Keyboard voicings have their own `{define: … keys …}`
-            // shape; the wasm sister-site does not thread defines
-            // through this branch either. Match that gap here so
-            // NAPI behaviour stays consistent. Drop `defines`
-            // explicitly via `let _ = …;` to make the intentional
-            // omission visible in the diff (mirrors wasm's
-            // `chord_diagram_svg_inner`).
-            //
-            // Keyboard diagrams have no orientation knob — both arguments
-            // are accepted but ignored here.
-            let _ = defines;
-            Ok(lookup_keyboard_voicing(chord, &[]).map(|v| render_keyboard_svg(&v)))
-        }
-        "guitar" | "ukulele" | "uke" => {
-            // `frets_shown = 5` matches the default ChordPro HTML
-            // renderer (`crates/render-html` emits 5-fret diagrams
-            // when no `{chordfrets}` directive is set), keeping
-            // diagrams produced via NAPI visually consistent with
-            // sheets rendered through the same binding.
-            Ok(lookup_diagram(chord, defines, instrument, 5)
-                .map(|d| render_svg_with_orientation(&d, resolved)))
-        }
-        other => Err(format!(
-            "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
-        )),
-    }
+    chordsketch_chordpro::diagram_instrument::render_svg(
+        chord,
+        instrument,
+        defines,
+        orientation,
+        DiagramSize::Regular,
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Format a [`chordsketch_convert::ConversionWarning`] as a stable

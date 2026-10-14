@@ -287,27 +287,19 @@ pub fn format_source(source: &str) -> String {
 /// accepted names.
 #[must_use = "the caller must distinguish an unknown instrument from an undrawable chord"]
 pub fn chord_diagram_svg(chord: &str, instrument: &str) -> Result<Option<String>, String> {
-    use chordsketch_chordpro::chord_diagram::{
-        DiagramSize, render_keyboard_svg_with_size, render_svg_with_options, resolve_orientation,
-    };
-    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+    use chordsketch_chordpro::chord_diagram::DiagramSize;
 
     // Regular size and the project-default orientation, so a diagram
     // returned here matches the one the HTML renderer draws for the same
-    // chord. `frets_shown = 5` is the same constant `crates/render-html`
-    // uses when no `{chordfrets}` directive is set.
-    let orientation = resolve_orientation(None);
-    match instrument.to_ascii_lowercase().as_str() {
-        "piano" | "keyboard" | "keys" => Ok(lookup_keyboard_voicing(chord, &[])
-            .map(|v| render_keyboard_svg_with_size(&v, DiagramSize::Regular))),
-        instrument @ ("guitar" | "ukulele" | "uke") => {
-            Ok(lookup_diagram(chord, &[], instrument, 5)
-                .map(|d| render_svg_with_options(&d, orientation, DiagramSize::Regular)))
-        }
-        other => Err(format!(
-            "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
-        )),
-    }
+    // chord.
+    chordsketch_chordpro::diagram_instrument::render_svg(
+        chord,
+        instrument,
+        &[],
+        None,
+        DiagramSize::Regular,
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Returns every directive the parser knows, with its aliases and

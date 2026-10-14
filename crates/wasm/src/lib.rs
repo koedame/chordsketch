@@ -245,56 +245,21 @@ pub(crate) fn chord_diagram_svg_inner_with_options(
     orientation: Option<&str>,
     compact: bool,
 ) -> std::result::Result<Option<String>, String> {
-    use chordsketch_chordpro::chord_diagram::{
-        DiagramSize, render_keyboard_svg_with_size, render_svg_with_options, resolve_orientation,
-    };
-    use chordsketch_chordpro::voicings::{lookup_diagram, lookup_keyboard_voicing};
+    use chordsketch_chordpro::chord_diagram::DiagramSize;
 
-    let resolved = resolve_orientation(orientation);
     let size = if compact {
         DiagramSize::Compact
     } else {
         DiagramSize::Regular
     };
-
-    match instrument.to_ascii_lowercase().as_str() {
-        "piano" | "keyboard" | "keys" => {
-            // `lookup_keyboard_voicing` takes its defines as
-            // `&[(String, Vec<i32>)]` (keys form), not the
-            // fretted `&[(String, String)]` form. Bridging
-            // between the two requires re-parsing each raw
-            // string via `ChordDefinition::parse_value` and
-            // promoting `keys` entries into the Vec<i32> shape.
-            // The Rust HTML renderer does that work inside
-            // `render-html`'s keyboard branch — replicating it
-            // here would mean a sister-site helper in
-            // `chordsketch-chordpro`. Tracked as a follow-up;
-            // for now the wasm boundary passes an empty defines
-            // slice for keyboards (same behaviour as before
-            // this commit), and only the fretted branch
-            // benefits from the new API.
-            //
-            // Keyboard diagrams have no orientation knob — the
-            // argument is accepted but ignored here.
-            let _ = defines;
-            Ok(
-                lookup_keyboard_voicing(chord, &[])
-                    .map(|v| render_keyboard_svg_with_size(&v, size)),
-            )
-        }
-        "guitar" | "ukulele" | "uke" => {
-            // `frets_shown = 5` matches the default ChordPro HTML
-            // renderer (`crates/render-html` emits 5-fret diagrams
-            // when no `{chordfrets}` directive is set) so diagrams
-            // produced by `<ChordDiagram>` visually match the
-            // sheet output from `<ChordSheet>` for the same chord.
-            Ok(lookup_diagram(chord, defines, instrument, 5)
-                .map(|d| render_svg_with_options(&d, resolved, size)))
-        }
-        other => Err(format!(
-            "unknown instrument {other:?}; expected one of \"guitar\", \"ukulele\", \"piano\""
-        )),
-    }
+    chordsketch_chordpro::diagram_instrument::render_svg(
+        chord,
+        instrument,
+        defines,
+        orientation,
+        size,
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Pure-Rust core of [`bindings::chord_pitches`]. Returns the chord's
@@ -324,36 +289,17 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
 /// `diagram_pitches_inner` and the FFI binding's `diagram_pitches`
 /// (`.claude/rules/fix-propagation.md` §Bindings).
 ///
-/// The accepted instrument set is kept in lockstep with
-/// [`chord_diagram_svg_inner_with_options`]: only the instruments the SVG
-/// binding surface exposes (`guitar` / `ukulele` / `uke` + `piano` /
-/// `keyboard` / `keys`) yield pitches. Anything else — e.g. `charango`, which
-/// the core voicing layer supports but the binding SVG path does not draw —
-/// returns `None`, so the audio surface never sounds an instrument that has no
-/// drawable diagram on the same binding.
+/// The accepted instrument set is the core's
+/// [`chordsketch_chordpro::diagram_instrument`], the same one the SVG surface
+/// uses, so the audio surface never sounds an instrument that has no drawable
+/// diagram on the same binding.
 #[must_use]
 pub(crate) fn diagram_pitches_inner(
     chord: &str,
     instrument: &str,
     defines: &[(String, String)],
 ) -> Option<Vec<u8>> {
-    if !is_binding_diagram_instrument(instrument) {
-        return None;
-    }
-    chordsketch_chordpro::voicings::diagram_pitches(chord, defines, instrument, 5)
-}
-
-/// Whether `instrument` is one the binding diagram surface (SVG *and* audio)
-/// exposes — the lockstep instrument allowlist shared by
-/// [`chord_diagram_svg_inner_with_options`] and [`diagram_pitches_inner`].
-///
-/// Kept as one predicate so the SVG and audio surfaces cannot drift on which
-/// instruments they accept (`.claude/rules/fix-propagation.md`).
-fn is_binding_diagram_instrument(instrument: &str) -> bool {
-    matches!(
-        instrument.to_ascii_lowercase().as_str(),
-        "guitar" | "ukulele" | "uke" | "piano" | "keyboard" | "keys"
-    )
+    chordsketch_chordpro::diagram_instrument::pitches(chord, instrument, defines)
 }
 
 /// Pure-Rust core of [`bindings::key_scale_pitches`]. Returns the ascending

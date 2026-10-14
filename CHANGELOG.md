@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`chordsketch-chordpro` exposes `diagram_instrument`**, the instrument names
+  and the SVG / pitch lookup the standalone chord-diagram entry points
+  (WebAssembly, Node.js, UniFFI and MCP) share. Behaviour is unchanged.
+
 ### Fixed
 
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
