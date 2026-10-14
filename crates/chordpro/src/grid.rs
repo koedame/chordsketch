@@ -113,6 +113,26 @@ pub fn extract_grid_label(raw: &str) -> Option<String> {
     Some(after[..end].to_string())
 }
 
+/// The heading text for a `{start_of_grid}` directive's value.
+///
+/// The value may carry an attribute payload
+/// (`{start_of_grid shape="..." label="Intro"}`) or a legacy colon-form
+/// label (`{start_of_grid: Intro}`). Prefers the structured `label="..."`
+/// attribute, falls back to the colon-form value when it does not contain
+/// `=`, and otherwise returns `None` so the heading reads `Grid` rather than
+/// the raw attribute string.
+#[must_use]
+pub fn heading_value(raw: Option<&str>) -> Option<String> {
+    let v = raw?;
+    if let Some(label) = extract_grid_label(v) {
+        Some(label)
+    } else if !v.contains('=') {
+        Some(v.to_string())
+    } else {
+        None
+    }
+}
+
 fn extract_shape_value(raw: &str) -> Option<&str> {
     // `shape="..."` — quoted form
     if let Some(start) = find_substr_ci(raw, "shape") {
@@ -915,5 +935,16 @@ mod tests {
         // silently rewriting three golden snapshots.
         let row = classify_grid_row("|: G7 . | %  . :");
         assert_eq!(row.trailing_comment.as_deref(), Some("% ."));
+    }
+
+    #[test]
+    fn heading_value_prefers_label_attribute_then_colon_form_then_nothing() {
+        assert_eq!(heading_value(None), None);
+        assert_eq!(
+            heading_value(Some("shape=\"1+4x4+1\" label=\"Intro\"")).as_deref(),
+            Some("Intro")
+        );
+        assert_eq!(heading_value(Some("Intro")).as_deref(), Some("Intro"));
+        assert_eq!(heading_value(Some("shape=\"1+4x4+1\"")), None);
     }
 }
