@@ -15,6 +15,9 @@ use chordsketch_chordpro::ast::{
 };
 use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
+use chordsketch_chordpro::formatting::{
+    StyleElement, StyleProperty, parse_font_size, style_target,
+};
 use chordsketch_chordpro::inline_markup::TextSpan;
 use chordsketch_chordpro::notation::NotationKind;
 use chordsketch_chordpro::render_result::{
@@ -270,13 +273,10 @@ struct PdfFormattingState {
 impl PdfFormattingState {
     /// Apply a formatting directive, updating the appropriate style.
     fn apply(&mut self, kind: &DirectiveKind, value: &Option<String>) {
-        let size_val = value
-            .as_deref()
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|s| s.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE));
-        match kind {
-            DirectiveKind::TextSize => self.text.size = size_val,
-            DirectiveKind::ChordSize => self.chord.size = size_val,
+        let size_val = parse_font_size(value.as_deref());
+        match style_target(kind) {
+            Some((StyleElement::Text, StyleProperty::Size)) => self.text.size = size_val,
+            Some((StyleElement::Chord, StyleProperty::Size)) => self.chord.size = size_val,
             _ => {}
         }
     }
@@ -466,10 +466,6 @@ const MAX_PAGES: usize = 10_000;
 /// Maximum number of columns allowed.
 /// Prevents degenerate layout and f32 overflow from extreme values.
 const MAX_COLUMNS: u32 = 32;
-/// Minimum font size (in points) accepted from user directives.
-const MIN_FONT_SIZE: f32 = 0.5;
-/// Maximum font size (in points) accepted from user directives.
-const MAX_FONT_SIZE: f32 = 200.0;
 /// Maximum image file size in bytes (50 MB).
 const MAX_IMAGE_FILE_SIZE: u64 = 50 * 1024 * 1024;
 /// Maximum native image dimension in pixels.  JPEG headers can report up to

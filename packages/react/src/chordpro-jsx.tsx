@@ -3215,8 +3215,8 @@ function collectDefines(song: ChordproSong): Array<[string, string]> {
 }
 
 // Font-size clamping range, mirroring `MIN_FONT_SIZE` and
-// `MAX_FONT_SIZE` in `crates/render-html/src/lib.rs` and the PDF
-// renderer's matching constants. Out-of-range `{textsize: …}` etc.
+// `MAX_FONT_SIZE` in `crates/chordpro/src/formatting.rs`, which the
+// HTML and PDF renderers share. Out-of-range `{textsize: …}` etc.
 // values clamp to this band so a degenerate input (e.g.
 // `textsize: 99999`) does not blow up the layout.
 const MIN_FONT_SIZE = 0.5;

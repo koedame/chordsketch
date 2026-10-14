@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`chordsketch-chordpro` exposes `formatting`**: the font-size bounds, the
+  size parser and the font / size / colour directive-to-element table the HTML
+  and PDF renderers share. Rendered output is unchanged.
 - Every public function that returns a `Result` or an `Option` carries
   `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
 
