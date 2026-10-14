@@ -715,7 +715,7 @@ pub fn chord_diagram_svg(chord: &str, instrument: &str) -> Result<Option<String>
 ///
 /// Returns a `JsValue` error string when:
 ///   * `instrument` is not one of `"guitar"` / `"ukulele"` /
-///     `"piano"` (or their aliases).
+///     `"charango"` / `"piano"` (or their aliases).
 ///   * `defines` is not a deserialisable `[[string, string], …]`
 ///     array.
 #[must_use = "callers must handle the unknown-instrument error"]
