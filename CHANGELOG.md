@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`Config::preset_or_inline`** resolves a configuration from an optional preset name
-  or inline RRJSON string; the WebAssembly, Node.js and UniFFI bindings share
-  it.
-
 ### Fixed
 
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
@@ -40,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `invalid config: not a known preset and not valid RRJSON: …`**, the wording
   the UniFFI bindings already used (it was `invalid config (not a known preset
   and not valid RRJSON): …`).
+- **`chordsketch-chordpro` exposes `song_walk`**, the transpose, chorus-recall and
+  notation-block bookkeeping the text, HTML and PDF renderers share
+  (`SongTranspose`, `ChorusTracker`, `NotationSkip`, `replay_chorus_body`).
+  Rendered output is unchanged.
 - Every public function that returns a `Result` or an `Option` carries
   `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
 
