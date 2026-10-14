@@ -7,19 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`chordsketch-chordpro` exposes `formatting`**: the font-size bounds, the
-  size parser and the font / size / colour directive-to-element table the HTML
-  and PDF renderers share.
-
 ### Fixed
 
 - **`{textsize: NaN}` (and the other size directives) is ignored like any
   non-numeric size** instead of reaching the HTML as `font-size: NaN;` and the
-  PDF as a NaN font size.
+  PDF as a NaN font size, and the React renderer drops a non-numeric size the
+  same way.
 - **A fractional size such as `{textsize: 12.5}` gets its `pt` unit in the HTML
-  renderer**; it was emitted as the invalid unitless `font-size: 12.5;`.
+  renderer** (and in the React renderer); it was emitted as the invalid
+  unitless `font-size: 12.5;`.
 
 - **`convertIrealbToChordproText` returns the text renderer's warnings** (Node.js,
   WebAssembly and UniFFI bindings). They were printed to stderr
@@ -42,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`chordsketch-chordpro` exposes `song_walk`**, the transpose, chorus-recall and
+  notation-block bookkeeping the text, HTML and PDF renderers share
+  (`SongTranspose`, `ChorusTracker`, `NotationSkip`, `replay_chorus_body`).
+  Rendered output is unchanged.
 - Every public function that returns a `Result` or an `Option` carries
   `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
 
