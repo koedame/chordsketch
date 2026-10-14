@@ -73,19 +73,8 @@ pub(crate) struct RenderOptions {
 pub(crate) fn resolve_config_inner(
     opts: &RenderOptions,
 ) -> std::result::Result<chordsketch_chordpro::config::Config, String> {
-    match &opts.config {
-        Some(name) => {
-            // Try as a preset first, then as inline RRJSON.
-            if let Some(preset) = chordsketch_chordpro::config::Config::preset(name) {
-                Ok(preset)
-            } else {
-                chordsketch_chordpro::config::Config::parse(name).map_err(|e| {
-                    format!("invalid config (not a known preset and not valid RRJSON): {e}")
-                })
-            }
-        }
-        None => Ok(chordsketch_chordpro::config::Config::defaults()),
-    }
+    chordsketch_chordpro::config::Config::preset_or_inline(opts.config.as_deref())
+        .map_err(|e| format!("invalid config: {e}"))
 }
 
 /// Forward each warning in a [`RenderResult`] to `console.warn` and

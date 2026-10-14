@@ -43,18 +43,8 @@ pub mod bindings;
 fn resolve_config_inner(
     config: Option<&str>,
 ) -> std::result::Result<chordsketch_chordpro::config::Config, String> {
-    match config {
-        Some(name) => {
-            if let Some(preset) = chordsketch_chordpro::config::Config::preset(name) {
-                Ok(preset)
-            } else {
-                chordsketch_chordpro::config::Config::parse(name).map_err(|e| {
-                    format!("invalid config (not a known preset and not valid RRJSON): {e}")
-                })
-            }
-        }
-        None => Ok(chordsketch_chordpro::config::Config::defaults()),
-    }
+    chordsketch_chordpro::config::Config::preset_or_inline(config)
+        .map_err(|e| format!("invalid config: {e}"))
 }
 
 /// Parse input into songs.

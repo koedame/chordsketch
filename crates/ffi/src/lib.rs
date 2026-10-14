@@ -45,20 +45,8 @@ pub enum ChordSketchError {
 fn resolve_config(
     config_json: Option<String>,
 ) -> Result<chordsketch_chordpro::config::Config, ChordSketchError> {
-    match config_json {
-        Some(name) => {
-            if let Some(preset) = chordsketch_chordpro::config::Config::preset(&name) {
-                Ok(preset)
-            } else {
-                chordsketch_chordpro::config::Config::parse(&name).map_err(|e| {
-                    ChordSketchError::InvalidConfig {
-                        reason: format!("not a known preset and not valid RRJSON: {e}"),
-                    }
-                })
-            }
-        }
-        None => Ok(chordsketch_chordpro::config::Config::defaults()),
-    }
+    chordsketch_chordpro::config::Config::preset_or_inline(config_json.as_deref())
+        .map_err(|reason| ChordSketchError::InvalidConfig { reason })
 }
 
 /// Parse input into songs.

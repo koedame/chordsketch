@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The WebAssembly and Node.js bindings report an invalid `config` as
+  `invalid config: not a known preset and not valid RRJSON: …`**, the wording
+  the UniFFI bindings already used (it was `invalid config (not a known preset
+  and not valid RRJSON): …`).
 - **`chordsketch-chordpro` exposes `song_walk`**, the transpose, chorus-recall and
   notation-block bookkeeping the text, HTML and PDF renderers share
   (`SongTranspose`, `ChorusTracker`, `NotationSkip`, `replay_chorus_body`).
