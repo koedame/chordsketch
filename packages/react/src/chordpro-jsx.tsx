@@ -3261,7 +3261,7 @@ function elementStyleToCss(style: ElementStyle): CSSProperties | null {
   if (style.font) css.fontFamily = sanitizeCssValue(style.font);
   if (style.size) {
     const safe = sanitizeCssValue(style.size);
-    if (/^\d+$/.test(safe)) {
+    if (/^\d+(\.\d+)?$/.test(safe)) {
       css.fontSize = `${safe}pt`;
     } else if (safe.length > 0) {
       css.fontSize = safe;
@@ -3312,11 +3312,12 @@ function cloneFormattingState(s: FormattingState): FormattingState {
 
 /** Clamp a numeric font-size directive payload to the
  * `[MIN_FONT_SIZE, MAX_FONT_SIZE]` band. Non-numeric values
- * pass through unchanged. */
+ * (including `NaN`) yield `null`, i.e. the size is ignored, as in
+ * `parse_font_size` in `crates/chordpro/src/formatting.rs`. */
 function clampSize(raw: string | null): string | null {
   if (raw === null) return null;
-  const n = parseFloat(raw);
-  if (Number.isNaN(n)) return raw;
+  const n = Number(raw);
+  if (raw.trim() === '' || Number.isNaN(n)) return null;
   const clamped = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, n));
   return String(clamped);
 }
