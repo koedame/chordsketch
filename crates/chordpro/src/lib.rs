@@ -22,6 +22,7 @@ pub mod parser;
 pub mod render_result;
 pub mod rrjson;
 pub mod selector;
+pub mod song_walk;
 pub mod token;
 pub mod transpose;
 pub mod typography;

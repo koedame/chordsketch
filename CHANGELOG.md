@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`chordsketch-chordpro` exposes `song_walk`**, the transpose, chorus-recall and
+  notation-block bookkeeping the text, HTML and PDF renderers share
+  (`SongTranspose`, `ChorusTracker`, `NotationSkip`, `replay_chorus_body`).
+  Rendered output is unchanged.
 - Every public function that returns a `Result` or an `Option` carries
   `#[must_use]`; CI checks it with `scripts/check-must-use.py`.
 

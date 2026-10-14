@@ -24,7 +24,7 @@ use std::fmt::Write;
 mod bravura;
 mod music_glyphs;
 
-use chordsketch_chordpro::ast::{CommentStyle, DirectiveKind, Line, LyricsLine, Song};
+use chordsketch_chordpro::ast::{CommentStyle, Directive, DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_chordpro::canonical_chord_name;
 use chordsketch_chordpro::config::Config;
 use chordsketch_chordpro::escape::escape_xml as escape;
@@ -34,14 +34,13 @@ use chordsketch_chordpro::render_result::{
     validate_multiple_capo, validate_strict_key,
 };
 use chordsketch_chordpro::resolve_diagrams_instrument;
+use chordsketch_chordpro::song_walk::{
+    ChorusReplay, ChorusTracker, SongTranspose, replay_chorus_body,
+};
 use chordsketch_chordpro::transpose::{
     canonical_key_for_display, transpose_chord_with_style, transposed_key_prefers_flat,
 };
 use chordsketch_chordpro::typography::{tempo_marking_for, unicode_accidentals};
-
-/// Maximum number of chorus recall directives allowed per song.
-/// Prevents output amplification from malicious inputs with many `{chorus}` lines.
-const MAX_CHORUS_RECALLS: usize = 1000;
 
 /// Maximum number of warnings the renderer accumulates per render pass.
 /// Re-exported from `chordsketch-chordpro::render_result` so callers can
@@ -234,31 +233,10 @@ fn render_song_body_into(
             .with_song_overrides(&song_overrides, warnings);
         &song_config
     };
-    // Extract song-level transpose delta from {+config.settings.transpose}.
-    // The base config transpose is already folded into cli_transpose by the caller.
-    let song_transpose_delta = Config::song_transpose_delta(&song_overrides);
     // ADR-0023: capo subtracts from the effective transpose so the
     // displayed chord names match the shapes a guitarist holds at fret N.
-    let song_capo = match song.metadata.capo_validated() {
-        chordsketch_chordpro::ast::CapoValidation::Valid(n) => n,
-        _ => 0,
-    };
-    let top = chordsketch_chordpro::transpose::effective_transpose(
-        cli_transpose,
-        song_transpose_delta,
-        song_capo,
-    );
-    if top.saturated {
-        push_warning(
-            warnings,
-            format!(
-                "transpose offset {cli_transpose} + {song_transpose_delta} - capo \
-                 {song_capo} exceeds i8 range, clamped to {}",
-                top.offset
-            ),
-        );
-    }
-    let mut transpose_offset: i8 = top.offset;
+    // The base config transpose is already folded into cli_transpose by the caller.
+    let mut transpose = SongTranspose::new(song, cli_transpose, warnings);
     let mut fmt_state = FormattingState::default();
     // `<article>` is the semantic root for a self-contained song —
     // a single ChordPro document is a "composition complete in
@@ -351,15 +329,12 @@ fn render_song_body_into(
     // auto-inject grid and avoid duplicates.
     let mut inline_defined: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    // Stores the AST lines of the most recently defined chorus body.
-    // Re-rendered at recall time so the current transpose offset is applied.
-    let mut chorus_body: Vec<Line> = Vec::new();
-    // Temporary buffer for collecting chorus AST lines.
-    let mut chorus_buf: Option<Vec<Line>> = None;
+    // The most recently defined chorus body, re-rendered at recall time so
+    // the current transpose offset is applied.
+    let mut chorus = ChorusTracker::default();
     // Saved fmt_state before entering a chorus, restored on EndOfChorus
     // to prevent in-chorus formatting directives from leaking outward.
     let mut saved_fmt_state: Option<FormattingState> = None;
-    let mut chorus_recall_count: usize = 0;
 
     for line in &song.lines {
         match line {
@@ -387,14 +362,11 @@ fn render_song_body_into(
                     buf.push_str(&raw);
                     buf.push('\n');
                 } else if in_grid {
-                    if let Some(buf) = chorus_buf.as_mut() {
-                        buf.push(line.clone());
-                    }
+                    chorus.record(line);
                     render_grid_line(&lyrics_line.text(), html);
                 } else {
-                    if let Some(buf) = chorus_buf.as_mut() {
-                        buf.push(line.clone());
-                    }
+                    chorus.record(line);
+                    let transpose_offset = transpose.offset();
                     let prefer_flat = transposed_key_prefers_flat(&song.metadata, transpose_offset);
                     render_lyrics(lyrics_line, transpose_offset, prefer_flat, &fmt_state, html);
                 }
@@ -461,6 +433,7 @@ fn render_song_body_into(
                                 // with the song-wide flat/sharp side applied
                                 // under transpose. Falls back to verbatim when
                                 // the value isn't a key.
+                                let transpose_offset = transpose.offset();
                                 let prefer_flat =
                                     transposed_key_prefers_flat(&song.metadata, transpose_offset);
                                 let displayed = canonical_key_for_display(
@@ -555,75 +528,39 @@ fn render_song_body_into(
                     continue;
                 }
                 if directive.kind == DirectiveKind::Transpose {
-                    // A missing or empty value silently resets to 0; only a
-                    // non-empty value that cannot be parsed as i8 emits a warning.
-                    let file_offset: i8 = match directive.value.as_deref() {
-                        None | Some("") => 0,
-                        Some(raw) => match raw.parse() {
-                            Ok(v) => v,
-                            Err(_) => {
-                                push_warning(
-                                    warnings,
-                                    format!(
-                                        "{{transpose}} value {raw:?} cannot be \
-                                         parsed as i8, ignored (using 0)"
-                                    ),
-                                );
-                                0
-                            }
-                        },
-                    };
-                    let combined = chordsketch_chordpro::transpose::effective_transpose(
-                        file_offset,
-                        cli_transpose,
-                        song_capo,
-                    );
-                    if combined.saturated {
-                        push_warning(
-                            warnings,
-                            format!(
-                                "transpose offset {file_offset} + {cli_transpose} - capo \
-                                 {song_capo} exceeds i8 range, clamped to {}",
-                                combined.offset
-                            ),
-                        );
-                    }
-                    transpose_offset = combined.offset;
+                    transpose.apply_directive(directive.value.as_deref(), warnings);
                     continue;
                 }
                 if directive.kind.is_font_size_color() {
-                    if let Some(buf) = chorus_buf.as_mut() {
-                        buf.push(line.clone());
-                    }
+                    chorus.record(line);
                     fmt_state.apply(&directive.kind, &directive.value);
                     continue;
                 }
                 match &directive.kind {
                     DirectiveKind::StartOfChorus => {
                         render_section_open("chorus", "Chorus", &directive.value, html);
-                        chorus_buf = Some(Vec::new());
+                        chorus.start();
                         // Save fmt_state so in-chorus formatting directives
                         // do not leak into sections after the chorus.
                         saved_fmt_state = Some(fmt_state.clone());
                     }
                     DirectiveKind::EndOfChorus => {
                         html.push_str("</section>\n");
-                        if let Some(buf) = chorus_buf.take() {
-                            chorus_body = buf;
-                        }
+                        chorus.end();
                         // Restore fmt_state to pre-chorus value.
                         if let Some(saved) = saved_fmt_state.take() {
                             fmt_state = saved;
                         }
                     }
                     DirectiveKind::Chorus => {
-                        if chorus_recall_count < MAX_CHORUS_RECALLS {
+                        if chorus.try_recall(warnings) {
+                            let transpose_offset = transpose.offset();
                             let prefer_flat =
                                 transposed_key_prefers_flat(&song.metadata, transpose_offset);
                             render_chorus_recall(
                                 &directive.value,
                                 &ChorusRecallCtx {
-                                    chorus_body: &chorus_body,
+                                    chorus_body: chorus.body(),
                                     transpose_offset,
                                     prefer_flat,
                                     fmt_state: &fmt_state,
@@ -633,16 +570,6 @@ fn render_song_body_into(
                                 },
                                 html,
                             );
-                            chorus_recall_count += 1;
-                        } else if chorus_recall_count == MAX_CHORUS_RECALLS {
-                            push_warning(
-                                warnings,
-                                format!(
-                                    "chorus recall limit ({MAX_CHORUS_RECALLS}) reached, \
-                                     further recalls suppressed"
-                                ),
-                            );
-                            chorus_recall_count += 1;
                         }
                     }
                     DirectiveKind::Columns => {
@@ -694,9 +621,7 @@ fn render_song_body_into(
                             abc_buf = Some(String::new());
                             abc_label = directive.value.clone();
                         } else {
-                            if let Some(buf) = chorus_buf.as_mut() {
-                                buf.push(line.clone());
-                            }
+                            chorus.record(line);
                             render_directive_inner(
                                 directive,
                                 show_diagrams,
@@ -722,9 +647,7 @@ fn render_song_body_into(
                             ly_buf = Some(String::new());
                             ly_label = directive.value.clone();
                         } else {
-                            if let Some(buf) = chorus_buf.as_mut() {
-                                buf.push(line.clone());
-                            }
+                            chorus.record(line);
                             render_directive_inner(
                                 directive,
                                 show_diagrams,
@@ -750,9 +673,7 @@ fn render_song_body_into(
                             musicxml_buf = Some(String::new());
                             musicxml_label = directive.value.clone();
                         } else {
-                            if let Some(buf) = chorus_buf.as_mut() {
-                                buf.push(line.clone());
-                            }
+                            chorus.record(line);
                             render_directive_inner(
                                 directive,
                                 show_diagrams,
@@ -785,9 +706,7 @@ fn render_song_body_into(
                         }
                     }
                     DirectiveKind::StartOfGrid => {
-                        if let Some(buf) = chorus_buf.as_mut() {
-                            buf.push(line.clone());
-                        }
+                        chorus.record(line);
                         // `directive.value` may be:
                         // - a human-readable label via the
                         //   colon form (`{start_of_grid: Intro}`),
@@ -817,16 +736,12 @@ fn render_song_body_into(
                         in_grid = true;
                     }
                     DirectiveKind::EndOfGrid => {
-                        if let Some(buf) = chorus_buf.as_mut() {
-                            buf.push(line.clone());
-                        }
+                        chorus.record(line);
                         html.push_str("</section>\n");
                         in_grid = false;
                     }
                     _ => {
-                        if let Some(buf) = chorus_buf.as_mut() {
-                            buf.push(line.clone());
-                        }
+                        chorus.record(line);
                         // Track {define} chords that are rendered inline so the
                         // auto-inject grid can skip them (dedup for #1211/#1245/#1246).
                         if directive.kind == DirectiveKind::Define
@@ -850,15 +765,11 @@ fn render_song_body_into(
                 }
             }
             Line::Comment(style, text) => {
-                if let Some(buf) = chorus_buf.as_mut() {
-                    buf.push(line.clone());
-                }
+                chorus.record(line);
                 render_comment(*style, text, html);
             }
             Line::Empty => {
-                if let Some(buf) = chorus_buf.as_mut() {
-                    buf.push(line.clone());
-                }
+                chorus.record(line);
                 html.push_str("<div class=\"empty-line\" aria-hidden=\"true\"></div>\n");
             }
         }
@@ -2973,24 +2884,65 @@ fn render_chorus_recall(value: &Option<String>, ctx: &ChorusRecallCtx<'_>, html:
     // Use a local copy of fmt_state so in-chorus formatting directives
     // (e.g. {size}, {bold}) are applied during recall without mutating
     // the caller's state.
-    let mut local_fmt = fmt_state.clone();
-    for line in chorus_body {
-        match line {
-            Line::Lyrics(lyrics) => {
-                render_lyrics(lyrics, transpose_offset, prefer_flat, &local_fmt, html)
-            }
-            Line::Comment(style, text) => render_comment(*style, text, html),
-            Line::Empty => html.push_str("<div class=\"empty-line\" aria-hidden=\"true\"></div>\n"),
-            Line::Directive(d) if d.kind.is_font_size_color() => {
-                local_fmt.apply(&d.kind, &d.value);
-            }
-            Line::Directive(d) if !d.kind.is_metadata() => {
-                render_directive_inner(d, show_diagrams, diagram_frets, diagram_orientation, html);
-            }
-            _ => {}
+    replay_chorus_body(
+        chorus_body,
+        &mut HtmlReplay {
+            transpose_offset,
+            prefer_flat,
+            fmt_state: fmt_state.clone(),
+            show_diagrams,
+            diagram_frets,
+            diagram_orientation,
+            html,
+        },
+    );
+    html.push_str("</div>\n");
+}
+
+/// [`ChorusReplay`] sink that appends the recalled chorus as HTML.
+struct HtmlReplay<'a> {
+    transpose_offset: i8,
+    prefer_flat: bool,
+    fmt_state: FormattingState,
+    show_diagrams: bool,
+    diagram_frets: usize,
+    diagram_orientation: chordsketch_chordpro::chord_diagram::Orientation,
+    html: &'a mut String,
+}
+
+impl ChorusReplay for HtmlReplay<'_> {
+    fn lyrics(&mut self, line: &LyricsLine) {
+        render_lyrics(
+            line,
+            self.transpose_offset,
+            self.prefer_flat,
+            &self.fmt_state,
+            self.html,
+        );
+    }
+
+    fn comment(&mut self, style: CommentStyle, text: &str) {
+        render_comment(style, text, self.html);
+    }
+
+    fn empty(&mut self) {
+        self.html
+            .push_str("<div class=\"empty-line\" aria-hidden=\"true\"></div>\n");
+    }
+
+    fn directive(&mut self, directive: &Directive) {
+        if directive.kind.is_font_size_color() {
+            self.fmt_state.apply(&directive.kind, &directive.value);
+        } else {
+            render_directive_inner(
+                directive,
+                self.show_diagrams,
+                self.diagram_frets,
+                self.diagram_orientation,
+                self.html,
+            );
         }
     }
-    html.push_str("</div>\n");
 }
 
 // ---------------------------------------------------------------------------
