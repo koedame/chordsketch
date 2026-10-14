@@ -11,7 +11,7 @@ license: MIT AND OFL-1.1
 contact: https://github.com/koedame/chordsketch/issues
 issues: https://github.com/koedame/chordsketch/issues
 source-code: https://github.com/koedame/chordsketch
-website: https://chordsketch.koeda.me
+website: https://koedame.github.io/chordsketch/
 base: core24
 confinement: strict
 grade: stable

@@ -1,7 +1,7 @@
 # Embed ChordPro in your Vue app
 
 `@chordsketch/vue` ships the same parser + renderer pipeline that
-powers <https://chordsketch.koeda.me> as a published Vue 3 component
+powers <https://koedame.github.io/chordsketch/> as a published Vue 3 component
 library. This page is the recipe collection for the most common
 embedding scenarios; copy-paste into a fresh Vite + Vue 3 app (or
 Nuxt, see [§Server-side rendering / Nuxt](#recipe-8-server-side-rendering-nuxt)
@@ -16,7 +16,7 @@ has no counterpart for a React recipe, that is called out in
 
 > **Try it first.** Recipes 1 and 4 — `<ChordTextarea>` and
 > `<Transpose>` — are running as an editable page at
-> <https://chordsketch.koeda.me/vue/>, built on this package. Type
+> <https://koedame.github.io/chordsketch/vue/>, built on this package. Type
 > ChordPro there and watch the engine render it before you install
 > anything ([ADR-0053](../../adr/0053-framework-demos-live-in-the-playground.md)).
 

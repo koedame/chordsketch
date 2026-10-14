@@ -145,7 +145,7 @@ need programmatic access to the warning list.
 ## Links
 
 - Project repository: <https://github.com/koedame/chordsketch>
-- Live playground: <https://chordsketch.koeda.me>
+- Live playground: <https://koedame.github.io/chordsketch/>
 - API docs: <https://docs.rs/chordsketch>
 - Issue tracker: <https://github.com/koedame/chordsketch/issues>
 

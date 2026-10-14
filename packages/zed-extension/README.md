@@ -69,7 +69,7 @@ No additional Zed settings are required.
 ## Links
 
 - [ChordSketch](https://github.com/koedame/chordsketch) — main project
-- [Playground](https://chordsketch.koeda.me) — browser-based demo
+- [Playground](https://koedame.github.io/chordsketch/) — browser-based demo
 - [Editor setup guide](https://github.com/koedame/chordsketch/blob/main/docs/editors.md) — all editors
 - [Issues](https://github.com/koedame/chordsketch/issues) — bug reports
 

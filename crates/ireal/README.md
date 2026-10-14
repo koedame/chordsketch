@@ -209,7 +209,7 @@ All constants are `pub` in `chordsketch_ireal::json`.
 ## Links
 
 - [Project repository](https://github.com/koedame/chordsketch)
-- [Playground](https://chordsketch.koeda.me)
+- [Playground](https://koedame.github.io/chordsketch/)
 - [API docs (docs.rs)](https://docs.rs/chordsketch-ireal)
 - [Issue tracker](https://github.com/koedame/chordsketch/issues)
 

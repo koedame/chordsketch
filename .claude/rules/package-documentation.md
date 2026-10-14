@@ -103,7 +103,7 @@ immediately before the note about replacing `VERSION`.
 5. **API** — table of all public functions/methods with signature and return type
 6. **Options / Configuration** — document the `RenderOptions` equivalent where
    applicable (transpose, config preset, RRJSON)
-7. **Links** — links to: main repo, playground (`https://chordsketch.koeda.me`),
+7. **Links** — links to: main repo, playground (`https://koedame.github.io/chordsketch/`),
    `docs.rs` or equivalent API docs, issue tracker
 8. **License** — one-line MIT statement
 

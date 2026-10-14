@@ -130,7 +130,7 @@ Settings live under **ChordSketch** in Settings UI (or edit
 ## Links
 
 - Main repository: <https://github.com/koedame/chordsketch>
-- Playground (browser-hosted renderer): <https://chordsketch.koeda.me>
+- Playground (browser-hosted renderer): <https://koedame.github.io/chordsketch/>
 - Issue tracker: <https://github.com/koedame/chordsketch/issues>
 - ChordPro format specification: <https://www.chordpro.org/chordpro/>
 

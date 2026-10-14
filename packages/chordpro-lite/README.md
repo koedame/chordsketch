@@ -79,7 +79,7 @@ This is a pre-flight sniff, not a parse. Once the engine is loaded, its own `det
 ## Links
 
 - [Repository](https://github.com/koedame/chordsketch)
-- [Playground](https://chordsketch.koeda.me)
+- [Playground](https://koedame.github.io/chordsketch/)
 - [Issue tracker](https://github.com/koedame/chordsketch/issues)
 - [`@chordsketch/wasm`](https://www.npmjs.com/package/@chordsketch/wasm) — the parsing / rendering engine for browsers
 - [`@chordsketch/node`](https://www.npmjs.com/package/@chordsketch/node) — the same engine as a native Node.js addon

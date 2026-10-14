@@ -72,7 +72,7 @@ cp ../../syntaxes/language-configuration.json textmate/chordpro/
 ## Links
 
 - [ChordSketch repository](https://github.com/koedame/chordsketch)
-- [Playground](https://chordsketch.koeda.me)
+- [Playground](https://koedame.github.io/chordsketch/)
 - [Issue tracker](https://github.com/koedame/chordsketch/issues)
 
 ## Other people's names

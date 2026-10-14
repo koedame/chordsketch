@@ -147,14 +147,14 @@ new bindings and new operations as they are exposed:
   (#2050).
 - **Static-site rendering**: the canonical Markdown under
   `docs/sdk/` is also rendered by the docs site at
-  [chordsketch.koeda.me/docs](https://chordsketch.koeda.me/docs/)
+  [koedame.github.io/chordsketch/docs](https://koedame.github.io/chordsketch/docs/)
   ([ADR-0021](../adr/0021-docs-site-co-located-with-playground.md)).
   Both surfaces consume the same source — edits here propagate to
   both on the next deploy.
 - **Live demos**: each framework recipe has an editable page beside
-  the docs — [Vue](https://chordsketch.koeda.me/vue/),
-  [Svelte](https://chordsketch.koeda.me/svelte/), and the
-  [ChordPro playground](https://chordsketch.koeda.me/chordpro/) for
+  the docs — [Vue](https://koedame.github.io/chordsketch/vue/),
+  [Svelte](https://koedame.github.io/chordsketch/svelte/), and the
+  [ChordPro playground](https://koedame.github.io/chordsketch/chordpro/) for
   React ([ADR-0053](../adr/0053-framework-demos-live-in-the-playground.md)).
 
 If you find a gap, please [file an issue](https://github.com/koedame/chordsketch/issues/new).

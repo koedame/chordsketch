@@ -72,6 +72,6 @@ out of the box.
 For the full editor + preview shell, reach for
 [`<ChordProEditor>`](#/reference/playground) instead — that
 component is the same Tier 3 composition the
-[playground page](https://chordsketch.koeda.me/chordsketch/chordpro/)
+[playground page](https://koedame.github.io/chordsketch/chordpro/)
 mounts, with a built-in source editor on top of the same preview
 chrome.

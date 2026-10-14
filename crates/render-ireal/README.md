@@ -172,7 +172,7 @@ The expected SVGs live under `tests/fixtures/<name>/expected.svg`
 ## Links
 
 - [Project repository](https://github.com/koedame/chordsketch)
-- [Playground](https://chordsketch.koeda.me)
+- [Playground](https://koedame.github.io/chordsketch/)
 - [API docs (docs.rs)](https://docs.rs/chordsketch-render-ireal)
 - [Issue tracker](https://github.com/koedame/chordsketch/issues)
 

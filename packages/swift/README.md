@@ -197,7 +197,7 @@ and produces a best-effort result. Call `validate` to surface diagnostics.
 ## Links
 
 - **Project**: https://github.com/koedame/chordsketch
-- **Playground**: https://chordsketch.koeda.me
+- **Playground**: https://koedame.github.io/chordsketch/
 - **Issues**: https://github.com/koedame/chordsketch/issues
 
 ## License

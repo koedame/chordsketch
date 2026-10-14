@@ -47,7 +47,7 @@ The server communicates over stdio:
 ## Links
 
 - [ChordSketch repository](https://github.com/koedame/chordsketch)
-- [Playground](https://chordsketch.koeda.me)
+- [Playground](https://koedame.github.io/chordsketch/)
 - [Editor integration guide](../../docs/editors.md)
 - [Issue tracker](https://github.com/koedame/chordsketch/issues)
 
