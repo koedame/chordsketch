@@ -101,7 +101,8 @@ a template with no copyright holder for them.
   removes or bumps a shipped package fails CI until
   `python3 scripts/third-party-licenses.py` is run. Regenerating needs
   `cargo-about`, network access and `npm ci --ignore-scripts` in each
-  directory named in the script (about a minute).
+  directory named in the script (about a minute); `--install` runs those
+  `npm ci` commands first.
 - A dependency under a license outside `deny.toml` fails the pull request
   that adds it. Adding a license to the policy means adding it to both
   `deny.toml` and `about.toml`.
