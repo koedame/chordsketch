@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Build `THIRD_PARTY_LICENSES.md`, the third-party notice shipped with the binaries.
 
-    python3 scripts/third-party-licenses.py          regenerate the file
-    python3 scripts/third-party-licenses.py --check  fail when it is out of date
+    python3 scripts/third-party-licenses.py            regenerate the file
+    python3 scripts/third-party-licenses.py --install  `npm ci` first, then regenerate
+    python3 scripts/third-party-licenses.py --check    fail when it is out of date
 
 MIT, Apache-2.0, BSD, ISC, Unicode-3.0 and MPL-2.0 all make the same
 demand of a binary distribution: carry the copyright notice and the
@@ -37,9 +38,11 @@ so editing even this docstring means regenerating.
 
 Regenerating needs `cargo-about` (`cargo install cargo-about --locked`),
 network access for `cargo fetch`, and `npm ci --ignore-scripts` in each
-directory of `NPM_SURFACES` (run it in `packages/react` first: the VS Code
+directory of `NPM_SURFACES` (in `packages/react` first: the VS Code
 extension links it and npm builds a linked package even with
-`--ignore-scripts`).
+`--ignore-scripts`). `--install` runs those `npm ci` commands, in that
+order, before it regenerates. Without it, a run that finds `node_modules`
+missing lists every directory that lacks one, with the commands, in one go.
 It also needs `pip install fonttools brotli`: an npm font package's LICENSE names
 whoever published it (fontsource copies "Google Inc." for Noto Sans JP), so the
 holder is checked against the copyright line inside the font files themselves.
@@ -103,6 +106,14 @@ NPM_SURFACES = [
     ("packages/playground", True),
     ("packages/vscode-extension", False),
 ]
+
+# Directories that are not surfaces themselves but must be installed before
+# them: the VS Code extension links `packages/react` (`file:../react`), and npm
+# builds a linked package even with `--ignore-scripts`, which fails without the
+# dependencies of react.
+NPM_PREREQUISITES = ["packages/react"]
+
+NPM_CI = ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"]
 
 # devDependencies that only build, type-check or test a bundle and are never
 # part of it. Everything else in a `dev: True` surface is treated as bundled.
@@ -415,14 +426,27 @@ def npm_license_files(directory: Path) -> list[Path]:
     ]
 
 
+def npm_install_commands(surfaces: list[str]) -> list[str]:
+    """The `npm ci` command lines for `surfaces`, with the prerequisites first."""
+    dirs = [*NPM_PREREQUISITES, *(d for d in surfaces if d not in NPM_PREREQUISITES)]
+    return [f"(cd {d} && {' '.join(NPM_CI)})" for d in dirs]
+
+
+def install_npm(run=subprocess.run) -> None:
+    for directory in [*NPM_PREREQUISITES, *(s for s, _ in NPM_SURFACES)]:
+        run(NPM_CI, check=True, cwd=ROOT / directory)
+
+
 def npm_licenses(surfaces: list[tuple[str, dict]]) -> dict:
     groups: dict = {}
     missing: list = []
+    not_installed: dict[str, int] = {}
     for surface, selection in surfaces:
         for key, entry in selection.items():
             directory = ROOT / surface / key
             if not directory.is_dir():
-                sys.exit(f"{directory} is missing; run `npm ci --ignore-scripts` in {surface}")
+                not_installed[surface] = not_installed.get(surface, 0) + 1
+                continue
             meta = json.loads((directory / "package.json").read_text(encoding="utf-8"))
             files = npm_license_files(directory)
             if not files and meta["name"] in NPM_LICENSE_FROM:
@@ -442,6 +466,15 @@ def npm_licenses(surfaces: list[tuple[str, dict]]) -> dict:
                 missing.append(f"{surface}: {meta['name']} {meta['version']}")
             for name, text in texts:
                 groups.setdefault((license_id, name, text), {})[(meta["name"], meta["version"])] = ""
+    if not_installed:
+        lines = [f"  {d}: {n} package(s) not installed" for d, n in not_installed.items()]
+        sys.exit(
+            "node_modules is missing; install every directory below, in this order "
+            "(or run this script with --install):\n"
+            + "\n".join(lines)
+            + "\n\n"
+            + "\n".join(npm_install_commands(list(not_installed)))
+        )
     if missing:
         sys.exit(
             "npm packages without a license file (add them to NPM_LICENSE_FROM):\n  "
@@ -583,14 +616,16 @@ def check() -> int:
         print(f"{OUTPUT.name} is up to date")
         return 0
     print(problem, file=sys.stderr)
-    print("Regenerate with: python3 scripts/third-party-licenses.py", file=sys.stderr)
+    print("Regenerate with: python3 scripts/third-party-licenses.py --install", file=sys.stderr)
     return 1
 
 
-def generate() -> int:
+def generate(install: bool = False) -> int:
     mismatch = policy_mismatch()
     if mismatch:
         sys.exit(mismatch)
+    if install:
+        install_npm()
     surfaces = npm_surfaces()
     npm = npm_licenses(surfaces)
     cargo = cargo_licenses()
@@ -604,6 +639,8 @@ def generate() -> int:
 if __name__ == "__main__":
     if sys.argv[1:] == ["--check"]:
         sys.exit(check())
+    if sys.argv[1:] == ["--install"]:
+        sys.exit(generate(install=True))
     if sys.argv[1:]:
         sys.exit(__doc__)
     sys.exit(generate())

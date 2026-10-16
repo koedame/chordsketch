@@ -12,9 +12,11 @@ import importlib.util
 import json
 import subprocess
 import sys
+import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -175,6 +177,62 @@ class NpmSelectionTest(unittest.TestCase):
     def test_dependency_missing_from_the_lock_file_stops_the_run(self):
         with self.assertRaises(SystemExit):
             tpl.npm_selection("app", False, {"dependencies": {"nope": "^1"}}, self.LOCK)
+
+
+class NpmInstallTest(unittest.TestCase):
+    def surfaces_without_node_modules(self):
+        entry = {"version": "1.0.0"}
+        return [(name, {"node_modules/x": entry}) for name in ("apps/desktop", "packages/playground", "packages/vscode-extension")]
+
+    def test_several_surfaces_without_node_modules_are_all_named_in_one_failure(self):
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", Path(root)):
+            with self.assertRaises(SystemExit) as raised:
+                tpl.npm_licenses(self.surfaces_without_node_modules())
+        message = str(raised.exception)
+        for surface in ("apps/desktop", "packages/playground", "packages/vscode-extension"):
+            self.assertIn(f"  {surface}: 1 package(s) not installed", message)
+
+    def test_the_failure_lists_the_install_commands_with_react_before_the_surfaces(self):
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", Path(root)):
+            with self.assertRaises(SystemExit) as raised:
+                tpl.npm_licenses(self.surfaces_without_node_modules())
+        commands = [l for l in str(raised.exception).splitlines() if l.startswith("(cd ")]
+        self.assertEqual(
+            [c.split()[1] for c in commands],
+            ["packages/react", "apps/desktop", "packages/playground", "packages/vscode-extension"],
+        )
+        self.assertTrue(all("npm ci --ignore-scripts" in c for c in commands))
+
+    def test_only_the_surfaces_that_lack_node_modules_are_listed(self):
+        surfaces = self.surfaces_without_node_modules()
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", Path(root)):
+            package = Path(root) / "apps/desktop/node_modules/x"
+            package.mkdir(parents=True)
+            (package / "package.json").write_text('{"name": "x", "version": "1.0.0", "license": "MIT", "author": "A"}')
+            with self.assertRaises(SystemExit) as raised:
+                tpl.npm_licenses(surfaces)
+        message = str(raised.exception)
+        self.assertNotIn("apps/desktop", message)
+        self.assertIn("packages/playground", message)
+
+    def test_install_runs_npm_ci_without_install_scripts_in_react_first_then_in_each_surface(self):
+        calls = []
+        with mock.patch.object(tpl, "ROOT", Path("/repo")):
+            tpl.install_npm(run=lambda cmd, **kw: calls.append((cmd, kw["cwd"])))
+        self.assertEqual(
+            [str(cwd) for _, cwd in calls],
+            ["/repo/packages/react", "/repo/apps/desktop", "/repo/packages/playground", "/repo/packages/vscode-extension"],
+        )
+        self.assertTrue(all("ci" in cmd and "--ignore-scripts" in cmd for cmd, _ in calls))
+
+    def test_install_does_not_combine_with_check(self):
+        for flags in (["--install", "--check"], ["--check", "--install"]):
+            result = subprocess.run(
+                [sys.executable, str(SCRIPTS_DIR / "third-party-licenses.py"), *flags],
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--install", result.stderr)
 
 
 class ToolingTest(unittest.TestCase):
