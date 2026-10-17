@@ -24,4 +24,20 @@
 # waiting on an upstream release gets weeks, not a year.
 
 [advisories]
-ignore = []
+ignore = [
+    # why: zip 4.6.1 is pulled in only by tauri-plugin-updater (Windows-only
+    # `zip` feature, `ZipArchive::extract` on the downloaded update bundle).
+    # The latest stable plugin (2.14.0) still requires zip ^4 and no release
+    # moves to zip >=9, so there is nothing to upgrade to yet. The archive is
+    # minisign-verified against the app's pinned public key before it is
+    # extracted, so only an archive signed by the release key reaches the
+    # vulnerable path.
+    # review-by: 2026-10-31
+    "RUSTSEC-2026-0367",
+    # why: same zip 4.6.1 / tauri-plugin-updater path as RUSTSEC-2026-0367.
+    # review-by: 2026-10-31
+    "RUSTSEC-2026-0368",
+    # why: same zip 4.6.1 / tauri-plugin-updater path as RUSTSEC-2026-0367.
+    # review-by: 2026-10-31
+    "RUSTSEC-2026-0369",
+]
