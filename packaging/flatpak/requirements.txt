@@ -1,4 +1,4 @@
 # What flatpak-builder-tools needs to run prepare.py.
 aiohttp==3.14.5
 PyYAML==6.0.3
-tomlkit==0.15.1
+tomlkit==0.15.2
