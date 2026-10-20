@@ -49,3 +49,15 @@ updates:
     groups:
       cargo-minor-patch:
         update-types: ["minor", "patch"]
+
+  # `packaging/flatpak/requirements.txt` pins the packages the Flatpak source
+  # generators run on. It is not a lockfile of the shipped app, but the weekly
+  # dependency audit fails on any advisory against it, so its pins have to
+  # follow upstream releases like the other ecosystems do.
+  - package-ecosystem: "pip"
+    directory: "/packaging/flatpak"
+    schedule:
+      interval: "weekly"
+    groups:
+      pip-minor-patch:
+        update-types: ["minor", "patch"]
