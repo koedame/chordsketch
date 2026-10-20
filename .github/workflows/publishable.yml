@@ -370,7 +370,7 @@ jobs:
       - name: Stage with the release staging script
         run: packages/ruby/scripts/stage-native-libs.sh native-artifacts
 
-      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1
+      - uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1
         with:
           ruby-version: "3.3"
 
@@ -419,7 +419,7 @@ jobs:
       - name: Stage with the release staging script
         run: packages/kotlin/scripts/stage-jni-libs.sh jni-artifacts
 
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           java-version: "17"
           distribution: "temurin"
@@ -456,7 +456,7 @@ jobs:
           toolchain: stable
 
       - name: Install cross
-        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2
         with:
           tool: cross
 
@@ -504,7 +504,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: Homebrew/actions/setup-homebrew@e99025eb970cfa124b8284a35463d87426917478 # master
+      - uses: Homebrew/actions/setup-homebrew@eb02c69dbabdb66ff183c614f4ce7ab3c077592c # master
 
       - name: Generate, audit and style-check
         run: python3 scripts/check-publishable.py homebrew
@@ -559,7 +559,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           java-version: "17"
           distribution: "temurin"
