@@ -70,7 +70,7 @@
     "svelte-check": "^4.1.4",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "sideEffects": [
     "./dist/styles.css"
