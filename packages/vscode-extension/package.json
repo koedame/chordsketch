@@ -175,7 +175,8 @@
     "ovsx": {
       "@vscode/vsce": "$@vscode/vsce"
     },
-    "serialize-javascript": "^7.1.2",
+    "serialize-javascript": "^7.1.3",
+    "@azure/msal-node": "^7.1.0",
     "mocha": {
       "diff": "^8.0.4"
     }
