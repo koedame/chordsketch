@@ -14,7 +14,7 @@ PortSystem          1.0
 PortGroup           github 1.0
 PortGroup           cargo 1.0
 
-github.setup        koedame chordsketch 0.8.0 v
+github.setup        koedame chordsketch 0.9.0 v
 # The `github` portgroup defaults `tarball_from` to `releases`, which
 # looks for a release asset literally named
 # `chordsketch-${version}.tar.gz`. This project's releases carry
@@ -99,6 +99,7 @@ cargo.crates \
     blocking                         1.6.2  e83f8d02be6967315521be875afa792a316e28d57b5a2d401897e2a7921b7f21 \
     brotli                           8.0.2  4bd8b9603c7aa97359dbd97ecf258968c95f3adddd6db2f7e7a5bef101c84560 \
     brotli-decompressor              5.0.0  874bb8112abecc98cbd6d81ea4fa7e94fb9449648c93cc89aa40c81c24d7de03 \
+    bs58                             0.5.1  bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4 \
     bstr                            1.12.1  63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab \
     bumpalo                         3.20.2  5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb \
     bytemuck                        1.25.0  c8efb64bd706a16a1bdde310ae86b351e4d21550d98d056f22f8a7f7a2183fec \
@@ -156,11 +157,11 @@ cargo.crates \
     ctor                             0.8.0  352d39c2f7bef1d6ad73db6f5160efcaed66d94ef8c6c573a8410c00bf909a98 \
     ctor                            1.0.13  914a755b7c2d4af2bdcff7ce1739e2db9a1b81a9b07123d8015786ae03c0980d \
     ctor-proc-macro                  0.0.7  52560adf09603e58c9a7ee1fe1dcb95a16927b17c127f0ac02d6e768a0e25bc1 \
-    darling                         0.21.3  9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0 \
+    darling                         0.23.0  25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d \
     darling                         0.24.1  ed17f5901b6630b993ca003def43f2f8ef4014fc13b047b57aad617ff32bc2ec \
-    darling_core                    0.21.3  1247195ecd7e3c85f83c8d2a366e4210d588e802133e1e355180a9870b517ea4 \
+    darling_core                    0.23.0  9865a50f7c335f53564bb694ef660825eb8610e0a53d3e11bf1b0d3df31e03b0 \
     darling_core                    0.24.1  6837e2cf7485aaae18f86181d2f0e9a7ed297a025e220aeabf63fdebd3a2ddff \
-    darling_macro                   0.21.3  d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81 \
+    darling_macro                   0.23.0  ac3984ec7bd6cfa798e62b4a642426a5be0e68f9401cfc2a01e3fa9ea2fcdb8d \
     darling_macro                   0.24.1  2ac7135c3ef02b2f7833bbeb1be5ba7f966dcde8a87c6b87f65a778d71a02785 \
     dashmap                          5.5.3  978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856 \
     data-url                         0.3.2  be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376 \
@@ -317,7 +318,7 @@ cargo.crates \
     leb128fmt                        0.1.0  09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2 \
     libappindicator                  0.9.0  03589b9607c868cc7ae54c0b2a22c8dc03dd41692d48f2d7df73615c6a95dc0a \
     libappindicator-sys              0.9.0  6e9ec52138abedcc58dc17a7c6c0c00a2bdb4f3427c7f63fa97fd0d859155caf \
-    libc                           0.2.189  3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2 \
+    libc                           0.2.191  65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a \
     libdbus-sys                      0.2.7  328c4789d42200f1eeec05bd86c9c13c7f091d2ba9a6ea35acdf51f31bc0f043 \
     libloading                       0.7.4  b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f \
     libloading                       0.9.0  754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60 \
@@ -349,11 +350,11 @@ cargo.crates \
     mio                              1.2.0  50b7e5b27aa02a74bac8c3f23f448f8d87ff11f92d3aac1a6ed369ee08cc56c1 \
     moxcms                          0.7.11  ac9557c559cd6fc9867e122e20d2cbefc9ca29d80d027a8e39310920ed2f0a97 \
     muda                            0.19.1  0ae8844f63b5b118e334e205585b8c5c17b984121dbdb179d44aeb087ffad3cb \
-    napi                            3.12.7  b7d3c1107f2fda46a7bd2676d65221b7b8160054494b38554b0e055c731714db \
-    napi-build                       2.5.0  0941983559cd62bfa7f04646a16428967a847365adeef27711e4e3927046bbed \
-    napi-derive                      3.6.9  6b1d232c24dc6754979b27efdf2047a5849efc7c92c1245de87e6bedbb9f5c3c \
-    napi-derive-backend              6.1.4  fd6856fe1686867da90ed0dc292d7c0c87a695eb7c578b913360f33619ee01e3 \
-    napi-sys                         3.3.2  6801fc65ba4d7035636e93635e281113f00410401a237dcd4f55b1565ead2115 \
+    napi                            3.14.2  a4e2cf85c02d9b057898c485b824c3c416b65193689e2b7f517efc94b86ed24c \
+    napi-build                       2.6.0  b899b545d3aa6dca985939059f258c5488d34e4ecf39c274e20009748f4b846d \
+    napi-derive                     3.6.12  92cec6048ac04041ac8055bdce1ec4f353416cd443ba9222bf73af790c3d4495 \
+    napi-derive-backend              6.1.5  fae2444f4ba7333754bb73414ff8059dec2cb23b83a95bd1a0bf08169eed1be0 \
+    napi-sys                         3.4.0  e22a4f25c16a5c5411d987cd6fbd48313522ae1789ade2d6dd3efdc6d40a0fc8 \
     ndk                              0.9.0  c3f42e7bbe13d351b6bead8286a43aac9534b82bd3cc43e47037f012ebfd62d4 \
     ndk-sys                       0.6.0+11769913  ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873 \
     new_debug_unreachable            1.0.6  650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086 \
@@ -480,18 +481,18 @@ cargo.crates \
     rfd                             0.16.0  a15ad77d9e70a92437d8f74c35d99b4e4691128df018833e99f90bcd36152672 \
     rgb                             0.8.53  47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4 \
     ring                           0.17.14  a4689e6c2294d81e88dc6261c768b63bc4fcdb852be6d1352498b114f61383b7 \
-    rmcp                             3.4.1  5b6317cd8c13e3ec9033cf2aa5aa92cd743f0f4f8a93cddc42ea0ae6ce3b8898 \
-    rmcp-macros                      3.4.1  d2ee366004e5f87c103be91c6c09337811517ae8d2f919ece9da7c21444b85c5 \
+    rmcp                             3.5.1  ab5023804cbe0304cbe06197ac16e645a0a0d0ffa2953bf735c15c2fa0213350 \
+    rmcp-macros                      3.5.1  a1da498700030856ba63114bceefa30ba21f5e278cb975e5b9de3529fe842b40 \
     roxmltree                       0.20.0  6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97 \
     rustc-hash                       2.1.2  94300abf3f1ae2e2b8ffb7b58043de3d399c73fa6f4b73826402a5c457614dbe \
     rustc_version                    0.4.1  cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92 \
     rustix                           1.1.4  b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190 \
-    rustls                         0.23.45  0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634 \
+    rustls                         0.23.46  48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf \
     rustls-native-certs              0.8.3  612460d5f7bea540c490b2b6395d8e34a953e52b491accd6c86c8164c5932a63 \
     rustls-pki-types                1.14.0  be040f8b0a225e40375822a563fa9524378b9d63112f53e19ffff34df5d33fdd \
     rustls-platform-verifier         0.6.2  1d99feebc72bae7ab76ba994bb5e121b8d83d910ca40b36e0921f53becc41784 \
     rustls-platform-verifier-android     0.1.1  f87165f0995f63a9fbeea62b64d10b4d9d8e78ec6d7d51fb2125fda7bb36788f \
-    rustls-webpki                 0.103.15  f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2 \
+    rustls-webpki                 0.103.16  4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281 \
     rustversion                     1.0.22  b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d \
     rustybuzz                       0.20.1  fd3c7c96f8a08ee34eff8857b11b49b07d71d1c3f4e88f8a88d4c9e9f90b1702 \
     ryu                             1.0.23  9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f \
@@ -499,9 +500,9 @@ cargo.crates \
     schannel                        0.1.29  91c1b7e4904c873ef0710c1f407dde2e6287de2bebc1bbbf7d430bb7cbffd939 \
     schemars                        0.8.22  3fbf2ae1b8bc8e02df939598064d22402220cd5bbcca1c76f7d6a310974d5615 \
     schemars                         0.9.0  4cd191f9397d57d581cddd31014772520aa448f65ef991055d7f61582c65165f \
-    schemars                         1.2.2  687274d293b6cdc6e73e0fee520bf2049650090d7164f87672d212a3c530cf4a \
+    schemars                         1.2.3  ab508826f74a77ca9d5aba6ff19b522583ee3eaf28a19384ff3d0e5835fadf6e \
     schemars_derive                 0.8.22  32e265784ad618884abaea0600a9adf15393368d840e0222d101a072f3f7534d \
-    schemars_derive                  1.2.2  d98c67716b46af2f0b8cf752abc930f6f9aecfbf671ecfb531db8a31dbe4e2ba \
+    schemars_derive                  1.2.3  e1c3a92094fa7d61aa124645844facb6b554dfc797136d0f5fd1f890e2bffc69 \
     scopeguard                       1.2.0  94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49 \
     scroll                          0.12.0  6ab8598aa408498679922eff7fa985c25d58a90771bd6be794434c5277eab1a6 \
     scroll_derive                   0.12.1  1783eabc414609e28a5ba76aee5ddd52199f7107a0b24c2e9746a1ecc34a683d \
@@ -517,12 +518,12 @@ cargo.crates \
     serde_derive                   1.0.229  e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348 \
     serde_derive_internals          0.29.1  18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711 \
     serde_derive_internals          0.30.0  f852137cce035d6a4df67ccce505ff6b3e9fd3a10e3e52b24dc71e650bb1a9bd \
-    serde_json                     1.0.151  c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14 \
+    serde_json                     1.0.154  e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6 \
     serde_repr                      0.1.20  175ee3e80ae9982737ca543e96133087cbd9a485eecc3bc4de9c1a37b47ea59c \
     serde_spanned                    0.6.9  bf41e0cfaf7226dca15e8197172c295a782857fcb97fad1808a166870dee75a3 \
     serde_spanned                    1.1.1  6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26 \
-    serde_with                      3.17.0  381b283ce7bc6b476d903296fb59d0d36633652b633b27f64db4fb46dcbfc3b9 \
-    serde_with_macros               3.17.0  a6d4e30573c8cb306ed6ab1dca8423eec9a463ea0e155f45399455e0368b27e0 \
+    serde_with                      3.21.0  76a5c54c7310e7b8b9577c286d7e399ddd876c3e12b3ed917a8aabc4b96e9e8c \
+    serde_with_macros               3.21.0  84d57bc0c8b9a17920c178daa6bb924850d54a9c97ab45194bb8c17ad66bb660 \
     serialize-to-javascript          0.1.2  04f3666a07a197cdb77cdf306c32be9b7f598d7060d50cfd4d5aa04bfd92f6c5 \
     serialize-to-javascript-impl     0.1.2  772ee033c0916d670af7860b6e1ef7d658a4629a6d0b4c8c3e67f09b3765b75d \
     servo_arc                        0.2.0  d52aa42f8fdf0fed91e5ce7f23d8138441002fa31dca008acf47e6fd4721f741 \
@@ -568,7 +569,7 @@ cargo.crates \
     system-deps                      6.2.2  a3e535eb8dded36d55ec13eddacd30dec501792ff23a0b1682c38601b8cf2349 \
     tao                             0.35.0  1cf65722394c2ac443e80120064987f8914ee1d4e4e36e63cdf10f2990f01159 \
     tao-macros                       0.1.3  f4e16beb8b2ac17db28eab8bca40e62dbfbb34c0fcdc6d9826b11b7b5d047dfd \
-    tar                             0.4.45  22692a6476a21fa75fdfc11d452fda482af402c008cdbaf3476414e122040973 \
+    tar                             0.4.46  3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840 \
     target-lexicon                 0.12.16  61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1 \
     tauri                           2.11.6  6fa5bacdb9bbad5954af3d1bd6cf6ae9192cab1b2e270f4a07f904610b9e85f4 \
     tauri-build                      2.6.3  bc9ce40b16101cb6ea63d3e221567affd1c3a9205f95d7bc574941a10636b632 \
@@ -602,7 +603,7 @@ cargo.crates \
     tinystr                          0.8.3  c8323304221c2a851516f22236c5722a72eaa19749016521d6dff0824447d96d \
     tinyvec                         1.11.0  3e61e67053d25a4e82c844e8424039d9745781b3fc4f32b8d55ed50f5f667ef3 \
     tinyvec_macros                   0.1.1  1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20 \
-    tokio                           1.53.1  202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed \
+    tokio                           1.53.3  ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e \
     tokio-macros                     2.7.0  385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496 \
     tokio-rustls                    0.26.4  1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61 \
     tokio-stream                    0.1.19  a3d06f0b082ba57c26b79407372e57cf2a1e28124f78e9479fe80322cf53420b \
@@ -699,7 +700,7 @@ cargo.crates \
     web_atoms                        0.2.4  d7cff6eef815df1834fd250e3a2ff436044d82a9f1bc1980ca1dbdf07effc538 \
     webkit2gtk                       2.0.2  a1027150013530fb2eaf806408df88461ae4815a45c541c8975e61d6f2fc4793 \
     webkit2gtk-sys                   2.0.2  916a5f65c2ef0dfe12fff695960a2ec3d4565359fdbb2e9943c974e06c734ea5 \
-    webpki-root-certs                1.0.7  f31141ce3fc3e300ae89b78c0dd67f9708061d1d2eda54b8209346fd6be9a92c \
+    webpki-root-certs               1.0.10  58ec80e73fd8baf57bf0d9615554c75348bda990d6d5bbeab964dd068319fecb \
     webview2-com                    0.38.2  7130243a7a5b33c54a444e54842e6a9e133de08b5ad7b5861cd8ed9a6a5bc96a \
     webview2-com-macros              0.8.1  67a921c1b6914c367b2b823cd4cde6f96beec77d30a939c8199bb377cf9b9b54 \
     webview2-com-sys                0.38.2  381336cfffd772377d291702245447a5251a2ffa5bad679c99e61bc48bacbf9c \
@@ -713,7 +714,6 @@ cargo.crates \
     windows                         0.61.3  9babd3a767a4c1aef6900409f85f5d53ce2544ccdfaa86dad48c91782c6d6893 \
     windows-collections              0.2.0  3beeceb5e5cfd9eb1d76b381630e82c4241ccd0d27f1a39ed41b2760b255c5e8 \
     windows-core                    0.61.2  c0fdd3ddb90610c7638aa2b3a3ab2904fb9e5cdbecc643ddb3647212781c4ae3 \
-    windows-core                    0.62.2  b8e83a14d34d0623b51dce9581199302a221863196a1dde71a7663a4c2be9deb \
     windows-future                   0.2.1  fc6a41e98427b19fe4b73c550f060b59fa592d7d686537eebf9385621bfbad8e \
     windows-implement               0.60.2  053e2e040ab57b9dc951b72c264860db7eb3b0200ba345b4e4c3b14f67855ddf \
     windows-interface               0.59.3  3f316c4a2570ba26bbec722032c4099d8c8bc095efccdc15688708623367e358 \
