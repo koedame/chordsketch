@@ -1497,6 +1497,12 @@ def homebrew_problems(version: str, runner: Runner = run) -> list[str]:
             problems += [f"{label} has no `{field}`" for field in required if not formula_declares(text, field)]
             (tap / folder).mkdir(parents=True, exist_ok=True)
             (tap / folder / filename).write_text(text)
+            # Homebrew 6 refuses to load anything from a tap it has not been told to trust.
+            # Trust only this scratch tap's one item (https://docs.brew.sh/Tap-Trust).
+            trusted = runner(["brew", "trust", f"--{kind}", f"publish-check/local/{package}"], REPO_ROOT, env)
+            if trusted.returncode != 0:
+                problems.append(f"`brew trust` refuses the {kind}:\n{tail(trusted.stdout)}")
+                continue
             for command in (["brew", "audit", "--strict", f"--{kind}"], ["brew", "style", f"--{kind}"]):
                 checked = runner([*command, f"publish-check/local/{package}"], REPO_ROOT, env)
                 if checked.returncode != 0:
