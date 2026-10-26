@@ -329,15 +329,16 @@ export function slugifyWithCounter(text, counters) {
   counters.set(base, count + 1);
   return count === 0 ? base : `${base}-${count}`;
 }
+const HTML_ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" };
 function plainText(html) {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim();
+  // Strip until stable so `<<b>b>` cannot reassemble a tag after one pass.
+  let stripped = html;
+  for (let previous = null; previous !== stripped; ) {
+    previous = stripped;
+    stripped = stripped.replace(/<[^>]+>/g, '');
+  }
+  // One pass, so `&amp;lt;` decodes to `&lt;` rather than to `<`.
+  return stripped.replace(/&(?:amp|lt|gt|quot|#39);/g, (entity) => HTML_ENTITIES[entity]).trim();
 }
 function escapeAttribute(value) {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');

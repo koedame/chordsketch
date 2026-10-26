@@ -3755,6 +3755,9 @@ describe('renderChordproAst', () => {
     ['0x10', ''],
     [' 12 ', ''],
     ['inf', '200pt'],
+    ['7.', '7pt'],
+    ['.5', '0.5pt'],
+    ['1e1', '10pt'],
   ])('font-size directive %s renders as %j (fractional gets pt, non-numeric ignored)', (value, expected) => {
     const { container } = render(
       renderChordproAst({
@@ -3778,6 +3781,33 @@ describe('renderChordproAst', () => {
     );
     const lyrics = container.querySelector('.lyrics') as HTMLElement | null;
     expect(lyrics?.style.fontSize ?? '').toBe(expected);
+  });
+
+  test('font-size directive with a very long digit run is rejected quickly', () => {
+    const start = performance.now();
+    const { container } = render(
+      renderChordproAst({
+        metadata: EMPTY_META,
+        lines: [
+          {
+            kind: 'directive',
+            value: {
+              name: 'textsize',
+              value: `${'9'.repeat(100_000)}x`,
+              kind: { tag: 'textSize' },
+              selector: null,
+            },
+          },
+          {
+            kind: 'lyrics',
+            value: { segments: [{ chord: null, text: 'x', spans: [] }] },
+          },
+        ],
+      }),
+    );
+    expect(performance.now() - start).toBeLessThan(2000);
+    const lyrics = container.querySelector('.lyrics') as HTMLElement | null;
+    expect(lyrics?.style.fontSize ?? '').toBe('');
   });
 
   test('CSS-value sanitiser drops unsafe characters from directive payloads', () => {

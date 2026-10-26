@@ -3319,7 +3319,7 @@ function clampSize(raw: string | null): string | null {
   // Accept exactly what Rust's `f32::from_str` accepts (no surrounding
   // whitespace, no hex/binary literals; `inf` / `infinity` in any case).
   let n: number;
-  if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(raw)) {
+  if (/^[+-]?(\d+(?:\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw)) {
     n = Number(raw);
   } else if (/^[+-]?(inf|infinity)$/i.test(raw)) {
     n = raw.startsWith('-') ? -Infinity : Infinity;

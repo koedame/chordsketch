@@ -1,3 +1,5 @@
+import { removeSpans, spanContents } from './spans';
+
 /** One preview line: the chords on it, plus its lyric text. */
 export interface PreviewLine {
   /**
@@ -21,16 +23,6 @@ export interface PreviewOptions {
    */
   maxLyricChars?: number;
 }
-
-/**
- * Match one inline chord annotation and capture its contents (`[G]` -
- * `G`). Single-line constrained for the same reason as the spans in
- * `extract-lyrics`.
- */
-const INLINE_CHORD_SPAN = /\[([^\]\n]*)\]/g;
-
-/** Match a whole directive (`{title: X}`, `{soc}`). */
-const DIRECTIVE_SPAN = /\{[^}\n]*\}/g;
 
 /** Collapse any run of intra-line whitespace left behind by span removal. */
 const INNER_WHITESPACE = /[^\S\n]+/g;
@@ -106,22 +98,13 @@ export function extractPreview(source: string, options: PreviewOptions = {}): Pr
   const lines: PreviewLine[] = [];
   for (const rawLine of source.split('\n')) {
     const chords: string[] = [];
-    // `matchAll` starts a fresh iteration per line. `.exec` on a shared
-    // global regex would carry `lastIndex` across lines and silently
-    // skip matches.
-    for (const match of rawLine.matchAll(INLINE_CHORD_SPAN)) {
-      // `?? ''` rather than an assertion: group 1 is non-optional, so a
-      // match always carries it, but `noUncheckedIndexedAccess` types
-      // the access as possibly-undefined and the empty string is the
-      // honest fallback - it is what an empty `[]` yields, which the
-      // guard below drops.
-      const symbol = (match[1] ?? '').trim();
+    // Spans are matched within one line, as in `extract-lyrics`.
+    for (const contents of spanContents(rawLine, '[', ']')) {
+      const symbol = contents.trim();
       // Skip `[]` and `[ ]`: an annotation with no symbol is not a chord.
       if (symbol !== '' && chords.length < maxChordsPerLine) chords.push(symbol);
     }
-    const lyric = rawLine
-      .replace(INLINE_CHORD_SPAN, '')
-      .replace(DIRECTIVE_SPAN, '')
+    const lyric = removeSpans(removeSpans(rawLine, '[', ']'), '{', '}')
       .replace(INNER_WHITESPACE, ' ')
       .trim();
     if (chords.length === 0 && lyric === '') continue;

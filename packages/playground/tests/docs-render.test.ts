@@ -137,6 +137,13 @@ describe('slug parity with extractOutline', () => {
   });
 });
 
+describe('heading ids decode entities once', () => {
+  it('keeps a literal `&lt;` typed in a heading from becoming `<`', () => {
+    const html = renderMarkdown('## Use &amp;lt; here\n', 'docs/a.md');
+    expect(html).toContain('id="use-lt-here"');
+  });
+});
+
 describe('slugify primitives', () => {
   it('lowercases, strips non-alphanumeric, and collapses whitespace', () => {
     expect(slugify('  Hello, World!  ')).toBe('hello-world');
@@ -865,7 +872,7 @@ describe('renderMarkdown code-fence integration', () => {
         'docs/sdk/README.md',
       );
       expect(html, decl).toMatch(
-        new RegExp(`<span[^>]*style="${decl.replace('#', '#')}"`, 'i'),
+        new RegExp(`<span[^>]*style="${decl}"`, 'i'),
       );
     }
   });

@@ -37,14 +37,28 @@ const DIRECTIVE_PATTERN = new RegExp(
 );
 
 /**
- * An inline chord annotation (`[G]`, `[Cmaj7/E]`).
+ * Whether `input` holds an inline chord annotation (`[G]`, `[Cmaj7/E]`).
  *
  * The chord must start with `A`-`G`, which rejects a markdown-style
- * `[invalid]` and a plain-text section label such as `[Verse]`. The
- * character class excludes newlines so an unbalanced `]` several lines
- * later cannot make one match swallow the lines in between.
+ * `[invalid]` and a plain-text section label such as `[Verse]`. Each line
+ * is scanned on its own so an unbalanced `]` several lines later cannot
+ * make one match swallow the lines in between. This is the linear-time
+ * form of `/\[[A-G][^\]\n]*\]/`, which is quadratic on a line of many
+ * unterminated `[A`: once one opener finds no `]` on its line, no later
+ * opener on that line can either.
  */
-const INLINE_CHORD_PATTERN = /\[[A-G][^\]\n]*\]/;
+function hasInlineChord(input: string): boolean {
+  for (const line of input.split('\n')) {
+    for (let open = line.indexOf('['); open !== -1; open = line.indexOf('[', open + 1)) {
+      const first = line.charAt(open + 1);
+      if (first < 'A' || first > 'G') continue;
+      // `first` is not `]`, so the closer is searched from the next character.
+      if (line.indexOf(']', open + 2) !== -1) return true;
+      break;
+    }
+  }
+  return false;
+}
 
 /**
  * Identify which format `input` is written in, without loading a parser.
@@ -82,7 +96,7 @@ export function detectFormat(input: string): ChartFormat | null {
   if (IREAL_URL_PATTERN.test(input)) {
     return 'irealb';
   }
-  if (DIRECTIVE_PATTERN.test(input) || INLINE_CHORD_PATTERN.test(input)) {
+  if (DIRECTIVE_PATTERN.test(input) || hasInlineChord(input)) {
     return 'chordpro';
   }
   return null;
