@@ -1,6 +1,6 @@
-// URI-scheme denylist mirrors `crates/render-html`'s
-// `has_dangerous_uri_scheme` and the React JSX walker's
-// `isSafeHref` — sister-site parity per
+// URI-scheme denylist mirrors the React JSX walker's
+// `isSafeHref` and agrees with `crates/render-html`'s `svg_sanitize.rs`
+// on the shared corpus — sister-site parity per
 // `.claude/rules/sanitizer-security.md` + `.claude/rules/fix-propagation.md`.
 // Any addition or removal MUST land in all three sites in the same PR.
 
@@ -280,10 +280,47 @@ function isUnicodeNonAsciiWhitespace(c) {
     c === 0x3000
   );
 }
+// Character references that a browser decodes inside an attribute value
+// before it reads the URL, and which can therefore spell part of a
+// scheme. Numeric references (with or without the closing `;`) are
+// decoded for every code point; of the named ones only those that stand
+// for a character a URL parser ignores (tab, newline), the colon, and
+// the five predefined names are listed. A reference outside the list is
+// left as written.
+const NAMED_CHAR_REFS = {
+  Tab: '\t',
+  NewLine: '\n',
+  colon: ':',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+function decodeCharRefs(value) {
+  // One pass, so `&amp;lt;` decodes to the text `&lt;`, as in a browser.
+  return value.replace(
+    /&(?:#[xX]([0-9A-Fa-f]+);?|#([0-9]+);?|([A-Za-z][A-Za-z0-9]*);)/g,
+    (match, hex, dec, name) => {
+      if (name !== undefined) {
+        return Object.prototype.hasOwnProperty.call(NAMED_CHAR_REFS, name)
+          ? NAMED_CHAR_REFS[name]
+          : match;
+      }
+      const code = hex !== undefined ? parseInt(hex, 16) : parseInt(dec, 10);
+      // Out-of-range and surrogate references become U+FFFD in a browser.
+      return code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
+        ? '\ufffd'
+        : String.fromCodePoint(code);
+    },
+  );
+}
+
 function normalizeUriForCheck(href) {
   const out = [];
   let started = false;
-  for (const ch of href) {
+  for (const ch of decodeCharRefs(href)) {
     if (out.length >= 30) break;
     const code = ch.codePointAt(0);
     if (!started) {

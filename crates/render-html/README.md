@@ -28,8 +28,9 @@ let html = render_song(&song);
 - Metadata display (title, subtitle, artist)
 - Section styling
 - HTML escaping for user-provided text content (note: delegate
-  environments such as `{start_of_svg}` emit raw HTML by design;
-  use a Content Security Policy when rendering untrusted input)
+  environments such as `{start_of_svg}` embed SVG markup, which is rewritten
+  through an allowlist of SVG elements and attributes; use a Content Security
+  Policy when rendering untrusted input)
 
 ## Links
 

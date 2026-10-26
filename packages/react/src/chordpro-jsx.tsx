@@ -17,10 +17,10 @@
 // emitter for the CLI / FFI / GitHub Action surfaces.
 //
 // Sanitizer parity is enforced via `isSafeHref` below — the
-// same URI-scheme blocklist used by
-// `crates/render-html/src/lib.rs::has_dangerous_uri_scheme`
+// same URI-scheme blocklist the other surfaces are checked against
+// through the shared corpus `tests/fixtures/uri-scheme-corpus.txt`
 // (`javascript:`, `vbscript:`, `data:`, `file:`, `blob:`).
-// Any new scheme added in the Rust list MUST land in
+// Any new scheme added there MUST land in
 // `DANGEROUS_URI_SCHEMES` here in the same PR per
 // `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
 
@@ -95,8 +95,9 @@ import type { ChordRepositionEvent } from './chord-source-edit';
 
 // ---- Sanitiser helpers --------------------------------------------
 
-// Sister-site list to `crates/render-html/src/lib.rs::has_dangerous_uri_scheme`'s
-// scheme set. Any new entry MUST land in both lists in the same PR
+// Sister-site list to the playground docs pipeline's scheme set; the Rust
+// renderer keeps only fragment references (`svg_sanitize.rs`). Any new entry
+// MUST land in both lists in the same PR
 // per `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
 //
 // - `javascript:` / `vbscript:` — code execution
@@ -174,12 +175,57 @@ function isUnicodeNonAsciiWhitespace(code: number): boolean {
 }
 
 /**
+ * Character references that a browser decodes inside an attribute value
+ * before it reads the URL, and which can therefore spell part of a
+ * scheme. Numeric references (with or without the closing `;`) are
+ * decoded for every code point; of the named ones only those that stand
+ * for a character a URL parser ignores (tab, newline), the colon, and
+ * the five predefined names are listed. A reference outside the list is
+ * left as written.
+ */
+const NAMED_CHAR_REFS: Record<string, string> = {
+  Tab: '\t',
+  NewLine: '\n',
+  colon: ':',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+function decodeCharRefs(value: string): string {
+  // One pass, so `&amp;lt;` decodes to the text `&lt;`, as in a browser.
+  return value.replace(
+    /&(?:#[xX]([0-9A-Fa-f]+);?|#([0-9]+);?|([A-Za-z][A-Za-z0-9]*);)/g,
+    (
+      match: string,
+      hex: string | undefined,
+      dec: string | undefined,
+      name: string | undefined,
+    ): string => {
+      if (name !== undefined) {
+        return Object.prototype.hasOwnProperty.call(NAMED_CHAR_REFS, name)
+          ? NAMED_CHAR_REFS[name]
+          : match;
+      }
+      const code = hex !== undefined ? parseInt(hex, 16) : parseInt(dec as string, 10);
+      // Out-of-range and surrogate references become U+FFFD in a browser.
+      return code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
+        ? '\ufffd'
+        : String.fromCodePoint(code);
+    },
+  );
+}
+
+/**
  * Returns true when `href` is safe to embed in an `href` / `src`
  * attribute.
  *
- * Mirrors `has_dangerous_uri_scheme` in
- * `crates/render-html/src/lib.rs` byte for byte:
+ * Agrees with the Rust check in `crates/render-html/src/svg_sanitize.rs`
+ * on the shared corpus (`tests/fixtures/uri-scheme-corpus.txt`):
  *
+ *   0. Decode character references (see `decodeCharRefs`).
  *   1. Trim leading whitespace (full Unicode `White_Space` set,
  *      matching `str::trim_start`).
  *   2. Drop every embedded ASCII whitespace, ASCII control, and
@@ -204,7 +250,7 @@ function isUnicodeNonAsciiWhitespace(code: number): boolean {
 function isSafeHref(href: string): boolean {
   const out: string[] = [];
   let started = false;
-  for (const ch of href) {
+  for (const ch of decodeCharRefs(href)) {
     if (out.length >= 30) break;
     const code = ch.codePointAt(0)!;
     if (!started) {
