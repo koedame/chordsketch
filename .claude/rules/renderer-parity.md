@@ -88,8 +88,9 @@ When adding or changing validation in one surface:
 
 The React JSX walker at `packages/react/src/chordpro-jsx.tsx`
 duplicates the URI-scheme blocklist enforced by
-`crates/render-html/src/lib.rs::has_dangerous_uri_scheme` /
-`is_safe_image_src`. The walker's `DANGEROUS_URI_SCHEMES` array
+`crates/render-html/src/svg_sanitize.rs` (which keeps only fragment
+references) and `is_safe_image_src`; both are checked against
+`tests/fixtures/uri-scheme-corpus.txt`. The walker's `DANGEROUS_URI_SCHEMES` array
 and the Rust list MUST stay in lockstep — see
 `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
 

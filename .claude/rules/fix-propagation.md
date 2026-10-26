@@ -30,7 +30,8 @@ renderers, not an alternate entry point into one of them):
   drops the directive from the React preview
 - Error handling and warning paths
 - URI sanitisation (`isSafeHref` in the walker mirrors
-  `has_dangerous_uri_scheme` in `chordsketch-render-html`)
+  the fragment-only `href` check in `chordsketch-render-html`'s `svg_sanitize.rs`;
+  both read `tests/fixtures/uri-scheme-corpus.txt`)
 
 ### Bindings (FFI / WASM / NAPI)
 `crates/ffi/src/lib.rs`, `crates/wasm/src/lib.rs`, `crates/napi/src/lib.rs`
@@ -49,8 +50,8 @@ applied to all (e.g., `O_EXCL` temp file creation, RAII cleanup, JavaScript/scri
 stripping for user-supplied notation content).
 
 ### Sanitizer functions and blocklists
-`has_dangerous_uri_scheme`, `is_uri_attr`, `DANGEROUS_TAGS`, `is_safe_image_src`
-in `crates/render-html/src/lib.rs`; `sanitize_directive_token` in `crates/chordpro/`
+`ALLOWED_ELEMENTS`, `SKIP_SUBTREE`, `ALLOWED_ATTRS` and the `href` / `style` checks in
+`crates/render-html/src/svg_sanitize.rs`; `is_safe_image_src` in `crates/chordpro/`; `sanitize_directive_token` in `crates/chordpro/`
 
 Any addition to one URI-scheme denylist, tag blocklist, or attribute allowlist MUST be
 cross-checked against all sibling lists for the same class of risk.
