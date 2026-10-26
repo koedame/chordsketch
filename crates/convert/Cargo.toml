@@ -1,6 +1,6 @@
 [package]
 name = "chordsketch-convert"
-version = "0.8.0"
+version = "0.9.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -13,7 +13,7 @@ description = "ChordPro ↔ iReal Pro format-conversion bridge (trait scaffold)"
 readme = "README.md"
 
 [dependencies]
-chordsketch-chordpro = { version = "0.8.0", path = "../chordpro" }
-chordsketch-ireal = { version = "0.8.0", path = "../ireal" }
+chordsketch-chordpro = { version = "0.9.0", path = "../chordpro" }
+chordsketch-ireal = { version = "0.9.0", path = "../ireal" }
 # `strings::irealb_to_chordpro_text` renders the converted song as text.
-chordsketch-render-text = { version = "0.8.0", path = "../render-text" }
+chordsketch-render-text = { version = "0.9.0", path = "../render-text" }
