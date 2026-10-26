@@ -78,15 +78,21 @@ Multiple defense layers are applied:
 
 ### SVG Sanitization
 
-All SVG content (from delegates or `{start_of_svg}` sections) is sanitized:
+All SVG content (from delegates or `{start_of_svg}` sections) is rewritten
+through an allowlist:
 
-- **Dangerous elements stripped**: `<script>`, `<foreignobject>`, `<iframe>`,
-  `<object>`, `<embed>`, `<math>`, `<set>`, `<animate>`, `<animatetransform>`,
-  `<animatemotion>`.
-- **Event handlers removed**: all `on*` attributes (case-insensitive).
-- **URI scheme validation**: `href`, `src`, and `xlink:href` attributes are
-  checked; `javascript:`, `vbscript:`, and `data:` schemes are blocked.
-  Whitespace obfuscation (tabs, newlines) is stripped before scheme detection.
+- **Elements**: only SVG drawing, text, gradient and `use` elements are kept.
+  `<style>`, scripts, animation elements, `<foreignobject>`, `<image>` and all
+  HTML elements (forms, images, frames, ...) are removed; elements that carry
+  code or load resources are removed together with their content.
+- **Attributes**: only SVG geometry, presentation and accessibility attributes
+  are kept. Event handlers and every other attribute are dropped.
+- **References**: `href` and `xlink:href` are kept only when they point to a
+  fragment of the same document (`#id`), and `url(...)` in paint attributes and
+  in `style` is held to the same rule. Character references are decoded before
+  the value is checked; a value with a reference that cannot be decoded cleanly
+  is dropped.
+- **`style` attribute**: only listed properties with plain values are kept.
 
 ### HTML Output
 

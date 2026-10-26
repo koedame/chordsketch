@@ -1,7 +1,9 @@
 # URI-scheme sanitiser corpus, shared by every implementation of the check.
 #
-# Three copies of the same denylist exist and must agree on every entry here:
-#   - Rust:       `has_dangerous_uri_scheme` in crates/render-html/src/lib.rs
+# Three copies of the same check exist and must agree on every entry here:
+#   - Rust:       `is_kept_reference` in crates/render-html/src/svg_sanitize.rs
+#                 (an allowlist: only a fragment reference is kept, so `allowed`
+#                 entries only have to survive if they start with `#`)
 #   - React:      `isSafeHref` in packages/react/src/chordpro-jsx.tsx
 #   - Playground: `isSafeHref` in packages/playground/scripts/lib/docs-render.mjs
 # Each has a test that reads this file, so adding a case here fails whichever
@@ -68,6 +70,27 @@ blocked	tabs between every letter	j\u{9}a\u{9}v\u{9}a\u{9}s\u{9}c\u{9}r\u{9}i\u{
 # input, so padding must not push the colon past it.
 blocked	three tabs between every letter (colon at raw index 40)	j\u{9}\u{9}\u{9}a\u{9}\u{9}\u{9}v\u{9}\u{9}\u{9}a\u{9}\u{9}\u{9}s\u{9}\u{9}\u{9}c\u{9}\u{9}\u{9}r\u{9}\u{9}\u{9}i\u{9}\u{9}\u{9}p\u{9}\u{9}\u{9}t\u{9}\u{9}\u{9}:
 blocked	50 ZWSP then javascript:	\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}\u{200B}javascript:alert(1)
+
+# Character references. A browser decodes these in an attribute value before it
+# reads the scheme, so a scheme spelled with them is the same scheme. Names other
+# than the five predefined ones are not decoded by the Rust check, which refuses
+# them instead; the JavaScript checks decode the ones that stand for a character
+# a URL parser ignores or the colon.
+blocked	decimal reference for s	java&#115;cript:alert(1)
+blocked	hex reference for s	java&#x73;cript:alert(1)
+blocked	uppercase X hex reference for s	java&#X73;cript:alert(1)
+blocked	decimal reference for the first letter	&#106;avascript:alert(1)
+blocked	hex reference with leading zeros	&#x0000006a;avascript:alert(1)
+blocked	decimal reference without the closing semicolon	java&#115cript:alert(1)
+blocked	decimal reference for the colon	javascript&#58;alert(1)
+blocked	hex reference for the colon	javascript&#x3a;alert(1)
+blocked	named reference for a tab	java&Tab;script:alert(1)
+blocked	named reference for a newline	java&NewLine;script:alert(1)
+blocked	named reference for the colon	javascript&colon;alert(1)
+blocked	reference for a tab in vbscript	vb&#9;script:msgbox(1)
+blocked	reference for a newline before data:	da&#x0A;ta:text/html,x
+blocked	leading reference for a space	&#32;javascript:alert(1)
+blocked	references for every letter	&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;alert(1)
 
 # Ordinary references that must keep working.
 allowed	https URL	https://example.com/cover.png

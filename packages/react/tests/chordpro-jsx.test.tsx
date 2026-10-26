@@ -3016,11 +3016,9 @@ describe('renderChordproAst', () => {
   }
 
   // Sister-site coverage to
-  // `crates/render-html/src/lib.rs::has_dangerous_uri_scheme` —
-  // each entry in the walker's `DANGEROUS_URI_SCHEMES` MUST have
-  // a rejection test (`.claude/rules/sanitizer-security.md`
-  // §"Testing completeness"). Adding a new entry to the Rust
-  // list requires the same here.
+  // the shared corpus — each entry in the walker's
+  // `DANGEROUS_URI_SCHEMES` MUST have a rejection test
+  // (`.claude/rules/sanitizer-security.md` §"Testing completeness").
   test.each([
     ['javascript:alert(1)'],
     ['vbscript:msgbox(1)'],
@@ -3064,7 +3062,7 @@ describe('renderChordproAst', () => {
     expect(container.querySelector('img')).toBeNull();
   });
 
-  // The corpus shared with `crates/render-html`'s `has_dangerous_uri_scheme`
+  // The corpus shared with `crates/render-html`'s `svg_sanitize.rs`
   // and the playground's docs pipeline. Adding a case to the file fails
   // whichever of the three does not handle it.
   const corpusPath = resolve(

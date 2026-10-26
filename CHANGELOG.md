@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{diagrams: guitar}`, `{diagrams: ukulele}` and `{diagrams: piano}`. The
   value used to be unrecognised and fell back to the default instrument.
 
+### Changed
+
+- **Raw SVG in the HTML output is rewritten through an allowlist.** `{start_of_svg}`
+  sections and the SVG returned by abc2svg, LilyPond and MuseScore keep only SVG
+  drawing elements and attributes. `<style>` elements, HTML elements (forms,
+  images, links outside SVG) and links to other documents are removed, `href`
+  keeps only `#fragment` targets, and character references in attribute values
+  are decoded before the value is checked.
+
 ### Fixed
 
 - **`{textsize: NaN}` (and the other size directives) is ignored like any

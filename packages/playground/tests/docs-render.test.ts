@@ -464,7 +464,7 @@ describe('resolveRelative escape detection', () => {
 });
 
 describe('isSafeHref — adversarial parity with the Rust suite', () => {
-  // The corpus shared with `crates/render-html`'s `has_dangerous_uri_scheme`
+  // The corpus shared with `crates/render-html`'s `svg_sanitize.rs`
   // and the React walker's `isSafeHref`. Adding a case to the file fails
   // whichever of the three does not handle it. Sister-site parity per
   // `.claude/rules/sanitizer-security.md` §"Testing completeness" and
