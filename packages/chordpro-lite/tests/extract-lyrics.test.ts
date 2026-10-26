@@ -54,4 +54,14 @@ describe('extractLyrics', () => {
   it('does not let an unbalanced bracket swallow the following line', () => {
     expect(extractLyrics('[C]one [broken\n[G]two')).toBe('one [broken\ntwo');
   });
+
+  it('stays fast on a long line of unterminated openers', () => {
+    const start = performance.now();
+    expect(extractLyrics('['.repeat(100_000) + '{'.repeat(100_000))).toBe('['.repeat(100_000) + '{'.repeat(100_000));
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
+  it('keeps text after an unterminated opener and still strips earlier spans', () => {
+    expect(extractLyrics('[G]Hello [Am world')).toBe('Hello [Am world');
+  });
 });

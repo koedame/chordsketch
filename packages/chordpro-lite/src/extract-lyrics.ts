@@ -1,14 +1,4 @@
-/**
- * Match a whole inline chord annotation (`[G]`, `[Cmaj7/E]`).
- *
- * Constrained to a single line so an unbalanced `]` further down the
- * chart cannot make one match swallow the lines in between - the same
- * discipline `detect-format`'s patterns use.
- */
-const INLINE_CHORD_SPAN = /\[[^\]\n]*\]/g;
-
-/** Match a whole directive (`{title: X}`, `{soc}`), single line as above. */
-const DIRECTIVE_SPAN = /\{[^}\n]*\}/g;
+import { removeSpans } from './spans';
 
 /** Collapse any run of intra-line whitespace left behind by span removal. */
 const INNER_WHITESPACE = /[^\S\n]+/g;
@@ -41,9 +31,11 @@ const INNER_WHITESPACE = /[^\S\n]+/g;
 export function extractLyrics(source: string): string {
   const lines: string[] = [];
   for (const rawLine of source.split('\n')) {
-    const stripped = rawLine
-      .replace(INLINE_CHORD_SPAN, '')
-      .replace(DIRECTIVE_SPAN, '')
+    // Inline chord annotations (`[G]`, `[Cmaj7/E]`) and directives
+    // (`{title: X}`, `{soc}`) are matched within one line, so an
+    // unbalanced closer further down the chart cannot make one span
+    // swallow the lines in between.
+    const stripped = removeSpans(removeSpans(rawLine, '[', ']'), '{', '}')
       .replace(INNER_WHITESPACE, ' ')
       .trim();
     if (stripped !== '') {

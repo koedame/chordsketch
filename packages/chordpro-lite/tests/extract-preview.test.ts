@@ -147,4 +147,10 @@ describe('extractPreview', () => {
   it('keeps slash bass notes and extensions in the chord symbol', () => {
     expect(firstLine(extractPreview('[Cmaj7/E]word')).chords).toEqual(['Cmaj7/E']);
   });
+
+  it('stays fast on a long line of unterminated openers', () => {
+    const start = performance.now();
+    extractPreview('['.repeat(100_000) + '{'.repeat(100_000));
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
 });

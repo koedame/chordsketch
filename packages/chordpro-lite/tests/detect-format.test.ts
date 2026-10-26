@@ -71,7 +71,7 @@ describe('detectFormat / neither format', () => {
 
   it('returns null for a chord line that only uses notation outside A-G', () => {
     // Documents the boundary: widening inline-chord detection to `H`
-    // means changing INLINE_CHORD_PATTERN and inverting this test.
+    // means changing hasInlineChord and inverting this test.
     expect(detectFormat('[H]Hallo Welt')).toBeNull();
   });
 
@@ -121,5 +121,19 @@ describe('detectFormat / directive catalog coverage', () => {
   it('excludes directives that require a value, so a bare one is not a match', () => {
     expect(BARE_DIRECTIVES).not.toContain('title');
     expect(detectFormat('Hello {title}, welcome.')).toBeNull();
+  });
+
+  it('stays fast on a long line of unterminated chord openers', () => {
+    const start = performance.now();
+    expect(detectFormat('[A'.repeat(100_000))).toBeNull();
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
+  it('finds a chord after an unterminated opener on an earlier line', () => {
+    expect(detectFormat('[A oops\n[G]Hello')).toBe('chordpro');
+  });
+
+  it('does not let an opener on one line pair with a closer on the next', () => {
+    expect(detectFormat('[A oops\nwords]')).toBeNull();
   });
 });
