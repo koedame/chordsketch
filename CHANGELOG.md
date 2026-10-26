@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`{define}` with an unquoted `display=` or `format=` value that follows
+  whitespace no longer panics** on a multi-byte character; the attribute is
+  removed from the definition at the right position.
+
 - **`{textsize: NaN}` (and the other size directives) is ignored like any
   non-numeric size** instead of reaching the HTML as `font-size: NaN;` and the
   PDF as a NaN font size, and the React renderer drops a non-numeric size the
