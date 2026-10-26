@@ -1376,7 +1376,7 @@ fileprivate struct FfiConverterSequenceTypeValidationError: FfiConverterRustBuff
  * added in #2167.
  *
  * `instrument` accepts (case-insensitive): `"guitar"`,
- * `"ukulele"` (alias `"uke"`), or `"piano"` (aliases
+ * `"ukulele"` (alias `"uke"`), `"charango"`, or `"piano"` (aliases
  * `"keyboard"`, `"keys"`). `chord` is a standard ChordPro
  * chord name. Flat spellings are normalised to sharps via
  * the same path the core voicing-database lookup uses.
@@ -1538,14 +1538,13 @@ public func convertIrealbToChordproText(input: String)throws  -> ConversionWithW
  * Mirrors the wasm `diagramPitches` and NAPI `diagramPitches`
  * exports.
  *
- * Fretted instruments ("guitar", "ukulele" / "uke") return one
+ * Fretted instruments ("guitar", "ukulele" / "uke", "charango") return one
  * pitch per non-muted string in string (strum) order, keeping
  * octave doublings; keyboard instruments ("piano", "keyboard",
  * "keys") return the highlighted keys. `defines` is the same
  * `ChordDefine` list `chord_diagram_svg_with_defines` consults
- * (ignored for keyboard). The accepted instrument set is kept in
- * lockstep with `chord_diagram_svg_with_defines`; anything outside
- * it (e.g. "charango", not drawn by the binding SVG path) returns
+ * (ignored for keyboard). The accepted instrument set is the same as
+ * `chord_diagram_svg_with_defines`'s; any other instrument returns
  * `null`. Also `null` when no diagram is available for the chord.
  */
 public func diagramPitches(chord: String, instrument: String, defines: [ChordDefine]) -> [UInt8]?  {
