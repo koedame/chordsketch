@@ -62,7 +62,7 @@ jobs:
         # distribution; the aarch64 cell below already used `cross` and
         # came out at GLIBC_2.18. Same tool, same reason, same
         # `taiki-e/install-action` pin. See ADR-0046.
-        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2
+        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
         with:
           tool: cross
 
@@ -136,7 +136,7 @@ jobs:
         # vs. 1-2 minutes for apt-get. Docker is pre-installed on
         # ubuntu-latest runners.
         if: matrix.cross
-        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2
+        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
         with:
           tool: cross
 
