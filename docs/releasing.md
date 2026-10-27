@@ -128,9 +128,10 @@ from what is missing. When every channel already serves the version, only
 `release-verify.yml` runs, so a release that stopped after the last publish
 (a registry slow to show a package, say) is finished by re-running. It
 does not re-run a CI channel that failed after the tag: it names the
-channel and stops before crates.io and npm; re-run that channel (step 7), then re-run the
-script; `publish-registries.yml` likewise skips whatever the registries
-already serve. winget and MacPorts remain manual (Post-Release).
+channel and stops before crates.io and npm; re-run that channel (step 7),
+then re-run the script; `publish-registries.yml` likewise skips whatever
+the registries already serve. winget and MacPorts remain manual
+(Post-Release).
 
 ### Pre-release sanity
 
