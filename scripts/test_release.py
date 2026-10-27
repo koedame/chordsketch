@@ -5,8 +5,8 @@ Covers the decisions the script makes before it publishes anything — the
 part a refactor could quietly break without any registry noticing:
 
   1. `decide` refuses a version some channel already serves when the tag
-     is not out, refuses a release with nothing left to do, and otherwise
-     lists exactly what is pending.
+     is not out, plans only the verification for a release with every
+     channel published, and otherwise lists exactly what is pending.
   2. The release is built from the tagged commit once a tag exists, and
      from `origin/main` before that; `publish-registries.yml` is pointed at
      that commit before the tag and at the tag after it.
@@ -74,7 +74,7 @@ class DecideTest(unittest.TestCase):
         plan = release.decide("1.2.0", NO_TAGS, {"pypi": True}, {}, {})
         self.assertIn("pypi", plan.refusal)
 
-    def test_tagged_version_with_every_channel_published_is_refused(self) -> None:
+    def test_tagged_version_with_every_channel_published_plans_only_the_verification(self) -> None:
         plan = release.decide(
             "1.2.0",
             BOTH_TAGS,
@@ -82,7 +82,20 @@ class DecideTest(unittest.TestCase):
             {"chordsketch": True},
             {"@chordsketch/wasm": True},
         )
-        self.assertIn("already fully released", plan.refusal)
+        self.assertEqual(plan.refusal, "")
+        self.assertTrue(plan.verify_only)
+        self.assertEqual(plan.tags_to_push, ())
+        self.assertEqual(plan.pending_ci, ())
+        self.assertEqual(plan.pending_crates, ())
+        self.assertEqual(plan.pending_npm, ())
+
+    def test_release_with_something_pending_is_not_verify_only(self) -> None:
+        plan = release.decide("1.2.0", BOTH_TAGS, {}, {"chordsketch": False}, {})
+        self.assertFalse(plan.verify_only)
+
+    def test_refused_plan_is_not_verify_only(self) -> None:
+        plan = release.decide("1.2.0", NO_TAGS, {"pypi": True}, {}, {})
+        self.assertFalse(plan.verify_only)
 
     def test_tagged_version_resumes_with_only_the_missing_channels(self) -> None:
         plan = release.decide(

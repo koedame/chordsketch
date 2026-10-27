@@ -70,9 +70,9 @@ packaged and a wasm package built without publishing either.
    would be the most permanent half of it.
 5. **The registries are the state.** The script keeps no state file. Each
    run asks every registry what it serves, so a re-run resumes an
-   interrupted release from what is missing, and refuses a version that is
-   already fully released or that some registry already serves without a
-   tag.
+   interrupted release from what is missing, runs only the verification
+   for a version whose every channel is published, and refuses a version
+   that some registry already serves without a tag.
 
 ## Rationale
 

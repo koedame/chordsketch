@@ -48,7 +48,9 @@ published on this machine.
 
 Re-running with the same version is always safe. Every step checks the
 registry before acting, so an interrupted release resumes where it
-stopped, and a finished one is refused.
+stopped. When every channel already serves the version, only
+`release-verify.yml` runs again, so a release stopped between the last
+publish and its verification can be finished by re-running.
 
 Stdlib only.
 """
@@ -128,7 +130,10 @@ class Plan:
     """What a release of this version still needs, or why it must not run.
 
     `refusal` is set when the release must not proceed at all; the pending
-    lists are then irrelevant.
+    lists are then irrelevant. A plan with nothing pending and no refusal
+    is a release whose every channel is published: only the verification
+    is left, and it is run again because a release stopped by a lagging
+    registry ends in exactly that state.
     """
 
     refusal: str = ""
@@ -136,6 +141,12 @@ class Plan:
     pending_ci: tuple[str, ...] = ()
     pending_crates: tuple[str, ...] = ()
     pending_npm: tuple[str, ...] = ()
+
+    @property
+    def verify_only(self) -> bool:
+        return not (
+            self.refusal or self.tags_to_push or self.pending_ci or self.pending_crates or self.pending_npm
+        )
 
 
 def decide(
@@ -170,8 +181,6 @@ def decide(
                     f"twice; bump to a new version."
                 )
             )
-    elif not (missing_tags or pending_ci or pending_crates or pending_npm):
-        return Plan(refusal=f"v{version} is already fully released; there is nothing to do.")
 
     return Plan(
         tags_to_push=missing_tags,
@@ -712,6 +721,9 @@ def confirm_release(version: str) -> bool:
 
 def print_plan(state: Survey, plan: Plan) -> None:
     section("Plan")
+    if plan.verify_only:
+        print(f"    every channel serves {state.version}; running release-verify.yml")
+        return
     if plan.tags_to_push:
         print(f"    push tags: {', '.join(plan.tags_to_push)} at {state.commit[:12]}")
         print("    wait for the tag runs (the CI-published channels)")
