@@ -18,7 +18,7 @@ github.setup        koedame chordsketch 0.9.0 v
 # The `github` portgroup defaults `tarball_from` to `releases`, which
 # looks for a release asset literally named
 # `chordsketch-${version}.tar.gz`. This project's releases carry
-# per-target binaries (`chordsketch-v0.5.0-<triple>.tar.gz`) and no
+# per-target binaries (`chordsketch-vX.Y.Z-<triple>.tar.gz`) and no
 # such source asset, so the default 404s. Fetch the tag archive
 # instead — that is also what the `checksums` below are computed
 # against, per the maintenance note at the top of this file.
@@ -39,7 +39,7 @@ long_description    ChordSketch is a Rust implementation of the ChordPro file \
 # it belongs to. Without the key MacPorts reads the crate entries as a
 # continuation of this block ("invalid checksum field:
 # adler2-2.0.1.crate") and then reports "No checksum set for
-# chordsketch-0.5.0.tar.gz". Every cargo port in macports-ports uses
+# chordsketch-X.Y.Z.tar.gz". Every cargo port in macports-ports uses
 # this keyed form.
 checksums           ${distname}${extract.suffix} \
                     rmd160  2d2f0136f06a9f754c592e9339d906002aef8535 \

@@ -46,7 +46,7 @@
 #
 # Two situations call for `"skip"`:
 #   - The channel has no publish on this tag at all (manual PR flows such as
-#     winget, nixpkgs, MacPorts).
+#     winget, nixpkgs).
 #   - The channel publishes on its own cadence AND something else already
 #     asserts it is installable (a daily readme-smoke.yml install, ADR-0064).
 #     Off-cadence channels with no such coverage take `"exists"` instead.
@@ -364,18 +364,19 @@ required_secrets = []
 [[channels]]
 id = "macports"
 display = "MacPorts — textproc/chordsketch"
-kind = "manual"
-expected_version = "skip"
-skip_reason = """
-MacPorts publication requires a manual PR against macports/macports-ports
-that is reviewed asynchronously by port maintainers, mirroring the winget
-flow above. There is no automated publish step in this repository to
-trigger a check against, so this channel is intentionally skipped from the
-rollup. See docs/releasing.md step 5 for the per-release Portfile bump +
-PR procedure.
-"""
+kind = "macports"
+package = "chordsketch"
+expected_version = "tag"
 required_secrets = []
-notes = "Portfile lives at packaging/macports/Portfile. Live install path verified by the macports job in readme-smoke.yml."
+notes = """
+Portfile lives at packaging/macports/Portfile; the live install path is
+verified by the macports job in readme-smoke.yml, which does not look at the
+version. This entry asks two things of the release. FAIL: the Portfile's
+`checksums` do not match the tag's archive (the release commit cannot fill
+them; docs/releasing.md Post-Release step 5.1 does). PENDING, which keeps the
+rollup green: ports.macports.org still serves an older version because the
+PR to macports/macports-ports has not been merged by a MacPorts committer.
+"""
 
 # ---------------------------------------------------------------- VS Code
 
