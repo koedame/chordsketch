@@ -1080,7 +1080,11 @@ end
                     return_value={"name": "chordsketch", "version": api_version},
                 )
             )
+            # REPO_ROOT follows the temp dir so the "could not parse" message,
+            # which prints the Portfile path relative to it, can be built.
             with patch.object(regen, "PORTFILE", path), patch.object(
+                regen, "REPO_ROOT", Path(td)
+            ), patch.object(
                 check_release_channels, "_load_macports_regen", return_value=regen
             ), fetch, api as mock_api:
                 result = check_release_channels.verify_channel(
@@ -1111,6 +1115,18 @@ end
         )
         self.assertEqual(result.status, "FAIL")
         self.assertEqual(result.observed, "Portfile=0.8.0")
+
+    def test_macports_unparsable_portfile_is_an_error_not_an_abort(self) -> None:
+        # portfile_version() raises SystemExit; it must surface as a red
+        # channel result instead of terminating the checker.
+        result, _ = self._verify_macports(
+            "github.setup        something else entirely\n",
+            "v0.9.0",
+            chunks=[_MACPORTS_ARCHIVE],
+        )
+        self.assertEqual(result.status, "FAIL")
+        self.assertEqual(result.observed, "<error>")
+        self.assertIn("could not parse", result.detail)
 
     def test_macports_archive_that_cannot_be_downloaded_is_an_error(self) -> None:
         result, _ = self._verify_macports(
