@@ -850,8 +850,11 @@ fn extract_attribute(s: &mut String, key: &str) -> Option<String> {
             pos + needle.len() + 1 + close + usize::from(has_close),
         )
     } else {
+        let lead = after.len() - after.trim_start().len();
         match after.split_whitespace().next() {
-            Some(t) if !t.contains('=') => (Some(t.to_string()), pos + needle.len() + t.len()),
+            Some(t) if !t.contains('=') => {
+                (Some(t.to_string()), pos + needle.len() + lead + t.len())
+            }
             // Token contains '=' — likely the next attribute (e.g., "format=...").
             // Treat current attribute as empty-valued rather than consuming the
             // next attribute's token.
@@ -3709,6 +3712,16 @@ mod chord_definition_tests {
         let def = ChordDefinition::parse_value("Am format= display=\"A minor\"");
         assert_eq!(def.format, Some(String::new()));
         assert_eq!(def.display, Some("A minor".to_string()));
+    }
+
+    #[test]
+    fn test_unquoted_value_after_whitespace_with_multibyte_chars_does_not_panic() {
+        // The value starts after whitespace that follows "display="; the token
+        // end must account for that whitespace, or it can land inside a
+        // multi-byte character.
+        let def = ChordDefinition::parse_value("Am display= ab\u{59c} frets x 0 2 2 1 0");
+        assert_eq!(def.display, Some("ab\u{59c}".to_string()));
+        assert_eq!(def.raw, Some("frets x 0 2 2 1 0".to_string()));
     }
 
     // --- Unquoted value with embedded '=' (#688) ---
