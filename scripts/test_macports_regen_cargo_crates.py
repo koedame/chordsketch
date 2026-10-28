@@ -456,5 +456,112 @@ class CmdCheckFallbackTests(unittest.TestCase):
             self.assertEqual(rc, 1)
 
 
+def _portfile_with_checksums(version: str, data: bytes) -> str:
+    digests = mod.archive_digests([data])
+    rmd160 = digests.get("rmd160", "0" * 40)
+    return (
+        "PortSystem 1.0\n"
+        "\n"
+        f"github.setup        koedame chordsketch {version} v\n"
+        "\n"
+        "checksums           ${distname}${extract.suffix} \\\n"
+        f"                    rmd160  {rmd160} \\\n"
+        f"                    sha256  {digests['sha256']} \\\n"
+        f"                    size    {digests['size']}\n"
+        "\n"
+        "cargo.crates \\\n"
+        "    aaa                              1.0.0  "
+        "0000000000000000000000000000000000000000000000000000000000000001\n"
+        "\n"
+        "build.dir ${worksrcpath}\n"
+    )
+
+
+class ArchiveChecksumTests(unittest.TestCase):
+    ARCHIVE = b"the bytes GitHub serves for the tag"
+
+    def test_checksums_block_is_read_without_touching_the_crate_lines(self) -> None:
+        digests = mod.archive_digests([self.ARCHIVE])
+        parsed = mod.parse_portfile_checksums(
+            _portfile_with_checksums("0.9.0", self.ARCHIVE)
+        )
+        self.assertEqual(parsed["sha256"], digests["sha256"])
+        self.assertEqual(parsed["size"], str(len(self.ARCHIVE)))
+        self.assertEqual(set(parsed), {"rmd160", "sha256", "size"})
+
+    def test_portfile_matching_the_archive_has_no_problems(self) -> None:
+        portfile = _portfile_with_checksums("0.9.0", self.ARCHIVE)
+        # Chunked the way the download delivers it.
+        chunks = [self.ARCHIVE[:7], self.ARCHIVE[7:]]
+        self.assertEqual(mod.archive_checksum_problems(portfile, chunks), [])
+
+    def test_checksums_left_on_the_previous_release_are_reported_per_field(self) -> None:
+        portfile = _portfile_with_checksums("0.9.0", b"the previous release")
+        problems = mod.archive_checksum_problems(portfile, [self.ARCHIVE])
+        self.assertTrue(any(p.startswith("sha256:") for p in problems), problems)
+        self.assertTrue(any(p.startswith("size:") for p in problems), problems)
+
+    def test_missing_checksum_field_is_reported(self) -> None:
+        portfile = _portfile_with_checksums("0.9.0", self.ARCHIVE).replace(
+            "size", "sizz"
+        )
+        problems = mod.archive_checksum_problems(portfile, [self.ARCHIVE])
+        self.assertIn("the Portfile's checksums block has no size", problems)
+
+    def test_rmd160_is_skipped_when_openssl_does_not_provide_it(self) -> None:
+        portfile = _portfile_with_checksums("0.9.0", self.ARCHIVE)
+        real_new = mod.hashlib.new
+
+        def _no_ripemd(name, *args, **kwargs):
+            if name == "ripemd160":
+                raise ValueError("unsupported hash type ripemd160")
+            return real_new(name, *args, **kwargs)
+
+        with patch.object(mod.hashlib, "new", side_effect=_no_ripemd):
+            self.assertNotIn("rmd160", mod.archive_digests([self.ARCHIVE]))
+            self.assertEqual(
+                mod.archive_checksum_problems(portfile, [self.ARCHIVE]), []
+            )
+
+
+class CmdCheckArchiveTests(unittest.TestCase):
+    ARCHIVE = b"the bytes GitHub serves for the tag"
+
+    def _run(self, portfile: str, **fetch) -> int:
+        with TemporaryDirectory() as td:
+            path = Path(td) / "Portfile"
+            path.write_text(portfile, encoding="utf-8")
+            with patch.object(mod, "PORTFILE", path), patch.object(
+                mod, "REPO_ROOT", Path(td)
+            ), patch.object(mod, "fetch_archive_chunks", **fetch):
+                return mod.cmd_check_archive()
+
+    def test_checksums_that_match_the_tag_archive_pass(self) -> None:
+        rc = self._run(
+            _portfile_with_checksums("0.9.0", self.ARCHIVE),
+            return_value=[self.ARCHIVE],
+        )
+        self.assertEqual(rc, 0)
+
+    def test_checksums_of_another_release_fail(self) -> None:
+        rc = self._run(
+            _portfile_with_checksums("0.9.0", b"v0.7.0's archive"),
+            return_value=[self.ARCHIVE],
+        )
+        self.assertEqual(rc, 1)
+
+    def test_a_tag_that_does_not_exist_fails(self) -> None:
+        def _missing(version):
+            raise mod.urllib.error.HTTPError(
+                "https://github.com/x", 404, "Not Found", {}, None
+            )
+            yield  # pragma: no cover — makes this a generator like the real one
+
+        rc = self._run(
+            _portfile_with_checksums("0.9.0", self.ARCHIVE), side_effect=_missing
+        )
+        self.assertEqual(rc, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

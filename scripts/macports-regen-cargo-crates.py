@@ -72,14 +72,23 @@ Usage:
 
     # Pre-tag refresh: regenerate from a not-yet-tagged ref.
     python3 scripts/macports-regen-cargo-crates.py --apply --from-ref HEAD
+
+    # Verify the Portfile's `checksums` (rmd160 / sha256 / size) against
+    # the archive GitHub serves for the tag in `github.setup`. Needs the
+    # tag to exist, so it runs after the release (the release-verify
+    # rollup runs it daily), not on PRs. Exits non-zero on a mismatch.
+    python3 scripts/macports-regen-cargo-crates.py --check-archive
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +101,11 @@ GITHUB_SETUP_RE = re.compile(
     r"^github\.setup\s+koedame\s+chordsketch\s+([0-9][0-9A-Za-z.+\-]*)\s+v\s*$",
     re.M,
 )
+
+
+ARCHIVE_URL = "https://github.com/koedame/chordsketch/archive/refs/tags/v{version}.tar.gz"
+ARCHIVE_TIMEOUT = 60  # seconds, per read; the archive is ~20 MB
+USER_AGENT = "chordsketch-macports-check (+https://github.com/koedame/chordsketch)"
 
 
 # Column widths of `cargo2port`'s default (`AlignmentMode::Normal`)
@@ -149,6 +163,98 @@ def portfile_tag() -> str:
             f"from {PORTFILE.relative_to(REPO_ROOT)}"
         )
     return f"v{m.group(1)}"
+
+
+def portfile_version(text: str | None = None) -> str:
+    """Return the version in the Portfile's `github.setup` line (no `v`)."""
+    if text is None:
+        text = PORTFILE.read_text(encoding="utf-8")
+    m = GITHUB_SETUP_RE.search(text)
+    if not m:
+        raise SystemExit(
+            f"could not parse `github.setup koedame chordsketch <VERSION> v` "
+            f"from {PORTFILE.relative_to(REPO_ROOT)}"
+        )
+    return m.group(1)
+
+
+def parse_portfile_checksums(text: str) -> dict[str, str]:
+    """Return the `rmd160` / `sha256` / `size` values of the `checksums` block.
+
+    The block runs from the `checksums` line to the next blank line, which
+    keeps the `cargo.crates` lines (`name version sha256`) out of reach.
+    Returns only the keys it found, so the caller can tell a missing field
+    from a wrong one.
+    """
+    found: dict[str, str] = {}
+    in_block = False
+    for line in text.splitlines():
+        if not in_block:
+            if line.startswith("checksums"):
+                in_block = True
+            else:
+                continue
+        elif line.strip() == "":
+            break
+        for key in ("rmd160", "sha256", "size"):
+            m = re.search(rf"(?:^|\s){key}\s+([0-9a-f]+)\b", line)
+            if m:
+                found[key] = m.group(1)
+    return found
+
+
+def archive_digests(chunks) -> dict[str, str]:
+    """Return the `rmd160` / `sha256` / `size` MacPorts computes over a distfile.
+
+    `rmd160` is left out when this Python's OpenSSL does not provide
+    RIPEMD-160 (OpenSSL 3 moved it to the legacy provider); `sha256` and
+    `size` still pin the content.
+    """
+    sha256 = hashlib.sha256()
+    try:
+        rmd160 = hashlib.new("ripemd160")
+    except ValueError:
+        rmd160 = None
+    size = 0
+    for chunk in chunks:
+        sha256.update(chunk)
+        if rmd160 is not None:
+            rmd160.update(chunk)
+        size += len(chunk)
+    digests = {"sha256": sha256.hexdigest(), "size": str(size)}
+    if rmd160 is not None:
+        digests["rmd160"] = rmd160.hexdigest()
+    return digests
+
+
+def fetch_archive_chunks(version: str):
+    """Yield the bytes of the tag archive GitHub serves for `v<version>`.
+
+    Raises `urllib.error.HTTPError` (404 when the tag does not exist).
+    """
+    req = urllib.request.Request(
+        ARCHIVE_URL.format(version=version), headers={"User-Agent": USER_AGENT}
+    )
+    with urllib.request.urlopen(req, timeout=ARCHIVE_TIMEOUT) as resp:  # noqa: S310
+        while chunk := resp.read(1 << 20):
+            yield chunk
+
+
+def archive_checksum_problems(portfile_text: str, chunks) -> list[str]:
+    """Compare the Portfile's `checksums` with the digests of `chunks`.
+
+    Returns one line per mismatching or missing field; empty means the
+    Portfile matches the archive.
+    """
+    recorded = parse_portfile_checksums(portfile_text)
+    actual = archive_digests(chunks)
+    problems = []
+    for key in ("rmd160", "sha256", "size"):
+        if key not in recorded:
+            problems.append(f"the Portfile's checksums block has no {key}")
+        elif key in actual and recorded[key] != actual[key]:
+            problems.append(f"{key}: Portfile has {recorded[key]}, the archive has {actual[key]}")
+    return problems
 
 
 class GitRefMissingError(Exception):
@@ -301,6 +407,29 @@ def cmd_apply(from_ref: str) -> int:
     return 0
 
 
+def cmd_check_archive() -> int:
+    """Verify the Portfile's `checksums` against the tag archive on GitHub."""
+    portfile = PORTFILE.read_text(encoding="utf-8")
+    version = portfile_version(portfile)
+    try:
+        problems = archive_checksum_problems(portfile, fetch_archive_chunks(version))
+    except urllib.error.HTTPError as exc:
+        sys.stderr.write(
+            f"could not download {ARCHIVE_URL.format(version=version)}: HTTP {exc.code}"
+            + (" (the tag does not exist yet)" if exc.code == 404 else "")
+            + "\n"
+        )
+        return 1
+    if not problems:
+        return 0
+    sys.stderr.write(
+        f"{PORTFILE.relative_to(REPO_ROOT)} checksums do not match the v{version} archive:\n"
+        + "".join(f"  - {p}\n" for p in problems)
+        + "\nRefill them (docs/releasing.md, Post-Release step 5.1).\n"
+    )
+    return 1
+
+
 def cmd_check(from_ref: str, *, allow_tag_fallback: bool) -> int:
     """Verify the Portfile matches `Cargo.lock@from_ref`.
 
@@ -353,6 +482,10 @@ def main() -> int:
     group.add_argument("--check", action="store_true",
                        help="Verify the Portfile matches the tagged "
                             "Cargo.lock; exit non-zero on drift.")
+    group.add_argument("--check-archive", action="store_true",
+                       help="Verify the Portfile's checksums against the "
+                            "archive GitHub serves for its tag; exit "
+                            "non-zero on a mismatch.")
     parser.add_argument(
         "--from-ref",
         metavar="REF",
@@ -362,6 +495,9 @@ def main() -> int:
              "Portfile's `github.setup` line.",
     )
     args = parser.parse_args()
+
+    if args.check_archive:
+        return cmd_check_archive()
 
     auto_resolved = args.from_ref is None
     from_ref = args.from_ref if not auto_resolved else portfile_tag()

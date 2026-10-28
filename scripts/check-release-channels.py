@@ -21,9 +21,10 @@ visibility contract broken). Prints a single-line status to stdout followed
 by any diagnostic lines on stderr.
 
 The status word is `OK`, `FAIL`, or `PENDING`. `PENDING` means the channel
-accepted the release but has not published it yet — a state only Chocolatey's
-community moderation produces (ADR-0049). It exits 0, because no action here
-can clear it, and the rollup renders it as its own row rather than as a pass.
+accepted the release but has not published it yet — a state Chocolatey's
+community moderation (ADR-0049) and the macports-ports review produce. It
+exits 0, because no action here can clear it, and the rollup renders it as its
+own row rather than as a pass.
 
 Which question a channel is asked comes from its `expected_version` in the
 manifest: `"tag"` asks whether the newest published version equals the release
@@ -39,6 +40,7 @@ us if we misbehave.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import sys
@@ -779,6 +781,116 @@ def _check_snap(channel: Channel, version: str) -> CheckResult:
     return _compare(channel, version, ",".join(served))
 
 
+def _load_macports_regen():
+    """Load the hyphenated `macports-regen-cargo-crates.py` as a module.
+
+    It owns the Portfile parsing, so the rollup reads the `checksums` block
+    the same way `--check-archive` and the cargo.crates guard do.
+    """
+    path = Path(__file__).resolve().parent / "macports-regen-cargo-crates.py"
+    spec = importlib.util.spec_from_file_location("macports_regen_cargo_crates", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _check_macports(channel: Channel, version: str) -> CheckResult:
+    """Verify MacPorts, which has two things to ask and an answer for each.
+
+    1. **Is the in-tree Portfile ready to submit?** (FAIL when not.) The
+       release commit bumps `github.setup` but cannot fill `checksums`: they
+       are computed over the tag's archive, which does not exist until the
+       tag does. They are therefore refilled after the tag (docs/releasing.md,
+       Post-Release step 5), and this check is what notices when that was
+       skipped. v0.8.0 and v0.9.0 shipped with v0.7.0's values and nothing
+       went red, because `macports-portfile-sync` only reads `cargo.crates`.
+       Red is the right colour: the maintainer can clear it with a one-line
+       PR to this repository.
+    2. **Has macports-ports taken the version?** (PENDING when not.) Merging
+       the port bump is a MacPorts committer's action, like Chocolatey's
+       moderation (ADR-0049), so the lag is rendered as its own row and the
+       rollup stays green rather than holding a red nobody here can clear.
+       The row is what makes a port stuck on an old release visible: the
+       published port stayed on 0.5.0 through four releases unnoticed.
+
+    The Portfile is read from the checkout, i.e. main for the scheduled run.
+    """
+    regen = _load_macports_regen()
+    portfile = regen.PORTFILE.read_text(encoding="utf-8")
+    try:
+        pinned = regen.portfile_version(portfile)
+    except SystemExit as exc:  # an unparsable `github.setup` line is a red, not an abort
+        return _error(channel, version, str(exc.code))
+    if pinned != version:
+        return CheckResult(
+            channel_id=channel.id,
+            ok=False,
+            observed=f"Portfile={pinned}",
+            expected=version,
+            detail=(
+                f"packaging/macports/Portfile pins {pinned} but the release is "
+                f"{version}; the version bump did not reach it."
+            ),
+        )
+
+    try:
+        problems = regen.archive_checksum_problems(
+            portfile, regen.fetch_archive_chunks(pinned)
+        )
+    except Exception as exc:  # noqa: BLE001 — any download failure is a red
+        return _error(
+            channel,
+            version,
+            f"could not read the v{pinned} archive to check the Portfile's "
+            f"checksums: {exc}",
+        )
+    if problems:
+        return CheckResult(
+            channel_id=channel.id,
+            ok=False,
+            observed="<checksums-stale>",
+            expected=version,
+            detail=(
+                f"packaging/macports/Portfile's checksums do not match the "
+                f"v{pinned} archive ({'; '.join(problems)}). Refill them with "
+                f"docs/releasing.md Post-Release step 5.1 and open a PR; "
+                f"macports-ports cannot take this Portfile as is."
+            ),
+        )
+
+    url = f"https://ports.macports.org/api/v1/ports/{channel.package}/"
+    try:
+        payload = _http_get_json(url)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return _absent(
+                channel,
+                version,
+                f"ports.macports.org has no port named {channel.package}.",
+            )
+        return _error(channel, version, f"MacPorts API error: HTTP {exc.code}")
+    except Exception as exc:  # noqa: BLE001
+        return _error(channel, version, f"MacPorts API error: {exc}")
+    served = str(payload.get("version") or "<missing>")
+    if served == version:
+        return _compare(channel, version, served)
+    return CheckResult(
+        channel_id=channel.id,
+        ok=True,
+        pending=True,
+        observed=served,
+        expected=version,
+        detail=(
+            f"the Portfile is ready for {version}, but macports-ports still "
+            f"serves {served}. The bump is a PR to macports/macports-ports "
+            f"(docs/releasing.md Post-Release step 5.4) that a MacPorts "
+            f"committer merges: submit it if it is not open yet, otherwise "
+            f"wait for review."
+        ),
+    )
+
+
 def _check_manual(channel: Channel, version: str) -> CheckResult:
     # Manual channels are never verified — they are only in the manifest for
     # paper-trail reasons. This function exists so the dispatcher below does
@@ -858,6 +970,7 @@ _DISPATCH: dict[str, Callable[[Channel, str], CheckResult]] = {
     "chocolatey": _check_chocolatey,
     "aur": _check_aur,
     "snap": _check_snap,
+    "macports": _check_macports,
     "manual": _check_manual,
 }
 

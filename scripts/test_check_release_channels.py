@@ -26,6 +26,7 @@ import sys
 import unittest
 import urllib.error
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -73,6 +74,41 @@ def _fake_channel(
         skip_reason=skip_reason,
         notes="",
     )
+
+
+_MACPORTS_ARCHIVE = b"the bytes GitHub serves for the tag"
+
+
+def _load_regen_module():
+    spec = importlib.util.spec_from_file_location(
+        "macports_regen_under_test", SCRIPTS_DIR / "macports-regen-cargo-crates.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class _MacportsPortfile:
+    """Portfile text whose checksums are those of `data`."""
+
+    def format(self, *, version: str, data: bytes) -> str:
+        digests = _load_regen_module().archive_digests([data])
+        return (
+            f"github.setup        koedame chordsketch {version} v\n"
+            "\n"
+            "checksums           ${distname}${extract.suffix} \\\n"
+            f"                    rmd160  {digests.get('rmd160', '0' * 40)} \\\n"
+            f"                    sha256  {digests['sha256']} \\\n"
+            f"                    size    {digests['size']}\n"
+            "\n"
+            "cargo.crates \\\n"
+            "    aaa  1.0.0  " + "0" * 64 + "\n"
+            "\n"
+        )
+
+
+_MACPORTS_PORTFILE = _MacportsPortfile()
 
 
 # Trimmed shape of the `Packages(Id=…,Version=…)` entity response — the two
@@ -1017,6 +1053,140 @@ end
             )
         self.assertEqual(result.status, "PENDING")
         self.assertIn("not reported by the feed", result.detail)
+
+    def _macports_channel(self) -> Channel:
+        return _fake_channel(kind="macports", package="chordsketch")
+
+    def _verify_macports(
+        self, portfile: str, tag: str, *, chunks=None, api_version="0.5.0", api_error=None
+    ):
+        regen = _load_regen_module()
+        with TemporaryDirectory() as td:
+            path = Path(td) / "Portfile"
+            path.write_text(portfile, encoding="utf-8")
+            fetch = (
+                patch.object(regen, "fetch_archive_chunks", return_value=chunks)
+                if not isinstance(chunks, Exception)
+                else patch.object(regen, "fetch_archive_chunks", side_effect=chunks)
+            )
+            api = (
+                patch(
+                    "check_release_channels._http_get_json",
+                    side_effect=api_error,
+                )
+                if api_error is not None
+                else patch(
+                    "check_release_channels._http_get_json",
+                    return_value={"name": "chordsketch", "version": api_version},
+                )
+            )
+            # REPO_ROOT follows the temp dir so the "could not parse" message,
+            # which prints the Portfile path relative to it, can be built.
+            with patch.object(regen, "PORTFILE", path), patch.object(
+                regen, "REPO_ROOT", Path(td)
+            ), patch.object(
+                check_release_channels, "_load_macports_regen", return_value=regen
+            ), fetch, api as mock_api:
+                result = check_release_channels.verify_channel(
+                    self._macports_channel(), tag, force_stale=False
+                )
+        return result, mock_api
+
+    def test_macports_checksums_left_on_the_previous_release_are_red(self) -> None:
+        # v0.8.0 and v0.9.0 shipped with v0.7.0's checksums and nothing went
+        # red: the release commit cannot fill them (the archive does not
+        # exist before the tag) and macports-portfile-sync reads only
+        # cargo.crates.
+        result, mock_api = self._verify_macports(
+            _MACPORTS_PORTFILE.format(version="0.9.0", data=b"v0.7.0 archive"),
+            "v0.9.0",
+            chunks=[_MACPORTS_ARCHIVE],
+        )
+        self.assertEqual(result.status, "FAIL")
+        self.assertEqual(result.observed, "<checksums-stale>")
+        self.assertIn("sha256:", result.detail)
+        mock_api.assert_not_called()
+
+    def test_macports_portfile_behind_the_release_is_red(self) -> None:
+        result, _ = self._verify_macports(
+            _MACPORTS_PORTFILE.format(version="0.8.0", data=_MACPORTS_ARCHIVE),
+            "v0.9.0",
+            chunks=[_MACPORTS_ARCHIVE],
+        )
+        self.assertEqual(result.status, "FAIL")
+        self.assertEqual(result.observed, "Portfile=0.8.0")
+
+    def test_macports_unparsable_portfile_is_an_error_not_an_abort(self) -> None:
+        # portfile_version() raises SystemExit; it must surface as a red
+        # channel result instead of terminating the checker.
+        result, _ = self._verify_macports(
+            "github.setup        something else entirely\n",
+            "v0.9.0",
+            chunks=[_MACPORTS_ARCHIVE],
+        )
+        self.assertEqual(result.status, "FAIL")
+        self.assertEqual(result.observed, "<error>")
+        self.assertIn("could not parse", result.detail)
+
+    def test_macports_archive_that_cannot_be_downloaded_is_an_error(self) -> None:
+        result, _ = self._verify_macports(
+            _MACPORTS_PORTFILE.format(version="0.9.0", data=_MACPORTS_ARCHIVE),
+            "v0.9.0",
+            chunks=OSError("connection reset"),
+        )
+        self.assertEqual(result.status, "FAIL")
+        self.assertEqual(result.observed, "<error>")
+
+    def test_macports_ready_portfile_with_an_older_port_is_pending(self) -> None:
+        # Merging the port bump is a MacPorts committer's action, so the lag
+        # is its own verdict (like Chocolatey's moderation) and the rollup
+        # stays green.
+        result, mock_api = self._verify_macports(
+            _MACPORTS_PORTFILE.format(version="0.9.0", data=_MACPORTS_ARCHIVE),
+            "v0.9.0",
+            chunks=[_MACPORTS_ARCHIVE],
+            api_version="0.5.0",
+        )
+        self.assertEqual(result.status, "PENDING")
+        self.assertTrue(result.ok)
+        self.assertEqual(result.observed, "0.5.0")
+        self.assertEqual(result.expected, "0.9.0")
+        self.assertEqual(
+            mock_api.call_args.args[0],
+            "https://ports.macports.org/api/v1/ports/chordsketch/",
+        )
+
+    def test_macports_port_at_the_release_version_is_ok(self) -> None:
+        result, _ = self._verify_macports(
+            _MACPORTS_PORTFILE.format(version="0.9.0", data=_MACPORTS_ARCHIVE),
+            "v0.9.0",
+            chunks=[_MACPORTS_ARCHIVE],
+            api_version="0.9.0",
+        )
+        self.assertEqual(result.status, "OK")
+        self.assertFalse(result.pending)
+
+    def test_macports_unknown_port_is_absent(self) -> None:
+        result, _ = self._verify_macports(
+            _MACPORTS_PORTFILE.format(version="0.9.0", data=_MACPORTS_ARCHIVE),
+            "v0.9.0",
+            chunks=[_MACPORTS_ARCHIVE],
+            api_error=urllib.error.HTTPError(
+                "https://ports.macports.org/", 404, "Not Found", {}, None
+            ),
+        )
+        self.assertEqual(result.status, "FAIL")
+        self.assertEqual(result.observed, "<absent>")
+
+    def test_macports_api_failure_is_an_error_not_pending(self) -> None:
+        result, _ = self._verify_macports(
+            _MACPORTS_PORTFILE.format(version="0.9.0", data=_MACPORTS_ARCHIVE),
+            "v0.9.0",
+            chunks=[_MACPORTS_ARCHIVE],
+            api_error=OSError("timed out"),
+        )
+        self.assertEqual(result.status, "FAIL")
+        self.assertEqual(result.observed, "<error>")
 
     def test_maven_central_match(self) -> None:
         # Maven groupId is `me.koeda` (reverse-DNS of the koeda.me
