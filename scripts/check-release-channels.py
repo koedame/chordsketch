@@ -818,7 +818,10 @@ def _check_macports(channel: Channel, version: str) -> CheckResult:
     """
     regen = _load_macports_regen()
     portfile = regen.PORTFILE.read_text(encoding="utf-8")
-    pinned = regen.portfile_version(portfile)
+    try:
+        pinned = regen.portfile_version(portfile)
+    except SystemExit as exc:  # an unparsable `github.setup` line is a red, not an abort
+        return _error(channel, version, str(exc.code))
     if pinned != version:
         return CheckResult(
             channel_id=channel.id,
