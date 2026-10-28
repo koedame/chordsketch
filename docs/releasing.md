@@ -426,7 +426,7 @@ together with the check in `scripts/_publish_checks.py`.
 | VS Code Marketplace | `koedame.chordsketch` (1 universal + 7 platform-specific VSIXes, #1789) | `vscode-extension.yml`, called by `release.yml` on tag push | `VSCE_PAT` (PAT, Marketplace Publish scope) | `vscode-marketplace` rollup entry |
 | PyPI | `chordsketch` | `python.yml` on tag push | none (OIDC trusted publisher) | `pypi` rollup entry |
 | RubyGems | `chordsketch` | `ruby.yml` on tag push | none (OIDC trusted publisher) | `rubygems` rollup entry |
-| Maven Central | `me.koeda:chordsketch` | `kotlin.yml` on tag push | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`, `SIGNING_PASSWORD` | `maven-central` rollup entry |
+| Maven Central | `me.koeda:chordsketch` | `kotlin.yml` on tag push | `CENTRAL_PORTAL_USERNAME`, `CENTRAL_PORTAL_PASSWORD` (Central Portal user token, which expires; ADR-0001), `GPG_SIGNING_KEY`, `GPG_SIGNING_PASSWORD` | `maven-central` rollup entry |
 | JetBrains Marketplace | `me.koeda.chordsketch` | manual `./gradlew publishPlugin` | `JETBRAINS_MARKETPLACE_TOKEN` | not yet automated |
 | from source | `git clone` + `cargo install --path crates/cli` | always available | none | `source-build` job |
 | Library Usage (Rust) | crates.io snippet from README | implicit via crates.io | none | `library-smoke` job |
