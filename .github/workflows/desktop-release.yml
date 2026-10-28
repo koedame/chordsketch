@@ -14,7 +14,7 @@ name: Desktop Release
 #
 # Signing: this workflow ships **unsigned** bundles today. When
 # #2075 lands (Apple Developer ID + Windows Authenticode
-# certificates in repository secrets), the shared build steps
+# certificates in the `desktop-signing` environment secrets), the shared build steps
 # import the Apple certificate into a keychain before the build
 # and Tauri's build step picks up the signing env vars, so the
 # same cargo tauri build invocation below starts producing
@@ -64,6 +64,7 @@ jobs:
     name: Build (${{ matrix.platform.label }})
     needs: [validate]
     runs-on: ${{ matrix.platform.runner }}
+    environment: desktop-signing
     # Fail-closed: if any matrix cell fails, the downstream
     # `release` job (needs: build) is skipped and no GitHub
     # Release is created. A partial desktop release would orphan
@@ -349,6 +350,7 @@ jobs:
     # token secret is shared with the CLI post-release flow.
     needs: [release]
     runs-on: ubuntu-latest
+    environment: tap-publish
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -473,6 +475,7 @@ jobs:
     # and pushes. The token secret is shared with the other tap jobs.
     needs: [release]
     runs-on: ubuntu-latest
+    environment: tap-publish
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -574,6 +577,7 @@ jobs:
     # runs the `Generate Flathub files` step before every merge.
     needs: [release]
     runs-on: ubuntu-latest
+    environment: flathub
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -689,7 +693,7 @@ jobs:
     # (single git push), and well-supported by Tauri's updater
     # (which just GETs the URL).
     #
-    # If `TAURI_SIGNING_PRIVATE_KEY` is not set in repo secrets
+    # If `TAURI_SIGNING_PRIVATE_KEY` is not set in the `desktop-signing` environment secrets
     # (the pre-#2076 state), the `.sig` files never exist and this
     # job fails early with a clear error rather than publishing a
     # manifest with empty signatures that would fail client-side
@@ -741,7 +745,7 @@ jobs:
             -p "*.AppImage.sig" \
             -p "*-setup.exe.sig" || {
               echo "ERROR: release $TAG does not contain the updater signature files." >&2
-              echo "       Verify TAURI_SIGNING_PRIVATE_KEY is populated in repo secrets." >&2
+              echo "       Verify TAURI_SIGNING_PRIVATE_KEY is populated in the desktop-signing environment secrets." >&2
               exit 1
             }
           ls -la

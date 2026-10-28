@@ -108,8 +108,10 @@ not yet usable but is worth checking periodically.
 **Mitigations**
 
 - The secrets are scoped to the `maven-central` environment, not the
-  repository (see `kotlin.yml` lines 196–198), so they are not exposed to
-  pull-request workflow runs or to unrelated jobs.
+  repository (see `kotlin.yml`), and the environment admits only `main` and
+  the release tags ([ADR-0090](0090-publishing-credentials-are-environment-secrets-limited-to-main-and-release-tags.md)),
+  so they are not exposed to pull-request workflow runs, to other branches or
+  to unrelated jobs.
 - The `maven-central` environment can have required reviewers added if
   the threat model demands it; this ADR does not mandate that change but
   notes it as an available lever.
