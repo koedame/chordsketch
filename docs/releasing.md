@@ -422,7 +422,7 @@ together with the check in `scripts/_publish_checks.py`.
 | Snap Store | `chordsketch` | `post-release.yml`, called by `release.yml` on tag push | `SNAP_STORE_TOKEN` | `snap` rollup entry |
 | nixpkgs | `pkgs.chordsketch` | manual PR to `NixOS/nixpkgs` | none | `nixpkgs` rollup entry |
 | winget | `koedame.chordsketch` | manual PR to `microsoft/winget-pkgs` (Step 9) | none (uses your `gh` token to fork+push) | `winget` job |
-| MacPorts | `textproc/chordsketch` | manual PR to `macports/macports-ports` (Step 5) | none | `macports` job |
+| MacPorts | `textproc/chordsketch` | manual PR to `macports/macports-ports` (Step 5) | none | `macports` rollup entry |
 | VS Code Marketplace | `koedame.chordsketch` (1 universal + 7 platform-specific VSIXes, #1789) | `vscode-extension.yml`, called by `release.yml` on tag push | `VSCE_PAT` (PAT, Marketplace Publish scope) | `vscode-marketplace` rollup entry |
 | PyPI | `chordsketch` | `python.yml` on tag push | none (OIDC trusted publisher) | `pypi` rollup entry |
 | RubyGems | `chordsketch` | `ruby.yml` on tag push | none (OIDC trusted publisher) | `rubygems` rollup entry |
@@ -528,6 +528,10 @@ After the release workflow completes and the GitHub Release is published:
       openssl dgst -sha256 chordsketch-${TAG}.tar.gz
       wc -c chordsketch-${TAG}.tar.gz
       ```
+      Open a PR for this in this repository. The release-verify rollup's
+      `macports` row turns red until the `checksums` match the tag's
+      archive; `python3 scripts/macports-regen-cargo-crates.py
+      --check-archive` runs the same comparison locally.
    2. Regenerate the `cargo.crates` block from the **tagged** `Cargo.lock`.
       The cargo portgroup downloads each crate listed in `cargo.crates` and
       validates its checksum against the lockfile shipped inside the
@@ -578,7 +582,12 @@ After the release workflow completes and the GitHub Release is published:
       that is not yet in the upstream tree has no archive to fetch.
    4. Fork `macports/macports-ports` (or use the existing fork), place the
       Portfile in `textproc/chordsketch/Portfile`, and open a PR.
-   5. Wait for MacPorts CI and maintainer review.
+   5. Wait for MacPorts CI and maintainer review. Until a MacPorts
+      committer merges the PR, the rollup's `macports` row reads PENDING
+      (green, like Chocolatey's moderation wait): the Portfile here is
+      ready but `ports.macports.org` still serves an older version. A
+      PENDING that outlives a release or two means the PR was never opened
+      or is stuck, so look at it then.
 
 6. **Automated channel rollup** — `.github/workflows/release-verify.yml`
    has `on: release: types: [published]`, but like the other publish
