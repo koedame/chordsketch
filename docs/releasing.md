@@ -145,12 +145,15 @@ is healthy. Any gap here would silently break a channel and be discovered
 at post-release verification rather than before the tag is cut.
 
 1. **Every expected secret exists.** Cross-reference
-   `ci/release-channels.toml`'s `required_secrets` against the repo secret
-   list:
+   `ci/release-channels.toml`'s `required_secrets` against the secrets of the
+   environment that holds them ([Where the publishing secrets live](#where-the-publishing-secrets-live)):
    ```bash
-   gh secret list -R koedame/chordsketch
+   for env in docker-hub vscode-marketplace open-vsx maven-central tap-publish chocolatey snap-store aur desktop-signing; do
+     echo "== $env"; gh secret list --env "$env" -R koedame/chordsketch
+   done
    ```
-   Every secret listed in `required_secrets` (any field) must appear.
+   Every secret listed in `required_secrets` (any field) must appear under
+   its environment.
 2. **Every referenced environment exists.** The silent VS Code Marketplace
    skip happened because the `vscode-marketplace` environment was never
    created. Guard against a recurrence:
@@ -158,8 +161,9 @@ at post-release verification rather than before the tag is cut.
    gh api repos/koedame/chordsketch/environments --jq '.environments[].name'
    ```
    Every `environment:` name used in a publish job (`docker-hub`,
-   `vscode-marketplace`, `pypi`, `rubygems`, `maven-central`, `crates-io`,
-   `npm`) must appear in the output.
+   `vscode-marketplace`, `open-vsx`, `pypi`, `rubygems`, `maven-central`,
+   `crates-io`, `npm`, `tap-publish`, `chocolatey`, `snap-store`, `aur`,
+   `desktop-signing`, `flathub`) must appear in the output.
 3. **`ci.yml` and `readme-smoke.yml` are green on the target commit.** The
    release workflow builds from that commit, so a red CI is a release
    blocker:
@@ -646,17 +650,75 @@ After the release workflow completes and the GitHub Release is published:
 
 ## Required Secrets
 
-| Secret | Scope | Purpose |
-|--------|-------|---------|
-| `TAP_GITHUB_TOKEN` | `contents:write` on `koedame/homebrew-tap` and `koedame/scoop-bucket` | Push updated formulae/manifests after release |
-| `DOCKERHUB_USERNAME` | string | Docker Hub username under which images are pushed (currently `koedame`) |
-| `DOCKERHUB_TOKEN` | Docker Hub Personal Access Token, "Read & Write" | Authenticate `docker push` against `docker.io/koedame/chordsketch` from `docker.yml` |
-| `CHOCOLATEY_API_KEY` | Chocolatey Community Repository API key | Authenticate `choco push` from `post-release.yml` (windows-latest runner) |
-| `AUR_SSH_KEY` | ed25519 SSH private key registered with AUR account `koedame` | Authenticate `git push` to `ssh://aur@aur.archlinux.org/chordsketch.git` from `post-release.yml` |
-| `SNAP_STORE_TOKEN` | Snapcraft exported credentials (`snapcraft export-login`) | Authenticate `snapcraft upload` + `snapcraft release` from `post-release.yml` |
-| `OPEN_VSX_TOKEN` | Open VSX personal access token (**environment secret** in `open-vsx`, not repo-level) | Authenticate `ovsx publish` from `vscode-extension.yml` |
-| `FLATHUB_TOKEN` | Classic token with `public_repo`, from an account with write access to `flathub/io.github.koedame.chordsketch` | Open the update pull request from `desktop-release.yml`'s `update-flathub` job. Not set until the first submission is accepted ([Flathub](#flathub-desktop-app)) |
-| `GITHUB_TOKEN` | provided automatically | Used by `docker.yml` to push to GHCR, by `release.yml` to upload assets, by `npm-publish.yml` checkout |
+Each secret is an **environment secret** in the environment named below, not a
+repository secret ([Where the publishing secrets live](#where-the-publishing-secrets-live)).
+
+| Secret | Environment | Scope | Purpose |
+|--------|-------------|-------|---------|
+| `TAP_GITHUB_TOKEN` | `tap-publish` | `contents:write` on `koedame/homebrew-tap` and `koedame/scoop-bucket` | Push updated formulae/manifests after release |
+| `DOCKERHUB_USERNAME` | `docker-hub` | string | Docker Hub username under which images are pushed (currently `koedame`) |
+| `DOCKERHUB_TOKEN` | `docker-hub` | Docker Hub Personal Access Token, "Read & Write" | Authenticate `docker push` against `docker.io/koedame/chordsketch` from `docker.yml` |
+| `CHOCOLATEY_API_KEY` | `chocolatey` | Chocolatey Community Repository API key | Authenticate `choco push` from `post-release.yml` (windows-latest runner) |
+| `AUR_SSH_KEY` | `aur` | ed25519 SSH private key registered with AUR account `koedame` | Authenticate `git push` to `ssh://aur@aur.archlinux.org/chordsketch.git` from `post-release.yml` |
+| `SNAP_STORE_TOKEN` | `snap-store` | Snapcraft exported credentials (`snapcraft export-login`) | Authenticate `snapcraft upload` + `snapcraft release` from `post-release.yml` |
+| `OPEN_VSX_TOKEN` | `open-vsx` | Open VSX personal access token | Authenticate `ovsx publish` from `vscode-extension.yml` |
+| `VSCE_PAT` | `vscode-marketplace` | Personal access token with the Marketplace publish scope | Authenticate `vsce publish` from `vscode-extension.yml` |
+| `CENTRAL_PORTAL_USERNAME` / `CENTRAL_PORTAL_PASSWORD` | `maven-central` | Central Portal user token | Publish the Kotlin package from `kotlin.yml` (ADR-0001) |
+| `GPG_SIGNING_KEY` / `GPG_SIGNING_PASSWORD` | `maven-central` | Armored private key and its passphrase | Sign the Kotlin package from `kotlin.yml` |
+| `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | `desktop-signing` | Tauri updater signing key and its password | Sign the desktop updater artifacts in `desktop-release.yml` (ADR-0005) |
+| `FLATHUB_TOKEN` | `flathub` | Classic token with `public_repo`, from an account with write access to `flathub/io.github.koedame.chordsketch` | Open the update pull request from `desktop-release.yml`'s `update-flathub` job. Not set until the first submission is accepted ([Flathub](#flathub-desktop-app)) |
+| `CLAUDE_PAT` | repository | Token with `contents:write` on this repository | Push from the review and rebase automation (`claude*.yml`, `auto-*.yml`) and the Swift package pin in `swift.yml`. These run on pull-request activity, so the token stays a repository secret |
+| `CLAUDE_CODE_OAUTH_TOKEN` | repository | OAuth token | The review automation |
+| `GITHUB_TOKEN` | provided automatically | | Used by `docker.yml` to push to GHCR, by `release.yml` to upload assets, by `npm-publish.yml` checkout |
+
+### Where the publishing secrets live
+
+Every credential a release publishes with is an environment secret, in the
+environment of the channel that uses it. Each of those environments admits
+only `main` and the release tags, so a workflow run from any other branch
+(or from a pull request) cannot read them. The publish jobs name the
+environment with `environment:`; `release-credentials.yml` has one job per
+environment and runs from `main`.
+
+| Environment | Secrets | Refs admitted |
+|---|---|---|
+| `docker-hub` | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | `main`, `v*` |
+| `vscode-marketplace` | `VSCE_PAT` | `main`, `v*` |
+| `open-vsx` | `OPEN_VSX_TOKEN` | `main`, `v*` |
+| `maven-central` | `CENTRAL_PORTAL_USERNAME`, `CENTRAL_PORTAL_PASSWORD`, `GPG_SIGNING_KEY`, `GPG_SIGNING_PASSWORD` | `main`, `v*` |
+| `chocolatey` | `CHOCOLATEY_API_KEY` | `main`, `v*` |
+| `snap-store` | `SNAP_STORE_TOKEN` | `main`, `v*` |
+| `aur` | `AUR_SSH_KEY` | `main`, `v*` |
+| `tap-publish` | `TAP_GITHUB_TOKEN` | `main`, `v*`, `desktop-v*` |
+| `desktop-signing` | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and the `APPLE_*` / `WINDOWS_*` signing secrets once they exist | `main`, `desktop-v*` |
+| `flathub` | `FLATHUB_TOKEN` | `main`, `desktop-v*` |
+| `pypi`, `rubygems` | none (trusted publishing) | `main`, `v*` |
+| `crates-io`, `npm` | none (trusted publishing) | `main` |
+
+A job can use one environment, so a job that needs secrets from two channels
+has to be split. To add a channel or move a secret, create the environment
+with its refs, set the secret there, then delete any repository secret of the
+same name:
+
+```bash
+env=<name>
+gh api -X PUT repos/koedame/chordsketch/environments/$env \
+  -F 'deployment_branch_policy[protected_branches]=false' \
+  -F 'deployment_branch_policy[custom_branch_policies]=true'
+gh api -X POST repos/koedame/chordsketch/environments/$env/deployment-branch-policies -f name=main -f type=branch
+gh api -X POST repos/koedame/chordsketch/environments/$env/deployment-branch-policies -f name='v*' -f type=tag
+gh secret set <SECRET> --env $env -R koedame/chordsketch
+gh secret delete <SECRET> -R koedame/chordsketch   # only if a repository secret of that name exists
+```
+
+An environment secret shadows a repository secret of the same name, so a
+repository secret left behind keeps working for every job without an
+`environment:` and defeats the restriction. Verify the repository list holds
+only what the table above lists as `repository`:
+
+```bash
+gh secret list -R koedame/chordsketch
+```
 
 crates.io, npm, PyPI and RubyGems need no secret: they publish through
 trusted publishing ([Trusted publishing](#trusted-publishing)).
@@ -676,10 +738,10 @@ following as the rotation policy:
 |--------|----------------|-------------|
 | `DOCKERHUB_TOKEN` | Every 90 days | <https://hub.docker.com/settings/security> |
 | `TAP_GITHUB_TOKEN` | Every 90 days, or whenever the issuing GitHub account changes 2FA / recovery setup | <https://github.com/settings/tokens> |
-| `CHOCOLATEY_API_KEY` | Only if regenerated on chocolatey.org | <https://community.chocolatey.org/account> → API Key → copy, then `gh secret set CHOCOLATEY_API_KEY` |
-| `AUR_SSH_KEY` | Only if the key is compromised or the AUR account changes | <https://aur.archlinux.org/account/koedame> (replace SSH public key, then `gh secret set AUR_SSH_KEY < new_key`) |
-| `SNAP_STORE_TOKEN` | Before expiry date (check current expiry with `snapcraft whoami`) | `snapcraft export-login ~/snap-token.txt && gh secret set SNAP_STORE_TOKEN < ~/snap-token.txt && rm -f ~/snap-token.txt` |
-| `FLATHUB_TOKEN` | Every 90 days, like `TAP_GITHUB_TOKEN` | <https://github.com/settings/tokens>, then `gh secret set FLATHUB_TOKEN` |
+| `CHOCOLATEY_API_KEY` | Only if regenerated on chocolatey.org | <https://community.chocolatey.org/account> → API Key → copy, then `gh secret set CHOCOLATEY_API_KEY --env chocolatey` |
+| `AUR_SSH_KEY` | Only if the key is compromised or the AUR account changes | <https://aur.archlinux.org/account/koedame> (replace SSH public key, then `gh secret set AUR_SSH_KEY --env aur < new_key`) |
+| `SNAP_STORE_TOKEN` | Before expiry date (check current expiry with `snapcraft whoami`) | `snapcraft export-login ~/snap-token.txt && gh secret set SNAP_STORE_TOKEN --env snap-store < ~/snap-token.txt && rm -f ~/snap-token.txt` |
+| `FLATHUB_TOKEN` | Every 90 days, like `TAP_GITHUB_TOKEN` | <https://github.com/settings/tokens>, then `gh secret set FLATHUB_TOKEN --env flathub` |
 | `OPEN_VSX_TOKEN` | Only if revoked or compromised | <https://open-vsx.org/user-settings/tokens> → generate new token, then `gh secret set OPEN_VSX_TOKEN --env open-vsx` |
 | `DOCKERHUB_USERNAME` | Only if the Docker Hub namespace owner changes | n/a (string, not a credential) |
 | `GITHUB_TOKEN` | Provided automatically per workflow run; no rotation needed | n/a |
@@ -688,7 +750,7 @@ Procedure for any rotation:
 
 1. Issue the new token with the **same scope** documented in the Required
    Secrets table above.
-2. Update the repo secret: `gh secret set <NAME> -R koedame/chordsketch`.
+2. Update the environment secret: `gh secret set <NAME> --env <environment> -R koedame/chordsketch` (environment per the Required Secrets table).
 3. Revoke the old token in the issuing UI.
 4. Trigger a verification run and confirm the affected smoke job is green:
    ```bash
@@ -740,7 +802,8 @@ smoke on that.
    `base64 -i certificate.p12`), `APPLE_CERTIFICATE_PASSWORD` (the
    `.p12` password), `APPLE_SIGNING_IDENTITY` (the certificate's name,
    `Developer ID Application: <name> (<team id>)`), `APPLE_ID`,
-   `APPLE_PASSWORD` and `APPLE_TEAM_ID` as repository secrets.
+   `APPLE_PASSWORD` and `APPLE_TEAM_ID` as secrets of the `desktop-signing`
+   environment (`gh secret set <NAME> --env desktop-signing`).
    Nothing else has to change. `desktop-release.yml` passes all six to
    `desktop-build-steps`, whose macOS step `Import the Apple signing
    certificate` puts the certificate into a keychain **before** the
@@ -1275,9 +1338,9 @@ Set up on 2026-04-15. Automated via `post-release.yml` `update-aur`.
    git commit -m "Initial upload: X.Y.Z"
    GIT_SSH_COMMAND="ssh -i ~/.ssh/aur_key" git push
    ```
-4. Store the SSH private key as a GitHub secret:
+4. Store the SSH private key as an environment secret:
    ```bash
-   gh secret set AUR_SSH_KEY -R koedame/chordsketch < ~/.ssh/aur_key
+   gh secret set AUR_SSH_KEY --env aur -R koedame/chordsketch < ~/.ssh/aur_key
    ```
 
 ### Chocolatey (Windows)
@@ -1291,9 +1354,9 @@ No local Windows machine is needed.
    Confirm the email verification link.
 2. Log in and copy the API key from
    <https://community.chocolatey.org/account>.
-3. Store the API key as a GitHub secret:
+3. Store the API key as an environment secret:
    ```bash
-   gh secret set CHOCOLATEY_API_KEY -R koedame/chordsketch
+   gh secret set CHOCOLATEY_API_KEY --env chocolatey -R koedame/chordsketch
    # Paste the API key when prompted
    ```
 4. The `post-release.yml` `update-chocolatey` job handles building the
@@ -1450,9 +1513,9 @@ needed for a file-processing CLI).
    SNAPCRAFT_STORE_CREDENTIALS="$(cat ~/snap-token.txt)" \
      snapcraft upload chordsketch_X.Y.Z_amd64.snap --release=stable
    ```
-5. Store the credentials as a GitHub secret and clean up:
+5. Store the credentials as an environment secret and clean up:
    ```bash
-   gh secret set SNAP_STORE_TOKEN -R koedame/chordsketch < ~/snap-token.txt
+   gh secret set SNAP_STORE_TOKEN --env snap-store -R koedame/chordsketch < ~/snap-token.txt
    rm -f ~/snap-token.txt
    ```
 
@@ -1471,7 +1534,7 @@ the Open VSX Registry. Open VSX requires a separate account and token.
    ```bash
    npx ovsx create-namespace koedame -p <token-from-step-2>
    ```
-4. Store the token as an **environment secret** (not repo-level):
+4. Store the token as an environment secret:
    ```bash
    gh secret set OPEN_VSX_TOKEN --env open-vsx -R koedame/chordsketch
    # Paste the token when prompted
@@ -1534,7 +1597,7 @@ governs who may submit and what may be submitted:
 6. Once it is merged, Flathub creates `flathub/io.github.koedame.chordsketch` and
    invites you. Create a classic token with the `public_repo` scope from
    the account Flathub invited, and store it:
-   `gh secret set FLATHUB_TOKEN -R koedame/chordsketch`. From the next
+   `gh secret set FLATHUB_TOKEN --env flathub -R koedame/chordsketch`. From the next
    release, `desktop-release.yml`'s `update-flathub` job opens the update
    pull request; install the test build Flathub links from it, then merge.
 7. Verify the app on the Flathub developer portal by signing in with a

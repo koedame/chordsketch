@@ -45,7 +45,7 @@ inputs:
       `TAURI_SIGNING_PRIVATE_KEY` is not available on PR runs.
     required: false
     default: ""
-  # --- Signing pass-throughs (populated from repo secrets at the
+  # --- Signing pass-throughs (populated from the `desktop-signing` environment secrets at the
   # caller level). All default to empty so the PR-smoke caller
   # doesn't need to enumerate them. The Apple certificate is imported
   # into a keychain by its own step; Tauri's build step reads the

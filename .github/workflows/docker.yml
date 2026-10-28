@@ -113,10 +113,8 @@ jobs:
     # Hub is secondary to GHCR, so a blocked or missing environment should
     # not color a successful release workflow red. See #1437.
     #
-    # One-time human setup: create the "docker-hub" environment at
-    #   https://github.com/koedame/chordsketch/settings/environments
-    # and move DOCKERHUB_USERNAME and DOCKERHUB_TOKEN from repository
-    # secrets to environment secrets.
+    # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are environment secrets of
+    # "docker-hub", which admits only `main` and `v*` tags (ADR-0090).
     continue-on-error: true
     environment:
       name: docker-hub
