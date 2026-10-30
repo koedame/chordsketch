@@ -42,12 +42,12 @@ raw-window-handle = "0.6"
 # `windows::core::implement` expands to absolute `::windows_core::`
 # paths, so the crate behind that re-export has to be a direct
 # dependency as well.
-windows-core = "0.61"
+windows-core = "0.62"
 # Every `windows` feature this crate's own code reaches for is listed
 # here rather than left to Cargo's feature unification with `wry`. An
 # omission is invisible while `wry` pulls the same `windows` major and
 # turns into a compile error the moment it moves to the next one.
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_System_Com",
@@ -59,4 +59,4 @@ windows = { version = "0.61", features = [
 ] }
 # Same WebView2 embedding layer the desktop app itself runs on, so the
 # preview pane and the app render through one code path.
-wry = "0.55"
+wry = "0.57"
