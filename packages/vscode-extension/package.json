@@ -179,6 +179,8 @@
     "@azure/msal-node": "^7.1.0",
     "mocha": {
       "diff": "^8.0.4"
-    }
+    },
+    "glob": "^14.0.2",
+    "minimatch": "^11.0.1"
   }
 }
