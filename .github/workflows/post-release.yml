@@ -17,6 +17,18 @@ on:
         description: "Release tag (e.g., v0.1.0)"
         required: true
         type: string
+      only:
+        description: "Run a single channel against the tag (a re-run must not re-publish the others), or `all`"
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - homebrew
+          - scoop
+          - chocolatey
+          - snap
+          - aur
 
 # Post-release runs key off an already-published GitHub Release (or a
 # manual dispatch of a specific tag) and fan out to external package
@@ -36,8 +48,11 @@ defaults:
     shell: bash
 
 jobs:
+  # `only` exists on workflow_dispatch alone; a workflow_call run (the
+  # release fan-out) leaves it unset, so every job below runs.
   update-homebrew:
     name: Update Homebrew formula
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'homebrew' }}
     runs-on: ubuntu-latest
     environment: tap-publish
     steps:
@@ -138,6 +153,7 @@ jobs:
 
   update-scoop:
     name: Update Scoop manifest
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'scoop' }}
     runs-on: ubuntu-latest
     environment: tap-publish
     steps:
@@ -218,6 +234,7 @@ jobs:
 
   update-chocolatey:
     name: Update Chocolatey package
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'chocolatey' }}
     runs-on: windows-latest
     environment: chocolatey
     steps:
@@ -274,6 +291,7 @@ jobs:
 
   update-snap:
     name: Update Snap package
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'snap' }}
     # Pinned to 24.04: snapcraft refuses a core24 build on any other Ubuntu
     # release (`ubuntu-latest` moved to 26.04 on 2026-11-01).
     runs-on: ubuntu-24.04
@@ -342,6 +360,7 @@ jobs:
 
   update-aur:
     name: Update AUR packages
+    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'aur' }}
     runs-on: ubuntu-latest
     environment: aur
     # Two package bases, per the AUR submission guidelines: `chordsketch`
