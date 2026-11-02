@@ -360,3 +360,18 @@ jobs:
     with:
       tag: ${{ needs.release.outputs.tag }}
     secrets: inherit
+
+  # Last in the graph: once the release and every channel that serves its
+  # assets are up to date, delete the older releases (ADR-0091). Skipped
+  # when any job above failed, so a channel that still points at an older
+  # release keeps working until it is repaired.
+  prune-old-releases:
+    name: Prune old releases
+    needs: [release, docker, napi, vscode-extension, npm-wasm, npm-tree-sitter, swift, post-release]
+    if: ${{ always() && needs.release.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/prune-old-releases.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit

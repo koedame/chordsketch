@@ -311,6 +311,7 @@ jobs:
             scripts/test_check_release_channels.py \
             scripts/test_license_layers.py \
             scripts/test_release.py \
+            scripts/test_prune_old_releases.py \
             scripts/test_swift_package.py \
             scripts/test_check_msrv_consistency.py \
             scripts/test_check_fixture_counts.py \

@@ -9,6 +9,16 @@ bumped in lockstep. This project follows [Semantic Versioning](https://semver.or
 - **Minor** (0.2.0) — new features, backward compatible
 - **Patch** (0.1.1) — bug fixes, backward compatible
 
+### Pre-1.0: only the newest release of each family stays
+
+While the version is 0.x, the GitHub Releases page keeps only the newest
+`v*` release and the newest `desktop-v*` release; the release workflows delete
+the older ones (and their assets, not their git tags) as their last step
+([ADR-0091](adr/0091-before-1-0-only-the-newest-release-of-each-family-stays-on-github.md)).
+An old release can carry a vulnerability that a later one fixed, and the page
+should not offer it. Nothing links to an old release's assets by hand: every
+package definition pins the version being released.
+
 ### Pre-1.0: breaking changes are expected
 
 The workspace is below `1.0.0` and is still a **validation phase** — the
@@ -309,6 +319,16 @@ at post-release verification rather than before the tag is cut.
    `needs: [release]` jobs in that single run, per
    [ADR-0039](adr/0039-release-fan-out-is-an-explicit-call-graph.md).
    Nothing needs dispatching to make the release happen.
+
+   The run ends with `prune-old-releases`, which deletes the older GitHub
+   Releases of the same family once every channel above has succeeded
+   ([ADR-0091](adr/0091-before-1-0-only-the-newest-release-of-each-family-stays-on-github.md)).
+   If a channel failed, that job is skipped and the older releases stay;
+   after repairing the channel, run it by hand (a dry run unless
+   `dry-run` is unticked):
+   ```bash
+   gh workflow run prune-old-releases.yml -f tag=v$V -f dry-run=false -R koedame/chordsketch
+   ```
 
    What is left is the convergence check, and it can only run once
    step 6 has published crates.io and npm:
