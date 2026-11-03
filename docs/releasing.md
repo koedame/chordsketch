@@ -350,6 +350,13 @@ at post-release verification rather than before the tag is cut.
    gh workflow run napi.yml             -f tag=v$V -R koedame/chordsketch
    gh workflow run swift.yml            -f tag=v$V -R koedame/chordsketch
    ```
+   `post-release.yml` takes an optional `only` input (`homebrew`, `scoop`,
+   `chocolatey`, `snap`, `aur`) that runs a single channel; a dispatch without
+   it runs all five, and the Chocolatey and Snap uploads are not safe to
+   repeat for a published version:
+   ```bash
+   gh workflow run post-release.yml -f tag=v$V -f only=aur -R koedame/chordsketch
+   ```
    A `docker.yml` dispatch deliberately does **not** move the `:latest`
    tag unless you tick `promote-latest`, so re-running an older tag
    cannot regress it (#1064). The `napi.yml` dispatch only re-runs the
