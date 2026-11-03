@@ -2,20 +2,16 @@
 # Expects a pre-built musl binary at ./chordsketch-${TARGETARCH}.
 # Used by .github/workflows/docker.yml.
 
-# Pinned to a specific Alpine point release AND its sha256 manifest list
-# digest (was floating `alpine:3`) so a future Alpine 3.x change to
-# `adduser` flags / musl ABI / or a tag republish cannot silently change
-# the image we ship. The tag is kept alongside the digest so Dependabot
-# can correlate the bump and humans can read the version at a glance.
-# Bump intentionally via Dependabot. See #1070, #1100.
-FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
-
-RUN adduser -D -u 1000 chordsketch
+# Distroless static: no shell and no package manager in the shipped image.
+# The binary is a static musl build, so it needs nothing from libc.
+# `nonroot` runs as uid 65532. Pinned to the tag AND its sha256 manifest
+# list digest so a tag republish cannot silently change the image we
+# ship. The tag is kept alongside the digest so Dependabot can correlate
+# the bump and humans can read the version at a glance. See #1070, #1100.
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329
 
 ARG TARGETARCH
-COPY chordsketch-${TARGETARCH} /usr/local/bin/chordsketch
-RUN chmod +x /usr/local/bin/chordsketch
+COPY --chmod=0755 chordsketch-${TARGETARCH} /usr/local/bin/chordsketch
 COPY LICENSE NOTICE THIRD_PARTY_LICENSES.md /usr/share/licenses/chordsketch/
-USER chordsketch
 
 ENTRYPOINT ["/usr/local/bin/chordsketch"]

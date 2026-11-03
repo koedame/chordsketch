@@ -208,7 +208,7 @@ pushing.
 | The image runs, reports the version, and does not run as root | — | `container_image_problems` |
 | Size: GHCR limits a layer to 10 GB; Docker Hub documents no limit | [Working with the Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) | not checked (the image is a few megabytes) |
 
-The image pulls its pinned Alpine base from Docker Hub on every pull
+The image pulls its pinned Distroless base from gcr.io on every pull
 request, the dependency ADR-0062 declined for the from-source `Dockerfile`.
 Here the image is a published artifact, which ADR-0070 weighs above that
 cost.
