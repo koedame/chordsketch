@@ -1,0 +1,70 @@
+name: Prune old releases
+
+# Reusable: called last by release.yml and desktop-release.yml, after the
+# release is published and every channel that points at its assets has
+# been updated (ADR-0091). Deletes the GitHub Releases of the same family
+# that are older than `tag`, so only the newest one stays on the Releases
+# page. The git tags stay.
+#
+# Why this runs last: an older release's assets are what the channels
+# served until a moment ago. Deleting them before the channels moved to
+# the new release would break installs in the gap, and if a channel's
+# update fails the caller's `needs:` leaves this job skipped, so the old
+# release stays until the channel is repaired and this workflow is
+# re-dispatched.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "The release just published (e.g., v0.10.0 or desktop-v0.10.0). Older releases of the same family are deleted."
+        required: true
+        type: string
+      dry-run:
+        description: "Print what would be deleted and delete nothing."
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release to keep (e.g., v0.10.0 or desktop-v0.10.0). Older releases of the same family are deleted."
+        required: true
+        type: string
+      dry-run:
+        description: "Print what would be deleted and delete nothing."
+        required: false
+        type: boolean
+        default: true
+
+# Two prunes of the same family deleting the same releases is harmless
+# but noisy; never cancel one mid-flight.
+concurrency:
+  group: prune-old-releases-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    name: Delete older releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prune
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          # The script format-validates `TAG` itself and refuses a tag
+          # that has no release.
+          args=(--tag "$TAG" --repo "$GITHUB_REPOSITORY")
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          python3 scripts/prune-old-releases.py "${args[@]}"

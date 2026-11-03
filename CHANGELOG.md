@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Only the newest release of the CLI (`v*`) and of the desktop app
+  (`desktop-v*`) stays on the GitHub Releases page** while the version is
+  0.x, so nobody installs an older version that carries a fixed
+  vulnerability. Older releases and their downloads are removed when a new
+  release is published; the git tags remain.
+
 ### Fixed
 
 - **`{define}` with an unquoted `display=` or `format=` value that follows
