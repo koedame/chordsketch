@@ -6,7 +6,7 @@
 # otherwise produce a tampered builder that quietly compiles malicious
 # binary into the trusted runtime layer. The tag is kept alongside the
 # digest so Dependabot can correlate the bump. See #1103.
-FROM rust:1.98-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922 AS builder
+FROM rust:1.98-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e AS builder
 
 WORKDIR /build
 COPY . .
