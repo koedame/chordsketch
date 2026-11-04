@@ -61,3 +61,17 @@ updates:
     groups:
       pip-minor-patch:
         update-types: ["minor", "patch"]
+
+  # `directory: "/"` reads every file at the repository root whose name
+  # contains "dockerfile" (case-insensitive), so this one entry covers both
+  # `Dockerfile` and `Dockerfile.release`. Their `FROM` lines are pinned to
+  # tag@sha256 digest (see the comments there); Dependabot bumps the tag and
+  # the digest together, and refreshes the digest alone when a tag is
+  # republished.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      docker-minor-patch:
+        update-types: ["minor", "patch"]
