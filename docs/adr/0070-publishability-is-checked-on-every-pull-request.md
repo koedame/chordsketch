@@ -91,7 +91,7 @@ is made to read is not read.
   image. Those artifacts are staged, packed and checked exactly as at
   release, but only the Linux x86_64 build is loaded. Each release job runs
   the same check against the real per-target builds before it uploads.
-- The container image check pulls its pinned Alpine base from Docker Hub on
+- The container image check pulls its pinned Distroless base from gcr.io on
   every pull request — the registry dependency ADR-0062 declined for the
   from-source `Dockerfile`. The difference is that the release image is a
   published artifact: a registry hiccup failing a pull request is the

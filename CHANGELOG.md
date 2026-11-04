@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   0.x, so nobody installs an older version that carries a fixed
   vulnerability. Older releases and their downloads are removed when a new
   release is published; the git tags remain.
+- **The container images now run on Distroless** (`ghcr.io/koedame/chordsketch`
+  and the `Dockerfile` build). The image no longer contains a shell or a
+  package manager, and the process runs as the `nonroot` user (uid 65532
+  instead of 1000). `docker run` with the CLI as the entrypoint works as
+  before; `--entrypoint sh` no longer does.
 
 ### Fixed
 
