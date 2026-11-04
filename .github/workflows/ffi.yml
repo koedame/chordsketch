@@ -36,7 +36,7 @@ permissions:
 jobs:
   build-and-test:
     name: Build and test FFI crate
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -66,7 +66,7 @@ jobs:
   # This job catches UDL schema breakage early without running full builds.
   generate-bindings:
     name: Generate ${{ matrix.language }} bindings
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     strategy:
       matrix:
         language: [python, swift, kotlin, ruby]

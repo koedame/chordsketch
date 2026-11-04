@@ -50,7 +50,7 @@ defaults:
 jobs:
   scope:
     name: What the change reaches
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     outputs:
       run: ${{ steps.scope.outputs.run }}
     steps:
@@ -74,7 +74,7 @@ jobs:
 
   self-test:
     name: Publish checks self-test
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -96,7 +96,7 @@ jobs:
     name: crates.io
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -117,7 +117,7 @@ jobs:
     name: npm package list
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     outputs:
       packages: ${{ steps.matrix.outputs.packages }}
     steps:
@@ -133,7 +133,7 @@ jobs:
   npm:
     name: npm (${{ matrix.package }})
     needs: [npm-matrix]
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -172,7 +172,7 @@ jobs:
     name: npm (@chordsketch/node)
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -236,7 +236,7 @@ jobs:
     name: VS Code Marketplace and Open VSX
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -270,7 +270,7 @@ jobs:
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
     # Stays on GitHub-hosted: maturin-action builds the wheels in a manylinux container (docker). See ADR-0076.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -308,7 +308,7 @@ jobs:
     name: chordsketch-ffi library for the binding packages
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -333,7 +333,7 @@ jobs:
   rubygems:
     name: RubyGems
     needs: [ffi-library]
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -380,7 +380,7 @@ jobs:
   maven-central:
     name: Maven Central
     needs: [ffi-library]
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -446,7 +446,7 @@ jobs:
     name: GHCR and Docker Hub
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -500,7 +500,7 @@ jobs:
     name: Homebrew formula and cask
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -513,7 +513,7 @@ jobs:
     name: Scoop, winget, nixpkgs and the desktop updater
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -533,7 +533,7 @@ jobs:
     name: Flathub (desktop app)
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -555,7 +555,7 @@ jobs:
     name: JetBrains Marketplace
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -626,7 +626,7 @@ jobs:
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
     # Stays on GitHub-hosted: the AUR check runs makepkg in an Arch container (docker). See ADR-0076.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -674,7 +674,7 @@ jobs:
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
     # Stays on GitHub-hosted: the Swift check needs the Swift toolchain the hosted image ships. See ADR-0076.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -710,7 +710,7 @@ jobs:
       - snap
       - swift-package
     if: always()
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - name: Require every publish check to have passed
         env:

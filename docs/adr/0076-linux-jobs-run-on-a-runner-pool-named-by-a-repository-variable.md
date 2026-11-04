@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-09-16
-- **Amended by**: [ADR-0078](0078-the-runner-pool-keeps-a-rust-cache-per-runner.md)
+- **Amended by**: [ADR-0078](0078-the-runner-pool-keeps-a-rust-cache-per-runner.md), [ADR-0092](0092-github-hosted-linux-jobs-are-pinned-to-ubuntu-24-04.md)
 
 > Amended on 2026-09-16 by
 > [ADR-0078](0078-the-runner-pool-keeps-a-rust-cache-per-runner.md). Each
@@ -12,6 +12,10 @@
 > (`vscode-extension.yml`'s VSIX packaging, and the `kotlin.yml` /
 > `ruby.yml` bindings jobs whose artifact is published) moved back to
 > `ubuntu-latest`.
+>
+> Amended on 2026-11-04 by
+> [ADR-0092](0092-github-hosted-linux-jobs-are-pinned-to-ubuntu-24-04.md). The
+> hosted label is `ubuntu-24.04`, not `ubuntu-latest`, everywhere below.
 
 ## Context
 

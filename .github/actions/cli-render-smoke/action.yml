@@ -2,7 +2,7 @@ name: "CLI Render Smoke"
 description: >
   Run the README Usage examples against an installed `chordsketch` binary
   on PATH and assert each command produces non-empty, structurally valid
-  output. Cross-platform via `shell: bash` so it works on ubuntu-latest
+  output. Cross-platform via `shell: bash` so it works on ubuntu-24.04
   and windows-latest (git-bash) runners.
 inputs:
   fixtures-dir:

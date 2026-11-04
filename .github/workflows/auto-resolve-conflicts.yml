@@ -24,7 +24,7 @@ jobs:
     if: >
       github.event.workflow_run.conclusion != 'skipped' &&
       github.event.workflow_run.conclusion != 'cancelled'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pull-requests: read
     steps:

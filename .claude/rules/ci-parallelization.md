@@ -368,11 +368,14 @@ through the repository variable, never by writing a label into the file
 ([ADR-0076](../../docs/adr/0076-linux-jobs-run-on-a-runner-pool-named-by-a-repository-variable.md)):
 
 ```yaml
-runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
 ```
 
-A matrix job keeps `ubuntu-latest` as its `os` cell (required checks are
-matched by name) and picks the runner through an `include` key:
+No workflow uses `ubuntu-latest` as a runner: the alias moved to 26.04 on
+2026-11-01 and broke `snapcraft` and Playwright
+([ADR-0092](../../docs/adr/0092-github-hosted-linux-jobs-are-pinned-to-ubuntu-24-04.md)).
+The `Test` matrix of `ci.yml` keeps `ubuntu-latest` as its `os` cell only because
+required checks are matched by name, and picks the runner through an `include` key:
 
 ```yaml
 runs-on: ${{ matrix.runner || matrix.os }}
@@ -381,7 +384,7 @@ strategy:
     os: [ubuntu-latest, macos-latest, windows-latest]
     include:
       - os: ubuntu-latest
-        runner: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+        runner: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
 ```
 
 The pool is ephemeral and unprivileged: no `sudo`, no container engine,
@@ -389,7 +392,7 @@ nothing mounted from its host except a per-runner Rust cache directory that a
 later job reuses
 ([ADR-0078](../../docs/adr/0078-the-runner-pool-keeps-a-rust-cache-per-runner.md)).
 Because a pull request can leave build output there, **nothing that is
-published may be built on the pool**. A job stays on plain `ubuntu-latest` when
+published may be built on the pool**. A job stays on plain `ubuntu-24.04` when
 it needs `sudo` / `apt-get`, a container engine (`docker`, `cross`,
 `maturin-action`'s manylinux build, the AUR and Flathub checks),
 `snapcraft`, `flatpak`, Homebrew, the Swift toolchain, a display
@@ -400,5 +403,5 @@ When the reason is not visible in the job's own steps (it is inside a
 script the job calls), a one-line comment above `runs-on` names it.
 
 When a job on the pool starts failing for a tool the image lacks, move
-that job back to `ubuntu-latest` with such a comment; do not add the tool
+that job back to `ubuntu-24.04` with such a comment; do not add the tool
 to the workflow with `sudo`.
