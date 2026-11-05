@@ -41,7 +41,7 @@ defaults:
 jobs:
   ghcr:
     name: Build and push to GHCR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -94,7 +94,7 @@ jobs:
   docker-hub:
     name: Copy to Docker Hub
     needs: [ghcr]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Scopes DOCKERHUB_TOKEN and DOCKERHUB_USERNAME to this environment,
     # consistent with python.yml (pypi), ruby.yml (rubygems),
     # kotlin.yml (maven-central), vscode-extension.yml (vscode-marketplace),

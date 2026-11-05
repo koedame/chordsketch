@@ -67,7 +67,7 @@ permissions:
 jobs:
   audit:
     name: RustSec advisories
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     permissions:
       contents: read
       issues: write
@@ -233,7 +233,7 @@ jobs:
 
   npm:
     name: npm advisories
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     permissions:
       contents: read
       issues: write
@@ -338,7 +338,7 @@ jobs:
 
   python:
     name: Python requirements advisories
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     permissions:
       contents: read
     steps:
@@ -377,7 +377,7 @@ jobs:
   licenses:
     name: Dependency licenses
     if: github.event_name != 'schedule'
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     permissions:
       contents: read
     steps:

@@ -48,7 +48,7 @@ jobs:
   # the slower Windows build (see #1461).
   build-native-linux-x64:
     name: Build native library (x86_64-unknown-linux-gnu)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -106,7 +106,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
             lib: libchordsketch_ffi.so
             platform_dir: aarch64-linux
@@ -182,7 +182,7 @@ jobs:
     # `publish` ships this job's ruby-bindings artifact rather than rebuilding
     # it, so it must not reuse the pool's Rust cache, which pull requests
     # can write (ADR-0078).
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -235,7 +235,7 @@ jobs:
     # Wait for all native builds AND generate-and-test to ensure the gem
     # contains validated bindings and every platform's native library.
     needs: [build-native-linux-x64, build-native-others, generate-and-test]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: |
       startsWith(github.ref, 'refs/tags/v') ||
       (github.event_name == 'workflow_dispatch' && inputs.tag != '')

@@ -271,7 +271,7 @@ jobs:
     name: Pin XCFramework in Package.swift
     needs: [assemble-xcframework]
     if: inputs.pin != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Pushes a commit to the release branch. The default GITHUB_TOKEN
     # cannot trigger the pull request's checks on that push, so it is
     # the same PAT the other release automation pushes with.
@@ -362,7 +362,7 @@ jobs:
 
   publish:
     name: Publish XCFramework
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # `inputs.tag`, not the event: under `workflow_call` the event is the
     # caller's `push`, indistinguishable from a push to main (ADR-0039).
     if: inputs.tag != ''

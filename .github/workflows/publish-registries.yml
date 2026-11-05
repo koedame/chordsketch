@@ -67,7 +67,7 @@ defaults:
 jobs:
   plan:
     name: Plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -128,7 +128,7 @@ jobs:
     needs: [plan]
     # A publish needs a crate to upload; a check proves the token for every crate.
     if: needs.plan.outputs.pending_crates != '[]' || (inputs.mode == 'check' && needs.plan.outputs.crates != '[]')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: crates-io
     permissions:
       contents: read
@@ -173,7 +173,7 @@ jobs:
     name: npm
     needs: [plan]
     if: needs.plan.outputs.pending_npm != '[]' || (inputs.mode == 'check' && needs.plan.outputs.npm != '[]')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: npm
     permissions:
       contents: read

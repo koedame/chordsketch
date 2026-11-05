@@ -84,9 +84,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
           - os: macos-latest
             target: x86_64-apple-darwin
@@ -196,7 +196,7 @@ jobs:
         # still gets exercised end-to-end on every supported platform via
         # readme-smoke.
         if: |
-          (matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu') ||
+          (matrix.os == 'ubuntu-24.04' && matrix.target == 'x86_64-unknown-linux-gnu') ||
           (matrix.os == 'macos-latest' && matrix.target == 'aarch64-apple-darwin') ||
           (matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc')
         working-directory: crates/napi
@@ -247,7 +247,7 @@ jobs:
         # targets as the smoke test (cross-compiled artifacts cannot be
         # required on the build host).  See #1568.
         if: |
-          (matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu') ||
+          (matrix.os == 'ubuntu-24.04' && matrix.target == 'x86_64-unknown-linux-gnu') ||
           (matrix.os == 'macos-latest' && matrix.target == 'aarch64-apple-darwin') ||
           (matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc')
         working-directory: crates/napi
@@ -265,7 +265,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -300,7 +300,7 @@ jobs:
     # would not work — under `workflow_call` the event is the *caller's*
     # (`push`, for a tag push), indistinguishable from a push to `main`.
     if: inputs.tag != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

@@ -69,7 +69,7 @@ permissions:
 jobs:
   docker-ghcr:
     name: Docker (GHCR)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # DOCKER_CONFIG points at a fresh empty directory so the Docker
     # client cannot pick up any pre-cached credentials from the runner
     # image, $HOME/.docker, or a credential helper. This guarantees the
@@ -146,7 +146,7 @@ jobs:
 
   docker-hub:
     name: Docker Hub
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # See docker-ghcr for the rationale behind isolating DOCKER_CONFIG.
     env:
       DOCKER_CONFIG: /tmp/docker-anon-hub
@@ -203,7 +203,7 @@ jobs:
 
   npm-wasm:
     name: npm (@chordsketch/wasm)
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     # Pin to the exact released version so the smoke test verifies
     # the *specific* artifact it was written against, rather than
     # silently following whatever the latest published version
@@ -312,7 +312,7 @@ jobs:
 
   npm-wasm-export:
     name: npm (@chordsketch/wasm-export)
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     # Heavy-bundle sister package added in #2466 — carries
     # `render_pdf` (and PNG export) which were split out of
     # `@chordsketch/wasm` to keep the lean bundle ~175 KB
@@ -398,7 +398,7 @@ jobs:
 
   npm-react:
     name: npm (@chordsketch/react)
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -451,7 +451,7 @@ jobs:
 
   npm-react-ui:
     name: npm (@chordsketch/react-ui)
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -506,7 +506,7 @@ jobs:
 
   npm-vue:
     name: npm (@chordsketch/vue)
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -555,7 +555,7 @@ jobs:
 
   npm-svelte:
     name: npm (@chordsketch/svelte)
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -615,7 +615,7 @@ jobs:
 
   cargo-install:
     name: cargo install chordsketch
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -643,7 +643,7 @@ jobs:
 
   source-build:
     name: From source (git clone + cargo install)
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -708,7 +708,7 @@ jobs:
 
   homebrew:
     name: Homebrew
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -994,7 +994,7 @@ jobs:
 
   snap:
     name: Snap (Linux)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -1038,7 +1038,7 @@ jobs:
 
   library-smoke:
     name: Library Usage
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       # Checkout is needed even on non-PR runs because the PR branch
       # variant uses workspace path-deps. Cheap on shallow clone.
@@ -1195,7 +1195,7 @@ jobs:
 
   usage-smoke:
     name: README Usage examples (source build)
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -1247,7 +1247,7 @@ jobs:
       - library-smoke
       - usage-smoke
     if: failure() && github.event_name != 'pull_request'
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - name: Open or update tracking issue
         env:

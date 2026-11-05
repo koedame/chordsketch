@@ -51,7 +51,7 @@ env:
 jobs:
   validate:
     name: Validate tag format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate
@@ -217,7 +217,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     outputs:
@@ -351,7 +351,7 @@ jobs:
     # generated cask to `Casks/chordsketch.rb`, and pushes. The
     # token secret is shared with the CLI post-release flow.
     needs: [release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: tap-publish
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -476,7 +476,7 @@ jobs:
     # writes the generated formula to `Formula/chordsketch-desktop.rb`,
     # and pushes. The token secret is shared with the other tap jobs.
     needs: [release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: tap-publish
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -578,7 +578,7 @@ jobs:
     # the files and stops, as it does for prerelease tags. `publishable.yml`
     # runs the `Generate Flathub files` step before every merge.
     needs: [release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: flathub
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -701,7 +701,7 @@ jobs:
     # manifest with empty signatures that would fail client-side
     # verification.
     needs: [release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

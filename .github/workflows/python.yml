@@ -38,7 +38,7 @@ jobs:
   build-sdist:
     name: Build sdist
     # Stays on GitHub-hosted: maturin-action runs in a container (docker). See ADR-0076.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -72,9 +72,9 @@ jobs:
   # safer failure mode. Contrast with `vscode-extension.yml
   # build-platform`, which has a universal VSIX fallback (#1795). See #1806.
   build-wheels-ubuntu:
-    name: Build ${{ matrix.target }} wheels on ubuntu-latest
+    name: Build ${{ matrix.target }} wheels on ubuntu-24.04
     # Stays on GitHub-hosted: maturin-action builds in a manylinux container (docker). See ADR-0076.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -97,7 +97,7 @@ jobs:
           target: ${{ matrix.target }}
           manylinux: manylinux2014
           # sccache disabled — measured 0% hit rate on 4 of 5 recent
-          # ubuntu-latest runs despite an unchanged Cargo.lock. Root
+          # ubuntu-24.04 runs despite an unchanged Cargo.lock. Root
           # cause: maturin-action runs the wheel build inside a
           # `manylinux2014` Docker container whose host path varies
           # per runner instance; sccache's argument hash includes
@@ -111,7 +111,7 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: wheels-ubuntu-latest-${{ matrix.target }}
+          name: wheels-ubuntu-24.04-${{ matrix.target }}
           path: dist
           retention-days: 7
 
@@ -224,9 +224,9 @@ jobs:
   # Each test job waits only for the matching OS wheel build so that linux
   # and macOS smoke tests don't block on the slower Windows build (#1463).
   test-ubuntu:
-    name: Test Python bindings (ubuntu-latest)
+    name: Test Python bindings (ubuntu-24.04)
     needs: [build-wheels-ubuntu]
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -236,7 +236,7 @@ jobs:
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: wheels-ubuntu-latest-x86_64
+          name: wheels-ubuntu-24.04-x86_64
           path: dist
 
       - name: Install wheel
@@ -310,7 +310,7 @@ jobs:
         test-macos,
         test-windows,
       ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/v')
     # Uses PyPI Trusted Publishing via OIDC — no API token needed.
     # `id-token: write` exposes ACTIONS_ID_TOKEN_REQUEST_* env vars to the

@@ -52,7 +52,7 @@ permissions:
 jobs:
   prune:
     name: Prune stale rust-cache generations on main
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: List, group, and prune caches
         env:

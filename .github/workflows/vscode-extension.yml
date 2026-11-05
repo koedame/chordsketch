@@ -76,7 +76,7 @@ defaults:
 jobs:
   build:
     name: Build & Package Extension
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # No `ref:` override — always check out main so package-lock.json
@@ -148,7 +148,7 @@ jobs:
     # it to musl users.
     if: inputs.tag != ''
     # Release job: stays hosted (ADR-0076, ADR-0078).
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.targets.outputs.matrix }}
     steps:
@@ -160,7 +160,7 @@ jobs:
     name: Package ${{ matrix.vs_target }} VSIX
     # Builds the VSIXes the release publishes, so it must not reuse the
     # pool's Rust cache, which pull requests can write (ADR-0078).
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Release-only matrix that downloads the per-platform chordsketch-lsp
     # binary from the GitHub Release assets (produced by release.yml), places
     # it at server/<platform>-<arch>/chordsketch-lsp[.exe], and packages a
@@ -286,7 +286,7 @@ jobs:
   publish:
     name: Publish to VS Code Marketplace
     needs: [build, build-platform]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Publish only on GitHub Release (published) events or when workflow_dispatch supplies a tag.
     #
     # Prerequisites (one-time human setup before this job can succeed):
@@ -368,7 +368,7 @@ jobs:
   publish-openvsx:
     name: Publish to Open VSX Registry
     needs: [build, build-platform]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Publish only on GitHub Release (published) events or when workflow_dispatch supplies a tag.
     #
     # Prerequisites (one-time human setup before this job can succeed):

@@ -24,7 +24,7 @@ env:
 jobs:
   fmt:
     name: Format
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -39,7 +39,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -72,7 +72,7 @@ jobs:
 
   doc:
     name: Docs
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -124,7 +124,7 @@ jobs:
     # `if: ${{ !cancelled() }}` on every check keeps the property the separate
     # jobs had: a push that breaks three guards reports all three in one run
     # instead of stopping at the first.
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -340,10 +340,11 @@ jobs:
         rust: [stable, "1.88.0"]
         include:
           # The Linux cell keeps `ubuntu-latest` in its name (required checks
-          # are matched by name) and runs on the Linux runner pool when
-          # LINUX_RUNNER is set. See ADR-0076.
+          # are matched by name) but never runs on that label: it runs on
+          # the Linux runner pool when LINUX_RUNNER is set and on
+          # `ubuntu-24.04` otherwise. See ADR-0076 and ADR-0092.
           - os: ubuntu-latest
-            runner: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+            runner: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -398,7 +399,7 @@ jobs:
     # #2077. Per `.claude/rules/ci-parallelization.md` §3, this runs
     # without a `paths:` filter so any workspace or dep change is
     # exercised.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

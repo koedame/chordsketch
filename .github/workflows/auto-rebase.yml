@@ -16,7 +16,7 @@ jobs:
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # GITHUB_TOKEN only needs read access; git push uses CLAUDE_PAT
     # (configured via actions/checkout token) to trigger CI on the pushed branch.
     permissions:

@@ -21,7 +21,7 @@ permissions:
 jobs:
   test:
     name: TextMate grammar snapshot tests
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
     defaults:
       run:
         working-directory: syntaxes
