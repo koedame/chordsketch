@@ -25,7 +25,7 @@ runs:
       # can only download the `wasm-pack` releases baked into the pinned
       # commit's manifest, and for anything newer it warns and falls back
       # to cargo-binstall on every CI cell that installs wasm-pack.
-      uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+      uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2
       with:
         # The fallback is the canonical repo-wide version. Keep it
         # in sync with the release cadence of the upstream
