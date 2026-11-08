@@ -385,16 +385,21 @@ fn next_token(input: &str, pos: usize) -> Option<(Token<'_>, usize)> {
             _ => Some((Token::Dropped, skip_past_gt(input, pos))),
         },
         Some(b'!') if input[pos..].starts_with("<!--") => {
-            // Ends at `-->` or `--!>`; `<!-->` is an empty comment.
+            // Ends at the first `>` preceded by `--` or `--!`; `<!-->` is an
+            // empty comment. The search stops at the end, so the input is
+            // scanned once however many comments it holds.
             let search = &input[pos + 2..];
-            let end = [
-                search.find("-->").map(|i| i + 3),
-                search.find("--!>").map(|i| i + 4),
-            ]
-            .into_iter()
-            .flatten()
-            .min()
-            .map_or(bytes.len(), |i| pos + 2 + i);
+            let mut from = 0;
+            let end = loop {
+                let Some(i) = search[from..].find('>').map(|i| from + i) else {
+                    break bytes.len();
+                };
+                let before = &search[..i];
+                if before.ends_with("--") || before.ends_with("--!") {
+                    break pos + 2 + i + 1;
+                }
+                from = i + 1;
+            };
             Some((Token::Dropped, end))
         }
         Some(b'!') if input[pos..].starts_with("<![CDATA[") => {
@@ -877,6 +882,19 @@ mod tests {
         );
         assert_eq!(sanitize("a<!-- x --!>b<!-->c"), "abc");
         assert_eq!(sanitize("a<!-- never closed <svg>"), "a");
+        assert_eq!(sanitize("a<!--->b<!-- x > y -->c<!--!>d"), "abcd");
+    }
+
+    #[test]
+    fn a_long_run_of_comments_is_dropped_quickly() {
+        let input = format!("<svg>{}<rect/></svg>", "<!---->".repeat(200_000));
+        let start = std::time::Instant::now();
+        assert_eq!(sanitize(&input), "<svg><rect/></svg>");
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(5),
+            "took {:?}",
+            start.elapsed()
+        );
     }
 
     #[test]
