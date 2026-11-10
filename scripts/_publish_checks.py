@@ -1612,9 +1612,16 @@ def aur_problems(version: str, runner: Runner = run) -> list[str]:
         # makepkg refuses root; `-s` installs what the PKGBUILD declares, so
         # an undeclared build dependency fails here. namcap reads both
         # PKGBUILDs and the built package, which is where it finds the
-        # shared libraries missing from `depends`.
+        # shared libraries missing from `depends`. `-Syu`, not `-Sy`: the
+        # image lags the repositories, and installing a package against
+        # fresh sync databases without upgrading the rest is a partial
+        # upgrade, which Arch does not support
+        # (https://wiki.archlinux.org/title/System_maintenance#Partial_upgrades_are_unsupported).
+        # Once a soname bump lands (openssl 3 -> 4), `makepkg -s` pulls the
+        # new library for `cargo` and pacman refuses it because the image's
+        # own curl, pacman and sudo still link the old one.
         script = (
-            "set -euo pipefail; pacman -Sy --noconfirm --needed namcap >/dev/null; "
+            "set -euo pipefail; pacman -Syu --noconfirm --needed namcap >/dev/null; "
             "useradd -m builder; echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder; "
             f"cp -r /work/aur/{AUR_SOURCE_PACKAGE} /work/aur/{AUR_BINARY_PACKAGE} /home/builder/; "
             f"cp /work/{archive} /home/builder/{AUR_SOURCE_PACKAGE}/; chown -R builder /home/builder; "

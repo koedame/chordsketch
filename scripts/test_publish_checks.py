@@ -1142,6 +1142,30 @@ class PackageRuleTest(unittest.TestCase):
         self.assertEqual(checks.aur_naming_problems("chordsketch-bin", pkgbuild), ["chordsketch-bin/PKGBUILD builds from source, but its name ends in -bin"])
         self.assertEqual(checks.aur_naming_problems("chordsketch", pkgbuild), [])
 
+    def test_when_the_aur_container_refreshes_the_sync_databases_it_upgrades_the_whole_system(self) -> None:
+        # `pacman -Sy` followed by an install is a partial upgrade. It broke
+        # `makepkg -s` once the repositories moved to openssl 4 while the
+        # image still linked curl, pacman and sudo against openssl 3.
+        scratch = Path(tempfile.mkdtemp())
+        (scratch / "chordsketch-1.2.0.tar.gz").write_bytes(b"archive")
+        outputs = {f"aur/{pkg}/{name}": "" for pkg in checks.AUR_PACKAGES for name in ("PKGBUILD", ".SRCINFO")}
+        scripts: list[str] = []
+
+        def runner(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> checks.subprocess.CompletedProcess[str]:
+            if cmd[:2] == ["docker", "run"]:
+                scripts.append(cmd[-1])
+                (scratch / "namcap.txt").write_text("")
+            return checks.subprocess.CompletedProcess(cmd, 0, "")
+
+        with mock.patch.object(checks, "generated", return_value=(outputs, [], scratch)):
+            checks.aur_problems("1.2.0", runner=runner)
+
+        self.assertEqual(len(scripts), 1)
+        refreshes = [flags for flags in re.findall(r"pacman -(S\w*)", scripts[0]) if "y" in flags]
+        self.assertNotEqual(refreshes, [], "the container never refreshes the sync databases")
+        for flags in refreshes:
+            self.assertIn("u", flags, f"`pacman -{flags}` refreshes the databases without upgrading the system")
+
     def test_when_a_pkgbuild_uses_shell_variables_they_are_expanded_for_the_url_check(self) -> None:
         text = 'source=("https://example/v${pkgver}/x-${CARCH}.tar.gz")'
         self.assertEqual(checks.expand_shell_variables(text, {"pkgver": "1.2.0", "CARCH": "x86_64"}), 'source=("https://example/v1.2.0/x-x86_64.tar.gz")')
