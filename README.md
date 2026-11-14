@@ -1,10 +1,18 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo.svg" alt="ChordSketch" width="100" height="100">
-</p>
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/koedame/chordsketch/main/assets/logo.svg" alt="ChordSketch" width="100" height="100">
 
 # ChordSketch
 
+**Write chord charts in ChordPro or iReal Pro, and render them to text, HTML, PDF, SVG and PNG.**
+
+<a href="https://koedame.github.io/chordsketch/chordpro/"><img src="docs/images/playground.png" alt="The ChordSketch Playground: a ChordPro source on the left and the rendered chord sheet on the right" width="880"></a>
+
+**[Try it in your browser](https://koedame.github.io/chordsketch/)** — no installation required
+
 [![codecov](https://codecov.io/gh/koedame/chordsketch/branch/main/graph/badge.svg)](https://codecov.io/gh/koedame/chordsketch)
+
+</div>
 
 A Rust implementation of the [ChordPro](https://www.chordpro.org/) and
 [iReal Pro](https://www.irealpro.com/) chord chart formats. It reads
@@ -93,15 +101,14 @@ version if you depend on this crate today. The full policy is in
 
 ## Try it Online
 
-**[ChordSketch Playground](https://koedame.github.io/chordsketch/)** — try
-ChordPro and iReal Pro rendering directly in your browser, no installation
-required. The format toggle in the header switches between the ChordPro
-text editor and the iReal Pro bar-grid GUI editor at runtime.
+The [Playground](https://koedame.github.io/chordsketch/) runs the engine
+in your browser. The format toggle in the header switches between the
+ChordPro text editor and the iReal Pro bar-grid GUI editor at runtime.
 
 The same engine embedded through each UI package, one editable page per
 binding: [Vue](https://koedame.github.io/chordsketch/vue/) and
 [Svelte](https://koedame.github.io/chordsketch/svelte/). The ChordPro
-playground above is the `@chordsketch/react` surface
+playground is the `@chordsketch/react` surface
 ([ADR-0053](docs/adr/0053-framework-demos-live-in-the-playground.md)).
 
 ## Documentation
