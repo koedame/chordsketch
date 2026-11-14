@@ -13,7 +13,6 @@ rust-version.workspace = true
 license = "AGPL-3.0-only"
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 description = "Windows Explorer preview handler for ChordPro files"
 publish = false
 

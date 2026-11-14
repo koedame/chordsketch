@@ -6,7 +6,6 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 keywords = ["chordpro", "ireal", "music", "converter"]
 categories = ["parser-implementations", "text-processing"]
 description = "ChordPro ↔ iReal Pro format-conversion bridge (trait scaffold)"
