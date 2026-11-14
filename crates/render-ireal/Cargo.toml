@@ -11,7 +11,6 @@ rust-version.workspace = true
 license = "MIT AND OFL-1.1"
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 keywords = ["ireal", "chord", "music", "svg", "render"]
 categories = ["rendering", "text-processing"]
 description = "iReal Pro chart renderer (SVG skeleton)"

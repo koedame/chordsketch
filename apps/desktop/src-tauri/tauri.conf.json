@@ -37,6 +37,7 @@
     "active": true,
     "targets": "all",
     "category": "Music",
+    "homepage": "https://github.com/koedame/chordsketch",
     "resources": {
       "../LICENSE": "licenses/AGPL-3.0-only/LICENSE",
       "../../../LICENSE": "licenses/MIT/LICENSE",

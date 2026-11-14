@@ -32,11 +32,10 @@ fn standard_directives_golden_test() {
 
     // -- Directive classification -------------------------------------------
     // Lines 0-10: metadata directives
-    for i in 0..=10 {
+    for (i, line) in song.lines[..=10].iter().enumerate() {
         assert!(
-            matches!(song.lines[i], Line::Directive(_)),
-            "line {i} should be a directive, got: {:?}",
-            song.lines[i]
+            matches!(line, Line::Directive(_)),
+            "line {i} should be a directive, got: {line:?}"
         );
     }
 
@@ -512,8 +511,8 @@ fn formatting_directives_golden_test() {
     }
 
     // Verify none of these are metadata
-    for i in 1..=21 {
-        if let Line::Directive(ref d) = song.lines[i] {
+    for (i, line) in song.lines.iter().enumerate().take(22).skip(1) {
+        if let Line::Directive(d) = line {
             assert!(
                 d.kind.is_font_size_color(),
                 "line {i}: {:?} should be font_size_color",

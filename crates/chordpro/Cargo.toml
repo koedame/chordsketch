@@ -6,7 +6,6 @@ rust-version.workspace = true
 license = "MIT"
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "ChordPro parser, AST, and transforms"
