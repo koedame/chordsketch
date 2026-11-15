@@ -214,11 +214,15 @@ a conditional carve-out for AI-assistant merges (see step 5 below and
 
 1. **PR created** — CI runs (fmt, clippy, test, plus workflow-specific smoke jobs)
 2. **Auto-review** — Claude reviews with severity classification on CI success
-3. **All findings, every severity, resolved in-PR** — Claude pushes fix commits
-   (High first, Nit last), CI re-runs, delta review iterates. Review bots do NOT
-   create follow-up issues for findings; the in-PR fix is the only path.
-4. **Convergence** — loop iterates until the delta review surfaces zero findings
-   (or the 10-iteration safety cap in `.claude/rules/pr-workflow.md` fires).
+3. **All findings, every severity, handled in-PR** — Claude reproduces each
+   High / Medium finding (failing test, or command and output) before pushing its
+   fix commit; one that cannot be reproduced is recorded as "Not reproduced"
+   with the reason and gets no code change. Low / Nit findings are fixed without
+   a repro. Fix commits go High first, Nit last; CI re-runs, delta review
+   iterates. Review bots do NOT create follow-up issues for findings.
+4. **Convergence** — loop iterates until no finding is left unhandled (fixed, or
+   recorded as not reproduced), or the 10-iteration safety cap in
+   `.claude/rules/pr-workflow.md` fires.
 5. **Ready for merge** — when the review converges, Claude posts a
    "Ready for merge" comment. A human inspects the **full check rollup** (not
    just the required checks listed in branch protection), verifies there are no

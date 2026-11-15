@@ -246,7 +246,7 @@ strengthened to prevent.
 regardless of whether the finding falls inside the original issue's
 scope.** This restates
 [`.claude/rules/pr-workflow.md`](../../../rules/pr-workflow.md)
-step 4 ("All findings, every severity, resolved in-PR") and step 5
+step 4 ("All findings, every severity, handled in-PR, High / Medium reproduced first") and step 5
 ("No follow-up issues for review findings") inline so the phase
 prompt is self-contained:
 
@@ -269,6 +269,15 @@ prompt is self-contained:
 
 For each finding, in High → Nit order:
 
+0. **High / Medium only: reproduce before fixing.** A review finding
+   is a hypothesis. Write down the input and the path it takes to the
+   wrong behaviour as a failing test or a command with its output
+   (for a documentation or configuration finding: the quoted line and
+   the primary source that contradicts it), and run a test repro
+   against the unfixed code to see it fail. If it cannot be
+   reproduced, make no code change; record it under "Not reproduced"
+   in the PR comment with the reason, and treat the finding as
+   handled. Low / Nit findings need no repro.
 1. Push a fix commit that addresses the **root cause** per
    [`.claude/rules/root-cause-fixes.md`](../../../rules/root-cause-fixes.md)
    (no `#[allow(...)]` on legitimate warnings, no
@@ -310,15 +319,15 @@ For each finding, in High → Nit order:
    commits only (delta review). Findings from the original code that
    were not flagged previously are considered accepted; do not revive
    them.
-3. Iterate until the delta review surfaces nothing further. This
-   matches `pr-workflow.md` step 6's convergence criterion ("the
-   delta review surfaces nothing further") and is the only valid
+3. Iterate until no finding is left unhandled (fixed, or for High /
+   Medium recorded as not reproduced). This
+   matches `pr-workflow.md` step 6's convergence criterion and is the only valid
    stop condition besides the hard cap below. Inline comments are
    **inputs** to aggregation in step 4, not a separately-converging
    surface — they are re-collected each iteration so any new human
    review signal is reflected, but they do not have their own
-   "zero findings" criterion. Convergence is the delta-review
-   output being empty, not "no blocking findings".
+   "zero findings" criterion. Convergence is "every finding is
+   handled", not "no blocking findings".
 
 Hard cap: 10 review iterations per
 [`.claude/rules/pr-workflow.md`](../../../rules/pr-workflow.md) step 7.
