@@ -14,17 +14,25 @@ below.
    workflow-specific smoke jobs).
 3. **Auto-review** — on CI success, `claude-review.yml` requests a Claude review
    with severity classification. Claude performs both code review and security review.
-4. **All findings — every severity — resolved in-PR.** Every High / Medium / Low /
-   Nit finding produces a fix commit on the PR branch. CI re-runs, then a **delta
-   review** examines only the fix commits. The review loop iterates until the
-   delta review surfaces nothing further (or the safety cap in step 7 fires).
+4. **All findings — every severity — handled in-PR, High / Medium reproduced
+   first.** A review finding is a hypothesis. Before a High / Medium fix commit,
+   the review comment shows a **Repro**: the input and the path to the wrong
+   behaviour, as a failing test or a command with its output (for a
+   documentation or configuration finding, the quoted line and the primary source
+   that contradicts it). When the repro is a test, it is run against the unfixed
+   code and seen to fail, then committed with the fix. A High / Medium finding
+   that cannot be reproduced gets no code change; it is recorded under **Not
+   reproduced** in the review comment with the reason. Low / Nit findings need no
+   repro and produce a fix commit as before. CI re-runs, then a **delta review**
+   examines only the new commits. The review loop iterates until no finding is
+   left unhandled (or the safety cap in step 7 fires).
 5. **No follow-up issues for review findings.** Review bots MUST NOT call
    `gh issue create` during review. If a finding is genuinely out of the PR's
    scope (e.g. a pre-existing defect in an unrelated crate surfaced in passing),
    the PR body's "Deferred" section records it with a one-line justification
    and a link to an existing tracker. The default is "fix it in this PR."
-6. **Ready for merge** — when the review converges to zero findings,
-   Claude posts a single summary comment stating "Ready for merge." If the
+6. **Ready for merge** — when the review converges (every finding has a fix
+   commit or a **Not reproduced** entry), Claude posts a single summary comment stating "Ready for merge." If the
    four conditions in the "Bot-driven merge: conditional permission"
    section below are met — the first of them being maintainer authorization —
    Claude adds the PR to the merge queue (condition 4). Otherwise, a
@@ -277,9 +285,11 @@ goes into the next PR that touches the area, not the current delta review.
 
 The in-PR-resolution rule (step 4) applies equally to delta review: if the
 delta review surfaces a Nit that the prior iteration missed, the Nit gets a
-fix commit too. The review loop keeps iterating until the delta review is
-empty. This is the convergence criterion — not "no blocking findings" but
-"no findings at all".
+fix commit too, and a High / Medium finding gets a repro first. A finding
+already recorded as **Not reproduced** is not raised again unless the reviewer
+has a new repro. The review loop keeps iterating until no finding is left
+unhandled. This is the convergence criterion — not "no blocking findings" but
+"every finding is fixed, or (High / Medium only) recorded as not reproduced".
 
 ### PR Formatting and Commit Messages
 
