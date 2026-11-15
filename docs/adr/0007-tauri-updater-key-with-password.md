@@ -3,6 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-04-25
 - **Supersedes**: [ADR-0005](0005-tauri-updater-key-management.md)
+- **Amended by**: [ADR-0090](0090-publishing-credentials-are-environment-secrets-limited-to-main-and-release-tags.md)
 
 ## Context
 
@@ -53,12 +54,14 @@ shipped with auto-update disabled (see release notes).
 2. **Commit the public key** to
    `apps/desktop/src-tauri/tauri.conf.json` under
    `plugins.updater.pubkey` (unchanged from ADR-0005).
-3. **Store both halves of the credential** in repo secrets:
+3. **Store both halves of the credential** as secrets of the
+   `desktop-signing` environment, which admits only `main` and the release
+   tags ([ADR-0090](0090-publishing-credentials-are-environment-secrets-limited-to-main-and-release-tags.md)):
    - `TAURI_SIGNING_PRIVATE_KEY` — the encrypted private-key file
      contents.
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the matching non-empty
      password.
-4. **Pair-verify before pushing the keypair to repo secrets.** Any
+4. **Pair-verify before pushing the keypair to the environment secrets.** Any
    future rotation MUST sign a test payload locally with the exact
    password before the secrets are uploaded, to avoid another
    `Wrong password for that key` regression in CI.

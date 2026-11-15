@@ -220,7 +220,7 @@ jobs:
     # check (.github/workflows/readme-sync.yml) does not catch this
     # automatically because the version string lives only here.
     env:
-      WASM_VERSION: "0.9.0"
+      WASM_VERSION: "0.9.1"
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -319,7 +319,7 @@ jobs:
     # gzipped. Same pinning + release-cut tolerance pattern as the
     # `npm-wasm` job above.
     env:
-      WASM_EXPORT_VERSION: "0.9.0"
+      WASM_EXPORT_VERSION: "0.9.1"
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
