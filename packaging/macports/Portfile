@@ -42,9 +42,9 @@ long_description    ChordSketch is a Rust implementation of the ChordPro file \
 # chordsketch-X.Y.Z.tar.gz". Every cargo port in macports-ports uses
 # this keyed form.
 checksums           ${distname}${extract.suffix} \
-                    rmd160  fdb22fc892449692a217d96456edfd56ad7dd94b \
-                    sha256  2c7f28480683b27c69b08241c6f4d95e64590f9d327850f501549aa700a41435 \
-                    size    21529862
+                    rmd160  e6e46f0f0e844981d9d4fbaf104972db2ac7704d \
+                    sha256  383552fbb11535d8db242b30648cb8080eebf0c1202aac0bcd25d4bba089980a \
+                    size    21734609
 
 # Cargo crate manifest auto-generated from the tagged `Cargo.lock`.
 # Do not edit by hand — regenerate with the script linked at the top.
