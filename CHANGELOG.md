@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-16
+
 ### Changed
 
 - **Only the newest release of the CLI (`v*`) and of the desktop app
@@ -28,6 +30,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HTML output of a `{start_of_svg}` section that holds many comments no
   longer slows down with the number of comments**; the section is scanned
   once.
+
+### Security
+
+- **The desktop app uses `tauri-plugin-updater` 2.14.1, which moves `zip`
+  to 9.1.3**, clearing GHSA-m665-v7pm-7grj, GHSA-q7v9-x93c-xqv3,
+  GHSA-8hxf-qr8p-62x4 and RUSTSEC-2026-0367/0368/0369. `zip` is reached only
+  through the updater (Windows ZIP update bundles). The update pulls the
+  Tauri 2.12 line, so building `chordsketch-desktop` from source now needs
+  Rust 1.90; the rest of the workspace keeps its 1.88 floor.
+- **The VS Code extension bundles `minimatch` 11**, clearing
+  GHSA-g3hv-75wg-m249 (globpart amplification during preprocessing).
+- **The MCP server uses `rmcp` 3.9.0**, clearing RUSTSEC-2026-0457 (OAuth
+  client SSRF filter) and RUSTSEC-2026-0462 (unbounded Streamable HTTP
+  response buffering). `chordsketch-mcp` serves over stdio only, so neither
+  code path was reachable from the shipped binary.
+- **`rustix` 1.1.6** clears RUSTSEC-2026-0486. `rustix` comes in through
+  `tempfile`, which does not call the affected xattr functions.
+- **`libz-sys` 1.1.31** clears RUSTSEC-2026-0418, which logged the full
+  build environment from the zlib probe when building from source.
 
 ## [0.9.0] - 2026-10-26
 

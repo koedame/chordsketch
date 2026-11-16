@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-10-29
-- **Amends**: [ADR-0001](0001-kotlin-maven-central-publishing-credentials.md)
+- **Amends**: [ADR-0001](0001-kotlin-maven-central-publishing-credentials.md), [ADR-0007](0007-tauri-updater-key-with-password.md)
 
 ## Context
 

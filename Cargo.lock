@@ -743,7 +743,7 @@ dependencies = [
 
 [[package]]
 name = "chordsketch"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "assert_cmd",
  "chordsketch-chordpro",
@@ -763,11 +763,11 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-chordpro"
-version = "0.9.0"
+version = "0.9.1"
 
 [[package]]
 name = "chordsketch-convert"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "chordsketch-ireal",
@@ -776,14 +776,14 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-convert-musicxml"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
 ]
 
 [[package]]
 name = "chordsketch-desktop"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "chordsketch-render-html",
@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-ffi"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "chordsketch-convert",
@@ -814,11 +814,11 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-ireal"
-version = "0.9.0"
+version = "0.9.1"
 
 [[package]]
 name = "chordsketch-lsp"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "serde_json",
@@ -829,7 +829,7 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-mcp"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "chordsketch-render-html",
@@ -843,7 +843,7 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-napi"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "chordsketch-convert",
@@ -859,7 +859,7 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-preview-handler"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "chordsketch-render-html",
@@ -871,14 +871,14 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-render-html"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
 ]
 
 [[package]]
 name = "chordsketch-render-ireal"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-ireal",
  "resvg",
@@ -887,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-render-pdf"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "flate2",
@@ -898,7 +898,7 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-render-text"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "unicode-width",
@@ -906,7 +906,7 @@ dependencies = [
 
 [[package]]
 name = "chordsketch-wasm"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chordsketch-chordpro",
  "chordsketch-convert",
