@@ -1,0 +1,25 @@
+-- Title: Chord Font Directives
+
+
+-- Start of verse
+Am                  Em
+Chords in Helvetica Bold
+F             G
+Dark blue and eleven point
+Am            Em
+Standing out above the text
+F        G
+At every chord point
+-- End of verse
+
+
+-- Start of chorus
+C             G
+Now chords in Arial
+Am             F
+Fourteen point red
+C       G
+Big and bright
+Am       F
+Overhead spread
+-- End of chorus

@@ -1,0 +1,19 @@
+-- Title: Lilypond Section
+
+-- Start of verse
+Am              Dm
+Classical meets modern style
+E                 Am
+Engraved notation on the page
+-- End of verse
+
+-- Start of ly
++ image: <none> align=left
+-- End of ly
+
+-- Start of chorus
+Dm          Am
+Sheet music rendered clean
+E                       Am
+The finest score you’ve seen
+-- End of chorus

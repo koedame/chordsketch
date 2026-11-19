@@ -1,0 +1,40 @@
+-- Title: Chord Only Lines
+
+-- Start of verse
+Am C G F
+ -- - ---
+Am C G F
+ -- - ---
+Am               C           G   F
+These lines have lyrics with the chords
+Am C G F
+ -- - ---
+-- End of verse
+
+-- Start of chorus
+F C G Am
+ - - ----
+F
+But this line has words
+F C G Am
+ - - ----
+-- End of chorus
+
+-- Start of verse
+G
+--
+C
+--
+D
+--
+G
+--
+-- End of verse
+
+-- Instrumental section
+Am F C G
+ -- - ---
+Am F C G
+ -- - ---
+Dm Am E Am
+ -- -- ----

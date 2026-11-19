@@ -1,0 +1,27 @@
+-- Title: Directive Selectors
+
+
+-- Selectors allow instrument-specific or user-specific formatting
+
+
+-- Start of verse
+G                 C
+Selectors let you customize
+D                 G
+Per instrument or user
+Em          C
+Guitar sees Courier
+D               G
+Piano sees Helvetica
+-- End of verse
+
+-- Start of chorus
+C         G
+Different views
+D    Em
+Same song
+C        G
+Everyone gets
+D              G
+What they want along
+-- End of chorus

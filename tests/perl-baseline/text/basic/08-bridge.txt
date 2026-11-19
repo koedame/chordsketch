@@ -1,0 +1,37 @@
+-- Title: Song with Bridge
+
+-- Start of verse
+Em             Am
+Shadows on the wall tonight
+C              D
+Candle burning low
+Em              Am
+Whispers in the hallway say
+C              D
+Time to let it go
+-- End of verse
+
+-- Start of chorus
+G        D        Em         C
+Hold on, hold on, don’t give in
+G        D        C    D
+Hold on, hold on, try again
+-- End of chorus
+
+-- Start of bridge
+Am              Em
+Maybe there’s a reason why
+F       C       G
+We keep holding on
+Am              Em
+Maybe there’s a brighter day
+F       G      Am
+Waiting just beyond
+-- End of bridge
+
+-- Start of chorus
+G        D        Em         C
+Hold on, hold on, don’t give in
+G        D        C    D
+Hold on, hold on, try again
+-- End of chorus

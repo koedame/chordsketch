@@ -1,0 +1,23 @@
+-- Title: Span Markup
+
+-- Start of verse
+G
+Roses are red
+C
+Violets are blue
+D
+Sugar is white
+G          C
+And so are you
+-- End of verse
+
+-- Start of chorus
+C
+Green with envy
+G
+Golden memories
+D
+Purple mountains
+G
+Orange skies
+-- End of chorus

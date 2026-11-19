@@ -1,0 +1,28 @@
+-- Title: First Song
+
+-- Start of verse
+G           C
+This is the first song
+D           G
+It has some content
+-- End of verse
+
+-- Start of chorus
+C     G
+La la la
+D     G
+La la la
+-- End of chorus
+
+-- New song
+-- Title: Empty Second Song
+
+-- New song
+-- Title: Third Song Has Content
+
+-- Start of verse
+Am            Dm
+Third song is back
+E              Am
+With some real content
+-- End of verse

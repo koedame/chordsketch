@@ -1,0 +1,21 @@
+-- Title: Highlight Markup
+
+-- Start of verse
+Am
+Pay attention to the highlighted part here
+Em
+This is normal but this stands out
+Dm
+Entire line highlighted for emphasis
+Am             Em
+Back to normal text
+-- End of verse
+
+-- Start of chorus
+F
+Remember this line
+C
+And this one too
+G            Am
+Not this one though
+-- End of chorus

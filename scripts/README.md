@@ -1,8 +1,22 @@
 # Comparison Scripts
 
+## update-perl-baseline.sh
+
+Regenerates the saved Perl ChordPro text output in `tests/perl-baseline/`,
+which `cargo test -p chordsketch --test perl_comparison` compares ChordSketch's
+output against in CI, and the generated sections of
+`docs/known-deviations.md`. Needs Perl ChordPro at the release in
+`.github/upstream-version` (`docs/dev-setup.md`).
+
+```bash
+./scripts/update-perl-baseline.sh
+```
+
 ## compare-with-perl.sh
 
-Automated comparison tool that runs both ChordSketch and the Perl ChordPro
+Ad-hoc comparison tool (the text comparison that runs in CI works from saved
+Perl output instead, see above; this script is still the way to compare HTML
+output). It runs both ChordSketch and the Perl ChordPro
 reference implementation on the same `.cho` input files and diffs the output.
 
 ### Prerequisites

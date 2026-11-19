@@ -1,0 +1,52 @@
+-- Title: Sunrise
+-- Subtitle: Morning Movement
+
+-- Start of verse
+G               C
+Golden light is breaking through
+D              G
+Morning dew on everything
+-- End of verse
+
+-- Start of chorus
+C     G             D
+Rise, rise with the sun
+Em            C D
+A new day has begun
+-- End of chorus
+
+-- New song
+-- Title: Sunset
+-- Subtitle: Evening Movement
+
+-- Start of verse
+Am            Dm
+Orange sky is fading fast
+E               Am
+Another day has passed
+-- End of verse
+
+-- Start of chorus
+Dm    Am            E
+Rest, rest with the moon
+F        E      Am
+Night is coming soon
+-- End of chorus
+
+-- New song
+-- Title: Midnight
+-- Subtitle: Nocturne
+
+-- Start of verse
+Em                 Am       B
+Darkness wraps the world in sleep
+Em              Am       B
+Silence running wide and deep
+-- End of verse
+
+-- Start of chorus
+Am     Em                B
+Dream, dream through the night
+C         B       Em
+Stars are burning bright
+-- End of chorus

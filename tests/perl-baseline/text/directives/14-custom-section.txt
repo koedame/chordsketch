@@ -1,0 +1,48 @@
+-- Title: Custom Sections
+
+-- Start of intro
+Am F C G
+ -- - ---
+Am F C G
+ -- - ---
+-- End of intro
+
+-- Start of verse
+Am              F
+Custom sections let you name
+C           G
+Any part of your song
+Am            F
+Intro, outro, solo, break
+C              G
+Nothing can go wrong
+-- End of verse
+
+-- Start of chorus
+F       C        G
+Name it what you want
+Am            F
+The format is free
+C        G
+Start of anything
+Am                F
+Works for you and me
+-- End of chorus
+
+-- Start of solo
+Am F C G
+ -- - ---
+Am F C G
+ -- - ---
+F G Am
+ - ----
+-- End of solo
+
+-- Start of outro
+Am     F
+Fading out now
+C        G
+Slow and low
+Am
+---
+-- End of outro

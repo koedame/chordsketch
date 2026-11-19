@@ -1,0 +1,20 @@
+-- Title: Chord Definitions
+
+
+-- Start of verse
+Am             Am7
+Sitting in the garden
+Dsus4                 G/B
+Watching clouds drift by--
+Cadd9          Em7
+Flowers in the meadow
+Fmaj7        G
+Underneath a painted sky
+-- End of verse
+
+-- Start of chorus
+Cadd9       Em7
+Open up the window
+Fmaj7   G           Am
+Let the breeze come in-
+-- End of chorus

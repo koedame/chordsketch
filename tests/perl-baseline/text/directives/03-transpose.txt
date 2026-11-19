@@ -1,0 +1,21 @@
+-- Title: Transpose Demo
+
+-- Original key C, transposed up 2 to D
+
+-- Start of verse
+D                G         A
+Morning light on fields of gold
+Bm              G     A
+Stories waiting to be told
+D                 G        A
+Sing me something warm and true
+Bm       G      A      D
+Like the sky is always blue
+-- End of verse
+
+-- Start of chorus
+G     D   A     Bm
+La la la, la la la-
+G     A     D
+La la la la la
+-- End of chorus

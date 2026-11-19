@@ -1,0 +1,23 @@
+-- Title: ABC Notation Section
+
+-- Start of verse
+G             C
+Music written in the sheet
+D                  G
+Notes and rests in time
+-- End of verse
+
+-- Start of abc
++ image: <none> align=left
+-- End of abc
+
+-- Start of chorus
+C                G
+Read the notes upon the page
+D               G
+Play the melody through
+-- End of chorus
+
+-- Start of abc
++ image: <none> align=left
+-- End of abc

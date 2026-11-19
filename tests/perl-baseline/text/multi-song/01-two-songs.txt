@@ -1,0 +1,44 @@
+-- Title: Morning Song
+
+-- Start of verse
+G              C
+Wake up in the morning light
+D             G
+Everything is bright
+Em             C
+Coffee brewing on the stove
+D              G
+Another day to love
+-- End of verse
+
+-- Start of chorus
+C    G        D
+Good morning, world
+C    G        D
+Good morning, sun
+C    G       D    G
+Good morning everyone
+-- End of chorus
+
+-- New song
+-- Title: Evening Song
+
+-- Start of verse
+Am               Dm
+Stars are coming out tonight
+E               Am
+Moon is shining bright
+F                C
+Crickets singing in the dark
+E              Am
+Fireflies like sparks
+-- End of verse
+
+-- Start of chorus
+Dm   Am       E
+Good evening, world
+Dm   Am       E
+Good evening, moon
+Dm   Am      E       Am
+Good evening see you soon
+-- End of chorus

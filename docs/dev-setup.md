@@ -71,13 +71,19 @@ Verify: `lilypond --version`
 
 ### Perl ChordPro (reference implementation)
 
-Used for compatibility testing — comparing our output against the reference.
+Used to refresh the saved Perl output that the compatibility test compares
+against (see "Refreshing the saved Perl output" below). Install the release
+recorded in `.github/upstream-version`; the refresh script refuses any other.
 
 | Platform | Install |
 |----------|---------|
-| Ubuntu/Debian | `sudo apt install cpanminus && cpanm App::Music::ChordPro` |
-| macOS | `brew install cpanminus && cpanm App::Music::ChordPro` |
-| Windows | Install [Strawberry Perl](https://strawberryperl.com/), then `cpanm App::Music::ChordPro` |
+| Ubuntu/Debian | `sudo apt install cpanminus && cpanm App::Music::ChordPro@<version>` |
+| macOS | `brew install cpanminus && cpanm App::Music::ChordPro@<version>` |
+| Windows | Install [Strawberry Perl](https://strawberryperl.com/), then `cpanm App::Music::ChordPro@<version>` |
+
+For R6.101.0 that is `cpanm App::Music::ChordPro@6.101`. To keep the install
+out of the system Perl, add `--notest -l <dir>` and put `<dir>/bin` on `PATH`
+and `<dir>/lib/perl5` on `PERL5LIB`.
 
 Verify: `chordpro --version`
 
@@ -96,11 +102,32 @@ the commands below locally; nothing else will.
 # Run only external-tool tests
 cargo test --workspace -- --ignored
 
-# Run the Perl compatibility comparison
+# Compare the text and HTML output with a locally installed Perl ChordPro
 ./scripts/compare-with-perl.sh
+```
 
-# Run both
-cargo test --workspace -- --ignored && ./scripts/compare-with-perl.sh
+### Perl comparison in CI
+
+The text output of every file in `tests/corpus/` is compared with saved Perl
+output by `cargo test -p chordsketch --test perl_comparison`, which CI runs
+with the rest of the workspace. It needs no Perl. When it fails, the message
+says whether a file got worse, a listed difference is gone, or the saved
+output is stale; `tests/perl-baseline/accepted-differences.txt` and
+`docs/known-deviations.md` explain the rest.
+
+### Refreshing the saved Perl output
+
+Needed when `.github/upstream-version` changes or `tests/corpus/` changes.
+With Perl ChordPro installed at the release in `.github/upstream-version`:
+
+```bash
+./scripts/update-perl-baseline.sh
+```
+
+It rewrites `tests/perl-baseline/` and the generated sections of
+`docs/known-deviations.md`. Then run `cargo test -p chordsketch --test
+perl_comparison`: new differences have to be fixed or added to
+`accepted-differences.txt` with a reason.
 ```
 
 ## Tool Detection
