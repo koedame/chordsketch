@@ -324,9 +324,13 @@ def run_gradle(
     wait: float = GRADLE_RETRY_WAIT,
     sleep: Callable[[float], None] = time.sleep,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a Gradle command again, after a wait, when it failed fetching from a repository."""
+    """Run a Gradle command again, after a wait, when it failed fetching from a repository.
+
+    Gradle remembers a 404 for a day, so a plain second run fails in half a second
+    without asking the repository again; the runs after the first refresh what it knows.
+    """
     for attempt in range(1, attempts + 1):
-        result = runner(cmd, cwd)
+        result = runner(cmd if attempt == 1 else [*cmd, "--refresh-dependencies"], cwd)
         if result.returncode == 0 or attempt == attempts:
             return result
         if not any(marker in result.stdout for marker in GRADLE_FETCH_FAILURES):
