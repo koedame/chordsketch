@@ -4506,3 +4506,200 @@ mod metadata_cap_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod survivor_tests {
+    use super::*;
+    use crate::ast::{CommentStyle, Line};
+
+    fn limit(max: usize) -> ParseOptions {
+        ParseOptions {
+            max_input_size: max,
+            ..Default::default()
+        }
+    }
+
+    // -- ParseError / ParseResult accessors ---------------------------------
+
+    #[test]
+    fn parse_error_reports_the_column_of_the_failure() {
+        let result = parse_lenient("Hello [Am");
+        assert_eq!(result.errors.len(), 1);
+        let err = &result.errors[0];
+        assert_eq!(err.line(), 1);
+        assert_eq!(err.column(), err.span.start.column);
+        assert!(err.column() > 1, "column was {}", err.column());
+    }
+
+    #[test]
+    fn parse_result_with_an_error_is_not_ok() {
+        let result = parse_lenient("[Am");
+        assert!(!result.is_ok());
+        assert!(result.has_errors());
+    }
+
+    #[test]
+    fn parse_result_without_errors_is_ok() {
+        let result = parse_lenient("Hello");
+        assert!(result.is_ok());
+        assert!(!result.has_errors());
+    }
+
+    #[test]
+    fn multi_result_with_one_bad_song_is_not_ok_and_lists_its_errors() {
+        let result = parse_multi_lenient("{title: A}\n{new_song}\n[Am\n{new_song}\nfine");
+        assert_eq!(result.results.len(), 3);
+        assert!(!result.is_ok());
+        assert!(result.has_errors());
+        let errors = result.all_errors();
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].message.contains("unclosed"));
+    }
+
+    #[test]
+    fn multi_result_without_errors_is_ok_and_lists_no_errors() {
+        let result = parse_multi_lenient("{title: A}\n{new_song}\nfine");
+        assert!(result.is_ok());
+        assert!(!result.has_errors());
+        assert!(result.all_errors().is_empty());
+    }
+
+    // -- Input size limit boundary ------------------------------------------
+
+    #[test]
+    fn input_exactly_at_the_limit_is_accepted_by_every_entry_point() {
+        let input = "{title: T}";
+        let opts = limit(input.len());
+
+        assert!(parse_with_options(input, &opts).is_ok());
+        assert!(parse_lenient_with_options(input, &opts).is_ok());
+        assert!(parse_multi_with_options(input, &opts).is_ok());
+        assert!(parse_multi_lenient_with_options(input, &opts).is_ok());
+    }
+
+    #[test]
+    fn input_one_byte_over_the_limit_is_rejected_by_every_entry_point() {
+        let input = "{title: T}";
+        let opts = limit(input.len() - 1);
+
+        assert!(parse_with_options(input, &opts).is_err());
+        assert!(!parse_lenient_with_options(input, &opts).is_ok());
+        assert!(parse_multi_with_options(input, &opts).is_err());
+        assert!(!parse_multi_lenient_with_options(input, &opts).is_ok());
+    }
+
+    // -- {new_song} detection and splitting ---------------------------------
+
+    #[test]
+    fn is_new_song_line_rejects_text_that_only_has_one_brace() {
+        // Both strings would read as `ns` if the missing brace were ignored.
+        assert!(!is_new_song_line("{nsx"));
+        assert!(!is_new_song_line("xns}"));
+        assert!(is_new_song_line("{ns}"));
+        assert!(is_new_song_line("{ New_Song : tag }"));
+    }
+
+    #[test]
+    fn split_at_new_song_keeps_crlf_line_endings_with_their_line() {
+        assert_eq!(split_at_new_song("a\r\n{ns}\r\nb"), vec!["a\r\n", "b"]);
+    }
+
+    #[test]
+    fn split_at_new_song_handles_bare_cr_line_endings() {
+        assert_eq!(split_at_new_song("a\r{ns}\rb"), vec!["a\r", "b"]);
+    }
+
+    #[test]
+    fn split_at_new_song_handles_a_trailing_bare_cr() {
+        assert_eq!(split_at_new_song("a\r"), vec!["a\r"]);
+        assert_eq!(split_at_new_song("a\r{ns}\r"), vec!["a\r", ""]);
+    }
+
+    // -- Metadata directives -------------------------------------------------
+
+    #[test]
+    fn sort_and_descriptive_metadata_directives_populate_their_fields() {
+        let song = parse(
+            "{sorttitle: Sort T}\n{sortartist: Sort A}\n{arranger: Arr}\n\
+             {copyright: (c) 2026}\n{duration: 3:45}\n{tag: folk}",
+        )
+        .unwrap();
+        let m = &song.metadata;
+        assert_eq!(m.sort_title.as_deref(), Some("Sort T"));
+        assert_eq!(m.sort_artist.as_deref(), Some("Sort A"));
+        assert_eq!(m.arrangers, vec!["Arr".to_string()]);
+        assert_eq!(m.copyright.as_deref(), Some("(c) 2026"));
+        assert_eq!(m.duration.as_deref(), Some("3:45"));
+        assert_eq!(m.tags, vec!["folk".to_string()]);
+    }
+
+    #[test]
+    fn meta_directive_populates_sort_and_descriptive_fields_by_key() {
+        let song = parse(
+            "{meta: sorttitle Sort T}\n{meta: sortartist Sort A}\n{meta: arranger Arr}\n\
+             {meta: copyright (c) 2026}\n{meta: duration 3:45}\n{meta: tag folk}",
+        )
+        .unwrap();
+        let m = &song.metadata;
+        assert_eq!(m.sort_title.as_deref(), Some("Sort T"));
+        assert_eq!(m.sort_artist.as_deref(), Some("Sort A"));
+        assert_eq!(m.arrangers, vec!["Arr".to_string()]);
+        assert_eq!(m.copyright.as_deref(), Some("(c) 2026"));
+        assert_eq!(m.duration.as_deref(), Some("3:45"));
+        assert_eq!(m.tags, vec!["folk".to_string()]);
+        assert!(m.custom.is_empty(), "custom was {:?}", m.custom);
+    }
+
+    #[test]
+    fn highlight_directive_becomes_a_highlight_comment() {
+        let song = parse("{highlight: Look}").unwrap();
+        assert_eq!(
+            song.lines,
+            vec![Line::Comment(CommentStyle::Highlight, "Look".to_string())]
+        );
+    }
+
+    // -- Verbatim sections ---------------------------------------------------
+
+    #[test]
+    fn ly_svg_and_musicxml_sections_keep_their_content_verbatim() {
+        for (start, end) in [
+            ("start_of_ly", "end_of_ly"),
+            ("start_of_svg", "end_of_svg"),
+            ("start_of_musicxml", "end_of_musicxml"),
+        ] {
+            let song = parse(&format!("{{{start}}}\n[Am] {{x}}\n{{{end}}}\n[C]go")).unwrap();
+            let Line::Lyrics(inner) = &song.lines[1] else {
+                panic!("{start}: expected verbatim lyrics, got {:?}", song.lines[1]);
+            };
+            assert_eq!(inner.segments.len(), 1, "{start}");
+            assert!(inner.segments[0].chord.is_none(), "{start}");
+            assert_eq!(inner.segments[0].text, "[Am] {x}", "{start}");
+            // After the end directive, chords parse normally again.
+            let Line::Lyrics(after) = &song.lines[3] else {
+                panic!("{start}: expected lyrics after {end}");
+            };
+            assert!(after.segments[0].chord.is_some(), "{start}");
+        }
+    }
+
+    // -- Image attribute parsing ---------------------------------------------
+
+    #[test]
+    fn quoted_value_followed_directly_by_a_key_does_not_leak_the_quote() {
+        let pairs = split_key_value_pairs(r#"title="a b"width=100"#);
+        assert_eq!(
+            pairs,
+            vec![
+                ("title".to_string(), "a b".to_string()),
+                ("width".to_string(), "100".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn key_value_pairs_ignore_tokens_without_an_equals_sign() {
+        let pairs = split_key_value_pairs("  junk  src=a.png  tail ");
+        assert_eq!(pairs, vec![("src".to_string(), "a.png".to_string())]);
+    }
+}
