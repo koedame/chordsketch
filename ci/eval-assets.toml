@@ -1,0 +1,71 @@
+# Evaluation assets: the files that define what "correct" means for this
+# project (expected outputs, corpora, thresholds, the checks themselves).
+#
+# `scripts/check-eval-assets.py` (run by `.github/workflows/eval-assets.yml`)
+# lists every pull request that modifies, deletes or changes the type of an
+# existing file matched below. Adding a new file is not a change and is not
+# reported; a rename counts as the deletion of the old path. A pull request that
+# is reported is merged by the maintainer after reading the listed diffs
+# (ADR-0093, `.claude/rules/pr-workflow.md` condition 5).
+#
+# `*` matches within one path segment, `**` any number of segments. The
+# registry is read from the base branch, so a pull request cannot remove its
+# own entry; the detection's own files are listed so it cannot rewrite itself.
+#
+# The script also reports a few content patterns that need no registry entry
+# (large net deletions in workflows, fewer assertions, newly ignored tests);
+# see its docstring.
+
+# --- Expected outputs and corpora ---
+
+[[asset]]
+glob = "crates/*/tests/fixtures/**"
+reason = "golden inputs and expected snapshots of the renderers and the parser"
+
+[[asset]]
+glob = "tests/corpus/**"
+reason = "shared test corpus"
+
+[[asset]]
+glob = ".github/snapshots/**"
+reason = "expected snapshots read by CI jobs"
+
+[[asset]]
+glob = ".github/fixtures/**"
+reason = "inputs and expected values read by CI jobs"
+
+# --- Thresholds and policy files read by checks ---
+
+[[asset]]
+glob = "codecov.yml"
+reason = "coverage thresholds"
+
+[[asset]]
+glob = "deny.toml"
+reason = "dependency license allow list"
+
+[[asset]]
+glob = "ci/*.toml"
+reason = "manifests and allowlists that CI checks compare the repository against"
+
+[[asset]]
+glob = "scripts/check-*.py"
+reason = "CI check scripts and the floors they carry (for example MINIMUMS in check-fixture-counts.py)"
+
+# --- The detection itself ---
+
+[[asset]]
+glob = "ci/eval-assets.toml"
+reason = "this registry"
+
+[[asset]]
+glob = "scripts/check-eval-assets.py"
+reason = "the check that reads this registry"
+
+[[asset]]
+glob = "scripts/test_check_eval_assets.py"
+reason = "tests of the check that reads this registry"
+
+[[asset]]
+glob = ".github/workflows/eval-assets.yml"
+reason = "the workflow that runs the check"

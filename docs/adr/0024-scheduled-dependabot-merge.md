@@ -1,6 +1,6 @@
 # 0024. Scheduled unattended Dependabot review-and-merge
 
-- **Status**: Accepted (decision 2's release-note read and diff-sanity gate apply per dependency of a grouped PR since ADR-0075 on 2026-09-15; condition 4 merges through the queue since ADR-0079 on 2026-09-17)
+- **Status**: Accepted (decision 2's release-note read and diff-sanity gate apply per dependency of a grouped PR since ADR-0075 on 2026-09-15; condition 4 merges through the queue since ADR-0079 on 2026-09-17; a Dependabot PR on which the `Eval assets` check reports a hit stays open for the maintainer since ADR-0093 on 2026-11-20)
 - **Date**: 2026-05-25
 
 ## Context
