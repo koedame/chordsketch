@@ -41,6 +41,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import tomllib
 import urllib.request
 import xml.etree.ElementTree as ElementTree
@@ -292,6 +293,47 @@ def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> subproc
         # A missing tool is a failed check, reported like any other.
         return subprocess.CompletedProcess(cmd, 127, f"{cmd[0]}: command not found\n")
     print(result.stdout, end="", flush=True)
+    return result
+
+
+# What Gradle prints when a plugin, a dependency or the distribution itself could
+# not be fetched. plugins.gradle.org and services.gradle.org answer 404 / 5xx or drop
+# the connection now and then for files that exist, so these are retried; a build
+# that fails any other way is not.
+GRADLE_FETCH_FAILURES = (
+    "Could not resolve ",
+    "Could not parse POM",
+    "Could not GET ",
+    "Could not HEAD ",
+    "was not found in any of the following sources",
+    "Could not find ",
+    "Read timed out",
+    "Connection reset",
+    "Server returned HTTP response code",
+    "Could not install Gradle distribution",
+)
+GRADLE_ATTEMPTS = 3
+GRADLE_RETRY_WAIT = 30
+
+
+def run_gradle(
+    runner: Runner,
+    cmd: list[str],
+    cwd: Path,
+    attempts: int = GRADLE_ATTEMPTS,
+    wait: float = GRADLE_RETRY_WAIT,
+    sleep: Callable[[float], None] = time.sleep,
+) -> subprocess.CompletedProcess[str]:
+    """Run a Gradle command again, after a wait, when it failed fetching from a repository."""
+    for attempt in range(1, attempts + 1):
+        result = runner(cmd, cwd)
+        if result.returncode == 0 or attempt == attempts:
+            return result
+        if not any(marker in result.stdout for marker in GRADLE_FETCH_FAILURES):
+            return result
+        pause = wait * attempt
+        print(f"Gradle could not fetch what it needs (attempt {attempt} of {attempts}); trying again in {pause:g}s", flush=True)
+        sleep(pause)
     return result
 
 
@@ -1243,7 +1285,8 @@ def maven_problems(directory: Path, runner: Runner = run) -> list[str]:
     """Publish the Kotlin library to a scratch Maven repository and check it."""
     version = cargo_package_version(REPO_ROOT / "crates/ffi/Cargo.toml")
     with tempfile.TemporaryDirectory(prefix="maven-repo-") as scratch:
-        published = runner(
+        published = run_gradle(
+            runner,
             ["./gradlew", "publishToMavenLocal", "--no-configuration-cache", f"-Dmaven.repo.local={scratch}"],
             directory,
         )
@@ -2141,7 +2184,7 @@ def jetbrains_problems(runner: Runner = run) -> list[str]:
     https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html
     """
     directory = REPO_ROOT / JETBRAINS_DIR
-    built = runner(["./gradlew", "buildPlugin", "verifyPluginProjectConfiguration", "--no-configuration-cache"], directory)
+    built = run_gradle(runner, ["./gradlew", "buildPlugin", "verifyPluginProjectConfiguration", "--no-configuration-cache"], directory)
     if built.returncode != 0:
         return [f"`gradlew buildPlugin verifyPluginProjectConfiguration` failed:\n{tail(built.stdout, 40)}"]
     problems = [line.strip() for line in built.stdout.splitlines() if "[org.jetbrains.intellij.platform]" in line and "warn" in line.lower()]

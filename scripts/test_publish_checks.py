@@ -1480,6 +1480,40 @@ class XcframeworkArchiveTest(unittest.TestCase):
         self.assertTrue(any("no chordsketchFFI.xcframework at its root" in p for p in problems), problems)
 
 
+class RunGradleTest(unittest.TestCase):
+    """plugins.gradle.org fails now and then for files that exist; the checks must not fail with it."""
+
+    FETCH_FAILURE = "Plugin [id: 'com.vanniktech.maven.publish', version: '0.30.0'] was not found in any of the following sources:"
+
+    def run_with(self, outputs: list[tuple[int, str]]) -> tuple[checks.subprocess.CompletedProcess, int, list[float]]:
+        calls: list[list[str]] = []
+        pauses: list[float] = []
+
+        def runner(cmd, cwd, env=None):
+            calls.append(cmd)
+            code, out = outputs[len(calls) - 1]
+            return checks.subprocess.CompletedProcess(cmd, code, out)
+
+        result = checks.run_gradle(runner, ["./gradlew", "build"], Path("."), sleep=pauses.append)
+        return result, len(calls), pauses
+
+    def test_when_the_first_fetch_fails_and_the_second_works_the_build_passes(self) -> None:
+        result, calls, pauses = self.run_with([(1, self.FETCH_FAILURE), (0, "BUILD SUCCESSFUL")])
+        self.assertEqual((result.returncode, calls, len(pauses)), (0, 2, 1))
+
+    def test_when_every_attempt_fails_fetching_the_last_failure_is_returned(self) -> None:
+        result, calls, _ = self.run_with([(1, self.FETCH_FAILURE)] * 3)
+        self.assertEqual((result.returncode, calls), (1, checks.GRADLE_ATTEMPTS))
+
+    def test_when_the_build_fails_for_another_reason_it_is_not_run_again(self) -> None:
+        result, calls, pauses = self.run_with([(1, "e: Unresolved reference: foo")])
+        self.assertEqual((result.returncode, calls, pauses), (1, 1, []))
+
+    def test_when_the_build_passes_it_is_run_once(self) -> None:
+        _, calls, _ = self.run_with([(0, "BUILD SUCCESSFUL")])
+        self.assertEqual(calls, 1)
+
+
 class JetbrainsNameProblemsTest(unittest.TestCase):
     """The Marketplace approval guidelines bound <name> tighter than plugin.xml's own schema."""
 
