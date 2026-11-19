@@ -38,6 +38,12 @@ npm ci --prefix tools/lint && npx --prefix tools/lint eslint --config tools/lint
                      # ESLint over the TypeScript packages (minimal rule set in
                      # tools/lint/eslint.config.mjs; fails on an `eslint-disable`
                      # that suppresses nothing). CI runs it on every PR.
+python3 scripts/check-suppressions.py  # Counts suppression comments (`eslint-disable`,
+                     # `@ts-expect-error`, skipped tests, `#[allow(...)]`, `#[ignore]`,
+                     # `// WORKAROUND`) against ci/suppression-baseline.json; CI fails on
+                     # a count above or below it. `--update` lowers the baseline,
+                     # `--update --allow-increase` accepts a new suppression
+                     # (docs/adr/0095-suppression-comments-may-not-grow-unnoticed.md)
 cargo +nightly fuzz run parse --fuzz-dir crates/chordpro/fuzz  # Fuzz the ChordPro
                      # parser (needs a nightly toolchain + `cargo install cargo-fuzz`;
                      # CI runs it nightly — see crates/chordpro/fuzz/README.md and
