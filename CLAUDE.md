@@ -287,7 +287,10 @@ was created).
   underdocumented behavior.
 - Parser behavior is validated via **golden tests**: input `.cho` files paired with
   expected output snapshots.
-- Compatibility with the Perl reference implementation is checked by hand with
-  `scripts/compare-with-perl.sh` on a shared test corpus (results in
-  `docs/known-deviations.md`), and the directive coverage is checked in CI by
-  `crates/chordpro/tests/upstream_directives.rs`.
+- Compatibility with the Perl reference implementation is checked in CI by
+  `crates/cli/tests/perl_comparison.rs`, which compares the text output for
+  the shared test corpus with saved Perl output in `tests/perl-baseline/`
+  (results in `docs/known-deviations.md`; refresh with
+  `scripts/update-perl-baseline.sh`). The HTML output is compared by hand
+  with `scripts/compare-with-perl.sh`. The directive coverage is checked in CI
+  by `crates/chordpro/tests/upstream_directives.rs`.
