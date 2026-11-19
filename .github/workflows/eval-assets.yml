@@ -12,9 +12,9 @@ name: Eval assets
 # out, because `gh pr checks` reads a failed job as `fail`.
 #
 # `pull_request_target` runs this file and scripts/check-eval-assets.py from the
-# base branch, so a pull request cannot edit its own check. The pull request's
-# commits are fetched as git objects and read with `git diff`; nothing from
-# them is checked out, built or executed. The token holds `contents: read` and
+# base branch, so a pull request cannot edit its own check. The script fetches
+# the pull request's commits as git objects (`--fetch`) and reads them with
+# `git diff`; nothing from them is checked out, built or executed. The token holds `contents: read` and
 # `pull-requests: write` (the label and one comment) and nothing else.
 #
 # It stays off the LINUX_RUNNER pool because it runs under
@@ -56,24 +56,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Fetch the pull request head as objects
-        if: ${{ github.event_name == 'pull_request_target' }}
-        env:
-          PR: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          git fetch --no-tags --quiet origin "refs/pull/${PR}/head"
-          git cat-file -e "${HEAD_SHA}^{commit}"
-
       - name: Look for changed evaluation assets
         id: check
         if: ${{ github.event_name == 'pull_request_target' }}
         env:
+          PR: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           code=0
-          python3 scripts/check-eval-assets.py --base "$BASE_SHA" --head "$HEAD_SHA" > "$RUNNER_TEMP/report.md" || code=$?
+          python3 scripts/check-eval-assets.py --fetch "refs/pull/${PR}/head" --base "$BASE_SHA" --head "$HEAD_SHA" > "$RUNNER_TEMP/report.md" || code=$?
           cat "$RUNNER_TEMP/report.md"
           case "$code" in
             0) echo "hit=false" >> "$GITHUB_OUTPUT" ;;

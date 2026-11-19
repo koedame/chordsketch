@@ -359,6 +359,40 @@ class RenderAndExitCodeTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(out, "No evaluation assets changed.\n")
 
+    def test_fetch_brings_in_a_pull_request_head_that_the_clone_does_not_have(self) -> None:
+        path = "crates/render-text/tests/fixtures/a/expected.txt"
+        with _make({path: "old\n"}) as (origin, base), TemporaryDirectory() as tmp:
+            origin.write(path, "new\n")
+            head = origin.commit("head")
+            _git(origin.root, "update-ref", "refs/pull/7/head", head)
+            _git(origin.root, "reset", "-q", "--hard", base)
+            clone = Path(tmp) / "clone"
+            subprocess.run(
+                ["git", "clone", "-q", "--no-local", str(origin.root), str(clone)], check=True, env=_GIT_ENV
+            )
+            with self.assertRaises(check_eval_assets.CheckError):
+                check_eval_assets.check(clone, base, head, REGISTRY)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = check_eval_assets.main(
+                    ["--fetch", "refs/pull/7/head", "--base", base, "--head", head, "--repo", str(clone)]
+                )
+        self.assertEqual(code, 1)
+        self.assertIn(path, out.getvalue())
+
+    def test_fetch_of_a_missing_ref_exits_with_two(self) -> None:
+        with _make({"README.md": "a\n"}) as (repo, base), TemporaryDirectory() as tmp:
+            clone = Path(tmp) / "clone"
+            subprocess.run(
+                ["git", "clone", "-q", str(repo.root), str(clone)], check=True, env=_GIT_ENV
+            )
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code = check_eval_assets.main(
+                    ["--fetch", "refs/pull/9/head", "--base", base, "--head", base, "--repo", str(clone)]
+                )
+        self.assertEqual(code, 2)
+
     def test_an_unknown_commit_exits_with_two(self) -> None:
         with _make({"README.md": "a\n"}) as (repo, base):
             code, _, err = self._run(repo, base, "0" * 40)

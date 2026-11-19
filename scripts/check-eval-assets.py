@@ -24,11 +24,13 @@ disabled (a rename is the deletion of the old path plus an addition):
 
 The registry is read from the working tree, which the workflow checks out from
 the base branch, and the pull request's own commits are only read as git
-objects: nothing from the pull request is executed or loaded.
+objects: nothing from the pull request is executed or loaded. `--fetch REF`
+brings those objects in (`git fetch --no-tags origin REF` touches the object
+store and a remote-tracking ref, never the working tree or the index).
 
 Usage:
 
-    python3 scripts/check-eval-assets.py --base <ref> --head <ref>
+    python3 scripts/check-eval-assets.py [--fetch refs/pull/N/head] --base <ref> --head <ref>
 
 Exit codes: 0 no hit, 1 at least one hit (the table is printed), 2 error.
 """
@@ -124,6 +126,10 @@ def _git(repo: Path, *args: str) -> str:
     if proc.returncode != 0:
         raise CheckError(f"{' '.join(cmd)} failed: {proc.stderr.decode('utf-8', 'replace').strip()}")
     return proc.stdout.decode("utf-8", "replace")
+
+
+def fetch_objects(repo: Path, ref: str) -> None:
+    _git(repo, "fetch", "--no-tags", "--quiet", "origin", ref)
 
 
 _DIFF_FLAGS = ("--no-ext-diff", "--no-textconv", "--no-renames", "--no-color")
@@ -243,12 +249,19 @@ def render(findings: list[Finding]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
+    parser.add_argument(
+        "--fetch",
+        metavar="REF",
+        help="fetch this ref from origin first (for example refs/pull/N/head) so the head commit is present",
+    )
     parser.add_argument("--base", required=True, help="base commit of the pull request")
     parser.add_argument("--head", required=True, help="head commit of the pull request")
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
     parser.add_argument("--repo", type=Path, default=REPO_ROOT)
     args = parser.parse_args(argv)
     try:
+        if args.fetch:
+            fetch_objects(args.repo, args.fetch)
         registry = load_registry(args.registry)
         findings = check(args.repo, args.base, args.head, registry)
     except CheckError as exc:
