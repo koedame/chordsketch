@@ -78,7 +78,7 @@ fn transposed_note(semitone: u8, prefer_flat: bool) -> (Note, Option<Accidental>
     }
 }
 
-/// Canonical spelling for a chromatic pitch class as a key root.
+/// Canonical spelling for a chromatic pitch class as a **major** key root.
 ///
 /// Used after transposition to pick the conventional name
 /// (e.g. `A#` → `Bb`, `D#` → `Eb`, `G#` → `Ab`) rather than the
@@ -93,24 +93,45 @@ fn transposed_note(semitone: u8, prefer_flat: bool) -> (Note, Option<Accidental>
 /// upstream — `transpose(song, 0)` already short-circuits to
 /// preserve the authored key.
 ///
+/// Minor keys have their own table — see
+/// [`canonical_key_spelling_for_mode`]; the major table would
+/// spell `F#m` / `C#m` / `G#m` as `Gbm` / `Dbm` / `Abm`, which
+/// are 9 / 8 / 7-flat keys nobody writes.
+///
 /// Returns `(note, accidental)` for the canonical major-root
-/// spelling. Whether the surrounding key is major or minor is
-/// the caller's responsibility — [`key_prefers_flat`] takes the
-/// `is_minor` flag to pick the flat / sharp side.
+/// spelling.
 #[must_use]
 pub fn canonical_key_spelling(semitone: u8) -> (Note, Option<Accidental>) {
+    canonical_key_spelling_for_mode(semitone, false)
+}
+
+/// Canonical spelling for a chromatic pitch class as a key root,
+/// given whether the key is minor.
+///
+/// The spelling is the one with the fewest accidentals in the key
+/// signature. Major keys: `Db` (5♭), `Eb` (3♭), `Gb` (6♭, tied with
+/// `F#` at 6♯ — flat side wins for pop / folk convention), `Ab`
+/// (4♭), `Bb` (2♭). Minor keys: `C#m` (4♯, not `Dbm` at 8♭), `F#m`
+/// (3♯, not `Gbm` at 9♭), `G#m` (5♯, not `Abm` at 7♭), `Bbm` (5♭,
+/// not `A#m` at 7♯); `Ebm` and `D#m` tie at 6 accidentals, and the
+/// flat side wins, matching the `Gb` major tie-break.
+#[must_use]
+pub fn canonical_key_spelling_for_mode(semitone: u8, is_minor: bool) -> (Note, Option<Accidental>) {
     match semitone % 12 {
         0 => (Note::C, None),
-        1 => (Note::D, Some(Accidental::Flat)), // Db, not C#
+        1 if is_minor => (Note::C, Some(Accidental::Sharp)), // C#m, not Dbm
+        1 => (Note::D, Some(Accidental::Flat)),              // Db, not C#
         2 => (Note::D, None),
-        3 => (Note::E, Some(Accidental::Flat)), // Eb, not D#
+        3 => (Note::E, Some(Accidental::Flat)), // Eb / Ebm (D#m ties at 6 — flat wins), not D#
         4 => (Note::E, None),
         5 => (Note::F, None),
+        6 if is_minor => (Note::F, Some(Accidental::Sharp)), // F#m, not Gbm
         6 => (Note::G, Some(Accidental::Flat)), // Gb (F#/Gb tie — flat-side wins for pop / folk convention)
         7 => (Note::G, None),
-        8 => (Note::A, Some(Accidental::Flat)), // Ab, not G#
+        8 if is_minor => (Note::G, Some(Accidental::Sharp)), // G#m, not Abm
+        8 => (Note::A, Some(Accidental::Flat)),              // Ab, not G#
         9 => (Note::A, None),
-        10 => (Note::B, Some(Accidental::Flat)), // Bb, not A#
+        10 => (Note::B, Some(Accidental::Flat)), // Bb / Bbm, not A#
         11 => (Note::B, None),
         _ => unreachable!(),
     }
@@ -440,8 +461,8 @@ pub fn canonical_key_for_display(
 fn key_prefers_flat_for_song(detail: &ChordDetail, semitones: i8) -> bool {
     let root_semitone = note_to_semitone(detail.root, detail.root_accidental);
     let new_semitone = shift_semitone(root_semitone, semitones);
-    let (new_root, new_acc) = canonical_key_spelling(new_semitone);
     let is_minor = detail.quality == ChordQuality::Minor;
+    let (new_root, new_acc) = canonical_key_spelling_for_mode(new_semitone, is_minor);
     key_prefers_flat(new_root, new_acc, is_minor)
 }
 
@@ -457,7 +478,8 @@ fn key_prefers_flat_for_song(detail: &ChordDetail, semitones: i8) -> bool {
 /// [`transposed_key_display_string`].
 fn canonical_key_string(detail: &ChordDetail) -> String {
     let root_semitone = note_to_semitone(detail.root, detail.root_accidental);
-    let (new_root, new_acc) = canonical_key_spelling(root_semitone);
+    let (new_root, new_acc) =
+        canonical_key_spelling_for_mode(root_semitone, detail.quality == ChordQuality::Minor);
     let mut s = String::new();
     s.push(match new_root {
         Note::C => 'C',
@@ -578,7 +600,7 @@ pub fn transposed_key_prefers_flat(metadata: &crate::ast::Metadata, semitones: i
     };
     let root_semitone = note_to_semitone(key.root, key.accidental);
     let new_semitone = shift_semitone(root_semitone, semitones);
-    let (new_root, new_acc) = canonical_key_spelling(new_semitone);
+    let (new_root, new_acc) = canonical_key_spelling_for_mode(new_semitone, key.is_minor());
     key_prefers_flat(new_root, new_acc, key.is_minor())
 }
 
@@ -763,6 +785,76 @@ mod tests {
             canonical_key_spelling(10),
             (Note::B, Some(Accidental::Flat))
         );
+    }
+
+    #[test]
+    fn canonical_key_spelling_for_mode_uses_conventional_minor_keys() {
+        let minor = |n| canonical_key_spelling_for_mode(n, true);
+        assert_eq!(minor(1), (Note::C, Some(Accidental::Sharp)));
+        assert_eq!(minor(3), (Note::E, Some(Accidental::Flat)));
+        assert_eq!(minor(6), (Note::F, Some(Accidental::Sharp)));
+        assert_eq!(minor(8), (Note::G, Some(Accidental::Sharp)));
+        assert_eq!(minor(10), (Note::B, Some(Accidental::Flat)));
+        // Major keys are unchanged by the mode-aware entry point.
+        for n in 0..12 {
+            assert_eq!(
+                canonical_key_spelling_for_mode(n, false),
+                canonical_key_spelling(n)
+            );
+        }
+    }
+
+    #[test]
+    fn transposed_minor_key_never_lands_on_gbm_dbm_or_abm() {
+        // Am shifted to every pitch class: the transposed key and the
+        // chord lines must use the conventional minor-key spelling.
+        let expected = [
+            (0, "A minor"),
+            (1, "Bb minor"),
+            (2, "B minor"),
+            (3, "C minor"),
+            (4, "C# minor"),
+            (5, "D minor"),
+            (6, "Eb minor"),
+            (7, "E minor"),
+            (8, "F minor"),
+            (9, "F# minor"),
+            (10, "G minor"),
+            (11, "G# minor"),
+        ];
+        for (shift, key) in expected {
+            let shift_i8 = shift as i8;
+            assert_eq!(
+                canonical_transposed_key(Some("Am"), shift_i8).as_deref(),
+                if shift == 0 {
+                    Some("A minor")
+                } else {
+                    Some(key)
+                },
+                "canonical_transposed_key(Am, {shift})"
+            );
+        }
+    }
+
+    #[test]
+    fn transpose_minor_song_spells_sharp_side_minor_chords_with_sharps() {
+        let chords = |input: &str, semitones: i8| -> Vec<String> {
+            let song = transpose(&parse_song(input), semitones);
+            song.lines
+                .iter()
+                .filter_map(|l| match l {
+                    Line::Lyrics(l) => Some(l),
+                    _ => None,
+                })
+                .flat_map(|l| l.segments.iter().filter_map(|s| s.chord.as_ref()))
+                .map(|c| c.name.clone())
+                .collect()
+        };
+        let src = "{key: Am}\n[Am]a [Dm]b [E]c";
+        assert_eq!(chords(src, -3), ["F#m", "Bm", "C#"]);
+        assert_eq!(chords(src, 4), ["C#m", "F#m", "G#"]);
+        assert_eq!(chords(src, 3), ["Cm", "Fm", "G"]);
+        assert_eq!(chords(src, 8), ["Fm", "Bbm", "C"]);
     }
 
     // --- transpose(song, …) normalises spelling song-wide ---

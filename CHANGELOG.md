@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Transposing a minor-key song now spells the key and its chords as
+  F♯m / C♯m / G♯m** instead of the 9-, 8- and 7-flat keys `Gbm` / `Dbm` /
+  `Abm`. The key spelling table is now mode-aware (`Bbm` and `Ebm` keep
+  their flat spelling), and every renderer and binding that decides the
+  flat / sharp side of a transposed key follows it.
+
 ## [0.9.1] - 2026-11-16
 
 ### Changed
