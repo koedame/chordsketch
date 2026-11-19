@@ -13,7 +13,7 @@
 The renderers each maintain their own fixture corpus. These minimums are the
 floor for sister-site parity (see [`renderer-parity.md`](renderer-parity.md));
 Codecov thresholds alone do not guarantee structural coverage of directive
-classes, so a PR that drops below any of these numbers blocks on human review:
+classes, so CI fails a PR that drops below any of these numbers:
 
 | Renderer | Minimum fixtures | Location |
 |---|---|---|
@@ -30,6 +30,13 @@ Enforced by `scripts/check-fixture-counts.py` (wired into the
 `fixture-counts` job in `.github/workflows/ci.yml`). The source of truth
 for the numbers is the `MINIMUMS` dict in that script; this table and the
 script must be updated in lockstep.
+
+`scripts/check-*.py` is an evaluation asset
+([ADR-0093](../../docs/adr/0093-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)):
+a PR that changes `MINIMUMS` (the floor going up or down alike) or deletes the
+`Fixture counts` step of `ci.yml` is flagged by the `Eval assets` check and is
+merged by the maintainer after reading the diff. Lowering a floor in the same
+PR that removes the fixtures therefore cannot pass on green CI alone.
 
 ## Stop-Word Collision Tests
 

@@ -325,7 +325,7 @@ silently ignored.
 
 ### 2c. Merge gate (only on SAFE / FIXED)
 
-The four conditions of [ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md)
+The five conditions of [ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md)
 apply per merge:
 
 1. **Per-session permission**: satisfied by this command's invocation.
@@ -351,6 +351,12 @@ apply per merge:
    verified in (2). Wait until `gh pr view <PR> --json state` reports
    `MERGED`. If the queue removes the PR, read the failing
    `merge_group` run and treat it as a failed check under (2).
+5. **No unreviewed change to an evaluation asset**
+   ([ADR-0093](../../docs/adr/0093-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)):
+   the `Eval assets (maintainer merge required)` line of `gh pr checks`
+   is `pass`. A `fail` there is not a regression to fix: it lists files
+   (a `FIXED` verdict's own adaptation commits included) that the maintainer
+   merges after reading them. Comment the PR and leave it open.
 
 Mark the task `completed`. Move on to the next PR.
 

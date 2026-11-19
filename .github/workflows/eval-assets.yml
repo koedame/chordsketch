@@ -1,0 +1,137 @@
+name: Eval assets
+
+# Flags a pull request that changes an evaluation asset (an existing expected
+# output, corpus, threshold or check, listed in ci/eval-assets.toml, or a diff
+# that removes assertions or tests) so that the maintainer merges it after
+# reading the diffs; an AI assistant does not enqueue it (ADR-0093,
+# .claude/rules/pr-workflow.md condition 5).
+#
+# The check is red on a hit and is deliberately NOT a required check: a required
+# red check would stop the maintainer's own merge too. Condition 2 of the
+# bot-merge rule (every check `pass` or `skipping`) is what keeps the assistant
+# out, because `gh pr checks` reads a failed job as `fail`.
+#
+# `pull_request_target` runs this file and scripts/check-eval-assets.py from the
+# base branch, so a pull request cannot edit its own check. The pull request's
+# commits are fetched as git objects and read with `git diff`; nothing from
+# them is checked out, built or executed. The token holds `contents: read` and
+# `pull-requests: write` (the label and one comment) and nothing else.
+#
+# It stays off the LINUX_RUNNER pool because it runs under
+# `pull_request_target` (.claude/rules/ci-parallelization.md §7). The merge
+# queue has nothing to check: the job passes without running a step.
+
+on:
+  pull_request_target:
+    branches:
+      - main
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-assets-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+
+jobs:
+  eval-assets:
+    name: Eval assets (maintainer merge required)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Nothing to check in the merge queue
+        if: ${{ github.event_name == 'merge_group' }}
+        run: echo "The merge queue only builds commits that already passed this check on their pull request."
+
+      # The checkout is the base branch: a `pull_request_target` run does not
+      # check out the pull request. Full history so `base...head` finds the
+      # merge base. No credentials are persisted; the repository is public.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ github.event_name == 'pull_request_target' }}
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch the pull request head as objects
+        if: ${{ github.event_name == 'pull_request_target' }}
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --quiet origin "refs/pull/${PR}/head"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+
+      - name: Look for changed evaluation assets
+        id: check
+        if: ${{ github.event_name == 'pull_request_target' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          code=0
+          python3 scripts/check-eval-assets.py --base "$BASE_SHA" --head "$HEAD_SHA" > "$RUNNER_TEMP/report.md" || code=$?
+          cat "$RUNNER_TEMP/report.md"
+          case "$code" in
+            0) echo "hit=false" >> "$GITHUB_OUTPUT" ;;
+            1) echo "hit=true" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "::error::scripts/check-eval-assets.py could not run (exit $code)."
+              exit 1
+              ;;
+          esac
+
+      - name: Update the label and the comment
+        if: ${{ github.event_name == 'pull_request_target' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HIT: ${{ steps.check.outputs.hit }}
+        run: |
+          marker='<!-- eval-assets-check -->'
+          issue="repos/${GITHUB_REPOSITORY}/issues/${PR}"
+          existing=$(gh api "${issue}/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"${marker}\"))) | [.id, .node_id] | @tsv" \
+            | sed -n 1p)
+          comment_id=${existing%%$'\t'*}
+          node_id=${existing#*$'\t'}
+          has_label=false
+          if gh api "${issue}/labels" --jq '.[].name' | grep -qx 'eval-assets'; then
+            has_label=true
+          fi
+
+          if [ "$HIT" = "true" ]; then
+            if ! gh api "repos/${GITHUB_REPOSITORY}/labels/eval-assets" --silent 2> /dev/null; then
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/labels" -f name=eval-assets -f color=B60205 \
+                -f description='Changes an evaluation asset: merged by the maintainer' --silent
+            fi
+            gh api -X POST "${issue}/labels" -f 'labels[]=eval-assets' --silent
+            { echo "$marker"; cat "$RUNNER_TEMP/report.md"; } > "$RUNNER_TEMP/body.md"
+            if [ -n "$comment_id" ]; then
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -F body=@"$RUNNER_TEMP/body.md" --silent
+              gh api graphql -f query="mutation(\$id: ID!) { unminimizeComment(input: {subjectId: \$id}) { clientMutationId } }" \
+                -f id="$node_id" --silent || echo "::warning::Could not expand the earlier comment."
+            else
+              gh api -X POST "${issue}/comments" -F body=@"$RUNNER_TEMP/body.md" --silent
+            fi
+          else
+            if [ "$has_label" = "true" ]; then
+              gh api -X DELETE "${issue}/labels/eval-assets" --silent
+            fi
+            if [ -n "$comment_id" ]; then
+              printf '%s\nNo evaluation assets are changed as of %s.\n' "$marker" "$HEAD_SHA" > "$RUNNER_TEMP/body.md"
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -F body=@"$RUNNER_TEMP/body.md" --silent
+              gh api graphql -f query="mutation(\$id: ID!) { minimizeComment(input: {subjectId: \$id, classifier: RESOLVED}) { clientMutationId } }" \
+                -f id="$node_id" --silent || echo "::warning::Could not collapse the earlier comment."
+            fi
+          fi
+
+      - name: Fail so that the maintainer merges this pull request
+        if: ${{ github.event_name == 'pull_request_target' && steps.check.outputs.hit == 'true' }}
+        run: |
+          echo "::error::This pull request changes an evaluation asset. The maintainer merges it after reading the diffs in the report above."
+          exit 1
