@@ -826,11 +826,7 @@ mod tests {
             let shift_i8 = shift as i8;
             assert_eq!(
                 canonical_transposed_key(Some("Am"), shift_i8).as_deref(),
-                if shift == 0 {
-                    Some("A minor")
-                } else {
-                    Some(key)
-                },
+                Some(key),
                 "canonical_transposed_key(Am, {shift})"
             );
         }
