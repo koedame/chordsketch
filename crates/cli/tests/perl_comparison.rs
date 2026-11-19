@@ -384,8 +384,12 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// Reads a text file with LF line endings, whatever the checkout converted
+/// them to (`core.autocrlf` on Windows).
 fn read(path: &Path) -> String {
-    fs::read_to_string(path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
+    fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
+        .replace("\r\n", "\n")
 }
 
 /// Corpus files, as paths relative to `tests/corpus/` with `/` separators.
