@@ -820,4 +820,103 @@ mod tests {
             "RTL + emoji lyric must round-trip verbatim, got: {json}"
         );
     }
+
+    // -- Exact output of the composite serialisers ---------------------------
+
+    #[test]
+    fn metadata_serialises_every_field_with_comma_separated_lists() {
+        let m = Metadata {
+            title: Some("T".to_string()),
+            subtitles: vec!["s1".to_string(), "s2".to_string()],
+            artists: vec!["a1".to_string(), "a2".to_string()],
+            sort_title: Some("ST".to_string()),
+            sort_artist: Some("SA".to_string()),
+            arrangers: vec!["r1".to_string()],
+            copyright: Some("(c)".to_string()),
+            duration: Some("3:45".to_string()),
+            tags: vec!["t1".to_string(), "t2".to_string()],
+            custom: vec![
+                ("k1".to_string(), "v1".to_string()),
+                ("k2".to_string(), "v2".to_string()),
+            ],
+            ..Metadata::default()
+        };
+        assert_eq!(
+            m.to_json_string(),
+            concat!(
+                r#"{"title":"T","subtitles":["s1","s2"],"artists":["a1","a2"],"#,
+                r#""composers":[],"lyricists":[],"album":null,"year":null,"#,
+                r#""key":null,"keys":[],"tempo":null,"tempos":[],"time":null,"#,
+                r#""times":[],"capo":null,"sortTitle":"ST","sortArtist":"SA","#,
+                r#""arrangers":["r1"],"copyright":"(c)","duration":"3:45","#,
+                r#""tags":["t1","t2"],"custom":[["k1","v1"],["k2","v2"]]}"#,
+            )
+        );
+    }
+
+    #[test]
+    fn text_span_serialises_nested_children_and_attributes() {
+        let span = TextSpan::Span(
+            SpanAttributes {
+                font_family: Some("Serif".to_string()),
+                size: Some("12".to_string()),
+                foreground: Some("red".to_string()),
+                background: Some("yellow".to_string()),
+                weight: Some("bold".to_string()),
+                style: Some("italic".to_string()),
+            },
+            vec![
+                TextSpan::Plain("a".to_string()),
+                TextSpan::Bold(vec![TextSpan::Plain("b".to_string())]),
+            ],
+        );
+        assert_eq!(
+            span.to_json_string(),
+            concat!(
+                r#"{"kind":"span","attributes":{"fontFamily":"Serif","size":"12","#,
+                r#""foreground":"red","background":"yellow","weight":"bold","#,
+                r#""style":"italic"},"children":[{"kind":"plain","value":"a"},"#,
+                r#"{"kind":"bold","children":[{"kind":"plain","value":"b"}]}]}"#,
+            )
+        );
+    }
+
+    #[test]
+    fn span_attributes_serialise_unset_fields_as_null() {
+        assert_eq!(
+            SpanAttributes::default().to_json_string(),
+            r#"{"fontFamily":null,"size":null,"foreground":null,"background":null,"weight":null,"style":null}"#
+        );
+    }
+
+    #[test]
+    fn image_attributes_serialise_every_field() {
+        let attrs = ImageAttributes {
+            src: "a.png".to_string(),
+            width: Some("10".to_string()),
+            height: Some("20".to_string()),
+            scale: Some("0.5".to_string()),
+            title: Some("T".to_string()),
+            anchor: Some("line".to_string()),
+        };
+        assert_eq!(
+            attrs.to_json_string(),
+            r#"{"src":"a.png","width":"10","height":"20","scale":"0.5","title":"T","anchor":"line"}"#
+        );
+    }
+
+    #[test]
+    fn chord_definition_serialises_multiple_keys_and_the_transposable_flag() {
+        let mut def = ChordDefinition::parse_value("Am keys 0 3 7");
+        assert_eq!(
+            def.to_json_string(),
+            r#"{"name":"Am","keys":[0,3,7],"copy":null,"copyall":null,"display":null,"format":null,"raw":null,"transposable":false}"#
+        );
+        def.transposable = true;
+        def.keys = None;
+        assert_eq!(
+            def.to_json_string(),
+            r#"{"name":"Am","keys":null,"copy":null,"copyall":null,"display":null,"format":null,"raw":null,"transposable":true}"#
+        );
+    }
 }
