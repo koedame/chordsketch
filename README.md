@@ -16,7 +16,7 @@
 [![codecov](https://codecov.io/gh/koedame/chordsketch/branch/main/graph/badge.svg)](https://codecov.io/gh/koedame/chordsketch)
 [![License: MIT and AGPL-3.0](https://img.shields.io/badge/license-MIT%20%2B%20AGPL--3.0-c8003c)](#license)
 
-[Quick start](#quick-start) · [Usage](#usage) · [Installation](#installation) · [Editor integration](#editor-integration) · [Documentation](#documentation)
+[Quick start](#quick-start) · [Installation](#installation) · [Usage](#usage) · [Editor integration](#editor-integration) · [Documentation](#documentation)
 
 </div>
 
@@ -84,37 +84,6 @@ Breaking changes are named in the [CHANGELOG](CHANGELOG.md), and larger
 ones get a guide under [`docs/migration/`](docs/migration/). Pin an exact
 version if you depend on this crate today. The full policy is in
 [Versioning and release process](docs/releasing.md#pre-10-breaking-changes-are-expected).
-
-## Usage
-
-```bash
-# Render a ChordPro file to plain text (default)
-chordsketch song.cho
-
-# Render a ChordPro file to HTML
-chordsketch -f html song.cho -o song.html
-
-# Render a ChordPro file to PDF
-chordsketch -f pdf song.cho -o song.pdf
-
-# Transpose up 2 semitones
-chordsketch --transpose 2 song.cho
-
-# Use a custom config file
-chordsketch -c myconfig.json song.cho
-
-# Process multiple ChordPro files
-chordsketch -f pdf song1.cho song2.cho -o songbook.pdf
-
-# Render an iReal Pro chart from a URL (always emits SVG)
-chordsketch 'irealb://%54=…'
-
-# Render an iReal Pro chart from an .irealb file (single song)
-chordsketch song.irealb
-
-# Render an iReal Pro chart from an .irealbook file (multi-song collection)
-chordsketch songs.irealbook
-```
 
 ## Try it Online
 
@@ -399,6 +368,37 @@ inside the image; each desktop release publishes the same file as
 `chordsketch-desktop-linux-bundled-libraries.txt`.
 
 </details>
+
+## Usage
+
+```bash
+# Render a ChordPro file to plain text (default)
+chordsketch song.cho
+
+# Render a ChordPro file to HTML
+chordsketch -f html song.cho -o song.html
+
+# Render a ChordPro file to PDF
+chordsketch -f pdf song.cho -o song.pdf
+
+# Transpose up 2 semitones
+chordsketch --transpose 2 song.cho
+
+# Use a custom config file
+chordsketch -c myconfig.json song.cho
+
+# Process multiple ChordPro files
+chordsketch -f pdf song1.cho song2.cho -o songbook.pdf
+
+# Render an iReal Pro chart from a URL (always emits SVG)
+chordsketch 'irealb://%54=…'
+
+# Render an iReal Pro chart from an .irealb file (single song)
+chordsketch song.irealb
+
+# Render an iReal Pro chart from an .irealbook file (multi-song collection)
+chordsketch songs.irealbook
+```
 
 ## Library Usage
 
