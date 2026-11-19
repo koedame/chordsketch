@@ -21,13 +21,6 @@ leaving the underlying defect intact is not acceptable.
   model — don't patch every call site.
 - **Avoid `#[allow(...)]` or `// nolint` to silence legitimate warnings.** These hide
   real problems. Fix the code that triggers the warning instead.
-- **A suppression comment is counted.** `scripts/check-suppressions.py` compares the
-  number of `eslint-disable`, `@ts-expect-error` / `@ts-ignore`, skipped tests, Rust
-  `#[allow(...)]` / `#[expect(...)]` / `#[ignore]` and `// WORKAROUND` comments per
-  package with `ci/suppression-baseline.json`, and CI fails when it changes. Adding one
-  therefore means `--update --allow-increase` and a baseline diff the reviewer sees;
-  removing one means `--update`
-  ([ADR-0095](../../docs/adr/0095-suppression-comments-may-not-grow-unnoticed.md)).
 - **Tests must validate the root cause.** When adding a regression test, ensure it
   covers the actual root cause, not just the surface-level symptom. The test should fail
   if the root cause is reintroduced.

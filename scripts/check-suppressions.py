@@ -20,7 +20,8 @@ the path, e.g. `packages/react`, `crates/ffi`):
   `.skip`, `.todo`, `.fixme`, `.only` and `xit` / `xdescribe` / `xtest` are
   counted on lines that are not comments.
 * Rust sources: a line that begins with `#[allow(`, `#![allow(`,
-  `#[expect(`, `#![expect(` or `#[ignore`, and a `// WORKAROUND` comment
+  `#[expect(`, `#![expect(` or `#[ignore`, a `#[cfg_attr(..., allow|expect|ignore)]`,
+  and a `// WORKAROUND` comment
   (`///` doc comments are not counted).
 
 Files come from `git ls-files`. `GENERATED` lists the committed files that a
@@ -71,7 +72,10 @@ _TEST_MARKER = re.compile(
     r"\b(?:(?:it|test|describe|suite|bench)(?:\.\w+)*\.(skip|todo|fixme|only)\b"
     r"|(xit|xdescribe|xtest)\()"
 )
-_RUST_ATTRIBUTE = re.compile(r"\s*#!?\[(allow|expect)\(|\s*#\[(ignore)\b")
+_RUST_ATTRIBUTE = re.compile(
+    r"\s*#!?\[(allow|expect)\(|\s*#\[(ignore)\b"
+    r"|\s*#!?\[cfg_attr\(.*?,\s*(allow|expect|ignore)\b"
+)
 _RUST_WORKAROUND = re.compile(r"(?<!/)//(?![/!])\s*WORKAROUND\b")
 
 
@@ -97,7 +101,7 @@ def _rust_sites(text: str) -> list[tuple[int, str]]:
     for number, line in enumerate(text.split("\n"), start=1):
         attribute = _RUST_ATTRIBUTE.match(line)
         if attribute:
-            sites.append((number, attribute.group(1) or attribute.group(2)))
+            sites.append((number, attribute.group(1) or attribute.group(2) or attribute.group(3)))
         elif _RUST_WORKAROUND.search(line):
             sites.append((number, "WORKAROUND"))
     return sites

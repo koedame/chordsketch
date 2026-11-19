@@ -142,6 +142,14 @@ class ScriptSourceTests(unittest.TestCase):
 
 
 class RustSourceTests(unittest.TestCase):
+    def test_cfg_attr_wrapped_suppressions_are_counted(self) -> None:
+        source = (
+            "#[cfg_attr(test, allow(dead_code))]\n"
+            "#[cfg_attr(not(feature = \"x\"), ignore)]\n"
+            "#[cfg_attr(test, derive(Debug))]\n"
+        )
+        self.assertEqual(_kinds("a.rs", source), ["allow", "ignore"])
+
     def test_allow_expect_and_ignore_attributes_are_counted(self) -> None:
         source = (
             "#![allow(clippy::all)]\n"

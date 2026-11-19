@@ -25,7 +25,7 @@ suppresses a real finding still passes.
    `@ts-nocheck`, `eslint-disable` (also `-next-line`, `-line`),
    `biome-ignore` or `svelte-ignore`, and the test markers `.skip`, `.todo`,
    `.fixme`, `.only`, `xit`; in Rust sources, a line that starts with
-   `#[allow(`, `#![allow(`, `#[expect(` or `#[ignore`, and a `// WORKAROUND`
+   `#[allow(`, `#![allow(`, `#[expect(` or `#[ignore` (also inside `#[cfg_attr(...)]`), and a `// WORKAROUND`
    comment. A sentence that mentions a directive is not counted, nor is a
    `///` doc comment.
 3. A count above the baseline fails and lists every site of that
