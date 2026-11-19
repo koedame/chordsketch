@@ -19,8 +19,6 @@
  * the server-response layer.
  */
 
-/* eslint-disable no-console */
-
 import { writeFileSync } from "node:fs";
 
 // Optional trace file: when `CHORDSKETCH_STUB_TRACE_FILE` is set, the

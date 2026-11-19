@@ -93,6 +93,7 @@ export function IrealPreview({
           // The SVG is produced by the trusted Rust renderer; no host
           // input flows into the markup beyond the structured chord /
           // metadata fields the renderer already escapes.
+          // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       )}

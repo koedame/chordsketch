@@ -214,7 +214,7 @@ export function useChordAudio(
       }
       playPitches(pitches);
     },
-    [playPitches],
+    [moduleRef, playPitches],
   );
 
   // Silence on unmount; the shared context is intentionally NOT closed

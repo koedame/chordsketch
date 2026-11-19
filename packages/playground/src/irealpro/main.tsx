@@ -41,6 +41,7 @@ void wasmReady.then(() => {
     // through to the chrome's `irealb:// v?` fallback.
     cachedVersion = null;
     if (typeof console !== 'undefined') {
+      // eslint-disable-next-line no-console -- surfaces a wasm-bindgen panic that would otherwise vanish
       console.warn('[chordsketch-playground] wasmVersion() failed', e);
     }
   }
@@ -189,6 +190,7 @@ function tryParse(source: string): IrealSong | null {
     return song;
   } catch (e) {
     if (typeof console !== 'undefined') {
+      // eslint-disable-next-line no-console -- surfaces a post-processing bug that would otherwise vanish
       console.error(
         '[chordsketch-playground] parseIrealb succeeded but post-processing failed; this is a bug',
         e,
@@ -305,6 +307,7 @@ function PlaygroundApp(): JSX.Element {
         // surface is at least visible in devtools rather than
         // disappearing into the chrome's `?` fallback.
         if (typeof console !== 'undefined') {
+          // eslint-disable-next-line no-console -- surfaces a wasm-bindgen panic that would otherwise vanish
           console.warn('[chordsketch-playground] wasmVersion() failed in effect', e);
         }
       }
@@ -340,6 +343,7 @@ function PlaygroundApp(): JSX.Element {
       // the failure when the button silently does nothing on
       // an `http://` deployment.
       if (typeof console !== 'undefined') {
+        // eslint-disable-next-line no-console -- surfaces a clipboard failure that would otherwise be silent
         console.warn('[chordsketch-playground] clipboard write failed', e);
       }
     }

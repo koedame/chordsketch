@@ -94,7 +94,6 @@ export function useIrealSerialize(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [song]);
 
   return { url, loading, error };

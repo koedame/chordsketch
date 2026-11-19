@@ -91,7 +91,6 @@ suite("preview panel serializer", () => {
     // `createPreviewSerializer` so the integration harness can reach
     // the serializer object that `registerWebviewPanelSerializer`
     // otherwise swallows.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const previewModule = require(
       path.resolve(__dirname, "..", "..", "..", "dist", "extension.js"),
     );

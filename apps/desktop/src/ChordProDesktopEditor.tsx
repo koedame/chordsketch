@@ -503,7 +503,7 @@ export const ChordProDesktopEditor = forwardRef<
     // We intentionally only mount once. `value` updates flow
     // through the sync effect below; `placeholder` changes require
     // a remount which the user can force via React's `key` prop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once: value updates flow through the sync effect below
   }, []);
 
   // Controlled-mode value synchronisation. Skips when the editor's

@@ -156,7 +156,7 @@ export const IrealGridEditor = forwardRef<
       }
     };
     // We intentionally mount once and use `setValue` for updates.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once: updates go through the adapter's setValue
   }, []);
 
   // Controlled-mode value synchronisation. Skips when the adapter's
