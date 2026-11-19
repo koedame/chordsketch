@@ -1,0 +1,33 @@
+-- Title: Chorus Recall
+
+-- Start of verse
+G                C         D
+Daylight breaks across the sky
+G                C     D
+Birds are waking up on high
+-- End of verse
+
+-- Start of chorus
+C       G             D
+Sing it loud, sing it clear
+Em      C          D     G
+Let the whole wide world hear
+-- End of chorus
+
+-- Start of verse
+G                  C      D
+Evening comes with gentle rain
+G                 C      D
+Washing clean the window pane
+-- End of verse
+
+{chorus}
+
+-- Start of verse
+G               C    D
+Midnight hums a lullaby
+G                  C      D
+Stars are spinning way up high
+-- End of verse
+
+{chorus}

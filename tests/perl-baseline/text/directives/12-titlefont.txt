@@ -1,0 +1,21 @@
+-- Title: Title Font Directives
+-- Subtitle: A Subtitle in Style
+
+
+-- Start of verse
+D             G
+The title up above
+A                 D
+Should be Georgia Bold
+D                 G
+Twenty-four point size
+A             D
+Dark blue and bold
+-- End of verse
+
+-- Start of chorus
+G               D         A
+Font directives style the page
+Bm           G      A
+Making every song a stage
+-- End of chorus

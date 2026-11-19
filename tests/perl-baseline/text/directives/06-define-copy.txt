@@ -1,0 +1,13 @@
+-- Title: Chord Definition Copy
+
+
+-- Start of verse
+Am               Amin
+Sometimes we use different names
+A-           Am
+For the very same chord
+Cmaj7        CM7
+Copy lets us reuse definitions
+Am                Cmaj7
+Without repeating every fret
+-- End of verse

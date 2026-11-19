@@ -1,0 +1,47 @@
+-- Title: Comments Demo
+
+-- This is a plain comment
+
+-- Start of verse
+G              C
+Take me to the river
+D            G
+Wash my soul clean
+-- End of verse
+
+-- Play softly here
+
+-- Start of chorus
+C        G
+River of life
+D                   Em
+Flowing through the night
+C        G
+Carry me home
+D              G
+Everything’s alright
+-- End of chorus
+
+-- Instrumental break - 8 bars
+
+-- Start of verse
+G               C
+Standing on the shoreline
+D              G
+Watching stars fall
+-- End of verse
+
+-- Repeat chorus twice
+
+-- Start of chorus
+C        G
+River of life
+D                   Em
+Flowing through the night
+C        G
+Carry me home
+D              G
+Everything’s alright
+-- End of chorus
+
+-- Fade out

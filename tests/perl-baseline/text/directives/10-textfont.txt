@@ -1,0 +1,25 @@
+-- Title: Text Font Directives
+
+
+-- Start of verse
+G                C         D
+Standard text in Times New Roman
+G                    C     D
+Twelve point size in basic black
+-- End of verse
+
+
+-- Start of verse
+G              C         D
+Now in Courier ten point grey
+G              C     D
+Monospaced and on display
+-- End of verse
+
+
+-- Start of verse
+G            C        D
+Helvetica in fourteen blue
+G                C           D
+Clean and modern through and through
+-- End of verse

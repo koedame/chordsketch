@@ -1,0 +1,49 @@
+-- Title: Original Key
+
+-- Start of verse
+C              F      G
+Playing in the key of C-
+Am          F           G
+Natural and easy as can be
+-- End of verse
+
+-- Start of chorus
+F      C       G      Am
+Simple chords, simple song
+F             G           C
+In the key of C where I belong
+-- End of chorus
+
+-- New song
+-- Title: Transposed Up
+
+-- Start of verse
+D#            G#            A#
+Same song but transposed up three
+Cm         G#     A#
+Now in the key of Eb-
+-- End of verse
+
+-- Start of chorus
+G#     D#      A#     Cm
+Simple chords, simple song
+G#            A#                 D#
+Transposed up three where they belong
+-- End of chorus
+
+-- New song
+-- Title: Transposed Down
+
+-- Start of verse
+Bb            Eb              F
+Same song but transposed down two
+Gm         Eb     F
+Now in the key of Bb
+-- End of verse
+
+-- Start of chorus
+Eb     Bb      F      Gm
+Simple chords, simple song
+Eb              F             Bb
+Transposed down two all along ---
+-- End of chorus

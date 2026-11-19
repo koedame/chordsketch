@@ -1,0 +1,26 @@
+-- Title: Unknown Directives
+
+
+-- Start of verse
+G                   C
+Songs might contain directives
+D                        G
+That the parser does not know
+Em                    C
+It should handle them gracefully
+D            G
+Not crash or throw
+-- End of verse
+
+-- Start of whatever
+
+This is in an unknown section type
+-- End of whatever
+
+-- Start of chorus
+C         G
+Even with unknowns
+D             G
+The song goes on
+-- End of chorus
+

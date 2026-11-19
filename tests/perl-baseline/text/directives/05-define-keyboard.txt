@@ -1,0 +1,24 @@
+-- Title: Keyboard Chord Definitions
+
+
+-- Start of verse
+Am             C
+Playing on the piano
+Dm             Em
+Fingers on the keys
+F            G
+Melodies are flowing
+Am            Bdim
+Gentle as the breeze
+-- End of verse
+
+-- Start of chorus
+C         F
+Ivory and ebony
+G          Am
+Harmony in time
+C             F
+Every chord a memory
+G          C
+Every note divine
+-- End of chorus

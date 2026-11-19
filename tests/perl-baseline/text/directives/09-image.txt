@@ -1,0 +1,22 @@
+-- Title: Image Directives
+
+
+-- Start of verse
+C               F        G
+Picture worth a thousand words
+Am             F
+Hanging on the wall
+C           F       G
+Memories of singing birds
+Am               G
+Echo through the hall
+-- End of verse
+
+
+-- Start of chorus
+F         C        G       Am
+Frame it, save it, hold it tight
+F     G       C
+Every picture tells a story
+-- End of chorus
+

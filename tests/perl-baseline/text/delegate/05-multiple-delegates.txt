@@ -1,0 +1,48 @@
+-- Title: Multiple Delegate Sections
+
+-- Start of verse
+G             C
+This song has multiple
+D                 G
+Delegate sections embedded
+-- End of verse
+
+-- ABC notation for the melody
+-- Start of abc
++ image: <none> align=left
+-- End of abc
+
+-- Start of chorus
+C        G
+Multiple formats
+D      G
+In one song
+-- End of chorus
+
+-- Lilypond for the harmony
+-- Start of ly
++ image: <none> align=left
+-- End of ly
+
+-- Start of verse
+G               C
+Mixing delegate types freely
+D                    G
+Each rendered by its own engine
+-- End of verse
+
+-- SVG decoration
+-- Start of svg
++ image: <none>
+-- End of svg
+
+-- Start of textblock
+
+Final Notes:
+
+This song demonstrates that multiple delegate
+
+environments can coexist in a single ChordPro file.
+
+Each is processed by its respective handler.
+-- End of textblock

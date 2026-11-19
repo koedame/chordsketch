@@ -11,22 +11,97 @@ have been checked.
 
 ## What was compared
 
-The comparison runs `scripts/compare-with-perl.sh` over the 55 files in
-`tests/corpus/` (see `tests/corpus/README.md`) against R6.101.0.
+Perl ChordPro R6.101.0 was run over the 55 files in `tests/corpus/` (see
+`tests/corpus/README.md`). The `text` output is compared on every `cargo test`;
+the HTML output is not.
 
-| Format | Identical output | Different output | Perl failed to render |
-|--------|------------------|------------------|-----------------------|
-| `text` | 0 | 46 | 9 |
-| `html` | 0 | 52 | 3 |
+### Text output (checked in CI)
 
-No file renders identically. The differences in the text output are the
-presentation choices described below. The HTML and PDF output use their own
-stylesheet and layout and are not intended to match Perl's markup or page
-layout. PDF output is not compared by the script.
+`tests/perl-baseline/text/` holds the text Perl prints for each corpus file.
+CI does not install Perl (see [ADR-0040](adr/0040-external-tool-tests-are-not-run-in-ci.md));
+the test `crates/cli/tests/perl_comparison.rs` renders the same files with
+ChordSketch, passes both outputs through the normalisation described below,
+and compares them.
 
-The comparison needs Perl ChordPro installed and is run by hand
-(`docs/dev-setup.md`); it is not part of CI. What CI does check is the
-directive coverage described in the next section.
+<!-- perl-compare:summary:start -->
+| Format | Identical after normalisation | Different (listed below) | Perl failed to render |
+|--------|-------------------------------|--------------------------|-----------------------|
+| `text` | 38 | 7 | 10 |
+<!-- perl-compare:summary:end -->
+
+A file whose output still differs after normalisation must be listed in
+`tests/perl-baseline/accepted-differences.txt` with a reason. The test fails
+when
+
+- a file differs and is not listed (the output got worse),
+- a listed file now matches (take it off the list),
+- the saved Perl output was made with another release than the one in
+  `.github/upstream-version`, or
+- a corpus file has no saved Perl output.
+
+The files that still differ:
+
+<!-- perl-compare:accepted:start -->
+| File | Why the output differs |
+|------|------------------------|
+| `delegate/01-abc.cho` | Perl has no ABC tooling installed and prints an empty image placeholder (`+ image: <none>`); ChordSketch prints a note that the block is omitted from text output |
+| `delegate/02-lilypond.cho` | Perl has no LilyPond tooling installed and prints an empty image placeholder (`+ image: <none>`); ChordSketch prints a note that the block is omitted from text output |
+| `delegate/03-svg.cho` | Perl prints an empty image placeholder (`+ image: <none>`) for the SVG block; ChordSketch prints a note that the block is omitted from text output |
+| `delegate/05-multiple-delegates.cho` | Same as the ABC, LilyPond and SVG files above: placeholder against omission note for each delegate block |
+| `directives/01-metadata.cho` | `{capo: 2}` lowers every chord by 2 semitones in ChordSketch (ADR-0023); Perl prints the chords as written |
+| `multi-song/03-songs-with-metadata.cho` | `{capo: 3}` lowers every chord of the second song by 3 semitones in ChordSketch (ADR-0023); Perl prints the chords as written. Two of the lowered chords are also spelled `Gbm` and `Db` where F# minor would use sharps |
+| `multi-song/04-song-with-transpose.cho` | After `{transpose: 3}` ChordSketch spells the chords for the flat-side key (`Eb`, `Ab`, `Bb`); Perl spells them with sharps (`D#`, `G#`, `A#`) |
+<!-- perl-compare:accepted:end -->
+
+To bump the upstream release or change the corpus, install the matching Perl
+ChordPro and run `scripts/update-perl-baseline.sh` (`docs/dev-setup.md`). It
+rewrites the saved output and the generated parts of this document.
+
+#### Normalisation
+
+Both outputs are reduced to a common form before they are compared. Each rule
+removes a presentation choice described under "Text Renderer Differences":
+
+| Rule | Effect |
+|------|--------|
+| Line endings, quotes | CRLF becomes LF; typographic quotes become straight quotes. |
+| Title, subtitle | Perl's `-- Title:` / `-- Subtitle:` prefix is dropped. |
+| Section markers | `-- Start of verse` and `[Verse]` both become one `SECTION verse` line; Perl's `-- End of ...` line is dropped. |
+| Comments | `-- text`, `(text)`, `(*text*)` and `[text]` become one `COMMENT text` line. |
+| Chorus recall | Perl's `{chorus}` line is replaced by the text of the preceding chorus. |
+| Hyphen fill | On both sides, runs of hyphens next to a space (`la la la-`, `- note`) become spaces. |
+| Blank lines | Blank lines and trailing spaces are ignored. |
+| ChordSketch-only lines | The metadata lines (`[Key: ...]`, `[Tempo: ...]`, ...), `[Image: ...]` lines and grid rows are dropped. |
+| Perl-only lines | `-- New page`, `-- Column break` and `-- New song` are dropped. |
+
+What the rules keep: chord names, the column of each chord over the lyrics,
+lyric text, and the order of sections. The test suite checks that a changed
+chord, a moved chord, a changed lyric and a reordered section each still
+make the outputs differ.
+
+What the rules hide, so that a change in these areas is not caught here:
+
+- the number of blank lines between and inside sections;
+- hyphens next to a space on either side: Perl's fill hyphens, but also a
+  hyphen that the file itself has there (a ` - ` in a lyric, `A-` as a chord
+  name), so a change to one of those is not caught;
+- whether a comment is plain, italic or boxed, and whether a heading is a
+  title or a subtitle;
+- the metadata lines, image lines and grid rows ChordSketch prints.
+
+The rules were written against these 55 files. A new corpus file can contain
+output the rules do not cover; it then appears as a difference and has to be
+either fixed or accepted with a reason.
+
+### HTML output (not compared in CI)
+
+The HTML and PDF output use their own stylesheet and layout and are not
+intended to match Perl's markup or page layout. PDF output is not compared at
+all. When the HTML output was last compared by hand
+(`scripts/compare-with-perl.sh html`), no file was identical, 52 differed and
+Perl failed on 3.
+
+What CI also checks is the directive coverage described in the next section.
 
 ## Directive coverage
 
@@ -142,28 +217,64 @@ Perl inserts extra blank lines between lyrics lines and around sections. Rust
 uses single blank lines for section boundaries only, producing a more compact
 output.
 
+### Capo
+
+`{capo: N}` lowers every displayed chord by N semitones, so the chords are the
+shapes to play with a capo on fret N ([ADR-0023](adr/0023-capo-transposes-displayed-chords.md)).
+Perl prints the chords as written. In the corpus this accounts for
+`directives/01-metadata.cho` and `multi-song/03-songs-with-metadata.cho`.
+
+### Chord Spelling After Transposition
+
+After `{transpose: N}` ChordSketch spells the chords for the flat or sharp
+side of the circle of fifths that the transposed `{key}` is on (`Eb`, `Ab`,
+`Bb` for a song now in Eb). In `multi-song/04-song-with-transpose.cho` Perl
+spells the same chords with sharps (`D#`, `G#`, `A#`). The pitches are the
+same.
+
+### Delegate Blocks
+
+For `{start_of_abc}`, `{start_of_ly}` and `{start_of_svg}` the text output
+cannot show the rendered result. Perl, with no ABC or LilyPond tooling
+installed, prints an empty image placeholder (`+ image: <none>`). ChordSketch
+prints a note that the block is omitted and can be viewed in the HTML output.
+
 ## What the differences leave intact
 
-Reading the text diffs for the corpus, the chord names, the chord positions
-over the lyrics, the transposition results and the section order match in the
-files inspected. This was checked by reading the diffs, not by an automated
-comparison.
+After the normalisation described under "What was compared", the chord names,
+the chord positions over the lyrics and the section order of the corpus files
+that Perl renders match, except for the files listed there. The test
+`crates/cli/tests/perl_comparison.rs` checks this on every run.
 
 ## Perl Errors on Test Corpus
 
 With R6.101.0 and the `Text` backend, Perl ChordPro fails on these corpus
-files. Rust renders all of them.
+files (it exits with an error or prints nothing). ChordSketch renders all of
+them. The list is generated from `tests/perl-baseline/perl-failed.txt`.
 
-- `basic/02-title-only.cho` — empty song body
-- `edge-cases/10-mixed-everything.cho` — complex markup combinations
-- `formatting/01-bold.cho`, `02-italic.cho`, `03-mixed-markup.cho`,
-  `06-span-attrs.cho`, `07-unclosed-tags.cho`, `08-case-insensitive.cho`,
-  `09-markup-with-chords.cho` — inline markup in Text mode
+<!-- perl-compare:perl-failed:start -->
+- `basic/01-empty.cho`
+- `basic/02-title-only.cho`
+- `edge-cases/10-mixed-everything.cho`
+- `formatting/01-bold.cho`
+- `formatting/02-italic.cho`
+- `formatting/03-mixed-markup.cho`
+- `formatting/06-span-attrs.cho`
+- `formatting/07-unclosed-tags.cho`
+- `formatting/08-case-insensitive.cho`
+- `formatting/09-markup-with-chords.cho`
+<!-- perl-compare:perl-failed:end -->
+
+`basic/01-empty.cho` is an empty file, so Perl prints nothing, and
+`basic/02-title-only.cho` has no song body (Perl stops with an undefined array
+reference in its text backend). The `formatting/` files and
+`edge-cases/10-mixed-everything.cho` use inline markup; Perl stops there with
+an undefined font family in its layout code. That may depend on the fonts of
+the machine used for the saved output, and was not investigated.
 
 With the `HTML` backend, Perl fails on `delegate/01-abc.cho`,
 `delegate/02-lilypond.cho` and `delegate/05-multiple-delegates.cho`.
 
 The Perl runs above were made with Perl 5.36 on a machine without ABC or
-LilyPond tooling and without the optional `JavaScript::QuickJS` module. The
-cause of each Perl failure was not investigated, and a different environment
-may change which files Perl fails on.
+LilyPond tooling, without the optional `JavaScript::QuickJS` module and
+without fonts. A different environment may change which files Perl fails on.

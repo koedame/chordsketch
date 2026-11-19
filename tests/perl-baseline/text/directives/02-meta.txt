@@ -1,0 +1,8 @@
+-- Title: Meta Directives
+
+-- Start of verse
+Am         Dm             E       Am
+Using meta directives for all metadata
+Am               Dm      E     Am
+Each one takes a key and value pair
+-- End of verse

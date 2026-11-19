@@ -1,0 +1,8 @@
+-- Title: No Trailing Newline
+
+-- Start of verse
+G                  C
+This file does not end with a newline
+D                         G
+The last character is the closing brace
+-- End of verse

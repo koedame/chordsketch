@@ -1,0 +1,34 @@
+-- Title: Special Characters
+
+-- Start of verse
+G              C
+Rock & roll is here to stay
+D               G
+Less than < and greater than >
+Am                       Em
+Quotes both "double" and ’single’ too
+F                           G
+Ampersands & angle brackets in the queue
+-- End of verse
+
+-- Start of verse
+G               C
+Backslash \ and forward slash /
+D                 G
+Parentheses (like these)
+Am                  Em
+Square brackets are for chords
+F                G
+But curly braces are for directives please
+-- End of verse
+
+-- Start of chorus
+C
+Hash # at @ dollar $
+G
+Percent % caret ^
+D
+Tilde ~ asterisk * plus +
+G                C
+Equals = and the rest of it
+-- End of chorus

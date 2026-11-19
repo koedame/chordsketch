@@ -1,0 +1,53 @@
+-- Title: Unicode Lyrics
+
+-- Japanese
+-- Start of verse
+Am     Dm
+Sakura sakura
+E        Am
+Yayoi no sora wa
+Am       Dm
+Miwatasu kagiri
+E         Am
+Kasumi ka kumo ka
+-- End of verse
+
+-- Chinese
+-- Start of verse
+C         F        G
+Yue liang dai biao wo de xin
+Am        F     G
+Ni wen wo ai ni you duo shen
+-- End of verse
+
+-- Korean
+-- Start of verse
+G       C
+Arirang arirang
+D    G
+Arariyo
+Em      C
+Arirang gogaero
+D     G
+Neomeoganda
+-- End of verse
+
+-- Accented characters
+-- Start of verse
+Am            Dm
+Frere Jacques Frere Jacques
+Am          Dm
+Dormez-vous dormez-vous
+Am         Dm      E          Am
+Sonnez les matines sonnez les matines
+Dm        E    Am
+Ding dang dong ding dang dong
+-- End of verse
+
+-- Symbols and diacritics
+-- Start of verse
+C          G
+Noel, Noel the angels did say
+Am       F               G             C
+Uber den Wolken muss die Freiheit wohl grenzenlos sein
+-- End of verse

@@ -1,0 +1,37 @@
+-- Title: Song with Chorus
+
+-- Start of verse
+C               G           Am              F
+Standing at the crossroads, wondering which way
+C                G              F
+Left or right it doesn’t matter anyway
+-- End of verse
+
+-- Start of chorus
+F        C        G      Am
+Come on, come on, let it go-
+F        C        G
+Come on, come on, let it flow
+F           C         G
+Every river finds the sea
+F     G          C
+Every heart will be set free
+-- End of chorus
+
+-- Start of verse
+C                   G        Am                F
+Walking through the shadows, searching for the light
+C              G             F
+Every step I’m closer to the other side
+-- End of verse
+
+-- Start of chorus
+F        C        G      Am
+Come on, come on, let it go-
+F        C        G
+Come on, come on, let it flow
+F           C         G
+Every river finds the sea
+F     G          C
+Every heart will be set free
+-- End of chorus

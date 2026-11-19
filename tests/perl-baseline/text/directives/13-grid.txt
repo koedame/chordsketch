@@ -1,0 +1,27 @@
+-- Title: Grid Section
+
+-- Start of verse
+G                   C
+Playing through the grid
+D              G
+Rhythm pattern here
+-- End of verse
+
+-- Start of grid
+-- End of grid
+
+-- Play grid pattern twice
+
+-- Start of chorus
+C          G
+Follow the grid
+D        G
+Feel the beat
+C     G
+Every measure
+D        G
+Nice and neat
+-- End of chorus
+
+-- Start of grid
+-- End of grid
