@@ -10,7 +10,13 @@
 
 **[Try it in your browser](https://koedame.github.io/chordsketch/)** — no installation required
 
+[![CI](https://github.com/koedame/chordsketch/actions/workflows/ci.yml/badge.svg)](https://github.com/koedame/chordsketch/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/chordsketch?color=c8003c)](https://crates.io/crates/chordsketch)
+[![npm](https://img.shields.io/npm/v/@chordsketch/wasm?color=c8003c)](https://www.npmjs.com/package/@chordsketch/wasm)
 [![codecov](https://codecov.io/gh/koedame/chordsketch/branch/main/graph/badge.svg)](https://codecov.io/gh/koedame/chordsketch)
+[![License: MIT and AGPL-3.0](https://img.shields.io/badge/license-MIT%20%2B%20AGPL--3.0-c8003c)](#license)
+
+[Quick start](#quick-start) · [Installation](#installation) · [Usage](#usage) · [Editor integration](#editor-integration) · [Documentation](#documentation)
 
 </div>
 
@@ -26,6 +32,48 @@ except six obsolete ones, but its output is not identical to Perl's and it
 offers fewer output formats. See
 [Known Deviations](docs/known-deviations.md) for the list.
 
+## Highlights
+
+- **Two chart formats, one engine.** ChordPro and iReal Pro in, with conversion in both directions between them.
+- **Five output formats.** Plain text, HTML and PDF for ChordPro; SVG, PNG and PDF for iReal Pro charts.
+- **ChordPro R6.101.0 coverage.** Every directive is parsed except six obsolete ones.
+- **Runs where you work.** A CLI, a desktop app, a browser Playground (WebAssembly), React / Vue / Svelte components, and bindings for Node.js, Python, Ruby, Swift and Kotlin.
+- **In your editor.** VS Code, the JetBrains IDEs and Zed, plus an LSP server and an MCP server for AI assistants.
+- **Nothing leaves your device.** No telemetry, no analytics, no account; see [Privacy](#privacy).
+
+## Quick start
+
+Install the CLI (more [install options](#installation) below):
+
+```bash
+brew install --formula koedame/tap/chordsketch   # macOS / Linux
+cargo install chordsketch                        # any platform with Rust 1.88+
+```
+
+Save a chart as `song.cho`:
+
+```
+{title: Amazing Grace}
+
+[G]Amazing [G7]grace, how [C]sweet the [G]sound
+```
+
+Render it:
+
+```bash
+chordsketch song.cho                  # plain text, to the terminal
+chordsketch -f pdf song.cho -o song.pdf
+```
+
+The plain-text output puts each chord over the lyric it belongs to:
+
+```
+Amazing Grace
+
+G       G7         C         G
+Amazing grace, how sweet the sound
+```
+
 ## Stability
 
 ChordSketch is pre-1.0 and still in a validation phase. **Until `1.0.0`
@@ -36,68 +84,6 @@ Breaking changes are named in the [CHANGELOG](CHANGELOG.md), and larger
 ones get a guide under [`docs/migration/`](docs/migration/). Pin an exact
 version if you depend on this crate today. The full policy is in
 [Versioning and release process](docs/releasing.md#pre-10-breaking-changes-are-expected).
-
-## Features
-
-### ChordPro
-
-- [ChordPro](https://www.chordpro.org/chordpro/) format parser with
-  zero external dependencies in the core crate. Parses the directives of
-  ChordPro R6.101.0 except six obsolete ones
-  ([details](docs/known-deviations.md#directive-coverage))
-- Three output formats: plain text, HTML, and PDF
-- Chord transposition
-- Configuration file system (chordsketch.json)
-- Inline markup (bold, italic, etc.)
-- Chord diagrams (vertical or horizontal / left-nut orientation for
-  Japanese tablature publishing) and extended `{define}` directives
-- Section environments (verse, chorus, tab, grid, custom)
-- Delegate environments (ABC, Lilypond, SVG, textblock)
-- Conditional directive selectors (instrument, user)
-- Multi-song files (`{new_song}`)
-- Font, size, and color directives
-- Image directive
-- Multi-page PDF with page control
-- Audible preview in the React components: with chord audio switched on,
-  click a chord diagram to hear the voicing it draws; click the `{key}`
-  chip to hear the scale and tonic chord, or the `{tempo}` chip for a
-  metronome
-
-### iReal Pro
-
-- `irealb://` URL parser (single-song and multi-song collections)
-  with zero external dependencies in the core crate. Accepts both the
-  canonical 7..=9-field `irealb://` shape and the iRealBook 6-field
-  `irealbook://` shape (`Title=Composer=Style=Key=TimeSig=Music`).
-- URL constructs handled: `(altchord)` substitutions, `n`
-  no-chord, `Kcl` / `x` / `r` repeat-previous-measure, `<text>`
-  free-form captions, `S` segno, `Q` coda, `<D.C.>` / `<D.S.>` /
-  `<Fine>` macros, repeat / final / double / single barlines, and
-  N-th endings — all attached to the bar in which the marker
-  appears.
-- Chart renderer producing SVG, PNG (via resvg), and PDF (via svg2pdf)
-  — 4-bars-per-line grid layout that wraps continuously across
-  section boundaries, repeat / final / double barlines, N-th-ending
-  brackets, section-letter labels, and Bravura SMuFL music symbols
-  (segno, coda). Chord-name typography translates URL-stored
-  shorthand (`b`→♭, `^`→Δ, `h`→ø, `o`→°, `-`→−, `#`→♯) and stacks
-  multi-alteration extensions (`7♭9♯5` → two-line `7♭9 / ♯5`).
-  Available as a `chordTypography` wasm export so React / Svelte /
-  external consumers can drive the same span layout.
-- Bidirectional ChordPro ↔ iReal Pro conversion with structured
-  warnings for lossy drops. The iReal → ChordPro bridge handles
-  the new AST fields end-to-end (`no_chord` → `N.C.` segment,
-  `staff_texts` → parenthesised inline text — plain captions
-  verbatim, `<Nx>` repeat-count overrides as `(Nx)`, and `<*XY...>`
-  vertical positions surfaced as `LossyDrop` warnings since
-  ChordPro has no equivalent —, `chord.alternate` → parenthesised
-  alternate after the primary).
-- `.irealb` (single song) and `.irealbook` (multi-song collection) file
-  extensions — picked up by the CLI sniff, the desktop OS file
-  associations, and the editor integrations (VS Code, JetBrains, Zed)
-- Bar-grid GUI editor (`@chordsketch/ui-irealb-editor`) with header
-  metadata editing, per-bar popovers, and structural section / bar
-  reordering
 
 ## Try it Online
 
@@ -351,7 +337,8 @@ Apple Developer ID signing + notarization (so neither step is needed
 regardless of install path) is tracked in
 [#2075](https://github.com/koedame/chordsketch/issues/2075).
 
-### Linux requirements
+<details>
+<summary>Linux requirements</summary>
 
 All three bundles need **glibc 2.35 or newer**. Where they differ is
 webkit2gtk 4.1.
@@ -379,6 +366,8 @@ they need, mostly LGPL) are listed with their versions, source packages
 and license texts in `usr/share/doc/chordsketch-desktop/bundled-libraries.txt`
 inside the image; each desktop release publishes the same file as
 `chordsketch-desktop-linux-bundled-libraries.txt`.
+
+</details>
 
 ## Usage
 
@@ -438,7 +427,101 @@ let svg = render_svg(&song, &RenderOptions::default());
 println!("{svg}");
 ```
 
+## GitHub Actions
+
+Use the composite action to render ChordPro files in any GitHub Actions
+workflow — no Rust toolchain required:
+
+```yaml
+- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+- uses: koedame/chordsketch/packages/github-action@action-v1
+  id: render
+  with:
+    input: songs/setlist.cho
+    output: dist/setlist.html
+    format: html
+
+- uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+  with:
+    name: setlist-html
+    path: ${{ steps.render.outputs.output-path }}
+```
+
+See [docs/github-action.md](docs/github-action.md) for full input/output
+reference and additional examples.
+
+## Features
+
+<details>
+<summary>What ChordSketch supports, per format</summary>
+
+### ChordPro
+
+- [ChordPro](https://www.chordpro.org/chordpro/) format parser with
+  zero external dependencies in the core crate. Parses the directives of
+  ChordPro R6.101.0 except six obsolete ones
+  ([details](docs/known-deviations.md#directive-coverage))
+- Three output formats: plain text, HTML, and PDF
+- Chord transposition
+- Configuration file system (chordsketch.json)
+- Inline markup (bold, italic, etc.)
+- Chord diagrams (vertical or horizontal / left-nut orientation for
+  Japanese tablature publishing) and extended `{define}` directives
+- Section environments (verse, chorus, tab, grid, custom)
+- Delegate environments (ABC, Lilypond, SVG, textblock)
+- Conditional directive selectors (instrument, user)
+- Multi-song files (`{new_song}`)
+- Font, size, and color directives
+- Image directive
+- Multi-page PDF with page control
+- Audible preview in the React components: with chord audio switched on,
+  click a chord diagram to hear the voicing it draws; click the `{key}`
+  chip to hear the scale and tonic chord, or the `{tempo}` chip for a
+  metronome
+
+### iReal Pro
+
+- `irealb://` URL parser (single-song and multi-song collections)
+  with zero external dependencies in the core crate. Accepts both the
+  canonical 7..=9-field `irealb://` shape and the iRealBook 6-field
+  `irealbook://` shape (`Title=Composer=Style=Key=TimeSig=Music`).
+- URL constructs handled: `(altchord)` substitutions, `n`
+  no-chord, `Kcl` / `x` / `r` repeat-previous-measure, `<text>`
+  free-form captions, `S` segno, `Q` coda, `<D.C.>` / `<D.S.>` /
+  `<Fine>` macros, repeat / final / double / single barlines, and
+  N-th endings — all attached to the bar in which the marker
+  appears.
+- Chart renderer producing SVG, PNG (via resvg), and PDF (via svg2pdf)
+  — 4-bars-per-line grid layout that wraps continuously across
+  section boundaries, repeat / final / double barlines, N-th-ending
+  brackets, section-letter labels, and Bravura SMuFL music symbols
+  (segno, coda). Chord-name typography translates URL-stored
+  shorthand (`b`→♭, `^`→Δ, `h`→ø, `o`→°, `-`→−, `#`→♯) and stacks
+  multi-alteration extensions (`7♭9♯5` → two-line `7♭9 / ♯5`).
+  Available as a `chordTypography` wasm export so React / Svelte /
+  external consumers can drive the same span layout.
+- Bidirectional ChordPro ↔ iReal Pro conversion with structured
+  warnings for lossy drops. The iReal → ChordPro bridge handles
+  the new AST fields end-to-end (`no_chord` → `N.C.` segment,
+  `staff_texts` → parenthesised inline text — plain captions
+  verbatim, `<Nx>` repeat-count overrides as `(Nx)`, and `<*XY...>`
+  vertical positions surfaced as `LossyDrop` warnings since
+  ChordPro has no equivalent —, `chord.alternate` → parenthesised
+  alternate after the primary).
+- `.irealb` (single song) and `.irealbook` (multi-song collection) file
+  extensions — picked up by the CLI sniff, the desktop OS file
+  associations, and the editor integrations (VS Code, JetBrains, Zed)
+- Bar-grid GUI editor (`@chordsketch/ui-irealb-editor`) with header
+  metadata editing, per-bar popovers, and structural section / bar
+  reordering
+
+</details>
+
 ## Workspace Structure
+
+<details>
+<summary>Crates and packages in this repository</summary>
 
 | Crate | Description |
 |---|---|
@@ -482,29 +565,7 @@ println!("{svg}");
 | [Playground](packages/playground) | `packages/playground` | Browser-based ChordPro and iReal Pro editor and renderer |
 | [Claude Code plugin](packages/claude-code-plugin) | `packages/claude-code-plugin` | `/chordpro` skill for Claude Code, installed from this repository as a plugin marketplace |
 
-## GitHub Actions
-
-Use the composite action to render ChordPro files in any GitHub Actions
-workflow — no Rust toolchain required:
-
-```yaml
-- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-- uses: koedame/chordsketch/packages/github-action@action-v1
-  id: render
-  with:
-    input: songs/setlist.cho
-    output: dist/setlist.html
-    format: html
-
-- uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-  with:
-    name: setlist-html
-    path: ${{ steps.render.outputs.output-path }}
-```
-
-See [docs/github-action.md](docs/github-action.md) for full input/output
-reference and additional examples.
+</details>
 
 ## Migration Guides
 
@@ -546,6 +607,23 @@ that registry, not ChordSketch.
 When a change adds a connection, it updates this section in the same pull
 request.
 
+## Contributing
+
+ChordSketch does not accept outside contributions: the source is public so
+that you can read it, build it and fork it. Bug reports and questions are
+welcome as [issues](https://github.com/koedame/chordsketch/issues). See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the details and
+[SECURITY.md](SECURITY.md) for reporting a vulnerability.
+
+## Trademark
+
+The licences above cover the code, not the name. Describing, packaging, and
+building on ChordSketch never needs permission; naming your own product
+ChordSketch does. Forks are welcome and must rename — see
+[TRADEMARK.md](TRADEMARK.md).
+
+ChordPro is the name of a file format and of its reference program by The ChordPro Team; iReal Pro is a product of Technimo LLC; MusicXML is published by the W3C Music Notation Community Group; Bravura is a font by Steinberg Media Technologies GmbH. These names belong to their owners. ChordSketch is not affiliated with or endorsed by any of them. They appear here only to say which formats and fonts ChordSketch reads, writes or embeds.
+
 ## License
 
 ChordSketch has two layers, split by directory. The licence text is in each
@@ -571,12 +649,3 @@ archives, container images, the desktop app, the VS Code extension, the
 wasm and napi npm packages, and the PyPI, RubyGems, Maven, and Swift
 packages — see
 [ADR-0085](docs/adr/0085-binaries-ship-a-generated-third-party-license-notice.md).
-
-## Trademark
-
-The licences above cover the code, not the name. Describing, packaging, and
-building on ChordSketch never needs permission; naming your own product
-ChordSketch does. Forks are welcome and must rename — see
-[TRADEMARK.md](TRADEMARK.md).
-
-ChordPro is the name of a file format and of its reference program by The ChordPro Team; iReal Pro is a product of Technimo LLC; MusicXML is published by the W3C Music Notation Community Group; Bravura is a font by Steinberg Media Technologies GmbH. These names belong to their owners. ChordSketch is not affiliated with or endorsed by any of them. They appear here only to say which formats and fonts ChordSketch reads, writes or embeds.
