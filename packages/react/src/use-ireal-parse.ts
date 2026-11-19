@@ -132,7 +132,6 @@ export function useIrealParse(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source]);
 
   return { song, loading, error };

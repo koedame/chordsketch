@@ -153,7 +153,6 @@ export function useChordRender(
     // see `use-pdf-export.ts` for the identical pattern and
     // rationale (inline loaders would invalidate the effect every
     // render).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, format, transpose, config]);
 
   return { output, loading, error };

@@ -237,6 +237,9 @@ export function useMetronome(): UseMetronomeResult {
   }
 
   useEffect(() => {
+    // The voice set is created once and never reassigned, so the value
+    // captured here is the one the cleanup must stop.
+    const voices = voicesRef.current;
     return () => {
       // Stop self on unmount. The shared context is intentionally
       // NOT closed — other live instances (and future mounts) reuse
@@ -245,7 +248,7 @@ export function useMetronome(): UseMetronomeResult {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      stopVoices(voicesRef.current);
+      stopVoices(voices);
       if (activeController === controllerRef.current) {
         activeController = null;
       }

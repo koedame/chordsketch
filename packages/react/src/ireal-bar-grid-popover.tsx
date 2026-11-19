@@ -437,13 +437,11 @@ function ChordRowEditor({
   // every reorder via `renderChordsSection()`, implicitly discarding
   // stale state — this useEffect is the React-idiomatic equivalent.
   //
-  // `formatBass` is a stable module-scope pure function; the eslint-disable
-  // below suppresses the false-positive exhaustive-deps warning for it.
+  // `formatBass` is a module-scope pure function, so it is not a dependency.
   useEffect(() => {
     const propStr = barChord.chord.bass !== null ? formatBass(barChord.chord.bass) : '';
     setBassRaw((prev) => (prev === propStr ? prev : propStr));
     setBassInvalid(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [barChord]);
 
   const setRoot = (note: string): void => {

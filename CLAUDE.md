@@ -32,6 +32,12 @@ python3 scripts/third-party-licenses.py --install  # Regenerate THIRD_PARTY_LICE
                      # `pip install fonttools brotli`); drop --install when node_modules
                      # is already in place, or use --check to verify the file is up to
                      # date without a toolchain, as CI does
+npm ci --prefix tools/lint && npx --prefix tools/lint eslint --config tools/lint/eslint.config.mjs \
+  packages/react packages/react-ui packages/ui-irealb-editor packages/playground \
+  packages/vscode-extension packages/svelte packages/vue apps/desktop
+                     # ESLint over the TypeScript packages (minimal rule set in
+                     # tools/lint/eslint.config.mjs; fails on an `eslint-disable`
+                     # that suppresses nothing). CI runs it on every PR.
 cargo +nightly fuzz run parse --fuzz-dir crates/chordpro/fuzz  # Fuzz the ChordPro
                      # parser (needs a nightly toolchain + `cargo install cargo-fuzz`;
                      # CI runs it nightly — see crates/chordpro/fuzz/README.md and

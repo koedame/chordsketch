@@ -209,9 +209,10 @@ export function useKeyAudio(
         startTime: chordStart,
       });
     },
-    // `moduleRef` / `pitchCacheRef` / `voicesRef` are stable refs; `stop`
-    // is the only reactive dependency (parity with `useChordAudio`).
-    [stop],
+    // `moduleRef` comes from a custom hook, so the lint rule cannot see that
+    // it is a stable ref and wants it listed; `stop` is the reactive
+    // dependency (parity with `useChordAudio`).
+    [moduleRef, stop],
   );
 
   // Silence on unmount; the shared context is intentionally NOT closed

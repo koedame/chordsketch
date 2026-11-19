@@ -52,7 +52,6 @@ test('startLspClientSafely: handles non-Error rejection values', async () => {
   const logs: string[] = [];
   await startLspClientSafely({
     start: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-throw-literal
       throw 'spawn EACCES';
     },
     log: (m) => logs.push(m),

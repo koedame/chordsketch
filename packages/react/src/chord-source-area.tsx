@@ -455,7 +455,7 @@ export const ChordSourceArea = forwardRef<ChordSourceAreaHandle, ChordSourceArea
       // (`noLineNumbers`, `noLineWrapping`, `placeholder`,
       // `ariaLabel`) require a remount which the user can force via
       // React's `key` prop.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once: value syncs in the effect below, option props remount via key
     }, []);
 
     // Controlled-mode value synchronisation. Runs whenever the

@@ -329,7 +329,7 @@ export function useChordDiagram(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- definesKey stands in for the defines array, whose identity changes every render
   }, [chord, instrument, definesKey, orientation, compact]);
 
   return { svg, loading, error };
@@ -433,7 +433,7 @@ export function useChordDiagramPitches(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- definesKey stands in for the defines array, whose identity changes every render
   }, [chord, instrument, definesKey, enabled]);
 
   return pitches;

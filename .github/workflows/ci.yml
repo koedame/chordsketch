@@ -102,6 +102,39 @@ jobs:
         env:
           RUSTDOCFLAGS: "-D warnings"
 
+  eslint:
+    name: ESLint
+    # A minimal rule set (`tools/lint/eslint.config.mjs`) over the TypeScript
+    # packages. It exists so that the `eslint-disable` comments in the source
+    # are checked: `reportUnusedDisableDirectives` fails a directive that
+    # suppresses nothing, which is what any directive was before this job
+    # existed. It parses without type information and needs nothing from the
+    # packages' own `node_modules`, so it installs only `tools/lint`.
+    #
+    # Its own job rather than a `guards` step: those are Python-only. It runs
+    # on every pull request like the other guarantees, so it has no `paths:`
+    # filter, and it compiles no Rust, so it has no `rust-cache` entry
+    # (`.claude/rules/ci-parallelization.md` §2).
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tools/lint/package-lock.json
+
+      - name: Install ESLint
+        run: npm ci --ignore-scripts --prefix tools/lint
+
+      - name: Lint the TypeScript packages
+        run: >-
+          npx --prefix tools/lint eslint --config tools/lint/eslint.config.mjs
+          packages/react packages/react-ui packages/ui-irealb-editor
+          packages/playground packages/vscode-extension packages/svelte
+          packages/vue apps/desktop
+
   guards:
     name: Repository guards
     # Every guarantee-style check this workflow carries that is Python-only
