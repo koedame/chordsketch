@@ -65,8 +65,8 @@ for the corpus does not change between runs. It is also small (45 files,
 
 ## Alternatives considered
 
-- **Install Perl ChordPro in CI.** Rejected for the reason in ADR-0040: 56
-  distributions to install on every run, for output that does not change within
+- **Install Perl ChordPro in CI.** Rejected for the reason in ADR-0040: a Perl module install
+  on every run, for output that does not change within
   an upstream release.
 - **Report the number of differing files as a warning.** Rejected: it is not read,
   and a count cannot tell one difference from another.
