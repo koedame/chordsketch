@@ -80,18 +80,26 @@ jobs:
         # runs without a commit here.
         run: cargo install cargo-fuzz --version 0.13.2 --locked
 
-      - name: Restore the corpus from the last successful run on main
+      - name: Restore the corpus from the latest trusted run on main
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p "$FUZZ_DIR/corpus/parse"
-          # Only `schedule` and `workflow_dispatch` runs on `main` are
-          # trusted; a pull request run never uploads the corpus.
-          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/fuzz.yml/runs?branch=main&status=success&per_page=50" \
-            --jq '.workflow_runs | map(select(.event == "schedule" or .event == "workflow_dispatch")) | .[:5][] | .id')
+          # Look the artifact up directly: the workflow-runs listing filtered
+          # by status can miss a run that finished minutes ago. Only artifacts
+          # of `schedule` and `workflow_dispatch` runs on `main` are trusted.
+          # A pull request run never uploads one, but a fork branch can be
+          # named `main`, so the event is checked on the run itself.
+          candidates=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=fuzz-corpus-parse&per_page=20" \
+            --jq '.artifacts | map(select(.expired == false and .workflow_run.head_branch == "main")) | .[] | .workflow_run.id')
           restored=0
-          for id in $runs; do
+          for id in $candidates; do
+            event=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.event')
+            if [ "$event" != "schedule" ] && [ "$event" != "workflow_dispatch" ]; then
+              echo "skipping run $id: it was a $event run"
+              continue
+            fi
             tmp=$(mktemp -d)
             if gh run download "$id" --repo "$GITHUB_REPOSITORY" --name fuzz-corpus-parse --dir "$tmp"; then
               find "$tmp" -type f -exec cp -- {} "$FUZZ_DIR/corpus/parse/" \;
