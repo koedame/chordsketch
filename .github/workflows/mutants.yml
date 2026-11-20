@@ -102,12 +102,20 @@ jobs:
         # failing the job on every missed mutant would leave this workflow red
         # every night. 1 (bad usage) and 4 (the unmutated tests fail) mean the
         # run itself is broken, so they fail the job.
+        #
+        # ulimit -v 4 GiB: a mutant that breaks a loop counter (`i += 1` ->
+        # `i *= 1`) makes the test binary push to a Vec until memory runs out,
+        # which took the whole runner down ("lost communication with the
+        # server") in the first run. With the cap the test aborts on the failed
+        # allocation and the mutant counts as caught. 3 jobs x 4 GiB stays
+        # under the 16 GiB of a hosted runner.
         shell: bash
         env:
           SHARD: ${{ matrix.shard }}
         run: |
           set -uo pipefail
           code=0
+          ulimit -v 4194304
           cargo mutants -p chordsketch-chordpro \
             --shard "$SHARD/16" \
             --timeout 10 \
