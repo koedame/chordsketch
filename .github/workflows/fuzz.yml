@@ -23,6 +23,18 @@ name: Fuzz
 # from the fixtures alone. An artifact is used instead of the Actions cache
 # because the cache is size-capped and evicts the oldest entries silently.
 #
+# This repository is public, and so are its workflow logs and artifacts. An
+# input that crashes the parser is a working denial of service against every
+# embedder until it is fixed, so it must not be published before the fix. The
+# fuzz step therefore writes everything libFuzzer and cargo-fuzz print (which
+# includes the crashing input, as hex, as Base64 and in Debug form) to a file
+# outside the log, and on a failure the log shows only the kind, size and
+# SHA-256 of each crashing input. The inputs and that output are packed into
+# one archive, encrypted with the age public key in
+# `.github/fuzz-crash-recipient.txt` and uploaded as `fuzz-parse-crash`, so only
+# the holder of the private key can read them. The key is a file in the
+# repository, not a secret, so that runs from forks can encrypt too.
+#
 # The fuzz crate lives in `crates/chordpro/fuzz/` as its own workspace root, so
 # `libfuzzer-sys` never enters the SDK workspace or the zero-dependency
 # contract of `chordsketch-chordpro` (`scripts/check-zero-deps.py`).
@@ -80,6 +92,15 @@ jobs:
         # runs without a commit here.
         run: cargo install cargo-fuzz --version 0.13.2 --locked
 
+      - name: Build the fuzz target
+        # Kept apart from the run so that a compile error is printed in full:
+        # the run step below prints nothing but statistics. It also comes
+        # before the corpus is downloaded, so nothing is compiled after an
+        # artifact has been fetched.
+        run: |
+          cargo +nightly fuzz build parse \
+            --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz
+
       - name: Restore the corpus from the latest trusted run on main
         env:
           GH_TOKEN: ${{ github.token }}
@@ -132,14 +153,55 @@ jobs:
         # -rss_limit_mb: an input that needs more than 2 GiB counts as an
         # out-of-memory crash. The parser's own input cap is 10 MiB, so
         # neither is reachable by legitimate input.
+        #
+        # Everything the fuzzer prints goes to $RUNNER_TEMP/fuzz.log and is
+        # never echoed, because a failing run prints the crashing input. The
+        # lines echoed on success are the statistics libFuzzer prints, which
+        # carry no input.
         run: |
+          set -uo pipefail
+          log="$RUNNER_TEMP/fuzz.log"
+          status=0
           cargo +nightly fuzz run parse \
             --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz \
             -- \
             -dict="$FUZZ_DIR/chordpro.dict" \
             -max_total_time="$FUZZ_SECONDS" \
             -timeout=10 \
-            -rss_limit_mb=2048
+            -rss_limit_mb=2048 \
+            > "$log" 2>&1 || status=$?
+
+          if [ "$status" -eq 0 ]; then
+            grep -E '^(#[0-9]+[[:space:]]+(INITED|DONE|pulse)[[:space:]]|Done [0-9]|INFO: )' "$log" || true
+            exit 0
+          fi
+
+          echo "::error::fuzzing exited with status $status; the crashing input and the fuzzer output are in the encrypted artifact fuzz-parse-crash"
+          found=0
+          if [ -d "$FUZZ_DIR/artifacts/parse" ]; then
+            for f in "$FUZZ_DIR"/artifacts/parse/*; do
+              [ -f "$f" ] || continue
+              found=1
+              name=$(basename "$f")
+              # File names are `<kind>-<sha1>`: crash, timeout, oom, leak, slow-unit.
+              echo "kind=${name%-*} bytes=$(wc -c < "$f" | tr -d ' ') sha256=$(sha256sum "$f" | cut -d' ' -f1)"
+            done
+          fi
+          [ "$found" -eq 1 ] || echo "no crashing input was written; the fuzzer output is in the encrypted artifact"
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          pack="$RUNNER_TEMP/fuzz-parse-crash"
+          mkdir -p "$pack"
+          if [ -d "$FUZZ_DIR/artifacts/parse" ]; then
+            cp -R "$FUZZ_DIR/artifacts/parse" "$pack/artifacts"
+          fi
+          cp "$log" "$pack/fuzz.log"
+          tar -czf - -C "$pack" . \
+            | age -R .github/fuzz-crash-recipient.txt \
+            > "$RUNNER_TEMP/fuzz-parse-crash.tar.gz.age"
+          echo "encrypted $(wc -c < "$RUNNER_TEMP/fuzz-parse-crash.tar.gz.age" | tr -d ' ') bytes for upload"
+          exit "$status"
 
       - name: Minimize the corpus
         # Reached only when the fuzz step found nothing, so a corpus that
@@ -165,9 +227,11 @@ jobs:
           if-no-files-found: error
 
       - name: Keep the crashing input
+        # Only the encrypted archive is uploaded; the plaintext input and
+        # output stay on the runner.
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-parse-crash
-          path: crates/chordpro/fuzz/artifacts/parse/
+          path: ${{ runner.temp }}/fuzz-parse-crash.tar.gz.age
           if-no-files-found: ignore
