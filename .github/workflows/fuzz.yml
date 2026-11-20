@@ -26,14 +26,15 @@ name: Fuzz
 # This repository is public, and so are its workflow logs and artifacts. An
 # input that crashes the parser is a working denial of service against every
 # embedder until it is fixed, so it must not be published before the fix. The
-# fuzz step therefore writes everything libFuzzer and cargo-fuzz print (which
-# includes the crashing input, as hex, as Base64 and in Debug form) to a file
-# outside the log, and on a failure the log shows only the kind, size and
-# SHA-256 of each crashing input. The inputs and that output are packed into
-# one archive, encrypted with the age public key in
-# `.github/fuzz-crash-recipient.txt` and uploaded as `fuzz-parse-crash`, so only
-# the holder of the private key can read them. The key is a file in the
-# repository, not a secret, so that runs from forks can encrypt too.
+# fuzz step and the `cargo fuzz cmin` step therefore write everything libFuzzer
+# and cargo-fuzz print (which includes the crashing input, as hex, as Base64
+# and in Debug form) to a file outside the log. On a failure,
+# `.github/scripts/fuzz-crash-report.sh` shows only the kind, size and SHA-256
+# of each crashing input, packs the inputs and that output into one archive,
+# encrypts it with the age public key in `.github/fuzz-crash-recipient.txt` and
+# the workflow uploads it as `fuzz-parse-crash`, so only the holder of the
+# private key can read it. The key is a file in the repository, not a secret,
+# so that runs from forks can encrypt too.
 #
 # The fuzz crate lives in `crates/chordpro/fuzz/` as its own workspace root, so
 # `libfuzzer-sys` never enters the SDK workspace or the zero-dependency
@@ -176,42 +177,47 @@ jobs:
             exit 0
           fi
 
-          echo "::error::fuzzing exited with status $status; the crashing input and the fuzzer output are in the encrypted artifact fuzz-parse-crash"
-          found=0
-          if [ -d "$FUZZ_DIR/artifacts/parse" ]; then
-            for f in "$FUZZ_DIR"/artifacts/parse/*; do
-              [ -f "$f" ] || continue
-              found=1
-              name=$(basename "$f")
-              # File names are `<kind>-<sha1>`: crash, timeout, oom, leak, slow-unit.
-              echo "kind=${name%-*} bytes=$(wc -c < "$f" | tr -d ' ') sha256=$(sha256sum "$f" | cut -d' ' -f1)"
-            done
-          fi
-          [ "$found" -eq 1 ] || echo "no crashing input was written; the fuzzer output is in the encrypted artifact"
-
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq age
-          pack="$RUNNER_TEMP/fuzz-parse-crash"
-          mkdir -p "$pack"
-          if [ -d "$FUZZ_DIR/artifacts/parse" ]; then
-            cp -R "$FUZZ_DIR/artifacts/parse" "$pack/artifacts"
-          fi
-          cp "$log" "$pack/fuzz.log"
-          tar -czf - -C "$pack" . \
-            | age -R .github/fuzz-crash-recipient.txt \
-            > "$RUNNER_TEMP/fuzz-parse-crash.tar.gz.age"
-          echo "encrypted $(wc -c < "$RUNNER_TEMP/fuzz-parse-crash.tar.gz.age" | tr -d ' ') bytes for upload"
+          bash .github/scripts/fuzz-crash-report.sh "Fuzz parse" "$status" "$log"
           exit "$status"
 
       - name: Minimize the corpus
         # Reached only when the fuzz step found nothing, so a corpus that
         # crashes the parser is never handed on.
+        #
+        # The same -timeout and -rss_limit_mb as the fuzz step: cmin runs every
+        # input of the corpus again, and an input that only misbehaves under
+        # those limits must not pass here either. Everything cmin prints goes
+        # to $RUNNER_TEMP/cmin.log and is never echoed, for the reason given
+        # in the fuzz step; the log shows the two counts only.
+        #
+        # An input that crashes the parser does not fail `cargo fuzz cmin`:
+        # libFuzzer's merge writes it to `artifacts/parse/`, leaves it out of
+        # the minimized corpus and exits 0. A merge that fails outright also
+        # exits 0, after printing "Failed to minimize corpus". So the step
+        # fails on the exit status, on that line, and on any file under
+        # `artifacts/parse/`.
         if: github.event_name != 'pull_request'
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          log="$RUNNER_TEMP/cmin.log"
           before=$(find "$FUZZ_DIR/corpus/parse" -type f | wc -l)
+          status=0
           cargo +nightly fuzz cmin parse \
-            --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz
+            --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz \
+            -- \
+            -timeout=10 \
+            -rss_limit_mb=2048 \
+            > "$log" 2>&1 || status=$?
+          if [ "$status" -eq 0 ]; then
+            if grep -q '^Failed to minimize corpus' "$log" \
+              || [ -n "$(find "$FUZZ_DIR/artifacts/parse" -type f 2> /dev/null | head -n 1)" ]; then
+              status=1
+            fi
+          fi
+          if [ "$status" -ne 0 ]; then
+            bash .github/scripts/fuzz-crash-report.sh "Minimize the corpus" "$status" "$log"
+            exit "$status"
+          fi
           after=$(find "$FUZZ_DIR/corpus/parse" -type f | wc -l)
           echo "minimized the corpus from $before to $after inputs"
 
