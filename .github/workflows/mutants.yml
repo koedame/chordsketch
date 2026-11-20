@@ -1,0 +1,148 @@
+name: Mutants
+
+# Mutation-tests the ChordPro parser (`crates/chordpro`) with cargo-mutants:
+# each mutant rewrites one expression in the parser, and the crate's tests are
+# expected to fail on it. A mutant the tests do not notice ("missed") marks
+# behaviour that no test pins down.
+#
+# Cadence: nightly, plus a manual run. A pull request does not run the full
+# pass (3,000+ mutants); one that touches this file only lists the mutants, so
+# a broken install or a bad flag shows up before merge.
+#
+# The pass is cut into 16 shards (`--shard k/16`) that run in parallel, each a
+# few minutes long. `max-parallel` keeps the matrix from taking every
+# concurrent job the repository gets and starving the pull-request checks.
+# Each shard uploads its result files as an artifact named `mutants-shard-<k>`.
+#
+# `rust-cache` is not used: `chordsketch-chordpro` has no dependencies, and
+# cargo-mutants builds in a scratch copy of the tree, so there is nothing for
+# a cache to restore.
+
+on:
+  schedule:
+    # Daily at 19:23 UTC (04:23 JST), off the hour and clear of `fuzz.yml`
+    # (18:17 UTC).
+    - cron: "23 19 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/mutants.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: mutants-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Pinned so a new release cannot change what this workflow runs without a
+  # commit here. Installed as a prebuilt binary with its checksum verified.
+  CARGO_MUTANTS_VERSION: "27.1.0"
+
+jobs:
+  list:
+    name: List the mutants
+    # Hosted runner, not `vars.LINUX_RUNNER`: this repository is public, and
+    # a self-hosted pool must not take jobs from a fork's pull request.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
+        with:
+          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
+
+      - name: List the mutants
+        run: |
+          set -euo pipefail
+          cargo mutants -p chordsketch-chordpro --list --colors never > mutants-list.txt
+          total="$(wc -l < mutants-list.txt)"
+          echo "cargo-mutants lists $total mutants"
+          echo "Mutants listed: $total" >> "$GITHUB_STEP_SUMMARY"
+          test "$total" -gt 0
+
+  mutants:
+    name: Mutants (shard ${{ matrix.shard }}/16)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
+        with:
+          tool: cargo-mutants@${{ env.CARGO_MUTANTS_VERSION }}
+
+      - name: Run the shard
+        # --timeout 10: the unmutated tests take about 2 s, so a mutant that
+        # runs longer than 10 s is stuck in a loop, and the default 20 s would
+        # only make the stuck ones slower to give up.
+        #
+        # Exit codes of cargo-mutants: 0 every mutant was caught, 2 some were
+        # missed, 3 some timed out. Those are results, not failures, and
+        # failing the job on every missed mutant would leave this workflow red
+        # every night. 1 (bad usage) and 4 (the unmutated tests fail) mean the
+        # run itself is broken, so they fail the job.
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -uo pipefail
+          code=0
+          cargo mutants -p chordsketch-chordpro \
+            --shard "$SHARD/16" \
+            --timeout 10 \
+            --no-shuffle \
+            --colors never \
+            -j 3 \
+            -o mutants-out || code=$?
+          echo "cargo-mutants exit code: $code"
+          case "$code" in
+            0|2|3) ;;
+            *) exit "$code" ;;
+          esac
+
+      - name: Summarize the shard
+        if: always()
+        run: |
+          out=mutants-out/mutants.out
+          {
+            echo "### Shard ${{ matrix.shard }}/16"
+            for k in caught missed timeout unviable; do
+              if [ -f "$out/$k.txt" ]; then
+                echo "- $k: $(wc -l < "$out/$k.txt")"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the results
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutants-shard-${{ matrix.shard }}
+          path: |
+            mutants-out/mutants.out/caught.txt
+            mutants-out/mutants.out/missed.txt
+            mutants-out/mutants.out/timeout.txt
+            mutants-out/mutants.out/unviable.txt
+            mutants-out/mutants.out/outcomes.json
+          if-no-files-found: error
+          retention-days: 14
