@@ -103,19 +103,25 @@ jobs:
         # every night. 1 (bad usage) and 4 (the unmutated tests fail) mean the
         # run itself is broken, so they fail the job.
         #
-        # ulimit -v 4 GiB: a mutant that breaks a loop counter (`i += 1` ->
+        # ulimit -v 2 GiB: a mutant that breaks a loop counter (`i += 1` ->
         # `i *= 1`) makes the test binary push to a Vec until memory runs out,
         # which took the whole runner down ("lost communication with the
         # server") in the first run. With the cap the test aborts on the failed
-        # allocation and the mutant counts as caught. 3 jobs x 4 GiB stays
-        # under the 16 GiB of a hosted runner.
+        # allocation and the mutant counts as caught. 4 GiB was not enough: in
+        # the second run one shard slowed down (builds went from 1 s to 10 s)
+        # and never finished, most likely from memory pressure. The unmutated
+        # tests and the build stay under 1 GiB.
+        #
+        # timeout-minutes: a shard normally takes 15 to 20 minutes. If it hangs
+        # anyway, stop at 45 so the log is kept instead of lost with the runner.
         shell: bash
+        timeout-minutes: 45
         env:
           SHARD: ${{ matrix.shard }}
         run: |
           set -uo pipefail
           code=0
-          ulimit -v 4194304
+          ulimit -v 2097152
           cargo mutants -p chordsketch-chordpro \
             --shard "$SHARD/16" \
             --timeout 10 \
