@@ -43,8 +43,8 @@ env:
 jobs:
   list:
     name: List the mutants
-    # Hosted runner, not `vars.LINUX_RUNNER`: this repository is public, and
-    # a self-hosted pool must not take jobs from a fork's pull request.
+    # GitHub-hosted only: this repository is public, so no job may run on a
+    # self-hosted runner (ADR-0096).
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
