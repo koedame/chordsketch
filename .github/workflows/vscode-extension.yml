@@ -147,7 +147,6 @@ jobs:
     # land under server/linux-*; the alpine-* VSIX channel is what routes
     # it to musl users.
     if: inputs.tag != ''
-    # Release job: stays hosted (ADR-0076, ADR-0078).
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.targets.outputs.matrix }}
@@ -158,8 +157,6 @@ jobs:
 
   build-platform:
     name: Package ${{ matrix.vs_target }} VSIX
-    # Builds the VSIXes the release publishes, so it must not reuse the
-    # pool's Rust cache, which pull requests can write (ADR-0078).
     runs-on: ubuntu-24.04
     # Release-only matrix that downloads the per-platform chordsketch-lsp
     # binary from the GitHub Release assets (produced by release.yml), places

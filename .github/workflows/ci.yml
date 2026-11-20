@@ -24,7 +24,7 @@ env:
 jobs:
   fmt:
     name: Format
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -39,7 +39,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -72,7 +72,7 @@ jobs:
 
   doc:
     name: Docs
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -115,7 +115,7 @@ jobs:
     # on every pull request like the other guarantees, so it has no `paths:`
     # filter, and it compiles no Rust, so it has no `rust-cache` entry
     # (`.claude/rules/ci-parallelization.md` §2).
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -146,18 +146,18 @@ jobs:
     # `rust-cache` entry (`.claude/rules/ci-parallelization.md` §2).
     #
     # Each used to be a job of its own, which is what §3 asks for while runner
-    # minutes are free. They stopped being free when Linux jobs moved to the
-    # runner pool named by `LINUX_RUNNER` ([ADR-0076](../../docs/adr/0076-linux-jobs-run-on-a-runner-pool-named-by-a-repository-variable.md)):
-    # ten checks that each do ~18 s of work still took ten of the pool's eight
-    # slots and queued behind the multi-minute cargo jobs, so per-job checkout
-    # and runner setup dominated what they actually measured. Batching trades
-    # ten check badges for one and gives nine slots per run back to the jobs
-    # that need them. See §3 for the measurement that decided it.
+    # minutes are free. They stopped being free when the account's hosted
+    # concurrency became the bottleneck: ten checks that each do ~18 s of
+    # work still took ten slots and queued behind the multi-minute cargo
+    # jobs, so per-job checkout and runner setup dominated what they actually
+    # measured. Batching trades ten check badges for one and gives nine slots
+    # per run back to the jobs that need them. See §3 for the measurement
+    # that decided it.
     #
     # `if: ${{ !cancelled() }}` on every check keeps the property the separate
     # jobs had: a push that breaks three guards reports all three in one run
     # instead of stopping at the first.
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -173,7 +173,7 @@ jobs:
       # fail loudly instead.
       - name: Verify pwsh is available
         if: ${{ !cancelled() }}
-        run: pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+        run: pwsh -NoLogo -NoProfile -Command "\$PSVersionTable.PSVersion.ToString()"
 
       # Enforces that every versioned manifest (workspace crates, the npm,
       # vscode-extension, and napi package.json files, and the hardcoded pins
@@ -247,6 +247,13 @@ jobs:
       - name: Suppression comments match the baseline
         if: ${{ !cancelled() }}
         run: python3 scripts/check-suppressions.py
+
+      # No job may run on a self-hosted runner or read its runner from a
+      # repository variable: the repository is public, so a fork's pull
+      # request would run arbitrary code there (ADR-0096).
+      - name: Runners are GitHub-hosted and not chosen by a variable
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-runs-on.py
 
       # The Windows preview handler and the desktop app ship in one installer
       # and embed WebView2 through the same `wry` / `windows` / `windows-core`,
@@ -361,6 +368,7 @@ jobs:
             scripts/test_check_zero_deps.py \
             scripts/test_check_must_use.py \
             scripts/test_check_suppressions.py \
+            scripts/test_check_runs_on.py \
             scripts/test_check_webview_lockstep.py \
             scripts/test_check_glibc_floor.py \
             scripts/test_macports_regen_cargo_crates.py \
@@ -384,10 +392,9 @@ jobs:
         include:
           # The Linux cell keeps `ubuntu-latest` in its name (required checks
           # are matched by name) but never runs on that label: it runs on
-          # the Linux runner pool when LINUX_RUNNER is set and on
-          # `ubuntu-24.04` otherwise. See ADR-0076 and ADR-0092.
+          # `ubuntu-24.04`. See ADR-0092 and ADR-0096.
           - os: ubuntu-latest
-            runner: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+            runner: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -406,8 +413,7 @@ jobs:
         # cells give the budget up because they are not on the critical
         # path (measured cold penalty: Windows 2.5 min -> 8.1 min,
         # macOS 1.4 min -> 4.8 min, on runners with no queue pressure),
-        # while the Linux cells run on the `LINUX_RUNNER` pool (§7),
-        # where a cold build costs ~21 min on a contended 8-slot pool.
+        # while the Linux cells are on the critical path and keep it (§7).
         if: matrix.os == 'ubuntu-latest'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}

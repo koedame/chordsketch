@@ -1,6 +1,6 @@
 # 0078. The runner pool keeps a Rust cache per runner
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-0096](0096-linux-jobs-run-on-github-hosted-ubuntu-24-04-only.md) (2026-11-21)
 - **Date**: 2026-09-16
 
 ## Context

@@ -2,6 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-10-08
+- **Amended by**: [ADR-0096](0096-linux-jobs-run-on-github-hosted-ubuntu-24-04-only.md) (the `LINUX_RUNNER` pool no longer exists; the workflow runs on `ubuntu-24.04`)
 - **Amends**: [ADR-0085](0085-binaries-ship-a-generated-third-party-license-notice.md)
 
 ## Context

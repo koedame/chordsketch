@@ -55,7 +55,7 @@ permissions:
 jobs:
   parse:
     name: Fuzz the ChordPro parser
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
       FUZZ_DIR: crates/chordpro/fuzz
