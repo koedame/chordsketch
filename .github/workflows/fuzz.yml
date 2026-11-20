@@ -92,6 +92,15 @@ jobs:
         # runs without a commit here.
         run: cargo install cargo-fuzz --version 0.13.2 --locked
 
+      - name: Build the fuzz target
+        # Kept apart from the run so that a compile error is printed in full:
+        # the run step below prints nothing but statistics. It also comes
+        # before the corpus is downloaded, so nothing is compiled after an
+        # artifact has been fetched.
+        run: |
+          cargo +nightly fuzz build parse \
+            --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz
+
       - name: Restore the corpus from the latest trusted run on main
         env:
           GH_TOKEN: ${{ github.token }}
@@ -138,13 +147,6 @@ jobs:
           done
           after=$(find "$corpus" -type f | wc -l)
           echo "added $((after - before)) fixture inputs; starting with $after inputs ($before inherited)"
-
-      - name: Build the fuzz target
-        # Kept apart from the run so that a compile error is printed in full:
-        # the run step below prints nothing but statistics.
-        run: |
-          cargo +nightly fuzz build parse \
-            --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz
 
       - name: Fuzz parse
         # -timeout: an input that runs longer than 10 s counts as a hang.
