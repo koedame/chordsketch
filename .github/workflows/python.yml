@@ -37,7 +37,7 @@ permissions:
 jobs:
   build-sdist:
     name: Build sdist
-    # Stays on GitHub-hosted: maturin-action runs in a container (docker). See ADR-0076.
+    # maturin-action runs in a container (docker).
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,7 +73,7 @@ jobs:
   # build-platform`, which has a universal VSIX fallback (#1795). See #1806.
   build-wheels-ubuntu:
     name: Build ${{ matrix.target }} wheels on ubuntu-24.04
-    # Stays on GitHub-hosted: maturin-action builds in a manylinux container (docker). See ADR-0076.
+    # maturin-action builds in a manylinux container (docker).
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -226,7 +226,7 @@ jobs:
   test-ubuntu:
     name: Test Python bindings (ubuntu-24.04)
     needs: [build-wheels-ubuntu]
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

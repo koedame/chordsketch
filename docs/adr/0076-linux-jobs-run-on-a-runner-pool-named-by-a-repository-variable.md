@@ -1,6 +1,6 @@
 # 0076. Linux jobs run on a runner pool named by a repository variable
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-0096](0096-linux-jobs-run-on-github-hosted-ubuntu-24-04-only.md) (2026-11-21)
 - **Date**: 2026-09-16
 - **Amended by**: [ADR-0078](0078-the-runner-pool-keeps-a-rust-cache-per-runner.md), [ADR-0092](0092-github-hosted-linux-jobs-are-pinned-to-ubuntu-24-04.md)
 

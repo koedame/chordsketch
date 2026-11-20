@@ -42,9 +42,8 @@ jobs:
     if: >-
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository
-    # `pull_request_target` stays off the LINUX_RUNNER pool: the pool is
-    # unprivileged build capacity and a job here holds a write token
-    # (.claude/rules/ci-parallelization.md §7).
+    # A job here holds a write token, so it runs only on GitHub-hosted
+    # `ubuntu-24.04` (.claude/rules/ci-parallelization.md §7, ADR-0096).
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

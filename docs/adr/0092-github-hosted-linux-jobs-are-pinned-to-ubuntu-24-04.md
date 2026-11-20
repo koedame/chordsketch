@@ -2,6 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-11-04
+- **Amended by**: [ADR-0096](0096-linux-jobs-run-on-github-hosted-ubuntu-24-04-only.md) (the pool fallback below is gone; the label is written directly)
 - **Amends**: [ADR-0076](0076-linux-jobs-run-on-a-runner-pool-named-by-a-repository-variable.md)
 
 ## Context
