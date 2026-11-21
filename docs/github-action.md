@@ -8,7 +8,7 @@ Actions workflow.
 ## Usage
 
 ```yaml
-- uses: koedame/chordsketch/packages/github-action@action-v1
+- uses: koedame/chordsketch/packages/github-action@v0.9.1
   with:
     input: songs/amazing-grace.cho
     output: dist/amazing-grace.html
@@ -56,7 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: koedame/chordsketch/packages/github-action@action-v1
+      - uses: koedame/chordsketch/packages/github-action@v0.9.1
         id: render
         with:
           input: songs/setlist.cho
@@ -72,7 +72,7 @@ jobs:
 ### Transpose before rendering
 
 ```yaml
-      - uses: koedame/chordsketch/packages/github-action@action-v1
+      - uses: koedame/chordsketch/packages/github-action@v0.9.1
         with:
           input: songs/song.cho
           output: dist/song-capo2.html
@@ -83,7 +83,7 @@ jobs:
 ### Pin to a specific version
 
 ```yaml
-      - uses: koedame/chordsketch/packages/github-action@action-v1
+      - uses: koedame/chordsketch/packages/github-action@v0.9.1
         with:
           input: songs/song.cho
           output: dist/song.txt
@@ -102,9 +102,9 @@ jobs:
 
 ## Tagging convention
 
-The action is versioned independently from the main ChordSketch CLI releases.
-Tags follow the `action-vX[.Y.Z]` convention (e.g. `action-v1`, `action-v1.0.1`)
-and are created alongside regular ChordSketch release tags.
+The action has no tags of its own. It lives in this repository, so pin it to a
+ChordSketch release tag such as `v0.9.1`. The CLI it installs is chosen
+separately by the `version` input, which defaults to `latest`.
 
 ## Links
 

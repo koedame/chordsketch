@@ -634,7 +634,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$CARGO_HOME"
-          cargo install chordsketch
+          cargo install chordsketch --locked
           "$CARGO_HOME/bin/chordsketch" --version
           echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
 

@@ -13,10 +13,9 @@ This extension provides syntax highlighting and LSP integration for `.cho`,
 
 ## Installation
 
-### From Zed Extensions (once published)
+### From Zed Extensions
 
-Open the Zed command palette and search for **"ChordSketch"** in the extensions
-panel.
+Not published yet. Use the development install below.
 
 ### Development install
 

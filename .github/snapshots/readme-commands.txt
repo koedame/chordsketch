@@ -16,7 +16,7 @@
 [Installation] yay -S chordsketch
 [Installation] docker run --rm ghcr.io/koedame/chordsketch --version
 [Installation] docker run --rm -v "$PWD:/data" ghcr.io/koedame/chordsketch /data/song.cho
-[Installation] cargo install chordsketch
+[Installation] cargo install chordsketch --locked
 [Installation] git clone https://github.com/koedame/chordsketch.git
 [Installation] cd chordsketch
 [Installation] cargo install --path crates/cli
