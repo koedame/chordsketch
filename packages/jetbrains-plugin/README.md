@@ -18,11 +18,10 @@ Part of the [ChordSketch](https://github.com/koedame/chordsketch) project
 
 ## Installation
 
-Install from the [JetBrains Marketplace](https://plugins.jetbrains.com/):
-
-1. Open **Settings** → **Plugins** → **Marketplace**
-2. Search for **ChordSketch**
-3. Click **Install**
+The plugin is not yet published to the [JetBrains Marketplace](https://plugins.jetbrains.com/).
+Build it from source (see [Development](#development)), then install the
+generated ZIP from **Settings** → **Plugins** → **⚙** → **Install Plugin from
+Disk…**.
 
 ## Requirements
 

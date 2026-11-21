@@ -13,8 +13,9 @@ and LSP integration out of the box.
 
 ## Zed
 
-Install the **ChordSketch** extension from the Zed extensions panel (command
-palette → "zed: extensions" → search for "ChordSketch").
+The ChordSketch extension is not yet published to the Zed extension registry.
+Install it from source as a dev extension (see
+[Manual configuration](#manual-configuration-alternative) below).
 
 The extension provides syntax highlighting via a tree-sitter grammar and LSP
 integration via `chordsketch-lsp`.
@@ -30,8 +31,7 @@ cargo install chordsketch-lsp
 
 ### Manual configuration (alternative)
 
-If the extension is not yet available in the Zed extension registry, you can
-install it as a dev extension:
+Install it as a dev extension:
 
 1. Clone the repository:
    ```bash
@@ -127,19 +127,16 @@ vim.api.nvim_create_autocmd("FileType", {
 
 ## JetBrains IDEs (IntelliJ IDEA, PyCharm, WebStorm, etc.)
 
-Install the **ChordSketch** plugin from the
-[JetBrains Marketplace](https://plugins.jetbrains.com/):
-
-1. Open **Settings** → **Plugins** → **Marketplace**
-2. Search for **ChordSketch**
-3. Click **Install**
+The ChordSketch plugin is not yet published to the
+[JetBrains Marketplace](https://plugins.jetbrains.com/). Build it from source
+as described under [Manual installation](#manual-installation-alternative).
 
 The plugin provides syntax highlighting for `.cho`, `.chordpro`, and `.chopro`
 files via a TextMate grammar. It requires IntelliJ Platform 2024.1 or later.
 
 ### Manual installation (alternative)
 
-If the plugin is not yet available on the Marketplace, build it from source:
+Build the plugin from source:
 
 ```bash
 cd packages/jetbrains-plugin
