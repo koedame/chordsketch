@@ -47,7 +47,7 @@ Install the CLI (more [install options](#installation) below):
 
 ```bash
 brew install --formula koedame/tap/chordsketch   # macOS / Linux
-cargo install chordsketch                        # any platform with Rust 1.88+
+cargo install chordsketch --locked               # any platform with Rust 1.88+
 ```
 
 Save a chart as `song.cho`:
@@ -112,8 +112,8 @@ ChordSketch provides syntax highlighting and Language Server Protocol (LSP)
 support for multiple editors:
 
 - **VS Code / Cursor / Windsurf / VSCodium** — install the [ChordSketch extension](https://marketplace.visualstudio.com/items?itemName=koedame.chordsketch)
-- **JetBrains IDEs** (IntelliJ IDEA, PyCharm, WebStorm, etc.) — install the ChordSketch plugin
-- **Zed** — install the ChordSketch extension from the extensions panel
+- **JetBrains IDEs** (IntelliJ IDEA, PyCharm, WebStorm, etc.) — build the plugin from source (not yet on the JetBrains Marketplace)
+- **Zed** — install the extension from source as a dev extension (not yet in the Zed extension registry)
 - **Neovim** — manual tree-sitter + LSP configuration
 - **Helix** — manual grammar + LSP configuration
 
@@ -234,6 +234,10 @@ was ambiguous.
 sudo port install chordsketch
 ```
 
+The MacPorts port is updated after each release, so `port install` can install
+an older release than the other channels. Run `port info chordsketch` to see
+the version it will install.
+
 ### Scoop (Windows)
 
 ```bash
@@ -280,8 +284,12 @@ docker run --rm -v "$PWD:/data" ghcr.io/koedame/chordsketch /data/song.cho
 ### From crates.io
 
 ```bash
-cargo install chordsketch
+cargo install chordsketch --locked
 ```
+
+`--locked` builds with the dependency versions the release was tested with.
+Without it, Cargo may pick a newer dependency release that needs a newer Rust
+than 1.88 and the build fails.
 
 ### From source
 
@@ -311,7 +319,7 @@ it carries no identifier, no document content, and not even your app or OS
 version (the request header names only the updater library), but GitHub
 sees your IP address like any web server does. If a newer version exists,
 the app shows its release notes and installs it only after you accept. The
-Flatpak build never checks (the store delivers updates). To stop the
+Flatpak build, which is not published to Flathub yet, never checks for updates (the store would deliver them). To stop the
 automatic check, turn off **Help → Check for Updates Automatically**; the
 choice is kept between launches. **Help → Check for Updates Now** still
 checks when you ask for it. See [Privacy](#privacy).
@@ -435,7 +443,7 @@ workflow — no Rust toolchain required:
 ```yaml
 - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-- uses: koedame/chordsketch/packages/github-action@action-v1
+- uses: koedame/chordsketch/packages/github-action@v0.9.1
   id: render
   with:
     input: songs/setlist.cho
