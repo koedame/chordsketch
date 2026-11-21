@@ -32,6 +32,18 @@ python3 scripts/third-party-licenses.py --install  # Regenerate THIRD_PARTY_LICE
                      # `pip install fonttools brotli`); drop --install when node_modules
                      # is already in place, or use --check to verify the file is up to
                      # date without a toolchain, as CI does
+npm ci --prefix tools/lint && npx --prefix tools/lint eslint --config tools/lint/eslint.config.mjs \
+  packages/react packages/react-ui packages/ui-irealb-editor packages/playground \
+  packages/vscode-extension packages/svelte packages/vue apps/desktop
+                     # ESLint over the TypeScript packages (minimal rule set in
+                     # tools/lint/eslint.config.mjs; fails on an `eslint-disable`
+                     # that suppresses nothing). CI runs it on every PR.
+python3 scripts/check-suppressions.py  # Counts suppression comments (`eslint-disable`,
+                     # `@ts-expect-error`, skipped tests, `#[allow(...)]`, `#[ignore]`,
+                     # `// WORKAROUND`) against ci/suppression-baseline.json; CI fails on
+                     # a count above or below it. `--update` lowers the baseline,
+                     # `--update --allow-increase` accepts a new suppression
+                     # (docs/adr/0095-suppression-comments-may-not-grow-unnoticed.md)
 cargo +nightly fuzz run parse --fuzz-dir crates/chordpro/fuzz  # Fuzz the ChordPro
                      # parser (needs a nightly toolchain + `cargo install cargo-fuzz`;
                      # CI runs it nightly — see crates/chordpro/fuzz/README.md and
@@ -282,7 +294,10 @@ was created).
   underdocumented behavior.
 - Parser behavior is validated via **golden tests**: input `.cho` files paired with
   expected output snapshots.
-- Compatibility with the Perl reference implementation is checked by hand with
-  `scripts/compare-with-perl.sh` on a shared test corpus (results in
-  `docs/known-deviations.md`), and the directive coverage is checked in CI by
-  `crates/chordpro/tests/upstream_directives.rs`.
+- Compatibility with the Perl reference implementation is checked in CI by
+  `crates/cli/tests/perl_comparison.rs`, which compares the text output for
+  the shared test corpus with saved Perl output in `tests/perl-baseline/`
+  (results in `docs/known-deviations.md`; refresh with
+  `scripts/update-perl-baseline.sh`). The HTML output is compared by hand
+  with `scripts/compare-with-perl.sh`. The directive coverage is checked in CI
+  by `crates/chordpro/tests/upstream_directives.rs`.

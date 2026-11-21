@@ -1007,18 +1007,18 @@ mod tests {
         // Compact-form minor (`Em`) uses ChordQuality::Minor — the
         // helper spells out ` minor` after the (transposed) accidental
         // (ADR-0035). At +2 the song-wide `prefer_flat` for an Em key
-        // lands flat side, so the helper spells G♭ minor (consistent with
-        // the chord lines, which also use G♭m). F♯m / G♭m are enharmonic
-        // equivalents; the convention is owned by
+        // lands sharp side, so the helper spells F♯ minor (consistent with
+        // the chord lines, which also use F♯m). F♯m is the conventional
+        // minor key (3♯); G♭m would be 9♭. The convention is owned by
         // `transposed_key_prefers_flat` and not negotiated here.
         let em = chordsketch_chordpro::parse("{key: Em}\n[Em]hi").unwrap();
         let em_out = render_song_with_transpose(&em, 2, &Config::defaults());
         assert!(
-            em_out.contains("[Key: G♭ minor]"),
-            "minor key must transpose to `G♭ minor` at +2 (song-wide prefer_flat); got:\n{em_out}"
+            em_out.contains("[Key: F♯ minor]"),
+            "minor key must transpose to `F♯ minor` at +2 (song-wide prefer_flat); got:\n{em_out}"
         );
         assert!(
-            em_out.contains("Gbm"),
+            em_out.contains("F#m"),
             "chord lines must agree with key marker root spelling; got:\n{em_out}"
         );
 

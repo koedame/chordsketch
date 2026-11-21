@@ -32,7 +32,7 @@ for the numbers is the `MINIMUMS` dict in that script; this table and the
 script must be updated in lockstep.
 
 `scripts/check-*.py` is an evaluation asset
-([ADR-0093](../../docs/adr/0093-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)):
+([ADR-0097](../../docs/adr/0097-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)):
 a PR that changes `MINIMUMS` (the floor going up or down alike) or deletes the
 `Fixture counts` step of `ci.yml` is flagged by the `Eval assets` check and is
 merged by the maintainer after reading the diff. Lowering a floor in the same

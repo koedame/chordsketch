@@ -1,0 +1,23 @@
+-- Title: SVG Section
+
+-- Start of verse
+C               G
+Vector graphics in the song
+Am           F
+Scalable and crisp
+-- End of verse
+
+-- Start of svg
++ image: <none>
+-- End of svg
+
+-- Start of chorus
+F                 C
+Pictures drawn in code
+G               Am
+Embedded in the song
+F           C
+Scalable to any size
+G                C
+Always sharp and strong
+-- End of chorus

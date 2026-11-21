@@ -1,6 +1,6 @@
 # 0013. Bot-driven merge is allowed under explicit session permission
 
-- **Status**: Accepted (condition 4 updated by ADR-0015 on 2026-05-03; clause 1 extended for unattended Dependabot merge by ADR-0024 on 2026-05-25; clause 1 generalized to authorization in any of three forms by ADR-0047 on 2026-09-02; condition 4 returned to the merge queue by ADR-0079 on 2026-09-17; condition 5 added by ADR-0093 on 2026-11-20)
+- **Status**: Accepted (condition 4 updated by ADR-0015 on 2026-05-03; clause 1 extended for unattended Dependabot merge by ADR-0024 on 2026-05-25; clause 1 generalized to authorization in any of three forms by ADR-0047 on 2026-09-02; condition 4 returned to the merge queue by ADR-0079 on 2026-09-17; condition 5 added by ADR-0097 on 2026-11-20)
 - **Date**: 2026-04-29
 
 > **Update (2026-05-03):** Condition (4) below ("Merge queue path
@@ -37,13 +37,13 @@
 > to every merge, including PRs the assistant opened itself.
 
 > **Update (2026-11-20):** A fifth condition is added by
-> [ADR-0093](0093-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md):
+> [ADR-0097](0097-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md):
 > an AI assistant does not enqueue a pull request that changes an evaluation asset
 > (an existing file listed in `ci/eval-assets.toml`, or a diff that removes
 > assertions or checks), whatever form of authorization condition (1) took; the
 > maintainer merges it after reading the diffs. The `Eval assets` check reports it,
 > and condition (2) already stops the assistant when that check is red. The
-> "docs-only" alternative rejected below was an allow list; ADR-0093 is a deny list.
+> "docs-only" alternative rejected below was an allow list; ADR-0097 is a deny list.
 
 ## Context
 

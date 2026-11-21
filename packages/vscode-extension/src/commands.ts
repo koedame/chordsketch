@@ -37,7 +37,6 @@ function getExportChannel(context: vscode.ExtensionContext): vscode.OutputChanne
   }
   // exportOutputChannel is guaranteed non-undefined: it was either non-undefined
   // on entry or just assigned in the branch above.
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return commandState.exportOutputChannel!;
 }
 
@@ -69,7 +68,6 @@ function getExportChannel(context: vscode.ExtensionContext): vscode.OutputChanne
 function loadWasmRender(extensionPath: string): WasmRenderModule {
   if (!commandState.wasmRenderCache) {
     const modPath = path.join(extensionPath, 'dist', 'node', 'chordsketch_wasm.js');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod: unknown = require(modPath);
     if (!isWasmRenderModule(mod)) {
       throw new Error(
@@ -79,7 +77,6 @@ function loadWasmRender(extensionPath: string): WasmRenderModule {
     commandState.wasmRenderCache = mod;
   }
   // wasmRenderCache is guaranteed non-undefined here.
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return commandState.wasmRenderCache!;
 }
 

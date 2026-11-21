@@ -93,7 +93,7 @@ An AI assistant MAY add a PR to the merge queue when
 the bot-merge rationale,
 [ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)
 for why condition (4) is the merge queue, and
-[ADR-0093](../../docs/adr/0093-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)
+[ADR-0097](../../docs/adr/0097-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)
 for condition (5).
 
 1. **Authorization to merge.** The maintainer has authorized the
@@ -211,7 +211,7 @@ unchanged and must be met verbatim.
 
 **Clause 5** (no unreviewed change to an evaluation asset) applies to
 Dependabot PRs unchanged
-([ADR-0093](../../docs/adr/0093-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)):
+([ADR-0097](../../docs/adr/0097-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)):
 the audit does not satisfy it. A Dependabot PR on which the `Eval assets`
 check reports a hit, whether from Dependabot's own diff or from the
 adaptation commits of a `FIXED` verdict, is commented and left open for the

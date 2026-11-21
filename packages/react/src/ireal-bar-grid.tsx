@@ -270,7 +270,6 @@ export function IrealBarGrid({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source]);
 
   const emit = useCallback(
@@ -381,7 +380,7 @@ export function IrealBarGrid({
     if (next !== activeBar) {
       setActiveBar(next);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on structure only: reconcileActiveBar returns a fresh object when every section is empty, so listing activeBar would loop
   }, [song?.sections]);
 
   // Structural editing ops. Each closure mutates a shallow-cloned

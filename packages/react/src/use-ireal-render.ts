@@ -106,7 +106,6 @@ export function useIrealRender(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source]);
 
   return { svg, loading, error };

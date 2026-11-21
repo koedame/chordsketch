@@ -29,17 +29,13 @@ export function useDebounced<T>(value: T, delay: number): T {
       // drifted from `value` (e.g. the component initially mounted
       // with delay > 0), resync it immediately. The fast-path
       // return below handles the normal case without going
-      // through the effect at all.
-      if (debounced !== value) {
-        setDebounced(value);
-      }
+      // through the effect at all. Setting the state it already holds is a
+      // no-op, so the current value does not need to be read here.
+      setDebounced(value);
       return undefined;
     }
     const id = setTimeout(() => setDebounced(value), delay);
     return () => clearTimeout(id);
-    // `debounced` intentionally excluded — it only matters on the
-    // delay-swap resync, which `delay` change already retriggers.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, delay]);
 
   // Fast-path for `delay <= 0`: return the live input synchronously

@@ -1,0 +1,10 @@
+basic/01-empty.cho
+basic/02-title-only.cho
+edge-cases/10-mixed-everything.cho
+formatting/01-bold.cho
+formatting/02-italic.cho
+formatting/03-mixed-markup.cho
+formatting/06-span-attrs.cho
+formatting/07-unclosed-tags.cho
+formatting/08-case-insensitive.cho
+formatting/09-markup-with-chords.cho

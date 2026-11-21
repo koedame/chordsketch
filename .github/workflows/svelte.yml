@@ -47,7 +47,7 @@ defaults:
 jobs:
   build-and-test:
     name: Build and test @chordsketch/svelte
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -100,6 +100,9 @@ jobs:
           # signature of that step not running: svelte-package keeps the
           # `lang="ts"` attribute on purpose for Svelte 5, so the attribute
           # cannot be the check.
-          ! grep -rln 'interface Props' dist/*.svelte
+          if grep -rln 'interface Props' dist/*.svelte; then
+            echo "::error::dist/*.svelte still contains 'interface Props'"
+            exit 1
+          fi
           echo "dist/ contents:"
           ls -la dist/

@@ -188,6 +188,7 @@ export function useChordproAst(
         // the failure is visible in devtools regardless of whether the
         // consumer renders `error`, then surface it through `error`.
         if (typeof console !== 'undefined') {
+          // eslint-disable-next-line no-console -- surfaces a WASM load failure that retry would otherwise hide
           console.error(
             '[@chordsketch/react] useChordproAst: failed to load @chordsketch/wasm',
             e,
@@ -202,7 +203,6 @@ export function useChordproAst(
     // `loader` intentionally excluded — see `use-chord-render.ts` for
     // the identical pattern + rationale (inline loaders would
     // invalidate the effect every render).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skip, parser, retryNonce]);
 
   // Last successfully-committed parse, retained so a transient invalid

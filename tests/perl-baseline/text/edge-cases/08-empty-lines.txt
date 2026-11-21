@@ -1,0 +1,39 @@
+-- Title: Empty Lines
+
+
+
+-- Start of verse
+G                 C
+First line of the verse
+
+
+
+D                 G
+After three blank lines
+
+
+Em              C
+After two blank lines
+
+D               G
+After one blank line
+-- End of verse
+
+
+
+
+-- Start of chorus
+
+
+C            G
+Chorus after blank lines
+
+
+D                G
+More blank lines above
+
+-- End of chorus
+
+
+
+

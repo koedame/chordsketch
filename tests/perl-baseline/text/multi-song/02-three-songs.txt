@@ -1,0 +1,49 @@
+-- Title: Song One
+
+-- Start of verse
+C                 G
+First song in the set
+Am           F
+Starting off strong
+-- End of verse
+
+-- Start of chorus
+F    C    G
+One, two, three
+Am        F
+Sing with me
+-- End of chorus
+
+-- New song
+-- Title: Song Two
+
+-- Start of verse
+Am            Em
+Second song begins
+F             G
+Middle of the show
+-- End of verse
+
+-- Start of chorus
+F     C     G
+Four, five, six
+Am     F
+In the mix
+-- End of chorus
+
+-- New song
+-- Title: Song Three
+
+-- Start of verse
+G               C
+Third and final tune
+D               G
+Closing out the night
+-- End of verse
+
+-- Start of chorus
+C      G      D
+Seven, eight, nine
+Em    C
+Doing fine
+-- End of chorus

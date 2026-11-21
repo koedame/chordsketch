@@ -1,4 +1,3 @@
-/* eslint-disable react/jsx-key */
 import { useRef, useState, type ReactElement } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';

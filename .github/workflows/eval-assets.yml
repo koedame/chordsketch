@@ -3,7 +3,7 @@ name: Eval assets
 # Flags a pull request that changes an evaluation asset (an existing expected
 # output, corpus, threshold or check, listed in ci/eval-assets.toml, or a diff
 # that removes assertions or tests) so that the maintainer merges it after
-# reading the diffs; an AI assistant does not enqueue it (ADR-0093,
+# reading the diffs; an AI assistant does not enqueue it (ADR-0097,
 # .claude/rules/pr-workflow.md condition 5).
 #
 # The check is red on a hit and is deliberately NOT a required check: a required

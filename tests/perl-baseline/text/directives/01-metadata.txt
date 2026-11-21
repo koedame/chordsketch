@@ -1,0 +1,24 @@
+-- Title: The Long Road Home
+-- Subtitle: A Journey Song
+
+-- Start of verse
+G                  C      D
+Down the long road home I go
+G                    C           D
+Through the rain and through the snow
+Em                 C    D
+Miles and miles of open land
+G               C        D
+Nothing but the road and sand
+-- End of verse
+
+-- Start of chorus
+C       G             D
+Take me home, take me home
+Em        C        D
+I’ve been gone too long
+C       G             D
+Take me home, take me home
+Em       C       G
+Where my heart belongs
+-- End of chorus

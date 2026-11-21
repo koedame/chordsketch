@@ -338,6 +338,7 @@ function renderSpan(span: ChordproTextSpan, key: number): ReactNode {
       void _exhaustive;
       const unknownKind = (span as { kind?: string } | null | undefined)?.kind ?? 'unknown';
       if (typeof console !== 'undefined') {
+        // eslint-disable-next-line no-console -- surfaces a missing renderer arm that the placeholder would otherwise hide
         console.warn(
           `[@chordsketch/react] AST walker has no renderer for TextSpan.kind="${unknownKind}" — placeholder emitted`,
         );
@@ -608,6 +609,7 @@ export function tokenizeGridLine(input: string): GridToken[] {
       //
       // Sister-site: same guard in `tokenize_grid_line`.
       if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console -- development-only invariant check, stripped from production builds
         console.assert(
           isDialectTerminator(input[i]!),
           `tokenizeGridLine no-progress guard: non-terminator char ${JSON.stringify(input[i])} must not reach this branch`,

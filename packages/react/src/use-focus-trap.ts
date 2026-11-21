@@ -136,10 +136,13 @@ export function useFocusTrap(
     return (): void => {
       dialog.removeEventListener('keydown', onKeyDown);
       ownerDocument.removeEventListener('pointerdown', onDocumentPointerDown, true);
+      // Read at cleanup time on purpose: focus returns to the anchor as it
+      // is when the dialog closes, not as it was when the dialog opened.
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
       const anchor = anchorRef.current;
       if (anchor !== null && ownerDocument.contains(anchor)) {
         anchor.focus();
       }
     };
-  }, [enabled]);
+  }, [enabled, anchorRef, dialogRef]);
 }

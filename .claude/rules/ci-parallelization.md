@@ -35,11 +35,9 @@ Every Rust-compiling job (any step that invokes `cargo build/test/clippy/doc`,
 or a tool that internally runs cargo: maturin, napi-rs, wasm-pack, cross) SHOULD
 include the local `./.github/actions/rust-cache` with a meaningful `shared-key`
 — **unless** the workflow runs less often than once per 7 days. Do not call
-`Swatinem/rust-cache` directly: the local action runs it on GitHub-hosted
-runners and uses the runner's own cache directory on the `LINUX_RUNNER` pool
-([ADR-0078](../../docs/adr/0078-the-runner-pool-keeps-a-rust-cache-per-runner.md)).
-It takes the same `shared-key` and `save-if` inputs, and the examples below
-apply to it unchanged.
+`Swatinem/rust-cache` directly: the local action wraps it and makes `save-if`
+required, so every caller states it. It takes the same `shared-key` and
+`save-if` inputs, and the examples below apply to it unchanged.
 
 GitHub Actions cache entries are evicted by LRU after 7 days of inactivity.
 Cache additions to infrequent workflows deliver no wall-clock benefit and add
@@ -110,25 +108,21 @@ run** — every job reports `No cache found.`, pays the full cold build,
 and then pays again to upload a cache nobody will read.
 
 Measured on the 2026-09-16 `main` pushes: all 35 entries in the pool had
-been created within the preceding 40 minutes, and every Linux cell on the
-`LINUX_RUNNER` pool missed. The pool peaked at 10.87 GiB and settled back
+been created within the preceding 40 minutes, and every Linux cell on the self-hosted pool missed. The pool peaked at 10.87 GiB and settled back
 to 9.98 GiB, so GitHub's documented "10 GB" cap is 10 GiB in practice —
 quote cache sizes in GiB when comparing against it.
 
 When demand approaches the cap, the cells that give up their cache are
-the ones on **unconstrained** runners. GitHub-hosted Windows and macOS
-minutes are free on a public repo and those cells sit off the critical
-path, so their cold penalty is absorbed in parallel. The self-hosted
-Linux pool (§7) is the scarce resource — 8 slots, 2 CPUs each — so a cold
-build there lands directly on CI wall-clock and on every other job
-queued behind it.
+the ones off the critical path. GitHub-hosted Windows and macOS minutes
+are free on a public repo and those cells sit off the critical path, so
+their cold penalty is absorbed in parallel. The Linux cells (§7) are on
+the critical path, so a cold build there lands directly on CI wall-clock.
 
-Since [ADR-0078](../../docs/adr/0078-the-runner-pool-keeps-a-rust-cache-per-runner.md)
-the pool's cells keep their cache on the runner and no longer write to
-this budget; only GitHub-hosted cells (and Linux cells while
-`LINUX_RUNNER` is unset) do. The hosted cells below gave their cache up
-while the pool's entries were in the budget, so re-measure the headroom
-before restoring them.
+Every cell's cache now comes out of this one budget (the self-hosted
+runner pool that once kept its cache on the runner is gone,
+[ADR-0096](../../docs/adr/0096-linux-jobs-run-on-github-hosted-ubuntu-24-04-only.md)).
+The cells below gave their cache up while the Linux cells' entries were
+the largest claim, so re-measure the headroom before restoring them.
 
 Before adding a `rust-cache` entry to a cell, check the
 headroom:
@@ -189,16 +183,16 @@ each pay runner boot + cache restore independently. Any proposed matrix split fo
 `swift.yml` MUST measure both the cold-cache and warm-cache cases before merging.
 See #1465 for the tracking issue.
 
-### Linux minutes stopped being free: the pool is eight slots
+### Linux minutes stopped being free: concurrency is finite
 
-"Runner minutes are free" held while every Linux job ran on a GitHub-hosted
-runner. Linux jobs now go to the pool named by `LINUX_RUNNER`
-([ADR-0076](../../docs/adr/0076-linux-jobs-run-on-a-runner-pool-named-by-a-repository-variable.md)),
-which is **eight concurrent slots for the whole repository** — every workflow,
-every branch, and `main` draw from the same eight. A job there holds a slot for
-its entire wall clock, so a split that used to cost nothing now delays whatever
-is behind it in the queue.
+"Runner minutes are free" held only while concurrency was not the limit.
+GitHub-hosted concurrency is shared by every workflow, every branch and
+`main` of the account, and a job holds a slot for its entire wall clock, so
+a split that used to cost nothing delays whatever is behind it in the queue.
 
+The measurement below was taken when Linux jobs ran on an eight-slot
+self-hosted pool (since removed, ADR-0096); the lesson — per-job checkout
+and runner setup dominate seconds-long jobs — holds on hosted runners too.
 Measured over every job of the `main` push for
 [e007b7d](https://github.com/koedame/chordsketch/commit/e007b7d5f0d1ed9495415d1be3c6ce3eec207e1d)
 — 26 workflow runs, 103 jobs, 59 of them on the pool:
@@ -214,7 +208,7 @@ Ten of those 27 were `ci.yml`'s Python-only guard jobs — roughly 18 s of work
 each, each behind its own checkout and runner setup, each holding a slot. They
 are now one `guards` job.
 
-For a job that lands on the pool:
+For a job that is queued behind others:
 
 - **Split when each cell does minutes of work.** The trade-off above is
   unchanged; the split still finishes sooner than a sequential loop.
@@ -361,15 +355,14 @@ gh run list --workflow <file>.yml -R koedame/chordsketch --limit 100 --json crea
 If the workflow runs less than weekly, most caching optimizations will be
 ineffective — the cache expires before the next run uses it.
 
-## 7. Linux jobs run on the pool named by `LINUX_RUNNER`
+## 7. Linux jobs run on GitHub-hosted `ubuntu-24.04`
 
-A job that needs nothing beyond a Linux userland MUST select its runner
-through the repository variable, never by writing a label into the file
-([ADR-0076](../../docs/adr/0076-linux-jobs-run-on-a-runner-pool-named-by-a-repository-variable.md)):
-
-```yaml
-runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
-```
+A Linux job MUST write `runs-on: ubuntu-24.04`. It MUST NOT read the runner
+from a variable (`vars.*`) or name a self-hosted label: this repository is
+public, so a pull request from a fork could run arbitrary code on a
+self-hosted runner
+([ADR-0096](../../docs/adr/0096-linux-jobs-run-on-github-hosted-ubuntu-24-04-only.md)).
+`scripts/check-runs-on.py` runs on every pull request and fails on either.
 
 No workflow uses `ubuntu-latest` as a runner: the alias moved to 26.04 on
 2026-11-01 and broke `snapcraft` and Playwright
@@ -384,24 +377,8 @@ strategy:
     os: [ubuntu-latest, macos-latest, windows-latest]
     include:
       - os: ubuntu-latest
-        runner: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+        runner: ubuntu-24.04
 ```
 
-The pool is ephemeral and unprivileged: no `sudo`, no container engine,
-nothing mounted from its host except a per-runner Rust cache directory that a
-later job reuses
-([ADR-0078](../../docs/adr/0078-the-runner-pool-keeps-a-rust-cache-per-runner.md)).
-Because a pull request can leave build output there, **nothing that is
-published may be built on the pool**. A job stays on plain `ubuntu-24.04` when
-it needs `sudo` / `apt-get`, a container engine (`docker`, `cross`,
-`maturin-action`'s manylinux build, the AUR and Flathub checks),
-`snapcraft`, `flatpak`, Homebrew, the Swift toolchain, a display
-(`xvfb-run`, Playwright `--with-deps`), or when it runs with
-`pull_request_target`. So do release, publish and deploy workflows, the
-Claude workflows and the `workflow_run`-driven maintenance workflows.
-When the reason is not visible in the job's own steps (it is inside a
-script the job calls), a one-line comment above `runs-on` names it.
-
-When a job on the pool starts failing for a tool the image lacks, move
-that job back to `ubuntu-24.04` with such a comment; do not add the tool
-to the workflow with `sudo`.
+A job that needs a tool the image lacks installs it in a step; it does not
+move to another runner.

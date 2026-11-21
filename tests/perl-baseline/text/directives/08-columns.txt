@@ -1,0 +1,43 @@
+-- Title: Column Layout
+
+-- Start of verse
+Am          Dm
+Left column starts here
+E                  Am
+First verse on the left
+Am                  Dm
+Short and sweet and clear
+E       Am
+Nothing left
+-- End of verse
+
+-- Start of chorus
+F                C
+Chorus spans the page
+G        Am
+Wide and bold
+-- End of chorus
+
+-- Column break
+
+-- Start of verse
+Am           Dm
+Right column begins now
+E                   Am
+Second verse on the right
+Am              Dm
+Balanced layout somehow
+E       Am
+Looking tight
+-- End of verse
+
+-- Start of verse
+Am           Dm
+Still in the right column
+E                   Am
+Third verse flowing on-
+Am               Dm
+Column break was solemn
+E      Am
+Nearly done
+-- End of verse

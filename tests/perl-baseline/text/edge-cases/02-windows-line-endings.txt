@@ -1,0 +1,23 @@
+-- Title: Windows Line Endings
+
+-- Start of verse
+G              C         D
+This file uses CRLF line endings
+G               C       D
+Like files from Windows machines
+Em              C           D
+Carriage return before each newline
+G               C         D
+In all of these lines and scenes
+-- End of verse
+
+-- Start of chorus
+C       G
+Windows style
+D    Em
+Line breaks
+C         G
+Backslash r-
+D         G
+Backslash n-
+-- End of chorus

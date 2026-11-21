@@ -1,0 +1,22 @@
+-- Title: Comment Markup
+
+-- Start of verse
+G                   C
+Singing through the morning light
+D             G
+Everything is right
+-- End of verse
+
+-- Note the <b>key change</b> here
+-- Play <b>softly</b> with <i>feeling</i>
+-- <b>Important:</b> Repeat this section <i>three</i> times
+
+-- Start of chorus
+C                 G
+Comments can have markup too
+D               G
+Bold and italic shine right through
+-- End of chorus
+
+-- <span foreground="red">Red warning</span> - watch the tempo
+-- <highlight>Highlighted note</highlight> for the band

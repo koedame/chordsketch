@@ -1,0 +1,20 @@
+-- Title: Many Chords Per Line
+
+-- Start of verse
+Am  C   G     F    Dm   Em  Bb    A     D    E   Fm     Ab
+One two three four five six seven eight nine ten eleven twelve
+G     Am   C      F      Dm   Em    G7     Cmaj7 Fmaj7 Dm7  Em7
+Still more chords packed into every single line -of ---this song
+-- End of verse
+
+-- Start of chorus
+C G Am F Dm Em G7 C7 F7 Bb Eb Ab
+---------------------------------
+Am7 Dm7 G7 Cmaj7 Fmaj7 Bm7b5 E7b9 Am9 Dm11 G13 Cmaj9 F6
+--------------------------------------------------------
+-- End of chorus
+
+-- Start of verse
+A     B     C#m     D    E   F#m    G#dim A
+Rapid chord changes test the parser limit --
+-- End of verse

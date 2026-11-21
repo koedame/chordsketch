@@ -11,9 +11,30 @@ name: Fuzz
 # it: cargo-fuzz needs a nightly toolchain, which this repository's PR jobs do
 # not otherwise compile with, and 30 s of fuzzing rarely finds what a
 # 15-minute nightly run does. The nightly run reads whatever `main` holds the
-# next morning, so a regression waits at most a day. The corpus is not carried
-# between runs; every run starts from the golden fixtures, which reach the
-# interesting parser states within seconds.
+# next morning, so a regression waits at most a day.
+#
+# The corpus is carried from one night to the next as the `fuzz-corpus-parse`
+# artifact. A run downloads the artifact of the latest successful scheduled or
+# manual run on `main`, adds the parser's fixtures as seeds, fuzzes, minimizes
+# the result with `cargo fuzz cmin` and uploads it for the next run. Runs on
+# pull requests may read the corpus but never write it, and never read an
+# artifact produced by a pull request, so a fork cannot plant inputs. When
+# there is nothing to download (first run, expired artifact) the run starts
+# from the fixtures alone. An artifact is used instead of the Actions cache
+# because the cache is size-capped and evicts the oldest entries silently.
+#
+# This repository is public, and so are its workflow logs and artifacts. An
+# input that crashes the parser is a working denial of service against every
+# embedder until it is fixed, so it must not be published before the fix. The
+# fuzz step and the `cargo fuzz cmin` step therefore write everything libFuzzer
+# and cargo-fuzz print (which includes the crashing input, as hex, as Base64
+# and in Debug form) to a file outside the log. On a failure,
+# `.github/scripts/fuzz-crash-report.sh` shows only the kind, size and SHA-256
+# of each crashing input, packs the inputs and that output into one archive,
+# encrypts it with the age public key in `.github/fuzz-crash-recipient.txt` and
+# the workflow uploads it as `fuzz-parse-crash`, so only the holder of the
+# private key can read it. The key is a file in the repository, not a secret,
+# so that runs from forks can encrypt too.
 #
 # The fuzz crate lives in `crates/chordpro/fuzz/` as its own workspace root, so
 # `libfuzzer-sys` never enters the SDK workspace or the zero-dependency
@@ -41,11 +62,13 @@ concurrency:
 
 permissions:
   contents: read
+  # Lists earlier runs and downloads their `fuzz-corpus-parse` artifact.
+  actions: read
 
 jobs:
   parse:
     name: Fuzz the ChordPro parser
-    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
       FUZZ_DIR: crates/chordpro/fuzz
@@ -70,33 +93,151 @@ jobs:
         # runs without a commit here.
         run: cargo install cargo-fuzz --version 0.13.2 --locked
 
-      - name: Seed the corpus from the parser's fixtures
+      - name: Build the fuzz target
+        # Kept apart from the run so that a compile error is printed in full:
+        # the run step below prints nothing but statistics. It also comes
+        # before the corpus is downloaded, so nothing is compiled after an
+        # artifact has been fetched.
+        run: |
+          cargo +nightly fuzz build parse \
+            --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz
+
+      - name: Restore the corpus from the latest trusted run on main
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p "$FUZZ_DIR/corpus/parse"
-          find crates/chordpro/tests -name '*.cho' -type f | while read -r f; do
-            cp "$f" "$FUZZ_DIR/corpus/parse/$(printf '%s' "$f" | tr '/' '_')"
+          # Look the artifact up directly: the workflow-runs listing filtered
+          # by status can miss a run that finished minutes ago. Only artifacts
+          # of `schedule` and `workflow_dispatch` runs on `main` are trusted.
+          # A pull request run never uploads one, but a fork branch can be
+          # named `main`, so the event is checked on the run itself.
+          candidates=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=fuzz-corpus-parse&per_page=20" \
+            --jq '.artifacts | map(select(.expired == false and .workflow_run.head_branch == "main")) | .[] | .workflow_run.id')
+          restored=0
+          for id in $candidates; do
+            event=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.event')
+            if [ "$event" != "schedule" ] && [ "$event" != "workflow_dispatch" ]; then
+              echo "skipping run $id: it was a $event run"
+              continue
+            fi
+            tmp=$(mktemp -d)
+            if gh run download "$id" --repo "$GITHUB_REPOSITORY" --name fuzz-corpus-parse --dir "$tmp"; then
+              find "$tmp" -type f -exec cp -- {} "$FUZZ_DIR/corpus/parse/" \;
+              restored=$(find "$FUZZ_DIR/corpus/parse" -type f | wc -l)
+              echo "inherited $restored inputs from run $id"
+              break
+            fi
+            echo "run $id has no usable fuzz-corpus-parse artifact"
           done
-          echo "seeded $(find "$FUZZ_DIR/corpus/parse" -type f | wc -l) inputs"
+          if [ "$restored" -eq 0 ]; then
+            echo "no corpus to inherit; starting from the fixtures alone"
+          fi
+
+      - name: Add the parser's fixtures as seeds
+        run: |
+          set -euo pipefail
+          corpus="$FUZZ_DIR/corpus/parse"
+          before=$(find "$corpus" -type f | wc -l)
+          # A fixture the minimized corpus already kept under the same name
+          # is not copied or counted again.
+          find crates/chordpro/tests -name '*.cho' -type f | while read -r f; do
+            dest="$corpus/$(printf '%s' "$f" | tr '/' '_')"
+            [ -e "$dest" ] || cp -- "$f" "$dest"
+          done
+          after=$(find "$corpus" -type f | wc -l)
+          echo "added $((after - before)) fixture inputs; starting with $after inputs ($before inherited)"
 
       - name: Fuzz parse
         # -timeout: an input that runs longer than 10 s counts as a hang.
         # -rss_limit_mb: an input that needs more than 2 GiB counts as an
         # out-of-memory crash. The parser's own input cap is 10 MiB, so
         # neither is reachable by legitimate input.
+        #
+        # Everything the fuzzer prints goes to $RUNNER_TEMP/fuzz.log and is
+        # never echoed, because a failing run prints the crashing input. The
+        # lines echoed on success are the statistics libFuzzer prints, which
+        # carry no input.
         run: |
+          set -uo pipefail
+          log="$RUNNER_TEMP/fuzz.log"
+          status=0
           cargo +nightly fuzz run parse \
             --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz \
             -- \
             -dict="$FUZZ_DIR/chordpro.dict" \
             -max_total_time="$FUZZ_SECONDS" \
             -timeout=10 \
-            -rss_limit_mb=2048
+            -rss_limit_mb=2048 \
+            > "$log" 2>&1 || status=$?
+
+          if [ "$status" -eq 0 ]; then
+            grep -E '^(#[0-9]+[[:space:]]+(INITED|DONE|pulse)[[:space:]]|Done [0-9]|INFO: )' "$log" || true
+            exit 0
+          fi
+
+          bash .github/scripts/fuzz-crash-report.sh "Fuzz parse" "$status" "$log"
+          exit "$status"
+
+      - name: Minimize the corpus
+        # Reached only when the fuzz step found nothing, so a corpus that
+        # crashes the parser is never handed on.
+        #
+        # The same -timeout and -rss_limit_mb as the fuzz step: cmin runs every
+        # input of the corpus again, and an input that only misbehaves under
+        # those limits must not pass here either. Everything cmin prints goes
+        # to $RUNNER_TEMP/cmin.log and is never echoed, for the reason given
+        # in the fuzz step; the log shows the two counts only.
+        #
+        # An input that crashes the parser does not fail `cargo fuzz cmin`:
+        # libFuzzer's merge writes it to `artifacts/parse/`, leaves it out of
+        # the minimized corpus and exits 0. A merge that fails outright also
+        # exits 0, after printing "Failed to minimize corpus". So the step
+        # fails on the exit status, on that line, and on any file under
+        # `artifacts/parse/`.
+        if: github.event_name != 'pull_request'
+        run: |
+          set -uo pipefail
+          log="$RUNNER_TEMP/cmin.log"
+          before=$(find "$FUZZ_DIR/corpus/parse" -type f | wc -l)
+          status=0
+          cargo +nightly fuzz cmin parse \
+            --fuzz-dir "$FUZZ_DIR" --target-dir target/fuzz \
+            -- \
+            -timeout=10 \
+            -rss_limit_mb=2048 \
+            > "$log" 2>&1 || status=$?
+          if [ "$status" -eq 0 ]; then
+            if grep -q '^Failed to minimize corpus' "$log" \
+              || [ -n "$(find "$FUZZ_DIR/artifacts/parse" -type f 2> /dev/null | head -n 1)" ]; then
+              status=1
+            fi
+          fi
+          if [ "$status" -ne 0 ]; then
+            bash .github/scripts/fuzz-crash-report.sh "Minimize the corpus" "$status" "$log"
+            exit "$status"
+          fi
+          after=$(find "$FUZZ_DIR/corpus/parse" -type f | wc -l)
+          echo "minimized the corpus from $before to $after inputs"
+
+      - name: Hand the corpus on to the next run
+        # The 30 s smoke on a pull request reads the corpus but does not
+        # replace it.
+        if: success() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-corpus-parse
+          path: crates/chordpro/fuzz/corpus/parse/
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Keep the crashing input
+        # Only the encrypted archive is uploaded; the plaintext input and
+        # output stay on the runner.
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-parse-crash
-          path: crates/chordpro/fuzz/artifacts/parse/
+          path: ${{ runner.temp }}/fuzz-parse-crash.tar.gz.age
           if-no-files-found: ignore

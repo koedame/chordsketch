@@ -1,0 +1,40 @@
+-- Title: Page Break Demo
+
+-- Start of verse
+G                C    D
+This verse is on page one
+G              C        D
+Along with the chorus below
+-- End of verse
+
+-- Start of chorus
+C          G
+Singing on page one
+D                  G
+Before we turn the page
+-- End of chorus
+
+-- New page
+
+-- Start of verse
+G             C    D
+Now we are on page two
+G              C          D
+After the page break came through
+-- End of verse
+
+-- Start of chorus
+C          G
+Singing on page two
+D           G
+A brand new stage
+-- End of chorus
+
+-- New page
+
+-- Start of verse
+G             C     D
+Physical page break here
+G              C        D
+Guaranteed new sheet of paper
+-- End of verse

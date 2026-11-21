@@ -6,7 +6,7 @@
 # existing file matched below. Adding a new file is not a change and is not
 # reported; a rename counts as the deletion of the old path. A pull request that
 # is reported is merged by the maintainer after reading the listed diffs
-# (ADR-0093, `.claude/rules/pr-workflow.md` condition 5).
+# (ADR-0097, `.claude/rules/pr-workflow.md` condition 5).
 #
 # `*` matches within one path segment, `**` any number of segments. The
 # registry is read from the base branch, so a pull request cannot remove its
@@ -25,6 +25,14 @@ reason = "golden inputs and expected snapshots of the renderers and the parser"
 [[asset]]
 glob = "tests/corpus/**"
 reason = "shared test corpus"
+
+[[asset]]
+glob = "tests/perl-baseline/**"
+reason = "saved Perl ChordPro output and the list of accepted differences that the text comparison checks against"
+
+[[asset]]
+glob = "crates/cli/tests/perl_comparison.rs"
+reason = "the test that compares the text output with the saved Perl output and decides which differences are accepted"
 
 [[asset]]
 glob = ".github/snapshots/**"
@@ -47,6 +55,10 @@ reason = "dependency license allow list"
 [[asset]]
 glob = "ci/*.toml"
 reason = "manifests and allowlists that CI checks compare the repository against"
+
+[[asset]]
+glob = "ci/suppression-baseline.json"
+reason = "the per-package counts of suppression comments that scripts/check-suppressions.py compares against"
 
 [[asset]]
 glob = "scripts/check-*.py"

@@ -3,7 +3,7 @@
 
 Lists the changes in a pull request that rewrite what "correct" means for the
 project, so that a maintainer reads them before the pull request is merged
-(ADR-0093, `.claude/rules/pr-workflow.md` condition 5).
+(ADR-0097, `.claude/rules/pr-workflow.md` condition 5).
 
 Two kinds of hit, both read from `git diff <base>...<head>` with renames
 disabled (a rename is the deletion of the old path plus an addition):

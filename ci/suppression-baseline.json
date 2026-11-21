@@ -1,0 +1,14 @@
+{
+  "@ts-expect-error:packages/react": 2,
+  "WORKAROUND:crates/ffi": 1,
+  "allow:crates/chordpro": 1,
+  "allow:crates/ffi": 1,
+  "eslint-disable:apps/desktop": 12,
+  "eslint-disable:crates/napi": 1,
+  "eslint-disable:packages/playground": 4,
+  "eslint-disable:packages/react": 25,
+  "eslint-disable:packages/svelte": 2,
+  "eslint-disable:packages/vue": 3,
+  "ignore:crates/chordpro": 8,
+  "ignore:crates/render-html": 2
+}

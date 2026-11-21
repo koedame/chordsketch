@@ -16,7 +16,7 @@ function Harness({ messages }: { messages: string[] }): ReactElement {
     for (const message of messages) {
       announce(message);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- test harness announces once on mount
   }, []);
   return <div>{liveRegion}</div>;
 }
@@ -80,7 +80,7 @@ describe('useAnnouncer', () => {
         Promise.resolve().then(() => {
           announce('second');
         });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- test harness announces once on mount
       }, []);
       return <div>{liveRegion}</div>;
     }

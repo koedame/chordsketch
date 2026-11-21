@@ -352,7 +352,7 @@ apply per merge:
    `MERGED`. If the queue removes the PR, read the failing
    `merge_group` run and treat it as a failed check under (2).
 5. **No unreviewed change to an evaluation asset**
-   ([ADR-0093](../../docs/adr/0093-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)):
+   ([ADR-0097](../../docs/adr/0097-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)):
    the `Eval assets (maintainer merge required)` line of `gh pr checks`
    is `pass`. A `fail` there is not a regression to fix: it lists files
    (a `FIXED` verdict's own adaptation commits included) that the maintainer

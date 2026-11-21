@@ -18,3 +18,5 @@
 crates/*/tests/fixtures/**/input.cho text eol=lf
 crates/*/tests/fixtures/**/expected.txt text eol=lf
 crates/*/tests/fixtures/**/expected.svg text eol=lf
+tests/perl-baseline/** text eol=lf
+docs/known-deviations.md text eol=lf
