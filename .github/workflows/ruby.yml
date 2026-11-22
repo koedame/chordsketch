@@ -62,7 +62,7 @@ jobs:
         # `GLIBC_2.39' not found" on every older distribution. `cross`
         # builds inside a pinned container whose sysroot is glibc 2.23.
         # See ADR-0046.
-        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2
         with:
           tool: cross
 
@@ -140,7 +140,7 @@ jobs:
         # already built with `cross`, sits at 2.18. Same pin as
         # `kotlin.yml`, which has used `cross` for this target all along.
         if: matrix.cross
-        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2
         with:
           tool: cross
 
@@ -204,7 +204,7 @@ jobs:
           path: packages/ruby/lib/x86_64-linux/
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
+        uses: ruby/setup-ruby@f9c4492e86def3e644ab32a0ef185eda5b0c20d0 # v1
         with:
           ruby-version: "3.3"
 
@@ -325,7 +325,7 @@ jobs:
 
       - name: Set up Ruby
         if: steps.oidc.outputs.available == 'true'
-        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
+        uses: ruby/setup-ruby@f9c4492e86def3e644ab32a0ef185eda5b0c20d0 # v1
         with:
           ruby-version: "3.3"
 
