@@ -2,7 +2,7 @@
 
 ## Rust Toolchain
 
-Minimum supported Rust version: **1.88**
+Minimum supported Rust version: **1.89**
 
 ```bash
 cargo build          # Build all crates

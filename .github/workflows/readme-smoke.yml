@@ -14,8 +14,8 @@ on:
     # Daily at 06:00 UTC — catches registry-side regressions without coupling
     # to the release cadence.
     - cron: "0 6 * * *"
-  # Scoped to the README system on PRs (ADR-0041). On a PR event 16
-  # of the 19 smoke jobs install from a PUBLISHED artifact (GHCR,
+  # Scoped to the README system on PRs (ADR-0041). On a PR event 17
+  # of the 20 smoke jobs install from a PUBLISHED artifact (GHCR,
   # Docker Hub, crates.io, npm, a tap, scoop, winget, chocolatey,
   # snap, the MacPorts ports tree). No PR diff can change what those
   # registries serve, so their failure mode is time-based, not
@@ -641,6 +641,59 @@ jobs:
       - name: Render smoke
         uses: ./.github/actions/cli-render-smoke
 
+  cargo-install-msrv:
+    name: cargo install chordsketch (MSRV, without --locked)
+    # The `cargo-install` job above runs the README command on current
+    # stable with `--locked`, so it cannot see the declared MSRV going
+    # stale. Without `--locked` Cargo resolves the newest compatible
+    # release of every dependency, and one of them raising its own
+    # `rust-version` above the workspace floor makes a plain
+    # `cargo install chordsketch` fail on a toolchain the manifest says is
+    # supported. That happened with the floor at 1.88: `uuid` 1.29 requires
+    # 1.89, and nothing here noticed. This job installs the published
+    # crate with exactly the toolchain `Cargo.toml` declares, so the daily
+    # run turns red the day the floor stops being true.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the MSRV from Cargo.toml
+        id: msrv
+        run: |
+          set -euo pipefail
+          # `[workspace.package] rust-version` is the single declaration;
+          # every crate inherits it (see scripts/check-msrv-consistency.py).
+          MSRV=$(sed -n 's/^rust-version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml)
+          if ! printf '%s\n' "$MSRV" | grep -Eqx '[0-9]+\.[0-9]+(\.[0-9]+)?'; then
+            echo "could not read a single rust-version from Cargo.toml: '$MSRV'" >&2
+            exit 1
+          fi
+          echo "version=$MSRV" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      # rust-cache intentionally omitted for the same reason as in the
+      # `cargo-install` job: everything lands under a scratch CARGO_HOME.
+
+      - name: Install from crates.io with the MSRV toolchain, without --locked
+        env:
+          CARGO_HOME: /tmp/cargo-smoke-msrv
+          MSRV: ${{ steps.msrv.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$CARGO_HOME"
+          # Fail if the toolchain in use is not the one that was asked for,
+          # so the job cannot pass on a newer compiler by accident.
+          rustc --version | grep -F "rustc $MSRV"
+          cargo install chordsketch
+          "$CARGO_HOME/bin/chordsketch" --version
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Render smoke
+        uses: ./.github/actions/cli-render-smoke
+
   source-build:
     name: From source (git clone + cargo install)
     runs-on: ubuntu-24.04
@@ -1235,6 +1288,7 @@ jobs:
       - npm-vue
       - npm-svelte
       - cargo-install
+      - cargo-install-msrv
       - source-build
       - homebrew
       - homebrew-cask
