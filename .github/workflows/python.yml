@@ -343,6 +343,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      # Only a commit that is on main is released. A deployment branch policy
+      # looks at the ref the run started from, not at the commit this job
+      # checks out, and a tag can be pushed on any commit. This runs before any
+      # step that executes the checked-out code.
+      - name: Require a release commit on main
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          commit=$(git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}") || {
+            echo "::error::${TAG} is not a tag of this repository"
+            exit 1
+          }
+          git merge-base --is-ancestor "$commit" origin/main || {
+            echo "::error::${TAG} is not on main: only commits on main are released"
+            exit 1
+          }
 
       - name: Check required secrets present
         # PyPI uses trusted publishing (OIDC), so there are no long-lived

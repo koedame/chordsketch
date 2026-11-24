@@ -264,6 +264,8 @@ jobs:
         # consistency between the checked-out source and the release tag is
         # enforced by the "Assert committed version matches the release tag"
         # step below.
+        with:
+          fetch-depth: 0
 
       - name: Validate release tag
         # Format-validate any user-supplied tag before downstream steps
@@ -271,6 +273,26 @@ jobs:
         uses: ./.github/actions/validate-release-tag
         with:
           tag: ${{ inputs.tag || github.ref_name }}
+
+      # Only a commit that is on main is released. A deployment branch policy
+      # looks at the ref the run started from, not at the commit the build
+      # jobs checked out, and a tag can be pushed on any commit. Those jobs
+      # build the tag as given, so their artifacts are published only if it
+      # passes here.
+      - name: Require a release commit on main
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          commit=$(git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}") || {
+            echo "::error::${TAG} is not a tag of this repository"
+            exit 1
+          }
+          git merge-base --is-ancestor "$commit" origin/main || {
+            echo "::error::${TAG} is not on main: only commits on main are released"
+            exit 1
+          }
 
       - name: Assert committed version matches the release tag
         # crates/ffi/Cargo.toml has a committed `version` field that must

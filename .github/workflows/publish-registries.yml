@@ -39,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "What to publish: a v* tag (required in publish mode) or, to check, a commit. Empty: main."
+        description: "What to publish: a v* tag (required in publish mode) or, to check, a commit. Either must be on main. Empty: main."
         type: string
         default: ""
       mode:
@@ -100,6 +100,18 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+
+      # A deployment branch policy looks at the ref the run started from, not
+      # at the commit checked out here, so a dispatch from main could still
+      # publish a commit that never merged. Every later job builds this
+      # commit, and this runs before any step that executes it.
+      - name: Require a commit on main
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$(git rev-parse HEAD) is not on main: only commits on main are published or checked"
+            exit 1
+          fi
 
       # Every later job checks out this commit, so a tag moved mid-run cannot
       # make the jobs build different trees.
