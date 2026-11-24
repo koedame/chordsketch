@@ -39,8 +39,15 @@ jobs:
               per_page: 100,
             });
 
+            // Outside pull requests are not accepted (ADR-0087), and a
+            // branch of another repository cannot be fetched or pushed here.
+            const thisRepo = `${context.repo.owner}/${context.repo.repo}`;
             const conflicted = [];
             for (const pr of prs) {
+              if (pr.head.repo?.full_name !== thisRepo) {
+                console.log(`Skipping PR #${pr.number}: its branch is not in ${thisRepo}`);
+                continue;
+              }
               if (pr.user.login === 'dependabot[bot]') {
                 console.log(`Skipping Dependabot PR #${pr.number}`);
                 continue;

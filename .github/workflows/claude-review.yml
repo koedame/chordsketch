@@ -40,6 +40,13 @@ jobs:
               console.log('Skipping Dependabot PR (handled separately)');
               return;
             }
+            // `pull_requests` is already empty for a fork's run; this holds
+            // even if it is not. Outside pull requests are not accepted
+            // (ADR-0087).
+            if (pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              console.log(`Skipping PR #${prNumber}: its branch is not in this repository`);
+              return;
+            }
 
             // Fetch all existing comments to prevent duplicates and limit iterations
             const comments = await github.paginate(github.rest.issues.listComments, {
