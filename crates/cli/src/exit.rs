@@ -85,7 +85,6 @@ impl From<Failure> for ExitCode {
 
 /// The exit code of a run that reported `first_failure`, or success when
 /// nothing failed.
-#[must_use]
 pub(crate) fn exit_code(first_failure: Option<Failure>) -> ExitCode {
     first_failure.map_or(ExitCode::SUCCESS, ExitCode::from)
 }
@@ -96,18 +95,18 @@ mod tests {
 
     /// The codes listed in the "Exit codes" table of the crate README.
     fn documented_codes() -> Vec<u8> {
-        let readme = include_str!("../README.md");
-        let section = readme
-            .split("\n## Exit codes\n")
-            .nth(1)
-            .expect("the README has an `## Exit codes` section");
-        let section = section.split("\n## ").next().unwrap_or(section);
-        section
+        // Line by line, so a checkout with CRLF line endings reads the same.
+        let codes: Vec<u8> = include_str!("../README.md")
             .lines()
+            .skip_while(|line| *line != "## Exit codes")
+            .skip(1)
+            .take_while(|line| !line.starts_with("## "))
             .filter_map(|line| line.strip_prefix("| `"))
             .filter_map(|rest| rest.split('`').next())
             .map(|code| code.parse().expect("the first column is an exit code"))
-            .collect()
+            .collect();
+        assert!(!codes.is_empty(), "the README has an `## Exit codes` table");
+        codes
     }
 
     #[test]
