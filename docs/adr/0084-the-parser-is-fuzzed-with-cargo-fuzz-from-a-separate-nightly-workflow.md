@@ -78,6 +78,22 @@ Two constraints shape the choice:
   over time but adds cache state; revisit if nightly runs stop finding new
   coverage from the fixtures alone.
 
+## Addendum: a crash is kept in an issue
+
+A crash that only exists in the Actions history is lost when the history
+expires, and the repository keeps logs and artifacts for a short time. A
+scheduled or manual run that finds a crash therefore also opens an issue
+titled "Fuzzing found a crash in the ChordPro parser", or comments on it when
+it is already open (the `report` job in `fuzz.yml`, the same shape as the
+tracking issues of `dependency-audit.yml`). The issue carries the link to the
+run and the name of the encrypted artifact, never the input. It is not closed
+automatically, because a night without a crash does not show the input was
+fixed; the pull request that fixes the crash closes it with `Closes #N`. An
+open issue with that title is the record of a crash that is still waiting for
+a fix. The `report` job runs after every scheduled or manual run and, when the
+fuzz job finished without a crash and no such issue is open, logs `No fuzz
+crash issue is open.`
+
 ## References
 
 - `.github/workflows/fuzz.yml`, `crates/chordpro/fuzz/`

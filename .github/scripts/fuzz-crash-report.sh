@@ -13,7 +13,9 @@
 # input libFuzzer wrote under `artifacts/parse/`. The inputs and the log are
 # packed into one archive, encrypted with the age public key in
 # `.github/fuzz-crash-recipient.txt` and left at
-# `$RUNNER_TEMP/fuzz-parse-crash.tar.gz.age` for the upload step.
+# `$RUNNER_TEMP/fuzz-parse-crash.tar.gz.age` for the upload step. It also sets
+# the step output `crashed=true`, which the workflow hands to the job that
+# opens the tracking issue.
 set -uo pipefail
 
 step="${1:?step name}"
@@ -21,6 +23,7 @@ status="${2:?exit status}"
 log="${3:?log file}"
 artifacts="$FUZZ_DIR/artifacts/parse"
 
+echo "crashed=true" >> "${GITHUB_OUTPUT:-/dev/null}"
 echo "::error::$step failed with status $status; the crashing input and the fuzzer output are in the encrypted artifact fuzz-parse-crash"
 found=0
 if [ -d "$artifacts" ]; then
