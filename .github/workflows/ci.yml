@@ -355,7 +355,7 @@ jobs:
       - name: Unit tests
         if: ${{ !cancelled() }}
         run: |
-          python3 -m unittest \
+          python3 -m unittest -v \
             scripts/test_check_version_consistency.py \
             scripts/test_check_release_channels.py \
             scripts/test_license_layers.py \
