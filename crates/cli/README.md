@@ -132,11 +132,32 @@ upstream Perl implementation.
 
 ## Exit codes
 
-| Exit | Meaning |
-|---|---|
-| `0` | Render, format, or conversion completed successfully. |
-| `1` | Input parse error, renderer error, or `fmt --check` found unformatted files. Diagnostic messages are written to stderr. |
-| `2` | Invalid command-line arguments (propagated from `clap`). |
+Each kind of failure has its own exit code, so a script can tell a bad
+song from a missing file without reading stderr. The values above `2`
+are the BSD [`sysexits.h`](https://man.freebsd.org/cgi/man.cgi?query=sysexits&sektion=3)
+ones.
+
+| Exit | `sysexits.h` | Meaning |
+|---|---|---|
+| `0` | `EX_OK` | Render, format, or conversion completed successfully. Warnings on stderr do not change this. |
+| `1` | | `fmt --check` found a file that needs formatting, and nothing else went wrong. |
+| `2` | | Invalid command line: an unknown option or bad option value (reported by `clap`), no input file, a malformed `--define`, or more than one input for `convert --to musicxml`. |
+| `65` | `EX_DATAERR` | The input was read but is not valid: a ChordPro parse error, an iReal Pro URL or MusicXML document that cannot be parsed, an input over the size limit, bytes that are not UTF-8, or a format `convert` cannot detect. |
+| `66` | `EX_NOINPUT` | An input file does not exist or cannot be read. |
+| `70` | `EX_SOFTWARE` | `mcp`: the server could not start, or stopped abnormally. |
+| `73` | `EX_CANTCREAT` | The file named by `-o`, or a file `fmt` rewrites in place, could not be written. |
+| `74` | `EX_IOERR` | Reading stdin or writing stdout failed. |
+| `76` | `EX_PROTOCOL` | `mcp`: the client closed the connection or sent something unusable before the handshake completed. |
+| `78` | `EX_CONFIG` | A `--config` file is missing, unreadable, or malformed. |
+
+Every failure also prints an `error:` line to stderr.
+
+When several things fail in one run — two of the input files, say — every
+failure is printed and the exit code is that of the **first** one printed.
+A run with a failed input still writes the output of the inputs that
+succeeded. `fmt --check` is the one exception to the ordering: a read
+error takes precedence over `1`, so `1` always means every file was
+checked.
 
 Warnings from the renderer are written to stderr and do not change the
 exit code. Use the Rust library API (`chordsketch-render-*`) if you

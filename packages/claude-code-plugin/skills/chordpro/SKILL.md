@@ -108,7 +108,7 @@ chordsketch --warnings-json song.cho > /dev/null
 Discarding stdout leaves only the diagnostics, in two layers:
 
 - **Syntax errors** go to stderr as `error: <file>: parse error at line L column C: <what>`
-  and the command **exits 1**. Nothing is rendered.
+  and the command **exits 65**. Nothing is rendered.
 - **Semantic warnings** go to stderr as one JSON object per line,
   `{"source":"render","message":"..."}`, and the command **exits 0**. These are
   advisory — ambiguous chord spellings, a saturated transpose — and the file

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: the CLI exits with a different code for each kind of
+  failure** instead of `1` for all of them, so a script can tell a bad song
+  from a missing file: `2` invalid command line (now also a malformed
+  `--define` and several inputs to `convert --to musicxml`), `65` invalid
+  input (a parse error, an oversized or non-UTF-8 input, an undetectable
+  `convert` format), `66` input file missing or unreadable, `73` output
+  file cannot be written, `74` stdin / stdout I/O error, `78` bad
+  `--config` file, and for `chordsketch mcp` `76` failed handshake and
+  `70` server failure. `1` now only means `fmt --check` found a file to
+  format. With several failures the code is that of the first one
+  reported. Scripts that test for failure with `!= 0` are unaffected;
+  scripts that test for `== 1` need updating. The full table is in the
+  [CLI README](crates/cli/README.md#exit-codes); the reasoning is in
+  [ADR-0098](docs/adr/0098-cli-exit-codes-follow-sysexits.md).
 - **The minimum supported Rust version is now 1.89** (was 1.88).
   `cargo install chordsketch` without `--locked` did not build on Rust 1.88:
   Cargo picks the newest `uuid` 1.x, and `uuid` 1.29 requires Rust 1.89. The

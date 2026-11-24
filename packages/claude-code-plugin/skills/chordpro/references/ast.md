@@ -97,7 +97,7 @@ They answer different questions and neither replaces the other.
 | on a valid file | `[]` | nothing on stderr |
 
 The CLI reports the same syntax errors as `error: … parse error at line L column
-C: …` and exits 1, so for a yes/no answer the CLI alone is enough.
+C: …` and exits 65, so for a yes/no answer the CLI alone is enough.
 `validate()` is for when the positions have to be handled programmatically —
 marking an editor, say.
 

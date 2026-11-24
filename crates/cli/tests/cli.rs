@@ -1102,7 +1102,7 @@ fn ireal_help_text_documents_from_flag() {
 fn ireal_nonexistent_file_with_forced_ireal_reports_error() {
     // When `--from ireal` is used and the file does not exist,
     // `read_ireal_input` returns Err and the CLI reports an error
-    // message and exits 1 (exercises the read_ireal_input Err branch).
+    // message and exits non-zero (exercises the read_ireal_input Err branch).
     Command::cargo_bin("chordsketch")
         .unwrap()
         .args([
