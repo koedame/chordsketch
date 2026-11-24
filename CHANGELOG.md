@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **PDF output: PNG images with transparency are painted correctly.** An
+  RGBA or gray + alpha PNG came out as its alpha mask instead of the
+  picture (the page referenced the soft-mask object rather than the image),
+  so the image looked like a grey silhouette or was invisible in every PDF
+  viewer. Indexed PNGs with a `tRNS` chunk and gray / RGB PNGs with a
+  transparent color are now transparent too, and indexed PNGs stored with
+  the Sub, Average or Paeth filter no longer decode with a wrong pixel
+  size.
 - **Transposing a minor-key song now spells the key and its chords as
   F♯m / C♯m / G♯m** instead of the 9-, 8- and 7-flat keys `Gbm` / `Dbm` /
   `Abm`. The key spelling table is now mode-aware (`Bbm` and `Ebm` keep
