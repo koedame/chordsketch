@@ -33,7 +33,7 @@ below.
    and a link to an existing tracker. The default is "fix it in this PR."
 6. **Ready for merge** — when the review converges (every finding has a fix
    commit or a **Not reproduced** entry), Claude posts a single summary comment stating "Ready for merge." If the
-   four conditions in the "Bot-driven merge: conditional permission"
+   five conditions in the "Bot-driven merge: conditional permission"
    section below are met — the first of them being maintainer authorization —
    Claude adds the PR to the merge queue (condition 4). Otherwise, a
    human inspects the full check rollup (not just the required checks
@@ -88,11 +88,13 @@ rots, and context is freshest while the code is still being edited.
 ### Bot-driven merge: conditional permission
 
 An AI assistant MAY add a PR to the merge queue when
-**all four** conditions hold. See
+**all five** conditions hold. See
 [ADR-0013](../../docs/adr/0013-conditional-bot-driven-merge.md) for
-the bot-merge rationale and
+the bot-merge rationale,
 [ADR-0079](../../docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)
-for why condition (4) is the merge queue.
+for why condition (4) is the merge queue, and
+[ADR-0097](../../docs/adr/0097-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)
+for condition (5).
 
 1. **Authorization to merge.** The maintainer has authorized the
    merge in one of three forms:
@@ -125,7 +127,7 @@ for why condition (4) is the merge queue.
    resulting auto-review iteration must have completed and
    converged.
 
-4. **Merge through the queue.** Once (1)–(3) hold, enqueue the PR at
+4. **Merge through the queue.** Once (1)–(3) and (5) hold, enqueue the PR at
    the HEAD they were checked on; the queue decides the squash:
 
    ```bash
@@ -135,7 +137,7 @@ for why condition (4) is the merge queue.
      -f oid=<HEAD checked by (2) and (3)>
    ```
 
-   Pinning `expectedHeadOid` enqueues exactly the commit (2) and (3)
+   Pinning `expectedHeadOid` enqueues exactly the commit (2), (3) and (5)
    were checked on, or fails. Do not use `gh pr merge <N>` instead.
    Its `--help` says it enqueues directly once the required checks
    have passed, but on #2940, with every check passed and
@@ -147,10 +149,32 @@ for why condition (4) is the merge queue.
    merge is done when the PR is `MERGED`, not when the command
    returns. If the queue removes the PR, read the failing
    `merge_group` run, fix and push (a GitHub-side transient failure
-   may be re-queued as is), meet (2) and (3) on the new HEAD, and
+   may be re-queued as is), meet (2), (3) and (5) on the new HEAD, and
    enqueue again.
 
-If any of (1)–(4) is not satisfied, post the "Ready for merge"
+5. **No unreviewed change to an evaluation asset.** The PR's diff against
+   its base does not modify or delete any existing file matched by
+   `ci/eval-assets.toml` (adding a new file is not a change), and the
+   `Eval assets` check reports no hit. If it reports a hit, the maintainer
+   merges the PR after reading the listed diffs; an AI assistant does not
+   enqueue it, whatever form condition (1) took. The check covers the whole
+   diff of the PR, including commits an assistant pushed to a Dependabot
+   branch.
+
+   The check is the `Eval assets (maintainer merge required)` job of
+   `eval-assets.yml`. A hit labels the PR `eval-assets`, lists the files in
+   one comment, and fails the job, so condition (2) already stops the
+   assistant; this condition says why, and covers a run of the check that
+   was skipped or not yet finished. The job is not a required check, so the
+   maintainer can still merge. Besides the registry, the check reports a
+   removal of assertions or tests, an added `#[ignore]` or skip marker, a
+   removed reference to a `scripts/check-*` script in a workflow, and a net
+   deletion of 10 lines or more in a workflow or a `scripts/_*.py` helper
+   (`scripts/check-eval-assets.py`). Assertions rewritten in place
+   (`assert_eq!(x, 5)` to `6`) are not detected; review and
+   [`root-cause-fixes.md`](root-cause-fixes.md) cover them.
+
+If any of (1)–(5) is not satisfied, post the "Ready for merge"
 comment and wait for the human merger.
 
 ### Scheduled unattended Dependabot review-and-merge (ADR-0024)
@@ -175,7 +199,7 @@ hold for a PR:
 3. **Full check rollup green** on the final commit (clause 2 above,
    unchanged — required AND non-required; for a `FIXED` PR, the rollup
    *after* the adaptation commits).
-4. **Direct squash** (clause 4 above, unchanged).
+4. **Merge through the queue** (clause 4 above, unchanged).
 5. **The audit posts its verdict as a PR comment before merging.** A PR
    the audit cannot clear (`BLOCKED` / `NEEDS_REVIEW`) is commented and
    left open for a human; it is never merged unattended.
@@ -184,6 +208,14 @@ hold for a PR:
 automation's own audit pass — analogous to ADR-0016's mapping where the
 skill's audit cycle IS the converged review. Clauses 2 and 4 are
 unchanged and must be met verbatim.
+
+**Clause 5** (no unreviewed change to an evaluation asset) applies to
+Dependabot PRs unchanged
+([ADR-0097](../../docs/adr/0097-pull-requests-that-change-an-evaluation-asset-are-merged-by-the-maintainer.md)):
+the audit does not satisfy it. A Dependabot PR on which the `Eval assets`
+check reports a hit, whether from Dependabot's own diff or from the
+adaptation commits of a `FIXED` verdict, is commented and left open for the
+maintainer, like a `BLOCKED` PR.
 
 The semver level is not part of the gate — majors are handled the same
 way the attended skill handles them (read release notes, adapt the code,
@@ -258,6 +290,10 @@ For local review before pushing, or when the automated flow is not desired:
   `paths:` filter would leave the check pending.
 - Non-required workflows (smoke jobs, language-binding builds, etc.)
   fire on `pull_request:` and `push:` to `main` as appropriate.
+- `eval-assets.yml` is deliberately not a required check: it fails on a
+  hit, and a required failure would stop the maintainer's own merge as
+  well. It uses `pull_request_target` so that a pull request cannot edit
+  the check that reads it; it passes without a step on `merge_group`.
 
 ### Severity Definitions
 

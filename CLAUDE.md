@@ -240,15 +240,16 @@ a conditional carve-out for AI-assistant merges (see step 5 below and
    just the required checks listed in branch protection), verifies there are no
    review-bot-authored issues still open against the PR, and adds it to the
    merge queue — *or* an AI assistant enqueues it when all
-   four conditions in `.claude/rules/pr-workflow.md`'s "Bot-driven merge:
+   five conditions in `.claude/rules/pr-workflow.md`'s "Bot-driven merge:
    conditional permission" section hold (maintainer authorization, full check
-   rollup green, auto-review converged on HEAD, merge through the queue).
+   rollup green, auto-review converged on HEAD, merge through the queue, no
+   unreviewed change to an evaluation asset).
    The merge is done when the queue lands it.
 
 All PRs are **squash-merged** by the merge queue, which runs the required
 checks — every publish check included — before anything reaches `main`
 (ADR-0079). Branch protection requires CI to pass on HEAD.
-Bot-driven merge is conditional on the four-clause check above — see
+Bot-driven merge is conditional on the five-clause check above — see
 `.claude/rules/pr-workflow.md` for the full rule.
 
 ## Parallel Development with tmux
