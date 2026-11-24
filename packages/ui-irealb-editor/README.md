@@ -12,10 +12,7 @@
 > [`@chordsketch/react`](../react/)'s `<IrealEditor>` /
 > `<IrealPreview>` / `<IrealPlayground>` components instead. Those
 > components are published, follow semver, and present an idiomatic
-> React surface; see
-> [ADR-0020](../../docs/adr/0020-ireal-pro-react-surface.md) for
-> the architectural split between this private editor and the
-> public React surface.
+> React surface.
 >
 > Reasons this package stays internal:
 >

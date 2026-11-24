@@ -1,16 +1,16 @@
 """What each registry must accept before a release is attempted, as code.
 
-`docs/publishing-requirements.md` is the table of conditions each
-distribution channel imposes on an upload. This module is the one
-executable definition of the conditions that can be checked without
+Each distribution channel imposes its own conditions on an upload. This
+module is the one executable definition of the conditions that can be
+checked without
 publishing, and it is imported by both places that check them:
 
   - `scripts/check-publishable.py`, which `.github/workflows/publishable.yml`
     runs in the merge queue, on every push to `main`, nightly, and on the
-    pull requests `packaging_reasons` picks out (ADR-0079);
+    pull requests `packaging_reasons` picks out;
   - `scripts/publish-registries.py`, which `publish-registries.yml` runs
     before it publishes crates.io and npm — for the release commit in the
-    release preflight, and again for the upload itself (ADR-0069).
+    release preflight, and again for the upload itself.
 
 Keeping one definition is the point. The v0.6.0 release was refused by
 crates.io for a crate over its upload limit that no pull request had ever
@@ -635,7 +635,7 @@ def npm_dependency_problems(manifest: dict, released_together: dict[str, str], v
     version on disk: a dependency on exactly that version, or on its caret
     range, is published in the same release. The release commit raises the
     `@chordsketch/wasm` ranges of the packages built on it to the version it
-    releases (ADR-0073), so they name a version npm does not serve until the
+    releases, so they name a version npm does not serve until the
     release publishes it. Anything else must already be satisfiable from the
     registry, which `view(name, range)` answers.
     """
@@ -1595,7 +1595,7 @@ AUR_PKGNAME = re.compile(r"^[a-z0-9@._+][a-z0-9@._+-]*$")
 AUR_PKGVER = re.compile(r"^[A-Za-z0-9._]+$")
 # The package bases `update-aur` pushes: the tagged source, and the release's
 # prebuilt archive under the `-bin` name the AUR submission guidelines ask
-# for when a source build exists (ADR-0071).
+# for when a source build exists.
 AUR_SOURCE_PACKAGE = "chordsketch"
 AUR_BINARY_PACKAGE = "chordsketch-bin"
 AUR_PACKAGES = (AUR_SOURCE_PACKAGE, AUR_BINARY_PACKAGE)
@@ -1730,7 +1730,7 @@ def swift_package_problems(version: str, runner: Runner = run) -> list[str]:
 
     SwiftPM reads the manifest from the tag's own checkout, so the release
     commit has to carry the URL and checksum already: `swift.yml`'s `pin` job
-    commits them onto the release branch (ADR-0080).
+    commits them onto the release branch.
     """
     manifest_path = REPO_ROOT / "Package.swift"
     if not manifest_path.is_file():
@@ -1744,7 +1744,7 @@ def swift_package_problems(version: str, runner: Runner = run) -> list[str]:
     expected = swift_package.asset_url(f"v{version}")
     if url != expected:
         problems.append(
-            f"Package.swift pins {url}, not {expected}: run `gh workflow run swift.yml --ref <release branch> -f pin={version}` (docs/releasing.md step 3)"
+            f"Package.swift pins {url}, not {expected}: run `gh workflow run swift.yml --ref <release branch> -f pin={version}` and pull the commit it pushes"
         )
     if not re.fullmatch(r"[0-9a-f]{64}", checksum):
         problems.append(f"Package.swift pins the checksum {checksum!r}, which is not a SHA-256")
@@ -2309,7 +2309,7 @@ def channel_check(channel_id: str, kind: str, package: str) -> str | None:
 # `publishable.yml` runs every job above on a pull request only when the pull
 # request changes one of these paths or adds a file over LARGE_FILE_BYTES.
 # The merge queue, `main` and the nightly run always run every job
-# (ADR-0079), so a change this list misses is still stopped before it lands;
+# so a change this list misses is still stopped before it lands;
 # the list only decides whether the author hears about it while the pull
 # request is open. A pattern without a `/` matches a file name anywhere in
 # the tree; a pattern with one matches the whole path. Every pattern has to

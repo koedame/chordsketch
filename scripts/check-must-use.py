@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """`#[must_use]` CI guard for public `Result` / `Option` functions.
 
-`.claude/rules/defensive-inputs.md` requires every public function that
-returns a `Result` or an `Option` to carry `#[must_use]`, so a caller cannot
+Every public function that returns a `Result` or an `Option` must carry
+`#[must_use]`, so a caller cannot
 drop a parse / conversion / lookup outcome on the floor and the compiler
 says why when it happens. The invariant is easy to miss when a new parse or
 convert entry point is added, so this guard fails CI for any `pub fn` under
@@ -93,8 +93,8 @@ def main(root: Path = REPO_ROOT) -> int:
             failures += 1
     if failures:
         print(
-            f"{failures} public function(s) missing #[must_use] "
-            "(.claude/rules/defensive-inputs.md)",
+            f"{failures} public function(s) returning Result / Option are "
+            "missing #[must_use]",
             file=sys.stderr,
         )
         return 1

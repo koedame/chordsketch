@@ -6,10 +6,9 @@
 //! iReal-style graphical renderer (#2058 et seq) build on this
 //! foundation in their own crates.
 //!
-//! See `ARCHITECTURE.md` (in this crate's directory) for the design
-//! decisions behind the AST shape, the field/variant choices made up
-//! front to keep the follow-up crates non-breaking, and the open
-//! questions deferred to the parser crate (#2054).
+//! The AST shape, and the field/variant choices made up front to keep
+//! the follow-up crates non-breaking, are documented on the types in
+//! [`ast`].
 //!
 //! # Dependency policy
 //!

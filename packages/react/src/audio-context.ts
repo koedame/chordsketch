@@ -258,7 +258,7 @@ export function scheduleVoice(
 // simultaneous "ja-n" stab. The roll spread AND the per-voice envelope live
 // here, owned by the single `scheduleStrummedChord` call site, so the two
 // surfaces roll identically and neither the stagger nor the envelope can
-// drift (per `.claude/rules/fix-propagation.md`). Only the timbre, the
+// drift. Only the timbre, the
 // pitches, and the start time are caller-supplied.
 const STRUM_OFFSET_S = 0.035; // per-note onset stagger — the roll's spread
 const STRUM_ATTACK_S = 0.006; // soft onset, no click
@@ -296,7 +296,7 @@ export interface StrumSpec {
  * Shared by `useChordAudio` (every tapped chord) and `useKeyAudio` (the
  * tonic-triad strum that follows the scale) so the strum logic — stagger,
  * envelope, peak division, node graph, cleanup — lives in one place and the
- * two surfaces cannot drift (see `.claude/rules/fix-propagation.md`). Only
+ * two surfaces cannot drift. Only
  * `pitches`, `wave`, and `startTime` vary between the two callers.
  */
 export function scheduleStrummedChord(

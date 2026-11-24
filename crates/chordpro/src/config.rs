@@ -1008,8 +1008,8 @@ mod tests {
     /// Stdlib-only stand-in for `tempfile::TempDir`.
     ///
     /// `chordsketch-chordpro` carries zero external dependencies — normal,
-    /// dev, and build (see CLAUDE.md "Dependency Policy", the
-    /// `external_tool` module's `TempDirGuard`, and the CI guard in
+    /// dev, and build (see the
+    /// `external_tool` module's `TempDirGuard` and the CI guard in
     /// `scripts/check-zero-deps.py`). The test suite therefore cannot pull
     /// in the `tempfile` crate, so this type provides the small slice of
     /// its API the config tests rely on: a uniquely named directory under

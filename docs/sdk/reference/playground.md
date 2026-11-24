@@ -12,8 +12,7 @@ import '@chordsketch/react/styles.css';
 <ChordProEditor defaultSource={"{title: My Song}\n[G]Hello [D]world"} />
 ```
 
-> Renamed from `<Playground>` in `@chordsketch/react` v0.3.0
-> ([ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md)).
+> Renamed from `<Playground>` in `@chordsketch/react` v0.3.0.
 > The `Editor` suffix denotes a Tier 3 composed editor (source +
 > preview + chrome) in the v0.3.0 layout.
 

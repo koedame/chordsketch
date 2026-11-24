@@ -6,8 +6,7 @@ consume the same wasm bridge under the hood; a parse error
 inside the editor renders through `errorFallback` without
 unmounting the surrounding tree.
 
-> Renamed in `@chordsketch/react` v0.3.0
-> ([ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md)).
+> Renamed in `@chordsketch/react` v0.3.0.
 > `<IrealEditor>` is now `<IrealBarGrid>` (Tier 1 widget atom) and
 > `<IrealPlayground>` is now `<IrealProEditor>` (Tier 3 composed
 > editor). `<IrealPreview>` keeps its name.

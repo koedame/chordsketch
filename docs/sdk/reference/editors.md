@@ -4,8 +4,7 @@
 `<ChordSourceArea>` (preferred for non-trivial editing) and a
 zero-dep `<ChordTextarea>` baseline (a textarea + preview pair).
 
-> Renamed in `@chordsketch/react` v0.3.0
-> ([ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md)).
+> Renamed in `@chordsketch/react` v0.3.0.
 > `<SourceEditor>` is now `<ChordSourceArea>` and `<ChordEditor>` is
 > now `<ChordTextarea>` — Tier 1 widget atoms use widget-type names,
 > while the `Editor` suffix is reserved for Tier 3 composed editors

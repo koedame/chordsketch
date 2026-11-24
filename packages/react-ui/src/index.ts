@@ -1,7 +1,7 @@
 // @chordsketch/react-ui — wasm-free React design-system primitives.
 //
 // The React binding of the framework-agnostic design system
-// (`design-system/DESIGN.md` / `tokens.css`). Per ADR-0029 this package
+// (`design-system/tokens.css`). This package deliberately
 // carries no `@chordsketch/wasm*` dependency; it is pure class
 // composition over the canonical class vocabulary. Load the stylesheet
 // once via `import '@chordsketch/react-ui/styles.css'`.

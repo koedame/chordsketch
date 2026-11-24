@@ -289,7 +289,7 @@ class ConfirmReleaseTest(unittest.TestCase):
 
 class InvocationTest(unittest.TestCase):
     def test_script_runs_as_documented_without_python3_prefix(self) -> None:
-        # docs/releasing.md runs `scripts/release.py X.Y.Z`. Without the
+        # The script is run as `scripts/release.py X.Y.Z`. Without the
         # executable bit, bash answers "Permission denied" and zsh answers
         # "command not found", neither of which points at the file mode.
         script = SCRIPTS_DIR / "release.py"

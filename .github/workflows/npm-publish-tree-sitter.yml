@@ -1,6 +1,6 @@
 name: Verify tree-sitter-chordpro build
 
-# Publishing happens in publish-registries.yml (ADR-0069); this
+# Publishing happens in publish-registries.yml; this
 # workflow only verifies that the tree-sitter-chordpro package's
 # pre-generated parser files are present and that the package packs
 # into a valid tarball.
@@ -8,7 +8,7 @@ name: Verify tree-sitter-chordpro build
 # The generated parser files (src/parser.c, src/grammar.json) are
 # already committed, so no build step is needed.
 
-# Reusable: called by release.yml's fan-out (ADR-0039). `workflow_dispatch`
+# Reusable: called by release.yml's fan-out. `workflow_dispatch`
 # stays as the re-run entry point.
 on:
   workflow_call:

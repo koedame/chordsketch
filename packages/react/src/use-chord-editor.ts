@@ -7,7 +7,7 @@
 // surfaces that own a ChordPro source editor —
 // `<ChordProEditor>` (Tier 3) and the playground — both consume this
 // hook so the coordination logic lives in one place rather than being
-// re-derived per host (see `.claude/rules/playground-is-a-sample.md`).
+// re-derived per host.
 //
 // The hook is purely about source-coordinate bookkeeping; every chord
 // mutation routes through the pure helpers in `chord-source-edit`, and
@@ -170,8 +170,8 @@ export function useChordEditor({
   );
 
   // Source-coordinate editing is only safe when the rendered chords
-  // match the raw source — i.e. no effective transpose / capo (ADR-0023,
-  // mirrors `<ChordSheet>`).
+  // match the raw source — i.e. no effective transpose / capo
+  // (mirrors `<ChordSheet>`).
   const editable = chordSourceEditableUnderTranspose(source, transpose);
 
   // The chord under the caret (null when the caret is in the lyrics, off

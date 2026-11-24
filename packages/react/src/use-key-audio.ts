@@ -107,7 +107,7 @@ export interface UseKeyAudioResult {
  * The pitches are computed by `@chordsketch/wasm`'s `keyScalePitches` /
  * `keyTonicTriad` exports (sisters to `chordsketch_chordpro::key_scale_pitches`
  * / `key_tonic_triad`) — the musical-theory source of truth lives in the
- * core library, not here (see `.claude/rules/playground-is-a-sample.md`).
+ * core library, not here.
  * This hook only turns those MIDI note numbers into sound and owns the
  * audition's *sequencing* (scale, pause, strum), sharing the page-level
  * `AudioContext` with {@link useMetronome} / {@link useChordAudio} via

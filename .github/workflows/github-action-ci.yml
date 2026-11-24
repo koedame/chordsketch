@@ -42,7 +42,6 @@ jobs:
         os: [ubuntu-24.04, ubuntu-24.04-arm, macos-latest, windows-latest]
         include:
           # The Linux x64 cell runs on GitHub-hosted `ubuntu-24.04`.
-          # See ADR-0092 and ADR-0096.
           - os: ubuntu-24.04
             runner: ubuntu-24.04
 
@@ -60,7 +59,7 @@ jobs:
       # matrix cell pays the full ~5-minute first-build cost on every PR;
       # with the cache, subsequent runs reuse the same target/ dir.
       # `save-if: main only` keeps the cache pool from filling with
-      # PR-specific entries (see `.claude/rules/ci-parallelization.md` §2).
+      # PR-specific entries.
       - uses: ./.github/actions/rust-cache
         with:
           shared-key: github-action-ci-${{ runner.os }}-${{ runner.arch }}

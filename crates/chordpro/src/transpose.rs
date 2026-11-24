@@ -400,8 +400,7 @@ pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option
 /// `prefer_flat` explicitly so the displayed key uses the SAME
 /// flat/sharp preference the chord lines do (the renderer
 /// computes `prefer_flat = transposed_key_prefers_flat(&song.metadata,
-/// semitones)` and passes it in — per `.claude/rules/renderer-parity.md`
-/// §"Validation Parity" the two decisions MUST agree, or a song
+/// semitones)` and passes it in — the two decisions MUST agree, or a song
 /// with mid-song `{key:}` changes can surface the same pitch as
 /// `A♭` (key marker) and `G#` (chord lines) in the same vicinity;
 /// see #2522).
@@ -412,7 +411,7 @@ pub fn canonical_transposed_key(song_key: Option<&str>, semitones: i8) -> Option
 /// simpler helper drops: the modal qualifier (`" <mode>"` extension
 /// text, kept verbatim because it's not a transposable music-theory
 /// token) and the slash `/bass` (transposed alongside the root).
-/// Non-modal keys spell out `" minor"` / `" major"` (ADR-0035).
+/// Non-modal keys spell out `" minor"` / `" major"`.
 ///
 /// Returns `None` when the value is not a key per [`crate::key::parse_key`] —
 /// same contract as [`canonical_transposed_key`] minus the modal exclusion. A
@@ -433,7 +432,7 @@ pub fn canonical_transposed_key_with_style(
 }
 
 /// Canonical display spelling for a `{key:}` directive value, for **any**
-/// transpose offset (ADR-0034 / ADR-0035). At a zero offset this normalises the
+/// transpose offset. At a zero offset this normalises the
 /// authored spelling to its canonical form (`Gm` → `G minor`, `Gmin` →
 /// `G minor`, `C Dorian` → `C dorian`) without re-spelling the accidental; at a
 /// non-zero offset it defers to [`canonical_transposed_key_with_style`] (which applies
@@ -468,8 +467,7 @@ fn key_prefers_flat_for_song(detail: &ChordDetail, semitones: i8) -> bool {
 
 /// Compute the canonical-spelling string for a transposed key
 /// detail. A key is a root + a spelled-out quality word (not a
-/// chord type), so this emits e.g. `"Bb major"` / `"F# minor"`
-/// (ADR-0035).
+/// chord type), so this emits e.g. `"Bb major"` / `"F# minor"`.
 ///
 /// `extension` and `bass_note` are intentionally dropped here —
 /// see [`canonical_transposed_key`]'s doc-comment. Callers that
@@ -496,7 +494,7 @@ fn canonical_key_string(detail: &ChordDetail) -> String {
             Accidental::Flat => s.push('b'),
         }
     }
-    // Spelled-out canonical quality (ADR-0035): `" minor"` / `" major"`, routed
+    // Spelled-out canonical quality: `" minor"` / `" major"`, routed
     // through `key::quality_word` so this matches `Key`'s Display and the
     // `_with_style` builder. This variant never carries a mode (modal keys
     // return early in `canonical_transposed_key`), so the boolean is enough.
@@ -510,7 +508,7 @@ fn canonical_key_string(detail: &ChordDetail) -> String {
 /// string that preserves the modal qualifier and slash-bass
 /// (sister to [`ChordDetail`]'s `Display` impl, but emits the
 /// **spelled-out** canonical quality `" major"` / `" minor"`
-/// rather than a chord-type suffix — ADR-0035).
+/// rather than a chord-type suffix).
 ///
 /// Unlike [`canonical_key_string`], this trusts the spelling the
 /// caller already picked (via `transpose_detail_with_style`'s
@@ -538,7 +536,7 @@ fn transposed_key_display_string(detail: &ChordDetail) -> String {
     // mode in `extension` (e.g. `" dorian"`), so the extension branch MUST win —
     // otherwise a modal key would render the impossible `"C major dorian"`. A
     // non-modal key has no extension and spells out `" minor"` / `" major"`
-    // (ADR-0035) via the shared `key::quality_word`, matching `Key`'s Display.
+    // via the shared `key::quality_word`, matching `Key`'s Display.
     if let Some(ref ext) = detail.extension {
         // Extension is verbatim source text (e.g. " dorian", " mixolydian") —
         // not a transposable theory token, so we preserve it.
@@ -738,8 +736,9 @@ pub fn combine_transpose(file_offset: i8, cli_offset: i8) -> TransposeResult {
 /// [`crate::ast::Metadata::capo_validated`], which already rejects
 /// values outside the guitarist-meaningful range).
 ///
-/// See `docs/adr/0023-capo-transposes-displayed-chords.md` for the
-/// rationale.
+/// Capo is subtracted because a guitarist who sets `{capo: N}` expects to
+/// see the chord shapes to hold with the capo on, i.e. the names shifted
+/// down by `N` semitones.
 ///
 /// # Panics
 ///
@@ -864,7 +863,7 @@ mod tests {
         // C major transposed +1 lands at canonical Db (NOT C#),
         // even though the chromatic-shift table would otherwise
         // emit C# for a source with no flat accidental. The quality
-        // is spelled out (ADR-0035).
+        // is spelled out.
         assert_eq!(
             canonical_transposed_key(Some("C"), 1).as_deref(),
             Some("Db major")
@@ -1087,7 +1086,7 @@ mod tests {
 
     #[test]
     fn lenient_key_spellings_transpose_as_their_canonical_quality() {
-        // ADR-0034: human spellings are accepted and transpose like `Gm`.
+        // Human spellings are accepted and transpose like `Gm`.
         for spelling in ["G minor", "G m", "Gminor", "G min"] {
             assert_eq!(
                 canonical_transposed_key(Some(spelling), 2).as_deref(),
@@ -1115,8 +1114,7 @@ mod tests {
 
     #[test]
     fn canonical_key_for_display_normalises_at_zero_transpose() {
-        // The transpose-0 path returns the spelled-out canonical form
-        // (ADR-0035).
+        // The transpose-0 path returns the spelled-out canonical form.
         assert_eq!(
             canonical_key_for_display(Some("G minor"), 0, false).as_deref(),
             Some("G minor")
@@ -1438,7 +1436,7 @@ mod tests {
         assert!(!result.saturated);
     }
 
-    // --- effective_transpose (ADR-0023) ---
+    // --- effective_transpose ---
 
     #[test]
     fn effective_transpose_no_capo_matches_combine() {

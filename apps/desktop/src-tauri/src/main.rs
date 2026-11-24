@@ -21,8 +21,7 @@ use chordsketch_chordpro::render_result::RenderResult;
 /// the parse + render pipeline here keeps the two commands
 /// byte-for-byte equivalent apart from the format choice, so a fix
 /// to one (e.g. transpose-clamp behaviour, parse-warnings surface,
-/// error message format) does not drift against the other — see
-/// `.claude/rules/fix-propagation.md` for the sister-site rationale.
+/// error message format) does not drift against the other.
 ///
 /// Warning parity with the WASM path (playground / desktop live
 /// preview): both use each renderer's `render_songs_with_warnings`
@@ -34,7 +33,7 @@ use chordsketch_chordpro::render_result::RenderResult;
 /// CLI/WASM paths do not surface those either.
 ///
 /// Trust model: the callers (`export_pdf` / `export_html`) are not
-/// capability-gated; see `save_file`'s doc comment and ADR-0006.
+/// capability-gated; see `save_file`'s doc comment.
 fn render_and_write<R>(
     path: &str,
     chordpro: &str,
@@ -47,8 +46,7 @@ where
     if path.is_empty() {
         return Err("Refusing to write: destination path is empty".to_string());
     }
-    // Per `.claude/rules/code-style.md` ("Resource Limits"): the
-    // `parse_multi_lenient` + renderer pipeline has no internal cap, so the
+    // The `parse_multi_lenient` + renderer pipeline has no internal cap, so the
     // boundary check lives here at the Tauri command entry point. The limit
     // is the one `open_file` enforces: a user who cannot open a larger file
     // cannot reach the export path with one either.
@@ -114,15 +112,13 @@ fn export_html(
 /// fails fast with a readable error, rather than a multi-minute WebView
 /// hang.
 ///
-/// The size check is TOCTOU-safe per `.claude/rules/defensive-inputs.md`
-/// ("Never check a resource then act on it in separate steps. Use
-/// atomic operations… Prefer passing already-opened handles"): the file
+/// The size check is TOCTOU-safe: the file
 /// is opened once and read through
 /// [`read_to_string_limited`], so a co-process cannot grow it past the
 /// limit between a stat and the read.
 ///
-/// Trust model: not capability-gated; see `save_file`'s doc comment
-/// and ADR-0006. WebView code can read any path the running user
+/// Trust model: not capability-gated; see `save_file`'s doc comment.
+/// WebView code can read any path the running user
 /// has read access to.
 #[tauri::command]
 fn open_file(path: String) -> Result<String, String> {
@@ -146,8 +142,10 @@ fn open_file(path: String) -> Result<String, String> {
 /// capability system does not apply to `invoke_handler!`-registered
 /// commands). The WebView is trusted to call this with a
 /// user-approved path because the WebView loads only from the local
-/// Vite build under the CSP documented in `tauri.conf.json`. See
-/// ADR-0006 for the full rationale and the revisit triggers.
+/// Vite build under the CSP documented in `tauri.conf.json`. A
+/// per-session path allowlist would add little while the WebView has no
+/// remote content; revisit it if the app ever loads remote content or
+/// grants the `fs` or `shell` plugins.
 #[tauri::command]
 fn save_file(path: String, content: String) -> Result<(), String> {
     if path.is_empty() {
@@ -200,8 +198,8 @@ fn main() {
             // `downloadAndInstall()` against the release manifest at the
             // endpoint configured in `tauri.conf.json`. Signatures are
             // verified against the bundled `pubkey` before install, so
-            // a compromised GitHub Release CDN cannot push rogue updates.
-            // See ADR-0005 (#2076).
+            // a compromised GitHub Release CDN cannot push rogue updates
+            // (#2076).
             .plugin(tauri_plugin_updater::Builder::new().build())
             // `tauri-plugin-process` exposes `relaunch()` to the
             // frontend so the user can restart the app after the

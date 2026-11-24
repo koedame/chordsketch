@@ -8,9 +8,9 @@
 //! routes through [`parse_key`] so the four subsystems can never disagree on a
 //! key's major / minor / modal classification.
 //!
-//! See [ADR-0034](../../../docs/adr/0034-lenient-key-input-canonical-render.md)
-//! (which supersedes ADR-0033's strict-input clause) for the
-//! lenient-input / canonical-render decision this module enforces.
+//! The module enforces lenient input and canonical rendering: the common
+//! human spellings of a key all parse, and every surface prints one
+//! canonical form.
 //!
 //! # Grammar
 //!
@@ -162,7 +162,7 @@ impl Key {
     /// display machinery (which operates on `ChordDetail`) can drive directly
     /// off this parse rather than re-parsing the raw string with the permissive
     /// [`crate::chord::parse_chord`]. Keeping a single parse is the "single
-    /// source of truth" this module exists for (ADR-0033 / ADR-0034): a minor
+    /// source of truth" this module exists for: a minor
     /// key becomes [`ChordQuality::Minor`], a modal qualifier becomes the
     /// canonical `" <mode>"` extension text (preserved verbatim on transpose
     /// because it is not a transposable theory token), and the slash-bass
@@ -278,7 +278,7 @@ pub fn parse_key(value: &str) -> Option<Key> {
     let (root, accidental) = take_root(&mut chars)?;
     let rest: String = chars.collect();
 
-    // Match the quality / mode qualifier leniently (ADR-0034): the editor is
+    // Match the quality / mode qualifier leniently: the editor is
     // permissive, so the common human spellings are all accepted and
     // normalised to one canonical structure. Trimming `rest` collapses the
     // space / no-space distinction (`Gm` / `G m` / `G minor` / `Gminor` all
@@ -353,7 +353,7 @@ mod tests {
 
     #[test]
     fn the_four_user_forms_all_normalise_to_canonical_minor() {
-        // ADR-0034 / ADR-0035: the editor is lenient, so all the spellings parse
+        // The editor is lenient, so all the spellings parse
         // as the SAME minor key and canonicalise to the spelled-out `G minor`
         // (the rendered form).
         for spelling in ["Gm", "G m", "Gminor", "G minor", "G min", "Gmi", "G-"] {
@@ -447,7 +447,7 @@ mod tests {
         // Not a quality marker and not a mode → not a key (rendered verbatim).
         assert_eq!(parse_key("C blues"), None);
         assert_eq!(parse_key("G augmented"), None);
-        // `G m` IS a key now (lenient minor, ADR-0034) — guarded elsewhere.
+        // `G m` IS a key now (lenient minor) — guarded elsewhere.
         assert_eq!(k("G m").mode, KeyMode::Minor);
     }
 

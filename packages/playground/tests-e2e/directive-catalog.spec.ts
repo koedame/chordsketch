@@ -3,12 +3,11 @@ import { expect, test } from '@playwright/test';
 const PLAYGROUND_PATH = './chordpro/';
 
 // The "Insert directive" picker is driven by the shared @chordsketch/wasm
-// directive catalog (ADR-0028) rather than a hard-coded list. This smoke
+// directive catalog rather than a hard-coded list. This smoke
 // proves the integration end to end in the deployed bundle: the wasm
 // `listDirectives` export loads, the playground consumes it, and the
 // resulting option list is complete — none of which the in-process unit
-// suites observe, since they stub the wasm boundary (see
-// .claude/rules/playground-smoke.md).
+// suites observe, since they stub the wasm boundary.
 test.describe('playground directive picker', () => {
   test('populates the directive picker from the shared wasm catalog', async ({
     page,

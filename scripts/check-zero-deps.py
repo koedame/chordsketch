@@ -4,9 +4,8 @@
 `chordsketch-chordpro` and `chordsketch-ireal` are contractually
 zero-external-dependency crates: all parsing, AST, and serialisation logic
 is implemented from scratch, and even RAII helpers use stdlib-only `Drop`
-types rather than `scopeguard` / `tempfile` (see CLAUDE.md "Dependency
-Policy" + Architecture table, `.claude/rules/code-style.md`, and the
-`external_tool` module's `TempDirGuard`).
+types rather than `scopeguard` / `tempfile` (see the `external_tool`
+module's `TempDirGuard`).
 
 The invariant is easy to violate by accident — a single `tempfile = "3"`
 under `[dev-dependencies]` is enough to drag `getrandom` (and its
@@ -18,8 +17,7 @@ for a crate listed in `ZERO_DEP_CRATES`, so the regression cannot recur
 silently.
 
 Runs on every PR via `.github/workflows/ci.yml` with no path filter: the
-guarantee is a project-wide property per `.claude/rules/ci-parallelization.md`
-§3. Python-only, sub-second wall clock; no rust-cache needed.
+guarantee is a project-wide property, not a per-path one. Python-only, sub-second wall clock; no rust-cache needed.
 
 Usage:
 
@@ -34,8 +32,7 @@ import tomllib
 from pathlib import Path
 
 # Crate directories under `crates/` that MUST declare zero external
-# dependencies of any kind. Keep in sync with CLAUDE.md "Dependency
-# Policy" + Architecture table and `.claude/rules/code-style.md`.
+# dependencies of any kind.
 ZERO_DEP_CRATES: list[str] = ["chordpro", "ireal"]
 
 # The dependency-table key names cargo recognises. Any of these holding a
@@ -110,8 +107,7 @@ def main() -> int:
             "A crate that must have zero external dependencies declared one. "
             "Remove it (the stdlib usually has an equivalent — e.g. the "
             "`TempDir`/`TempDirGuard` helpers replace `tempfile`). If the "
-            "policy itself is changing, update CLAUDE.md, "
-            "`.claude/rules/code-style.md`, and `ZERO_DEP_CRATES` in this "
+            "policy itself is changing, update `ZERO_DEP_CRATES` in this "
             "script in the same PR."
         )
         return 1

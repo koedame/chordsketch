@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Tests that the repository's licence files, manifests and notices agree.
 
-ChordSketch has two licence layers, split by directory (CLAUDE.md "License
-Policy", README "License"): AGPL-3.0-only for `apps/desktop/`,
+ChordSketch has two licence layers, split by directory (README "License"):
+AGPL-3.0-only for `apps/desktop/`,
 `packages/playground/` and `packages/ui-irealb-editor/`, MIT for everything
 else. These tests pin the places the split can silently drift:
 

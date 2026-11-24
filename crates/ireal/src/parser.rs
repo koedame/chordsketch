@@ -4,7 +4,7 @@
 //! values. Handles both the `irealb://` (single-song) and
 //! `irealbook://` (multi-song collection) prefixes, percent
 //! decoding, the iReal Pro obfusc50 unscramble, and the chord-
-//! chart syntax described in `crates/ireal/FORMAT.md`.
+//! chart syntax.
 //!
 //! # Format reference
 //!
@@ -15,9 +15,7 @@
 //! `irealb://` and `irealbook://` URL prefixes used to embed
 //! charts). The chord-chart grammar this parser accepts is a
 //! **subset of that spec extended with internal tokens** observed
-//! in real exports (`Kcl`, `XyQ`, `LZ|`) — see
-//! `crates/ireal/FORMAT.md` for the exact token table and the
-//! deltas from the spec.
+//! in real exports (`Kcl`, `XyQ`, `LZ|`).
 //!
 //! What the spec does **not** cover, and what therefore remains
 //! reverse-engineered from external references, are: the
@@ -406,8 +404,7 @@ fn make_song_irealbook(parts: &[&str]) -> Result<IrealSong, ParseError> {
     } else {
         // Preserve the strict-numeric posture #2424 introduced for
         // this branch. A malformed timesig (`9X`, `0`) is
-        // user-supplied data and should surface as an error per
-        // `.claude/rules/code-style.md` "Silent Fallback" rather
+        // user-supplied data and should surface as an error rather
         // than silently falling back to a default — the analogous
         // strict parse the 7-field path applies to its `u16` tempo
         // / transpose fields makes that posture consistent across
@@ -526,8 +523,8 @@ fn classify_al_target(tail: &str) -> Option<JumpTarget> {
     let suffix = &ending_body[digit_end..];
     // Strict ordinal-suffix check: `1st`, `2nd`, `3rd`, `4th`...
     // The parser rejects `1rd`/`2st`/`3nd` so it agrees with
-    // [`crate::json::expected_ordinal_suffix`] — sister-site
-    // discipline per `.claude/rules/fix-propagation.md`. The teen
+    // [`crate::json::expected_ordinal_suffix`] — the two sites
+    // must not disagree. The teen
     // exception (11th/12th/13th) is preserved.
     let expected = match n % 100 {
         11..=13 => "th",
@@ -2289,8 +2286,7 @@ mod tests {
         // All three spellings — `End.` (spec), `End`, `Ending` —
         // resolve to the same `AlEnding(n)` variant; the canonical
         // `End.` form is what the serializer re-emits. Both D.C.
-        // and D.S. families MUST accept all three (sister-site
-        // discipline per `.claude/rules/fix-propagation.md`).
+        // and D.S. families MUST accept all three.
         let nz = |n: u8| std::num::NonZeroU8::new(n).unwrap();
         let cases: &[(&str, MusicalSymbol)] = &[
             (

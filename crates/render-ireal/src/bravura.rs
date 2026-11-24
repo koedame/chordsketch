@@ -9,8 +9,7 @@
 //!
 //! # Why path-baked instead of `@font-face`
 //!
-//! See [ADR-0014](../../../docs/adr/0014-bravura-glyphs-as-svg-paths.md)
-//! for the full rationale; in short: the three SMuFL glyphs the iReal
+//! The three SMuFL glyphs the iReal
 //! renderer needs (segno U+E047, coda U+E048, fermataAbove U+E4C0)
 //! compress to ~2 KB of raw `<path>` data when extracted as outlines,
 //! vs. ~5 KB for a WOFF2 subset of the same codepoints. Path-baked

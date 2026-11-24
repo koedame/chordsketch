@@ -69,7 +69,7 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
    * Orientation forwarded to {@link ChordSheet}, which threads it
    * through to every emitted `<ChordDiagram>`. Defaults to
    * `"vertical"`; pass `"horizontal"` for the Japanese-tablature
-   * layout (reader-view, high pitch on top — see ADR-0026). Has no
+   * layout (reader-view, high pitch on top). Has no
    * effect when `chordDiagramsInstrument` is omitted or when
    * `format !== "html"`.
    */
@@ -167,9 +167,8 @@ export interface RendererPreviewProps extends Omit<HTMLAttributes<HTMLDivElement
  * Format-aware preview surface. Both `html` and `text` delegate
  * to {@link ChordSheet}, which renders the AST directly via the
  * chordpro-jsx walker (`html`) or via a `<pre>` block (`text`)
- * — see ADR-0017 for the architectural split between the React
- * surface (AST → JSX) and the Rust surface (`chordsketch-render-html`,
- * which still backs the CLI / FFI / GitHub Action). PDF stays a
+ * — the React surface renders AST → JSX, while the Rust surface
+ * (`chordsketch-render-html`) still backs the CLI / FFI / GitHub Action. PDF stays a
  * download action via `PdfExport` because PDF generation is
  * binary and remains owned by `chordsketch-render-pdf`.
  *

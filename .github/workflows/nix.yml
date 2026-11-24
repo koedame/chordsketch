@@ -3,7 +3,7 @@ name: Nix
 # Verify that the Nix flake builds the chordsketch CLI correctly.
 # Called by publishable.yml on every PR, push to main and nightly; no paths:
 # filter (guarantee-style check). It is part of the required `Publishable`
-# check because a derivation that builds is what nixpkgs accepts (ADR-0070).
+# check because a derivation that builds is what nixpkgs accepts.
 #
 # Cache note: nix downloads pre-built packages from cache.nixos.org (the
 # public binary cache). The chordsketch crates themselves are not in the
@@ -11,7 +11,7 @@ name: Nix
 # typically 4-6 minutes on a cold cache. Swatinem/rust-cache is NOT used here
 # because nix compiles in an isolated store outside the standard Cargo target/
 # directory; the nix store is managed by nix's own GC and binary-cache
-# protocol. Per ci-parallelization.md, rust-cache applies only to jobs that
+# protocol. rust-cache applies only to jobs that
 # invoke cargo directly — not to nix-wrapped builds.
 
 on:

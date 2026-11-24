@@ -20,8 +20,8 @@
 #   - If you add it behind an environment gate, also create that environment
 #     in repo settings and add its secrets.
 #   - Register the channel in README.md `## Installation` if it is user-facing,
-#     and add smoke coverage under `.github/workflows/readme-smoke.yml` per
-#     `.claude/rules/readme-sync.md`. A channel that is NOT advertised there
+#     and add smoke coverage under `.github/workflows/readme-smoke.yml`.
+#     A channel that is NOT advertised there
 #     gets no smoke job, so give it `expected_version = "exists"` unless the
 #     tag-equality check already covers it.
 #   - If the channel has a manifest that carries the version, add it to
@@ -32,8 +32,8 @@
 # takes exactly three values. `scripts/_release_channels.py` rejects any other.
 #
 #   "tag"    — the registry's newest version equals the release tag.
-#   "exists" — the package is still served publicly, whatever its version
-#              (ADR-0065). For a channel that publishes on its own cadence,
+#   "exists" — the package is still served publicly, whatever its version.
+#              For a channel that publishes on its own cadence,
 #              tag-equality is not a true statement about it but "still
 #              installable" is, and that is what a silent unpublish breaks.
 #   "skip"   — no assertion at all; `skip_reason` must say why. The entry
@@ -48,12 +48,12 @@
 #   - The channel has no publish on this tag at all (manual PR flows such as
 #     winget, nixpkgs).
 #   - The channel publishes on its own cadence AND something else already
-#     asserts it is installable (a daily readme-smoke.yml install, ADR-0064).
+#     asserts it is installable (a daily readme-smoke.yml install).
 #     Off-cadence channels with no such coverage take `"exists"` instead.
 #
 # The rollup reads this file as it is at the tag it verifies, not at main,
 # so a channel added or moved onto the tag between releases is first
-# asserted for the release that ships it (ADR-0073).
+# asserted for the release that ships it.
 
 # ---------------------------------------------------------------- crates.io
 
@@ -64,7 +64,7 @@ kind = "crates-io"
 package = "chordsketch-chordpro"
 expected_version = "tag"
 required_secrets = []
-notes = "Published by publish-registries.yml (ADR-0069)."
+notes = "Published by publish-registries.yml."
 
 [[channels]]
 id = "crates-io-render-text"
@@ -166,10 +166,10 @@ display = "npm — @chordsketch/wasm"
 kind = "npm"
 package = "@chordsketch/wasm"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml
-                       # (ADR-0069); no stored secret. Verification is
+required_secrets = []  # Trusted publishing from publish-registries.yml;
+                       # no stored secret. Verification is
                        # still `npm view @chordsketch/wasm version` (anonymous).
-notes = "Published by publish-registries.yml (ADR-0069). Patch skew from workspace allowed; see ci/version-skew-allowlist.toml."
+notes = "Published by publish-registries.yml. Patch skew from workspace allowed; see ci/version-skew-allowlist.toml."
 
 # ---------------------------------------------------------------- npm (wasm-export)
 
@@ -179,8 +179,8 @@ display = "npm — @chordsketch/wasm-export"
 kind = "npm"
 package = "@chordsketch/wasm-export"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Heavy-bundle sister of @chordsketch/wasm (#2466). Ships in lockstep with the lean wasm package. Published by publish-registries.yml (ADR-0069)."
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
+notes = "Heavy-bundle sister of @chordsketch/wasm (#2466). Ships in lockstep with the lean wasm package. Published by publish-registries.yml."
 
 # ---------------------------------------------------------------- npm (tree-sitter)
 
@@ -190,17 +190,17 @@ display = "npm — tree-sitter-chordpro"
 kind = "npm"
 package = "tree-sitter-chordpro"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Unscoped per ADR-0008 §Decision 6 (tree-sitter ecosystem convention). Published by publish-registries.yml (ADR-0069); version tracks workspace releases."
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
+notes = "Unscoped, following the tree-sitter ecosystem convention. Published by publish-registries.yml; version tracks workspace releases."
 
 # ------------------------------------------------ npm (packages built on the engine)
 #
 # @chordsketch/react-ui, @chordsketch/react, @chordsketch/vue,
 # @chordsketch/svelte and @chordsketch/chordpro-lite carry the workspace
-# version and publish with every release, like the packages above
-# (ADR-0073). Beyond the tag-equality assertion, readme-smoke.yml installs
+# version and publish with every release, like the packages above.
+# Beyond the tag-equality assertion, readme-smoke.yml installs
 # the `latest` dist-tag of the first four daily and server-renders a
-# component from it (ADR-0064); chordpro-lite is not an install method under
+# component from it; chordpro-lite is not an install method under
 # README ## Installation, so it has no smoke job.
 
 [[channels]]
@@ -209,8 +209,8 @@ display = "npm — @chordsketch/react-ui"
 kind = "npm"
 package = "@chordsketch/react-ui"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by publish-registries.yml (ADR-0069). Carries no @chordsketch/wasm dependency."
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
+notes = "Published by publish-registries.yml. Carries no @chordsketch/wasm dependency."
 
 [[channels]]
 id = "npm-react"
@@ -218,8 +218,8 @@ display = "npm — @chordsketch/react"
 kind = "npm"
 package = "@chordsketch/react"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by publish-registries.yml (ADR-0069)."
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
+notes = "Published by publish-registries.yml."
 
 [[channels]]
 id = "npm-vue"
@@ -227,8 +227,8 @@ display = "npm — @chordsketch/vue"
 kind = "npm"
 package = "@chordsketch/vue"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by publish-registries.yml (ADR-0069)."
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
+notes = "Published by publish-registries.yml."
 
 [[channels]]
 id = "npm-svelte"
@@ -236,8 +236,8 @@ display = "npm — @chordsketch/svelte"
 kind = "npm"
 package = "@chordsketch/svelte"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by publish-registries.yml (ADR-0069). npm run build runs svelte-package, which emits sources + declarations rather than a bundle."
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
+notes = "Published by publish-registries.yml. npm run build runs svelte-package, which emits sources + declarations rather than a bundle."
 
 [[channels]]
 id = "npm-chordpro-lite"
@@ -245,8 +245,8 @@ display = "npm — @chordsketch/chordpro-lite"
 kind = "npm"
 package = "@chordsketch/chordpro-lite"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
-notes = "Published by publish-registries.yml (ADR-0069). Carries no @chordsketch/wasm dependency (ADR-0060)."
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
+notes = "Published by publish-registries.yml. Carries no @chordsketch/wasm dependency."
 
 # ---------------------------------------------------------------- installers
 
@@ -283,7 +283,7 @@ gives this channel a state no other one has: OK once the version is
 installable, PENDING while the repository holds it but has not published
 it (28-54 days per release, nothing here can clear it), FAIL when the
 push never landed (usually a 403 behind a moderation queue, #1852 —
-re-run chocolatey-retry.yml). See ADR-0049.
+re-run chocolatey-retry.yml).
 """
 
 [[channels]]
@@ -294,10 +294,10 @@ package = "chordsketch"
 expected_version = "tag"
 required_secrets = ["AUR_SSH_KEY"]
 notes = """
-Builds the tagged source (ADR-0071). Published by post-release.yml
+Builds the tagged source. Published by post-release.yml
 update-aur job via SSH push, which aurweb
 serves immediately — so the rollup's verdict is the usual binary, not
-Chocolatey's three (ADR-0049). _check_aur reads Version from the RPC v5
+Chocolatey's three. _check_aur reads Version from the RPC v5
 info endpoint and strips the `[epoch:]`/`-pkgrel` decoration around
 pkgver before comparing, because the PKGBUILD templates' pkgrel counts
 rebuilds of the same release rather than tracking the tag.
@@ -314,7 +314,7 @@ notes = """
 The release's prebuilt Linux archive, pushed by the same update-aur job
 as `chordsketch`, which builds the tagged source. The AUR submission
 guidelines name a package of prebuilt binaries `-bin` when a source
-build exists (ADR-0071). The first release after ADR-0071 creates the
+build exists. The first release that ships this channel creates the
 package base with its push.
 """
 
@@ -332,7 +332,7 @@ track's stable channel, across every architecture the store serves it
 on, because that is what the README's `sudo snap install chordsketch`
 resolves to; candidate / beta / edge are ignored. The endpoint lists
 only revisions the store already serves, so there is no "accepted but
-unreleased" state to report and the verdict stays binary (ADR-0049).
+unreleased" state to report and the verdict stays binary.
 """
 
 [[channels]]
@@ -373,7 +373,7 @@ Portfile lives at packaging/macports/Portfile; the live install path is
 verified by the macports job in readme-smoke.yml, which does not look at the
 version. This entry asks two things of the release. FAIL: the Portfile's
 `checksums` do not match the tag's archive (the release commit cannot fill
-them; docs/releasing.md Post-Release step 5.1 does). PENDING, which keeps the
+them; a follow-up pull request after the tag does). PENDING, which keeps the
 rollup green: ports.macports.org still serves an older version because the
 PR to macports/macports-ports has not been merged by a MacPorts committer.
 """
@@ -455,7 +455,7 @@ display = "npm — @chordsketch/node (resolver)"
 kind = "npm"
 package = "@chordsketch/node"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
 
 [[channels]]
 id = "napi-linux-x64-gnu"
@@ -463,7 +463,7 @@ display = "npm — @chordsketch/node-linux-x64-gnu"
 kind = "npm"
 package = "@chordsketch/node-linux-x64-gnu"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
 
 [[channels]]
 id = "napi-linux-arm64-gnu"
@@ -471,7 +471,7 @@ display = "npm — @chordsketch/node-linux-arm64-gnu"
 kind = "npm"
 package = "@chordsketch/node-linux-arm64-gnu"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
 
 [[channels]]
 id = "napi-darwin-x64"
@@ -479,7 +479,7 @@ display = "npm — @chordsketch/node-darwin-x64"
 kind = "npm"
 package = "@chordsketch/node-darwin-x64"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
 
 [[channels]]
 id = "napi-darwin-arm64"
@@ -487,7 +487,7 @@ display = "npm — @chordsketch/node-darwin-arm64"
 kind = "npm"
 package = "@chordsketch/node-darwin-arm64"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.
 
 [[channels]]
 id = "napi-win32-x64-msvc"
@@ -495,4 +495,4 @@ display = "npm — @chordsketch/node-win32-x64-msvc"
 kind = "npm"
 package = "@chordsketch/node-win32-x64-msvc"
 expected_version = "tag"
-required_secrets = []  # Trusted publishing from publish-registries.yml (ADR-0069); no stored secret.
+required_secrets = []  # Trusted publishing from publish-registries.yml; no stored secret.

@@ -1,7 +1,7 @@
 name: Post-Release Package Updates
 
 # Reusable: called by release.yml's fan-out after the GitHub Release
-# exists (ADR-0039). Every job here targets the CLI/library release, and
+# exists. Every job here targets the CLI/library release, and
 # the caller's `push: tags: v*` trigger is what guarantees the tag is in
 # that namespace — this workflow no longer sorts tags itself.
 on:
@@ -33,8 +33,8 @@ on:
 # Post-release runs key off an already-published GitHub Release (or a
 # manual dispatch of a specific tag) and fan out to external package
 # registries. Cancelling one mid-flight would leave some ecosystems
-# updated and others not. Declare a concurrency group so the workflow
-# conforms to `.claude/rules/ci-parallelization.md` §5, but keep
+# updated and others not. Declare a concurrency group like every other
+# release workflow, but keep
 # `cancel-in-progress: false` so no partial rollouts are possible.
 concurrency:
   group: post-release-${{ inputs.tag }}
@@ -365,7 +365,7 @@ jobs:
     environment: aur
     # Two package bases, per the AUR submission guidelines: `chordsketch`
     # builds the tagged source, `chordsketch-bin` repackages the release's
-    # prebuilt Linux archive. ADR-0071.
+    # prebuilt Linux archive.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

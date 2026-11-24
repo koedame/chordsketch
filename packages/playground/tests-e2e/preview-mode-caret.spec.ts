@@ -14,8 +14,7 @@
 // Assertions are structural (presence / absence of the overlay
 // classes), matching the rest of the e2e smoke suite. Each test
 // registers a `pageerror` listener so a JS exception thrown during a
-// view switch fails the test even when the DOM still renders, per
-// `.claude/rules/playground-smoke.md`.
+// view switch fails the test even when the DOM still renders.
 
 import { expect, test, type Page } from '@playwright/test';
 

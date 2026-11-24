@@ -76,8 +76,7 @@ test.describe('docs site link integrity (static)', () => {
   }) => {
     // Covers article content (rewriter), sidebar nav (build script),
     // outline (build script), and topbar (build script). All four
-    // surfaces emit hrefs and all four must be SPA-survivable. Per
-    // `.claude/rules/renderer-parity.md`'s sister-site discipline.
+    // surfaces emit hrefs and all four must be SPA-survivable.
     const offenders: {
       slug: string;
       surface: string;

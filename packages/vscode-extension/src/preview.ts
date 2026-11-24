@@ -442,7 +442,7 @@ class PreviewPanel {
    * iframe-srcdoc / plain-text dual-pane HTML the WebView used pre-#2527
    * is retired in favour of the `<ChordProPreview>` component from
    * `@chordsketch/react`, which renders the AST directly without an
-   * intermediate iframe (per ADR-0017).
+   * intermediate iframe.
    */
   private buildHtml(): string {
     const webview = this.panel.webview;
@@ -467,8 +467,7 @@ class PreviewPanel {
     // `scriptUri.toString()`, `webview.cspSource`, the crypto-generated
     // `nonce`). VS Code's own values are well-formed today, but applying
     // the escape symmetrically defends against any future drift in
-    // either VS Code's behaviour or our derivation logic — per
-    // `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
+    // either VS Code's behaviour or our derivation logic.
     const documentUriAttr = escapeHtmlAttr(this.document.uri.toString());
     const wasmUriAttr = escapeHtmlAttr(wasmUri.toString());
     const scriptUriAttr = escapeHtmlAttr(scriptUri.toString());

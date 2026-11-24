@@ -8,9 +8,8 @@ name: Playground Smoke
 # iRealb factory shipped with a wasm-init race that no unit suite
 # caught.
 #
-# Runs unconditionally on every PR (no `paths:` filter) per the
-# guarantee-style-checks discipline in
-# `.claude/rules/ci-parallelization.md`. The same rationale applies
+# Runs unconditionally on every PR (no `paths:` filter), as every
+# guarantee-style check does. The same rationale applies
 # to push: main — a green smoke is the precondition the
 # Deploy Playground workflow's deploy job relies on under branch
 # protection. The two workflows are deliberately split: smoke is
@@ -26,8 +25,7 @@ on:
 
 # Cancel stale PR runs on force-push / rebase. `main` and dispatch
 # runs always go to completion. Pattern matches every other
-# PR-cancellable workflow in this repo
-# (`.claude/rules/ci-parallelization.md` §5).
+# PR-cancellable workflow in this repo.
 concurrency:
   group: playground-smoke-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

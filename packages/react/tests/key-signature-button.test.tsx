@@ -11,7 +11,7 @@ import { FakeAudioContext } from './fake-audio-context';
 // accuracy is covered by the hook's own suite.
 
 // The canonical key the walker now hands the button is the spelled-out
-// form (`G major`), per ADR-0035 — the audio core parses it the same way
+// form (`G major`) — the audio core parses it the same way
 // it parses `G` / `Gm`.
 const scale = vi.fn((key: string): Uint8Array | undefined =>
   key === 'G major' ? new Uint8Array([55, 57, 59, 60, 62, 64, 66, 67]) : undefined,

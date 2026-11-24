@@ -3,7 +3,7 @@
 
 A suppression (`@ts-expect-error`, `eslint-disable`, a skipped test, a Rust
 `#[allow(...)]`, ...) silences a check that would otherwise say something.
-`.claude/rules/root-cause-fixes.md` allows one only with a reason, but a
+One is acceptable only with a reason, but a
 reason is easy to write and a pull request that adds a dozen of them reads
 like any other. This guard counts them and compares the counts with
 `ci/suppression-baseline.json`, so adding one is a visible edit to that file

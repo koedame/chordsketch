@@ -48,8 +48,9 @@ outlines baked into `src/bravura.rs` — used to draw the inline `{key}`
 key-signature icon — are derived from the [Bravura SMuFL font][bravura]
 and are redistributed under the [SIL Open Font License 1.1][ofl]: the
 OFL text is at `LICENSE-OFL.txt` and the attribution required by §4 of
-the license is in the project-level `NOTICE`. ADR-0014 records why the
-renderer bakes path data instead of bundling the font binary.
+the license is in the project-level `NOTICE`. The renderer bakes path
+data instead of bundling the font binary because the few glyphs it needs
+are a couple of kilobytes as outlines, against a font file of several hundred kilobytes.
 
 [bravura]: https://github.com/steinbergmedia/bravura
 [ofl]: https://openfontlicense.org

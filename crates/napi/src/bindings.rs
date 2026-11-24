@@ -26,9 +26,8 @@
 //!
 //! If you find yourself adding non-trivial logic here, move it down to
 //! `lib.rs` and call it from a new wrapper — the unit-testable surface
-//! lives there. The sister-site rule in
-//! `.claude/rules/fix-propagation.md` requires that any new public API
-//! added here also lands in `crates/wasm/src/bindings.rs` and
+//! lives there. The three bindings expose the same surface, so any new public API
+//! added here must also land in `crates/wasm/src/bindings.rs` and
 //! `crates/ffi/src/lib.rs` in the same PR.
 
 use napi::bindgen_prelude::*;
@@ -485,8 +484,7 @@ pub fn chord_diagram_svg(chord: String, instrument: String) -> Result<Option<Str
 /// chords show up here exactly like the Rust HTML renderer's
 /// `<section class="chord-diagrams">` block. Sister-site to
 /// the wasm `chordDiagramSvgWithDefines` and FFI
-/// `chord_diagram_svg_with_defines` exports
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// `chord_diagram_svg_with_defines` exports.
 ///
 /// # Errors
 ///
@@ -514,8 +512,7 @@ pub fn chord_diagram_svg_with_defines(
 /// root), or `null` when `chord` is not parseable as a chord.
 ///
 /// Thin wrapper over the pure-Rust `chord_pitches_inner`. Sister-site to
-/// the wasm `chordPitches` export and the FFI `chord_pitches` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// the wasm `chordPitches` export and the FFI `chord_pitches` function.
 #[must_use]
 #[napi(js_name = "chordPitches")]
 pub fn chord_pitches(chord: String) -> Option<Buffer> {
@@ -537,8 +534,7 @@ pub fn chord_pitches(chord: String) -> Option<Buffer> {
 /// Also `null` when no diagram is available for the chord.
 ///
 /// Thin wrapper over the pure-Rust `diagram_pitches_inner`. Sister-site to the
-/// wasm `diagramPitches` export and the FFI `diagram_pitches` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// wasm `diagramPitches` export and the FFI `diagram_pitches` function.
 ///
 /// # Errors
 ///
@@ -587,8 +583,7 @@ pub struct StaffNote {
 /// D♯ F♯ A♯ C♯).
 ///
 /// Thin wrapper over the pure-Rust `chord_staff_notes_inner`. Sister-site to
-/// the wasm `chordStaffNotes` export and the FFI `chord_staff_notes` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// the wasm `chordStaffNotes` export and the FFI `chord_staff_notes` function.
 #[must_use]
 #[napi(js_name = "chordStaffNotes")]
 pub fn chord_staff_notes(chord: String) -> Option<Vec<StaffNote>> {
@@ -616,7 +611,7 @@ pub fn chord_staff_notes(chord: String) -> Option<Vec<StaffNote>> {
 ///
 /// Thin wrapper over the pure-Rust `key_scale_pitches_inner`. Sister-site
 /// to the wasm `keyScalePitches` export and the FFI `key_scale_pitches`
-/// function (`.claude/rules/fix-propagation.md` §Bindings).
+/// function.
 #[must_use]
 #[napi(js_name = "keyScalePitches")]
 pub fn key_scale_pitches(key: String) -> Option<Buffer> {
@@ -633,8 +628,7 @@ pub fn key_scale_pitches(key: String) -> Option<Buffer> {
 /// `key` is not a well-formed key.
 ///
 /// Thin wrapper over the pure-Rust `key_tonic_triad_inner`. Sister-site to
-/// the wasm `keyTonicTriad` export and the FFI `key_tonic_triad` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// the wasm `keyTonicTriad` export and the FFI `key_tonic_triad` function.
 #[must_use]
 #[napi(js_name = "keyTonicTriad")]
 pub fn key_tonic_triad(key: String) -> Option<Buffer> {
@@ -645,8 +639,8 @@ pub fn key_tonic_triad(key: String) -> Option<Buffer> {
 /// an optional string (#2572).
 ///
 /// `orientation` accepts `"vertical"` (default) or `"horizontal"`
-/// (case-insensitive). Horizontal mode is reader-view only per
-/// ADR-0026. `None` and unrecognised values fall back to the default.
+/// (case-insensitive). Horizontal mode is reader-view only
+/// (high pitch on top). `None` and unrecognised values fall back to the default.
 ///
 /// # Errors
 ///

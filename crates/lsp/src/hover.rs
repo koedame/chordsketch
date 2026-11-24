@@ -247,7 +247,7 @@ pub fn hover_token_span(line: &str, col: usize) -> Option<(usize, usize)> {
 /// chord's pitch-class content) and renders an ASCII diagram inside a fenced
 /// code block. Returns `None` when no voicing is available — in practice only
 /// when the chord name is not parseable, since the synthesiser voices every
-/// parseable chord (see `.claude/rules/chord-diagram-coverage.md`).
+/// parseable chord.
 #[must_use]
 pub fn chord_hover_markdown(chord_name: &str) -> Option<String> {
     let diagram = lookup_diagram(chord_name, &[], "guitar", DEFAULT_FRETS_SHOWN)?;

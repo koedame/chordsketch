@@ -29,8 +29,7 @@ invariant the cargo portgroup actually needs, because every crate
 listed in `cargo.crates` is checksummed against the lockfile shipped
 inside the source tarball. Reading HEAD's Cargo.lock instead silently
 allowed Portfile/tarball drift, surfacing only at upstream build time
-as "checksum mismatch on <crate>". See `docs/adr/0012-macports-
-portfile-cargo-crates-tag-relative.md` for the full rationale.
+as "checksum mismatch on <crate>".
 
 Override with `--from-ref REF` (any git revision, e.g. `HEAD`) when
 preparing a Portfile bump for a release that has not been tagged yet.
@@ -46,8 +45,7 @@ match SOMETHING coherent — HEAD if the tag is unavailable) without
 forcing the maintainer to revert their Portfile bump out of the
 release-cut PR. After the tag is pushed, the next normal CI run
 validates against the real tagged `Cargo.lock` per the original
-invariant. See ADR-0012 §"Release-cut window" and #2413 for the
-rationale.
+invariant (#2413).
 
 The fallback is intentionally scoped to `--check` with an
 auto-resolved tag. If the caller explicitly passes `--from-ref REF`
@@ -425,7 +423,7 @@ def cmd_check_archive() -> int:
     sys.stderr.write(
         f"{PORTFILE.relative_to(REPO_ROOT)} checksums do not match the v{version} archive:\n"
         + "".join(f"  - {p}\n" for p in problems)
-        + "\nRefill them (docs/releasing.md, Post-Release step 5.1).\n"
+        + "\nRefill them from the tag's source archive (rmd160, sha256, size).\n"
     )
     return 1
 

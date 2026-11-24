@@ -367,10 +367,9 @@ impl Metadata {
     ///   parsed as a non-negative integer.
     ///
     /// The `1..=24` range matches the MusicXML importer's existing
-    /// validation (`crates/convert-musicxml/src/import.rs`) and
-    /// `.claude/rules/renderer-parity.md` §Validation Parity, which
-    /// explicitly lists `{capo}` as a field that must be validated
-    /// consistently across every renderer.
+    /// validation (`crates/convert-musicxml/src/import.rs`); `{capo}`
+    /// is a field that must be validated consistently across every
+    /// renderer.
     #[must_use]
     pub fn capo_validated(&self) -> CapoValidation {
         let Some(raw) = self.capo.as_deref() else {

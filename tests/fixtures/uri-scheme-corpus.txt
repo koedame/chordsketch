@@ -7,8 +7,7 @@
 #   - React:      `isSafeHref` in packages/react/src/chordpro-jsx.tsx
 #   - Playground: `isSafeHref` in packages/playground/scripts/lib/docs-render.mjs
 # Each has a test that reads this file, so adding a case here fails whichever
-# copy does not yet handle it (`.claude/rules/sanitizer-security.md`,
-# `.claude/rules/fix-propagation.md`).
+# copy does not yet handle it.
 #
 # Format: <verdict><TAB><label><TAB><href>
 #   verdict  `blocked` = the href must be rejected, `allowed` = it must pass.

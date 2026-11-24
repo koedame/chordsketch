@@ -6,11 +6,10 @@
 // create) so the test fails loudly if the mount path silently
 // degrades.
 //
-// Per `.claude/rules/playground-smoke.md`, this spec exists because
+// This spec exists because
 // `packages/playground/src/irealpro/main.tsx` mounts a wasm-backed
 // React app on a new `parseIrealb` invocation site. The
-// `mountChordSketchUi`-style wasm-init race (#2397) the rule was
-// authored against is the exact class of regression a deep-link
+// `mountChordSketchUi`-style wasm-init race (#2397) is the exact class of regression a deep-link
 // smoke must catch.
 //
 // Assertions are intentionally structural, not visual: we are
@@ -24,7 +23,7 @@ test.describe('iRealb playground mount', () => {
     page,
   }) => {
     // `pageerror` fires only on uncaught exceptions reaching the
-    // window. Per `playground-smoke.md` "Authoring guidance", this
+    // window. This
     // is decoupled from any specific symbol name so the assertion
     // stays robust against wasm-bindgen rename churn — a regression
     // of the `?#format=irealb` wasm-init race class would surface

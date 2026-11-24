@@ -18,7 +18,7 @@ the HTML output is not.
 ### Text output (checked in CI)
 
 `tests/perl-baseline/text/` holds the text Perl prints for each corpus file.
-CI does not install Perl (see [ADR-0040](adr/0040-external-tool-tests-are-not-run-in-ci.md));
+CI does not install Perl;
 the test `crates/cli/tests/perl_comparison.rs` renders the same files with
 ChordSketch, passes both outputs through the normalisation described below,
 and compares them.
@@ -48,13 +48,13 @@ The files that still differ:
 | `delegate/02-lilypond.cho` | Perl has no LilyPond tooling installed and prints an empty image placeholder (`+ image: <none>`); ChordSketch prints a note that the block is omitted from text output |
 | `delegate/03-svg.cho` | Perl prints an empty image placeholder (`+ image: <none>`) for the SVG block; ChordSketch prints a note that the block is omitted from text output |
 | `delegate/05-multiple-delegates.cho` | Same as the ABC, LilyPond and SVG files above: placeholder against omission note for each delegate block |
-| `directives/01-metadata.cho` | `{capo: 2}` lowers every chord by 2 semitones in ChordSketch (ADR-0023); Perl prints the chords as written |
-| `multi-song/03-songs-with-metadata.cho` | `{capo: 3}` lowers every chord of the second song by 3 semitones in ChordSketch (ADR-0023); Perl prints the chords as written. Two of the lowered chords are also spelled `Gbm` and `Db` where F# minor would use sharps |
+| `directives/01-metadata.cho` | `{capo: 2}` lowers every chord by 2 semitones in ChordSketch; Perl prints the chords as written |
+| `multi-song/03-songs-with-metadata.cho` | `{capo: 3}` lowers every chord of the second song by 3 semitones in ChordSketch; Perl prints the chords as written. Two of the lowered chords are also spelled `Gbm` and `Db` where F# minor would use sharps |
 | `multi-song/04-song-with-transpose.cho` | After `{transpose: 3}` ChordSketch spells the chords for the flat-side key (`Eb`, `Ab`, `Bb`); Perl spells them with sharps (`D#`, `G#`, `A#`) |
 <!-- perl-compare:accepted:end -->
 
 To bump the upstream release or change the corpus, install the matching Perl
-ChordPro and run `scripts/update-perl-baseline.sh` (`docs/dev-setup.md`). It
+ChordPro and run `scripts/update-perl-baseline.sh`. It
 rewrites the saved output and the generated parts of this document.
 
 #### Normalisation
@@ -220,7 +220,7 @@ output.
 ### Capo
 
 `{capo: N}` lowers every displayed chord by N semitones, so the chords are the
-shapes to play with a capo on fret N ([ADR-0023](adr/0023-capo-transposes-displayed-chords.md)).
+shapes to play with a capo on fret N.
 Perl prints the chords as written. In the corpus this accounts for
 `directives/01-metadata.cho` and `multi-song/03-songs-with-metadata.cho`.
 

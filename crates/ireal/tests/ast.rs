@@ -138,8 +138,7 @@ fn section_label_variants_are_distinct() {
 fn json_serialization_is_byte_stable() {
     // Byte-stable JSON debug output is what golden-snapshot tests
     // in the follow-up crates rely on. If this assertion changes,
-    // the field-order documentation in `ARCHITECTURE.md` and the
-    // module-level `json.rs` doc comment both need a refresh.
+    // the module-level `json.rs` doc comment needs a refresh.
     let song = make_sample();
     let json = song.to_json_string();
     let expected = "{\

@@ -70,9 +70,10 @@ no MCP types in the signatures.
 
 - [Use ChordSketch from an AI assistant](https://github.com/koedame/chordsketch/blob/main/docs/sdk/tasks/mcp.md)
   — client setup and what each tool is for.
-- [ADR-0063](https://github.com/koedame/chordsketch/blob/main/docs/adr/0063-mcp-server-is-a-cli-subcommand.md)
-  — why the server is a CLI subcommand rather than a Node package or a
-  second binary.
+- The server is a CLI subcommand rather than a Node package or a second
+  binary because the packaging channels install exactly one executable,
+  `chordsketch`, so riding the CLI makes the server reachable through all
+  of them.
 
 ## License
 

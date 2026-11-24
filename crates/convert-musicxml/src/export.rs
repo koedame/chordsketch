@@ -420,7 +420,7 @@ fn quality_ext_to_kind(
 /// Convert a ChordPro key string to a (fifths, mode) pair.
 ///
 /// Routes through [`chordsketch_chordpro::parse_key`] — the single key parser
-/// (ADR-0033 / ADR-0034 / ADR-0035) — so every spelling the editor accepts maps
+/// — so every spelling the editor accepts maps
 /// to the same `(fifths, mode)`: compact `Gm`, spelled-out `G minor` / `G major`
 /// (the canonical rendered form), the lenient aliases (`Gmin` / `G-` / `CM`),
 /// Unicode accidentals, and the church modes (classified by their parent
@@ -728,7 +728,7 @@ mod tests {
 
     #[test]
     fn key_to_fifths_routes_lenient_and_spelled_out_through_parse_key() {
-        // ADR-0035: the canonical rendered form is spelled out, so authors type
+        // The canonical rendered form is spelled out, so authors type
         // `G minor` / `G major` more often. Every spelling `parse_key` accepts
         // must export the same (fifths, mode) as its compact equivalent —
         // previously these fell through the string match to a wrong `(0, major)`.

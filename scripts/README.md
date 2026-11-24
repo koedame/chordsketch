@@ -6,7 +6,8 @@ Regenerates the saved Perl ChordPro text output in `tests/perl-baseline/`,
 which `cargo test -p chordsketch --test perl_comparison` compares ChordSketch's
 output against in CI, and the generated sections of
 `docs/known-deviations.md`. Needs Perl ChordPro at the release in
-`.github/upstream-version` (`docs/dev-setup.md`).
+`.github/upstream-version`
+(`cpanm App::Music::ChordPro@<version>`).
 
 ```bash
 ./scripts/update-perl-baseline.sh

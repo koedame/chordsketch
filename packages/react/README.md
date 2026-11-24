@@ -134,9 +134,7 @@ text spans, hover affordances, snapshot tests). The walker
 mirrors the DOM contract `chordsketch-render-html` produces
 (`.song`, `.line`, `.chord-block`, `<section class="…">`,
 `<p class="comment">`, etc.) so the bundled
-`@chordsketch/react/styles.css` lights up unchanged. See
-[ADR-0017](https://github.com/koedame/chordsketch/blob/main/docs/adr/0017-react-renders-from-ast.md)
-for the architectural split.
+`@chordsketch/react/styles.css` lights up unchanged.
 
 `format="text"` renders the plain-text chords-above-lyrics
 output inside a `<pre>`; pick that variant if you need an
@@ -510,8 +508,7 @@ export function ChartEditor() {
 Edits to title / composer / style / key root + accidental + mode /
 time numerator + denominator / tempo / transpose round-trip through
 `@chordsketch/wasm`'s `parseIrealb` / `serializeIrealb` and fire
-`onChange` with the new URL. The bar grid is fully interactive per
-[ADR-0020](https://github.com/koedame/chordsketch/blob/main/docs/adr/0020-ireal-pro-react-surface.md):
+`onChange` with the new URL. The bar grid is fully interactive:
 
 - **Structural editing.** Per-section rename / move up / move
   down / delete + a `+ Add section` trailer; per-bar move left /
@@ -626,7 +623,7 @@ shorthand (no Unicode translation; the SVG renderer handles that).
 | `applyChordEdit` | Atom | Function | Apply an in-place `ChordEditEvent` (rewrite a chord token) to the source. |
 | `applyChordDelete` | Atom | Function | Remove a chord token from the source (inspector "Remove chord"). |
 | `chordSuffixFromQuality` | Atom | Function | Reconstruct a chord suffix from parsed quality + extension. |
-| `composeChordSuffix` / `decomposeChordSuffix` | Atom | Function | Compose an explicit chord suffix from a `ChordTypeSelection` (triad / 7th / tensions), and its normalising inverse (ADR-0037). |
+| `composeChordSuffix` / `decomposeChordSuffix` | Atom | Function | Compose an explicit chord suffix from a `ChordTypeSelection` (triad / 7th / tensions), and its normalising inverse. |
 | `TRIAD_OPTIONS` / `SEVENTH_OPTIONS` / `TENSION_OPTIONS` | Atom | Const | The inspector's structured chord-type control options. `isSeventhAvailable` / `isTensionAvailable` / `withTriad` / `withSeventh` / `toggleTension` drive their availability + toggling; `enumerateEditorSuffixes` lists every producible suffix. |
 | `useDebounced` | Atom | Hook | General-purpose debouncer used by `<ChordTextarea>`. |
 | `<MetronomeButton>` | Atom | Component | Interactive `{tempo}` chip; the whole pill toggles an audible metronome at the BPM (speaker cursor on hover, frame pulses while playing). |
@@ -717,5 +714,6 @@ chord-tone staff — are derived from the
 [Bravura SMuFL font](https://github.com/steinbergmedia/bravura) and are
 redistributed under the
 [SIL Open Font License 1.1](https://openfontlicense.org) (`LICENSE-OFL.txt`).
-See the project-level `NOTICE` for the required attribution; ADR-0014
-records why the glyphs ship as path data instead of a bundled font.
+See the project-level `NOTICE` for the required attribution. The glyphs
+ship as path data instead of a bundled font so the package never forces a
+music-font download on consumers.

@@ -782,8 +782,7 @@ pub fn lookup_diagram(
     // 3. Algorithmic synthesis. The curated tables cover only a few chord
     //    families; any other parseable chord is voiced by searching the
     //    fretboard from its pitch-class content, so the chord-type palette's
-    //    diagram coverage stays at 100% with no per-type data to maintain
-    //    (see `.claude/rules/chord-diagram-coverage.md`).
+    //    diagram coverage stays at 100% with no per-type data to maintain.
     crate::voicing_synth::synth_fretted_voicing(chord_name, instrument, frets_shown)
 }
 
@@ -1221,8 +1220,7 @@ pub fn lookup_keyboard_voicing(
     }
 
     // 3. Algorithmic synthesis from the chord's pitch-class content, so the
-    //    chord-type palette's keyboard-diagram coverage stays at 100%
-    //    (see `.claude/rules/chord-diagram-coverage.md`).
+    //    chord-type palette's keyboard-diagram coverage stays at 100%.
     crate::voicing_synth::synth_keyboard_voicing(chord_name)
 }
 
@@ -1763,21 +1761,21 @@ mod tests {
 
     // -- Chord-type palette diagram coverage ---------------------------------
     //
-    // Enforces `.claude/rules/chord-diagram-coverage.md`: every chord type the
+    // Coverage guarantee: every chord type the
     // editor's structured chord-type controls can produce MUST yield a valid
     // diagram on every instrument, for every root. This is the mechanical
-    // guard the rule points to — changing the editor's producible suffix set
+    // guard for that — changing the editor's producible suffix set
     // (`packages/react/src/chord-source-edit.ts`) without keeping coverage at
     // 100% fails here.
 
     /// The canonical chord-type suffixes the React editor's structured
-    /// controls (triad × seventh × tensions, ADR-0037) can produce.
+    /// controls (triad × seventh × tensions) can produce.
     ///
     /// SISTER LIST: the output of `enumerateEditorSuffixes()`
     /// (`packages/react/src/chord-source-edit.ts`). `tests/chord-type-coverage.test.ts`
     /// asserts this exact set equals that enumeration, so when the editor's
-    /// producible set changes, mirror the change here (and vice versa). Per
-    /// `.claude/rules/chord-diagram-coverage.md`, multi-altered tension
+    /// producible set changes, mirror the change here (and vice versa).
+    /// Multi-altered tension
     /// combinations beyond this representative set are covered structurally by
     /// the voicing synthesiser; combinations that demand more essential tones
     /// than an instrument has strings are inherently unplayable and fall back

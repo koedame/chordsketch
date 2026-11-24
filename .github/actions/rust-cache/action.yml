@@ -1,8 +1,7 @@
 name: "Rust cache"
 description: >
   Cache the cargo registry and `target/` for a Rust-compiling job with
-  `Swatinem/rust-cache`. A wrapper so every caller states `save-if`
-  (`.claude/rules/ci-parallelization.md` §2).
+  `Swatinem/rust-cache`. A wrapper so every caller states `save-if`.
 inputs:
   shared-key:
     description: >
@@ -13,8 +12,8 @@ inputs:
   save-if:
     description: >
       `Swatinem/rust-cache` save-if. Required so every caller states
-      that only `main` writes to the GitHub Actions cache
-      (`.claude/rules/ci-parallelization.md` §2).
+      that only `main` writes to the GitHub Actions cache; entries
+      written per pull request would exhaust the cache budget.
     required: true
 runs:
   using: "composite"

@@ -5,7 +5,7 @@
 //! output against `expected.html`.
 //!
 //! Each fixture is named after its render-text counterpart so sister-site
-//! parity (see `.claude/rules/renderer-parity.md`) can be verified by
+//! parity can be verified by
 //! cross-referencing directory listings.
 //!
 //! Regenerate snapshots when the HTML output changes intentionally:

@@ -227,7 +227,7 @@ export interface ChordSheetProps extends Omit<HTMLAttributes<HTMLDivElement>, 'c
   /**
    * Test-only WASM loader override applied to the
    * `format="html"` branch (which now drives `parseChordpro`
-   * via the AST → JSX walker per ADR-0017). Distinct from
+   * via the AST → JSX walker). Distinct from
    * {@link wasmLoader} because the two branches consume
    * different parts of the wasm surface — a stub for one is
    * not generally usable for the other.
@@ -323,7 +323,7 @@ function defaultErrorFallback(error: Error): ReactNode {
  * <ChordSheet source={chordproSource} transpose={0} />
  * ```
  *
- * Render path (per ADR-0017):
+ * Render path:
  * - `format="html"` parses with `parseChordpro` and renders the
  *   AST directly via the chordpro-jsx walker — pure React DOM,
  *   no HTML-string injection, no `<style>` block on the React
@@ -458,8 +458,7 @@ function ChordSheetTextBranch({
 //     selection as a side effect would surprise the user.
 // Everything else inside the preview — lyrics, whitespace — is "outside
 // a chord" and clears. Shared by the controlled and uncontrolled
-// branches of the outside-press listener so the two stay in lockstep
-// (.claude/rules/fix-propagation.md).
+// branches of the outside-press listener so the two stay in lockstep.
 const PREVIEW_SELECTION_KEEP = '.chord, .meta-inline';
 
 function ChordSheetAstBranch({
@@ -629,7 +628,7 @@ function ChordSheetAstBranch({
   // Source-coordinate editing (selection / drag / nudge / inspector)
   // is only valid when the chords the walker renders match the raw
   // source. The wasm parse path transposes the AST in place — folding
-  // any `{capo: N}` into the effective transpose (ADR-0023) — so under
+  // any `{capo: N}` into the effective transpose — so under
   // a non-zero effective transpose `chord.name` is the TRANSPOSED
   // spelling, and editing by source coordinates would write the wrong
   // chord / miscompute columns. The gate mirrors the core's

@@ -6,14 +6,14 @@ import { describe, expect, test } from 'vitest';
 
 /**
  * Selectors allowed to paint with the tertiary tone
- * (`--cs-text-tertiary` / its `--cs-ink-500` source), per ADR-0054: the
+ * (`--cs-text-tertiary` / its `--cs-ink-500` source): the
  * token is a non-text / large-text / disabled tone, so it clears the 3:1
  * floor WCAG 1.4.11 sets for non-text UI but not the 4.5:1 that 1.4.3
  * asks of text below 18.66px bold / 24px regular.
  *
  * The first two are disabled controls, which 1.4.3 exempts outright. The
  * third is the breadcrumb `/` separator — decorative punctuation between
- * links, named in ADR-0054 alongside the disabled controls as one of the
+ * links, which like the disabled controls is one of the
  * uses WCAG does not hold to 4.5:1; the crumb text itself is
  * `--cs-text-secondary`.
  *
@@ -21,7 +21,7 @@ import { describe, expect, test } from 'vitest';
  * `.song-card time`, `.setlist .stat .label`, `.setlist time` and
  * `.input::placeholder` moved there after being measured at 3.53:1.
  *
- * The scan covers the generated chrome region too (ADR-0061): rules
+ * The scan covers the generated chrome region too: rules
  * projected out of `design-system/` are shipped by this package and are
  * held to the same bar as the hand-authored ones.
  */

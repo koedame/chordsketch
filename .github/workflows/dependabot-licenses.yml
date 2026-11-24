@@ -1,10 +1,10 @@
 name: Dependabot license notice
 
 # THIRD_PARTY_LICENSES.md is generated from Cargo.lock and the bundled
-# package-lock.json files (scripts/third-party-licenses.py, ADR-0085), and CI
+# package-lock.json files (scripts/third-party-licenses.py), and CI
 # fails when it is older than the lock files. Dependabot cannot run the script,
 # so every cargo update PR started red. This regenerates the file on the PR
-# branch and pushes it as one extra commit (ADR-0089).
+# branch and pushes it as one extra commit.
 #
 # `pull_request_target` is used because a Dependabot run of `pull_request` gets
 # a read-only token. That event runs the workflow of the base branch with a
@@ -43,7 +43,7 @@ jobs:
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository
     # A job here holds a write token, so it runs only on GitHub-hosted
-    # `ubuntu-24.04` (.claude/rules/ci-parallelization.md §7, ADR-0096).
+    # `ubuntu-24.04`.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -83,7 +83,7 @@ jobs:
           toolchain: stable
 
       # The composite holds the one `cargo-about` version the notice is built
-      # with; the script below refuses to run with any other (ADR-0099). It is
+      # with; the script below refuses to run with any other. It is
       # read from the PR branch, which the first step has shown to differ from
       # `main` only in Cargo manifests and the lock file. The composite is not
       # in this workflow's `paths:` for the same reason: a PR that changes it

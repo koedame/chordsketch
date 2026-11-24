@@ -4,8 +4,7 @@
 // the docs markdown → HTML transform. The end-to-end Playwright
 // suite in `tests-e2e/docs-links.spec.ts` exercises the deployed
 // output; this suite probes the pipeline directly for adversarial
-// URIs and rewriter rules per
-// `.claude/rules/sanitizer-security.md` §"Testing completeness".
+// URIs and rewriter rules.
 
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -225,9 +224,9 @@ describe('rewriteHref', () => {
       'https://github.com/koedame/chordsketch/blob/main/packages/npm/README.md',
     );
     expect(
-      rewriteHref('../adr/0021-docs-site-co-located-with-playground.md', 'docs/sdk'),
+      rewriteHref('../configuration.md', 'docs/sdk'),
     ).toBe(
-      'https://github.com/koedame/chordsketch/blob/main/docs/adr/0021-docs-site-co-located-with-playground.md',
+      'https://github.com/koedame/chordsketch/blob/main/docs/configuration.md',
     );
   });
 
@@ -466,9 +465,7 @@ describe('resolveRelative escape detection', () => {
 describe('isSafeHref — adversarial parity with the Rust suite', () => {
   // The corpus shared with `crates/render-html`'s `svg_sanitize.rs`
   // and the React walker's `isSafeHref`. Adding a case to the file fails
-  // whichever of the three does not handle it. Sister-site parity per
-  // `.claude/rules/sanitizer-security.md` §"Testing completeness" and
-  // `.claude/rules/fix-propagation.md`.
+  // whichever of the three does not handle it.
   const corpusPath = resolve(
     dirname(fileURLToPath(import.meta.url)),
     '../../../tests/fixtures/uri-scheme-corpus.txt',
@@ -726,8 +723,7 @@ describe('renderMarkdown code-fence integration', () => {
     expect(html).toMatch(COLOUR_SPAN_RE);
   });
 
-  // Adversarial allowlist tests — per
-  // `.claude/rules/sanitizer-security.md` §"Testing completeness".
+  // Adversarial allowlist tests.
   // The `style` ADD_ATTR widening is the only attack surface this
   // PR opens; each blocked tag class needs an explicit test, and
   // each blocked CSS value pattern needs an explicit test.

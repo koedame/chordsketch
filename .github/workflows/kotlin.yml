@@ -61,7 +61,7 @@ jobs:
         # GLIBC_2.39 in v0.5.0 and failed to load on every older
         # distribution; the aarch64 cell below already used `cross` and
         # came out at GLIBC_2.18. Same tool, same reason, same
-        # `taiki-e/install-action` pin. See ADR-0046.
+        # `taiki-e/install-action` pin.
         uses: taiki-e/install-action@25f51f6b1bf4e18876107cece836f4f77ac17c8c # v2
         with:
           tool: cross
@@ -237,7 +237,7 @@ jobs:
     # The four signing and publishing secrets (CENTRAL_PORTAL_USERNAME,
     # CENTRAL_PORTAL_PASSWORD, GPG_SIGNING_KEY, GPG_SIGNING_PASSWORD) are
     # environment secrets of "maven-central", which admits only `main` and
-    # `v*` tags (ADR-0090), matching python.yml (pypi), ruby.yml (rubygems),
+    # `v*` tags, matching python.yml (pypi), ruby.yml (rubygems),
     # and vscode-extension.yml (vscode-marketplace).
     #
     # If the "maven-central" environment does not exist (fork, fresh instance),
@@ -250,7 +250,7 @@ jobs:
     # Enforce `bash -euo pipefail` in `run:` blocks. Scoped to this job
     # rather than workflow-level because kotlin.yml has a Windows matrix
     # cell (build-jni-others) whose `run:` blocks must keep pwsh defaults.
-    # See issue #1845 (fix-propagation from PR #1821). `-u` added per
+    # See issue #1845 (the same fix PR #1821 made elsewhere). `-u` added per
     # issue #1836 — every var-using block in this job already runs
     # `set -euo pipefail` explicitly, so the default is defense-in-depth.
     defaults:

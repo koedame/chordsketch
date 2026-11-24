@@ -5,7 +5,7 @@ Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/koedame/chordsketch/releases/download/v0.9.1/chordsketch-v0.9.1-x86_64-pc-windows-msvc.zip
     # SHA256 of the published zip. The release commit moves the URL; this is
-    # recomputed after the tag (docs/releasing.md, Post-Release):
+    # recomputed after the tag:
     # Run: curl -L <InstallerUrl> | sha256sum  (uppercase the hex output)
     InstallerSha256: C1918B0B8C9418A3ED8BC63401E9E1D6FF8BB1F9C65A887B215197F83CF1E38D
     NestedInstallerType: portable

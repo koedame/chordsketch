@@ -13,7 +13,7 @@ edition.workspace = true
 # require Rust 1.90. The desktop app is an application, not a library, and the
 # MSRV job excludes it, so the SDK crates keep the workspace floor.
 rust-version = "1.90"
-# Application-layer license per CLAUDE.md §License Policy (`apps/desktop/`,
+# Application-layer license (`apps/desktop/`,
 # `packages/playground/` and `packages/ui-irealb-editor/` are
 # AGPL-3.0-only). SDK crates (everything under `crates/`) stay MIT via the
 # workspace inheritance.

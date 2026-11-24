@@ -371,7 +371,7 @@ describe('<PreviewToolbar>', () => {
   });
 
   test('no string-order select is rendered (horizontal is reader-view only)', () => {
-    // ADR-0026 pins horizontal mode to reader-view; the toolbar must
+    // Horizontal mode is pinned to reader-view; the toolbar must
     // not surface a string-order knob. Locks in the simplification
     // landed alongside #2572 — a previous iteration shipped a
     // player-view escape hatch the maintainer chose to remove.

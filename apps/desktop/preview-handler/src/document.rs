@@ -18,8 +18,7 @@ use chordsketch_render_html::{render_html_css, render_songs_body_with_transpose}
 /// parser, the CLI and the desktop app's open / export commands share, so a
 /// file the app refuses to open is a file the preview pane refuses to draw
 /// and a user never meets two different size ceilings for the same
-/// document. Per `.claude/rules/code-style.md` §"Resource Limits" the
-/// parse + render pipeline has no internal cap, so the boundary check lives
+/// document. The parse + render pipeline has no internal cap, so the boundary check lives
 /// here, at the point where bytes enter the crate.
 pub const MAX_PREVIEW_SOURCE_BYTES: usize = chordsketch_chordpro::input_limit::MAX_INPUT_BYTES;
 

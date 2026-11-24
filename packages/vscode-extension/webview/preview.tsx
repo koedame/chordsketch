@@ -8,8 +8,7 @@
  *
  * Prior to #2527 / #2528 this file was a bespoke vanilla-TS implementation
  * (~487 lines) that managed an iframe-srcdoc HTML view, plain-text view,
- * and toolbar by hand. The retire-bespoke cut-over per
- * [ADR-0017](../../../docs/adr/0017-react-renders-from-ast.md) hands rendering
+ * and toolbar by hand. The cut-over hands rendering
  * to the React component library so VS Code, the playground, and the desktop
  * app all share the same preview surface.
  *

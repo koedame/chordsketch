@@ -69,7 +69,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "THIRD_PARTY_LICENSES.md"
 
 # The composite action CI installs cargo-about with. Its `tool:` line is the
-# only place the version is written down (ADR-0099).
+# only place the version is written down.
 CARGO_ABOUT_PIN = ".github/actions/install-cargo-about/action.yml"
 CARGO_ABOUT_TOOL = re.compile(r"^\s*tool:\s*cargo-about@(\d+\.\d+\.\d+)\s*$", re.M)
 

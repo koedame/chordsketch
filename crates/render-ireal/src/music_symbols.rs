@@ -5,8 +5,7 @@
 //! ending brackets occupy. The drawn shape is a real SMuFL outline
 //! from the Bravura font, baked as static SVG `<path>` data — see
 //! [`crate::bravura`] for the source / extraction provenance and
-//! [ADR-0014](../../../docs/adr/0014-bravura-glyphs-as-svg-paths.md)
-//! for the bundling-architecture decision.
+//! why the outlines are baked rather than loaded as a font.
 //!
 //! ## Glyph shapes
 //!
@@ -146,7 +145,7 @@ pub(crate) fn render_music_symbols(song: &IrealSong, layout: &Layout) -> String 
             // `MusicalSymbol::canonical_text`, which is the single
             // source of truth shared with the URL serializer and the
             // ChordPro converter so all four surfaces paint the same
-            // spelling (#2427, `.claude/rules/renderer-parity.md`).
+            // spelling (#2427).
             // `Segno` / `Coda` / `Fermata` are handled above as
             // SMuFL glyphs; for those `canonical_text()` returns
             // `None` and the structural `match` above is exhaustive,
@@ -331,8 +330,7 @@ mod tests {
         // Locks the eleven spec phrases through the SVG renderer
         // (#2427). The renderer must paint the canonical text from
         // `MusicalSymbol::canonical_text` — same source of truth
-        // the URL serializer and ChordPro converter use, per
-        // `.claude/rules/renderer-parity.md`.
+        // the URL serializer and ChordPro converter use.
         use chordsketch_ireal::JumpTarget;
         let cases: &[(MusicalSymbol, &str)] = &[
             (

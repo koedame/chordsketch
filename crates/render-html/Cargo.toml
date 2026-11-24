@@ -7,7 +7,7 @@ rust-version.workspace = true
 # Bravura SMuFL glyph outlines (`src/bravura.rs`) under SIL OFL-1.1
 # alongside the MIT-licensed Rust source. SPDX `AND` reflects that
 # downstream consumers must comply with both terms.
-# Attribution: NOTICE (project root) + LICENSE-OFL.txt + ADR-0014.
+# Attribution: NOTICE (project root) + LICENSE-OFL.txt.
 license = "MIT AND OFL-1.1"
 authors.workspace = true
 repository.workspace = true

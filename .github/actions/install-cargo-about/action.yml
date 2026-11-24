@@ -7,7 +7,7 @@ description: >
   `cargo-about`, and counts it among the inputs `--check` hashes. Two
   releases of `cargo-about` can find different license texts in the same
   crate, so the notice would otherwise gain or lose sections depending on
-  who regenerated it (ADR-0099).
+  who regenerated it.
 runs:
   using: "composite"
   steps:

@@ -1,8 +1,8 @@
 name: Dependency Audit
 
-# Scans `Cargo.lock` against the RustSec advisory database (ADR-0048), and
+# Scans `Cargo.lock` against the RustSec advisory database, and
 # every `package-lock.json` and `requirements*.txt` against the npm and PyPI
-# advisory databases (the "npm lockfiles" addendum to ADR-0048). Dependabot
+# advisory databases. Dependabot
 # version updates are configured for `github-actions` and `cargo` only, and
 # its alerts cover only what GitHub's dependency graph can see, so without
 # the `npm` and `python` jobs nothing watched those lockfiles.
@@ -10,15 +10,15 @@ name: Dependency Audit
 # The schedule is the load-bearing trigger: an advisory is published
 # against a version this repo already depends on, so a dependency-change
 # trigger alone can never see it. Before this workflow, the only place
-# `cargo audit` ran was inside `/dependabot-review`, which fires only when
+# `cargo audit` ran was the review of a Dependabot PR, which happens only when
 # a Dependabot PR is open for the affected crate — and Dependabot stops
 # opening PRs for an ecosystem once five of its PRs are open (see the
 # comment at the top of `.github/dependabot.yml`). The detector went quiet
 # exactly when the backlog grew.
 #
 # The `pull_request` trigger is scoped to the inputs that decide this
-# workflow's outcome (the same enumerable-inputs test ADR-0041 applies to
-# `readme-smoke.yml`): the manifests and lockfile that produce the crate
+# workflow's outcome (the same enumerable-inputs test `readme-smoke.yml`
+# applies): the manifests and lockfile that produce the crate
 # set, the ignore list that filters it, and the workflow and script that
 # evaluate it. A PR that changes none of those cannot change the verdict.
 
@@ -52,8 +52,8 @@ concurrency:
   group: dependency-audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# The `licenses` job holds every dependency to the allow list in `deny.toml`
-# (ADR-0085): a crate under GPL, AGPL or LGPL alone, or under a license nobody
+# The `licenses` job holds every dependency to the allow list in `deny.toml`:
+# a crate under GPL, AGPL or LGPL alone, or under a license nobody
 # decided to accept, fails the pull request that adds it. It does not run on
 # the schedule: an advisory arrives against a version this repo already uses,
 # but a license is fixed by the version, so a lock file that passed once
@@ -77,7 +77,7 @@ jobs:
       - name: Install Rust toolchain
         # `cargo tree` (the scope classification below) needs a toolchain.
         # No Rust is compiled here, so there is no `Swatinem/rust-cache`
-        # entry — per `.claude/rules/ci-parallelization.md` §2 cache belongs
+        # entry — the cache belongs
         # to jobs that invoke `cargo build/test/clippy/doc`.
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:

@@ -4,8 +4,8 @@ import { expect, test } from '@playwright/test';
 // interactive `<MetronomeButton>` (in `@chordsketch/react`, backed by
 // the `useMetronome` Web Audio hook): clicking anywhere on the pill
 // toggles playback and the frame animates while playing. The
-// in-package vitest suite stubs Web Audio, so — per
-// `.claude/rules/playground-smoke.md` — only a real-browser smoke
+// in-package vitest suite stubs Web Audio, so
+// only a real-browser smoke
 // proves the control actually mounts and toggles in the deployed
 // bundle.
 //

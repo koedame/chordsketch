@@ -29,7 +29,7 @@ on:
   # Reusable: called by release.yml's fan-out after the GitHub Release
   # exists. A non-empty `tag` is what puts this workflow in release mode:
   # `publish` uploads the XCFramework that was built and pinned in
-  # `Package.swift` *before* the tag (ADR-0080).
+  # `Package.swift` *before* the tag.
   # Nothing is built in release mode. On `push` / `pull_request` `tag` is
   # empty and only build + test run.
   workflow_call:
@@ -63,7 +63,7 @@ permissions:
 
 # Ensure `run:` blocks use `bash -eo pipefail`, not the silent default that
 # swallows mid-pipe failures. swift.yml has no Windows matrix, so a
-# workflow-level default is safe (fix-propagation from PR #1821, issue #1845).
+# workflow-level default is safe (the same fix as PR #1821, issue #1845).
 # `-u` is added on top (issue #1836) so a typo'd env-var reference fails
 # loud; every block in this workflow already runs `set -euo pipefail`
 # explicitly, making the default strictly defense-in-depth.
@@ -254,10 +254,10 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  # Release step 3: pin the XCFramework this run built, and the Swift
+  # Before the release tag: pin the XCFramework this run built, and the Swift
   # bindings generated for it, into the release branch, so the version-bump
   # commit that lands on `main` already names the asset and checksum its
-  # tag will serve (ADR-0080). Dispatch it on the release branch after
+  # tag will serve. Dispatch it on the release branch after
   # `check-version-consistency.py --set`:
   #
   #   gh workflow run swift.yml --ref <release-branch> -f pin=X.Y.Z
@@ -364,7 +364,7 @@ jobs:
     name: Publish XCFramework
     runs-on: ubuntu-24.04
     # `inputs.tag`, not the event: under `workflow_call` the event is the
-    # caller's `push`, indistinguishable from a push to main (ADR-0039).
+    # caller's `push`, indistinguishable from a push to main.
     if: inputs.tag != ''
     permissions:
       contents: write
@@ -389,14 +389,14 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           if [ ! -f Package.swift ] || [ ! -f scripts/swift_package.py ]; then
-            echo "::error::${TAG} has no root Package.swift, so no XCFramework was pinned for it. Only releases cut with the pin step (docs/releasing.md step 3) can be published from here."
+            echo "::error::${TAG} has no root Package.swift, so no XCFramework was pinned for it. Only releases cut with the pin step (this workflow dispatched with pin=X.Y.Z on the release branch) can be published from here."
             exit 1
           fi
           PIN=$(python3 scripts/swift_package.py show)
           read -r URL SHA <<< "$PIN"
           EXPECTED="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/chordsketch-xcframework.zip"
           if [ "$URL" != "$EXPECTED" ]; then
-            echo "::error::Package.swift at ${TAG} points at ${URL}, not ${EXPECTED}. The XCFramework was not pinned before the tag: see docs/releasing.md step 3."
+            echo "::error::Package.swift at ${TAG} points at ${URL}, not ${EXPECTED}. The XCFramework was not pinned before the tag: the release branch has to run this workflow with pin=X.Y.Z before the tag is cut."
             exit 1
           fi
           RUN_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=xcframework-${SHA}" \

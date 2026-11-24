@@ -3,16 +3,15 @@
 // The contrast and ARIA defects this suite guards were all found by
 // running Lighthouse by hand, months after the markup that introduced
 // them landed. Nothing in CI measured rendered colour or computed an
-// accessible name, so `--cs-text-tertiary` on 12px labels
-// (ADR-0054), `github-dark` comment tokens on a near-black code
-// surface (ADR-0055), `role="status"` on `<footer>`, an unnamed
+// accessible name, so `--cs-text-tertiary` on 12px labels,
+// `github-dark` comment tokens on a near-black code
+// surface, `role="status"` on `<footer>`, an unnamed
 // CodeMirror textbox and three buttons whose accessible name dropped
 // their visible text all shipped green.
 //
 // axe-core is the engine behind Lighthouse's accessibility category,
 // so a violation here is a Lighthouse point there. It runs against the
-// production build for the reason `.claude/rules/playground-smoke.md`
-// gives: the deployed bundle is what users get.
+// production build because the deployed bundle is what users get.
 
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';

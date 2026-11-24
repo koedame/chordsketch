@@ -120,6 +120,3 @@ When a notice is useful, this is the wording to copy:
 Open an issue at <https://github.com/koedame/chordsketch/issues>. Permission
 under this policy is only ever granted in writing; silence is not consent,
 and one grant does not extend to the next use.
-
-The rationale behind this policy is recorded in
-[ADR-0058](docs/adr/0058-the-name-is-protected-separately-from-the-code.md).

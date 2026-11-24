@@ -2,7 +2,7 @@ name: Prune old releases
 
 # Reusable: called last by release.yml and desktop-release.yml, after the
 # release is published and every channel that points at its assets has
-# been updated (ADR-0091). Deletes the GitHub Releases of the same family
+# been updated. Deletes the GitHub Releases of the same family
 # that are older than `tag`, so only the newest one stays on the Releases
 # page. The git tags stay.
 #

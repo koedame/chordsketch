@@ -148,7 +148,7 @@ function isSourceMode(
  *    <Capo source={source} onSourceChange={setSource} />
  *    ```
  *
- * Per ADR-0023, the selected value drives a render-time `-capo`
+ * The selected value drives a render-time `-capo`
  * semitone shift applied by the renderer pipeline; this component
  * itself does not transpose chord lines.
  */

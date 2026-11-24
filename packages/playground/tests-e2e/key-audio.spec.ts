@@ -5,8 +5,8 @@
 // pitches come from the new `keyScalePitches` / `keyTonicTriad`
 // `@chordsketch/wasm` exports.
 //
-// The in-package vitest suites stub Web Audio and the wasm exports, so —
-// per `.claude/rules/playground-smoke.md` — only a real-browser smoke
+// The in-package vitest suites stub Web Audio and the wasm exports, so
+// only a real-browser smoke
 // proves the interactive `{key}` chip mounts in the deployed bundle and
 // that clicking it drives the new wasm exports without an uncaught
 // exception. Unlike chord audio, the key chip needs no toggle: it is

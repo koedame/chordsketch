@@ -331,7 +331,7 @@ export function ChordInspector(props: ChordInspectorProps): JSX.Element {
         </div>
       </div>
 
-      {/* Structured chord-type controls (ADR-0037): triad quality, seventh,
+      {/* Structured chord-type controls: triad quality, seventh,
           and tensions are three orthogonal groups whose composition only ever
           yields an explicit, unambiguous suffix (e.g. `7(9,11,13)`, never the
           ambiguous `13`). The current suffix is decomposed to light up the

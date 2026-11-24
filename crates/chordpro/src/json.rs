@@ -2,12 +2,12 @@
 //!
 //! Mirrors the iReal Pro pattern in `chordsketch-ireal::json` so the
 //! `chordsketch-chordpro` crate's zero-dependency policy stays
-//! intact (CLAUDE.md §Dependency Policy).
+//! intact.
 //!
 //! The serializer exists to expose the parsed AST to the React /
 //! browser surface via `chordsketch-wasm::parseChordpro`, which is
 //! how `@chordsketch/react`'s AST → JSX renderer drives its
-//! preview output (see [ADR-0017](../../docs/adr/0017-react-renders-from-ast.md)).
+//! preview output.
 //! TypeScript types matching this shape live at
 //! `packages/react/src/chordpro-ast.ts` — keep the two in sync.
 //!
@@ -790,8 +790,7 @@ mod tests {
 
     #[test]
     fn multibyte_unicode_lyrics_round_trip() {
-        // Regression guard for `.claude/rules/code-style.md` §"Unicode
-        // Safety". The hand-rolled JSON serializer must preserve
+        // Unicode-safety regression guard. The hand-rolled JSON serializer must preserve
         // multi-byte UTF-8 (CJK, RTL, emoji) verbatim — a regression
         // that escaped them through `\uXXXX` would still parse, but
         // a regression that truncated mid-byte would break the

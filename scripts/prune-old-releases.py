@@ -3,7 +3,7 @@
 
 ChordSketch is pre-1.0, and an old release can carry a vulnerability that
 a newcomer would then install, so only the newest release of each tag
-family stays on the Releases page (ADR-0091). The two families are the
+family stays on the Releases page. The two families are the
 library / CLI (`v<X.Y.Z>`) and the desktop app (`desktop-v<X.Y.Z>`);
 they ship independently, so one family's newest release is never
 touched by the other's prune.

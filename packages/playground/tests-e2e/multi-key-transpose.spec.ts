@@ -11,15 +11,14 @@
 // "Original → Playing" pair for only the song-primary key and left
 // every other key chip unpaired.
 //
-// This is precisely the integration class `.claude/rules/playground-
-// smoke.md` exists for: the React unit tests hand-build the map as a
+// This is precisely the integration class a browser smoke
+// exists for: the React unit tests hand-build the map as a
 // plain JS object literal and the Rust unit tests call the parser
 // directly, so neither layer ever observes the real wasm boundary.
 // Only loading the deployed bundle in a browser proves the map
 // crosses the boundary in a shape the walker can read.
 //
-// Structural assertions only (DOM class names + text content), per
-// the playground-smoke authoring guidance.
+// Structural assertions only (DOM class names + text content).
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -72,7 +71,7 @@ test.describe("multi-{key} transpose", () => {
     // Spot-check the transposed (Playing) values so the assertion
     // fails if the pairing renders but with the wrong key: each pair's
     // second `.meta-inline__group` carries the sounding key. The
-    // canonical rendered form is spelled out (ADR-0035), so the chips
+    // canonical rendered form is spelled out, so the chips
     // read "A major" / "E major" / "B major".
     // G + 2 = A, D + 2 = E, A + 2 = B.
     const playing = await pairs.evaluateAll((els) =>

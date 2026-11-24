@@ -11,9 +11,8 @@ name: Desktop Build
 #
 # Kept separate from `ci.yml`'s `desktop-smoke` job because a full
 # Tauri bundle build is ~5-10 minutes per runner; running the full
-# matrix on every PR would blow the macOS-slot ceiling (see
-# `.claude/rules/ci-parallelization.md` §5 on the 5-job macOS cap
-# and what concurrent PRs cost against it).
+# matrix on every PR would blow the macOS-slot ceiling (the account
+# runs at most five macOS jobs at once, shared by every open PR).
 #
 # Triggers:
 #   - push to main: produces artefacts for every merged change
@@ -98,8 +97,7 @@ on:
       - ".github/actions/install-wasm-pack/action.yml"
   workflow_dispatch:
 
-# PR-scoped cancel-in-progress per the §5 shape in
-# `.claude/rules/ci-parallelization.md`: force-pushes to the same
+# PR-scoped cancel-in-progress: force-pushes to the same
 # PR cancel the stale run so the macOS 5-slot ceiling does not
 # fill with superseded speculative work. Push-to-main and
 # workflow_dispatch runs always complete.
@@ -138,7 +136,7 @@ jobs:
             # oldest image that still carries `libwebkit2gtk-4.1-dev`,
             # which makes glibc 2.35 the floor. Keep this label in sync
             # with `desktop-release.yml`; `scripts/check-glibc-floor.py`
-            # asserts both on every PR. See ADR-0056.
+            # asserts both on every PR.
             runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
           - label: macos-aarch64

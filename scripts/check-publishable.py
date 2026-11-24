@@ -7,8 +7,7 @@
 
 Run by `.github/workflows/publishable.yml` in the merge queue, on every
 push to `main`, nightly, and on each pull request that `scope` says can
-reach a package (ADR-0079). The conditions, and the reason each exists, are
-in `docs/publishing-requirements.md`; the checks themselves live in
+reach a package. The checks themselves live in
 `scripts/_publish_checks.py`, which `scripts/publish-registries.py` runs
 too before crates.io and npm publish, so a release is held to exactly what
 every merge was held to.

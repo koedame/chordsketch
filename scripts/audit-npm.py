@@ -4,7 +4,7 @@
 GitHub's Dependabot alerts cover only the dependencies GitHub's dependency
 graph can see, and this repository configures Dependabot version updates for
 `github-actions` and `cargo` only. The npm lockfiles therefore had no
-advisory detector at all (ADR-0048, "npm lockfiles" addendum). This script is
+advisory detector at all. This script is
 the npm counterpart of `scripts/audit-advisories.py` and makes the same
 decisions:
 

@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
-// Policy test for ADR-0060: @chordsketch/chordpro-lite is the helper
+// Policy test: @chordsketch/chordpro-lite is the helper
 // layer a consumer can use before — or instead of — loading the engine.
 // It must never acquire a dependency on @chordsketch/wasm or
 // @chordsketch/wasm-export, which would defeat the reason it exists.
@@ -27,7 +27,7 @@ function manifest(): Manifest {
   return JSON.parse(readFileSync(PKG_PATH, 'utf8')) as Manifest;
 }
 
-describe('@chordsketch/chordpro-lite is wasm-free (ADR-0060)', () => {
+describe('@chordsketch/chordpro-lite is wasm-free', () => {
   test('no @chordsketch/wasm* appears in any dependency field of package.json', () => {
     const pkg = manifest();
     const violations: string[] = [];

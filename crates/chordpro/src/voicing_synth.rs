@@ -14,7 +14,7 @@
 //! driven by the chord's tones — not by a per-type lookup table — any chord
 //! type the parser can model automatically gets a diagram, and the diagram
 //! coverage of the chord-type palette stays at 100% with no per-type data to
-//! maintain (see `.claude/rules/chord-diagram-coverage.md`).
+//! maintain.
 //!
 //! The synthesiser is a *fallback*: [`crate::voicings::lookup_diagram`] and
 //! [`crate::voicings::lookup_keyboard_voicing`] consult song `{define}`

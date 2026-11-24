@@ -3,8 +3,7 @@ description: >
   Install what the Marketplace and Open VSX publish jobs run `vsce` and
   `ovsx` from. Shared by those two jobs and by `publishable.yml`, which
   runs it before every merge: v0.6.0's publish jobs both died here
-  with `tsup: not found`, on a path no pull request had exercised
-  (ADR-0070).
+  with `tsup: not found`, on a path no pull request had exercised.
 runs:
   using: "composite"
   steps:

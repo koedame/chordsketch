@@ -335,7 +335,7 @@ jobs:
     # Enforce `bash -eo pipefail` in `run:` blocks. Scoped to this job
     # rather than workflow-level because python.yml has Windows matrix
     # cells (build-wheels-windows, test-windows) whose `run:` blocks must
-    # keep pwsh defaults. See issue #1845 (fix-propagation from PR #1821).
+    # keep pwsh defaults. See issue #1845 (the same fix PR #1821 made elsewhere).
     defaults:
       run:
         shell: bash

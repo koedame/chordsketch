@@ -1,7 +1,7 @@
 // Smoke coverage for the chord-editor footer mount path in the ChordPro
 // playground (#2622 / #2626 / #2630 / #2638 / #2644).
 //
-// Per `.claude/rules/playground-smoke.md`, a React component mount site
+// A React component mount site
 // reached only at runtime in a real browser needs an end-to-end spec:
 // the in-process vitest suites stub the wasm boundary, so the only thing
 // proving the footer actually mounts in the deployed bundle is loading
@@ -121,7 +121,7 @@ test.describe('chord-editor footer (ChordPro playground)', () => {
     await expect(page.locator(`${FOOTER} .chordsketch-sheet__cins[data-mode='edit']`)).toBeVisible();
 
     // The chord-type controls are three orthogonal groups (triad / 7th /
-    // tensions, ADR-0037), not a flat palette. Their composition produces only
+    // tensions), not a flat palette. Their composition produces only
     // explicit, unambiguous suffixes — `maj7(13)`, never the ambiguous `maj9`.
     const footer = page.locator(FOOTER);
     const triadMaj = footer.locator('[aria-label="Triad quality"] button', { hasText: /^maj$/ });

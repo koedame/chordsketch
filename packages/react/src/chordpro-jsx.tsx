@@ -10,8 +10,7 @@
 // `<p class="meta">` continues to apply unchanged.
 //
 // The split between this file and `chordsketch-render-html` is
-// the architectural one captured by
-// [ADR-0017](../../docs/adr/0017-react-renders-from-ast.md):
+// architectural:
 // React surfaces render AST → JSX directly, while
 // `chordsketch-render-html` stays as the canonical static-HTML
 // emitter for the CLI / FFI / GitHub Action surfaces.
@@ -21,8 +20,8 @@
 // through the shared corpus `tests/fixtures/uri-scheme-corpus.txt`
 // (`javascript:`, `vbscript:`, `data:`, `file:`, `blob:`).
 // Any new scheme added there MUST land in
-// `DANGEROUS_URI_SCHEMES` here in the same PR per
-// `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
+// `DANGEROUS_URI_SCHEMES` here in the same PR: a scheme
+// blocked on one surface but not the other is a security asymmetry.
 
 import {
   Fragment,
@@ -97,8 +96,8 @@ import type { ChordRepositionEvent } from './chord-source-edit';
 
 // Sister-site list to the playground docs pipeline's scheme set; the Rust
 // renderer keeps only fragment references (`svg_sanitize.rs`). Any new entry
-// MUST land in both lists in the same PR
-// per `.claude/rules/sanitizer-security.md` §"Security Asymmetry".
+// MUST land in both lists in the same PR, so the two surfaces
+// never disagree on what is dangerous.
 //
 // - `javascript:` / `vbscript:` — code execution
 // - `data:` — content injection
@@ -245,7 +244,7 @@ function decodeCharRefs(value: string): string {
  * diverge from Rust's `chars()` semantics on emoji-padded inputs.
  *
  * Any change here MUST land in the Rust function in the same PR
- * (sister-site parity per `.claude/rules/fix-propagation.md`).
+ * (sister-site parity).
  */
 function isSafeHref(href: string): boolean {
   const out: string[] = [];
@@ -272,8 +271,8 @@ function renderSpan(span: ChordproTextSpan, key: number): ReactNode {
   // Element choices match `crates/render-html/src/lib.rs::render_spans`
   // byte for byte (`<b>` / `<i>` / `<mark>` / `<span class="comment">`)
   // so the existing host-page CSS keyed off those selectors lights
-  // up across both surfaces (sister-site parity per
-  // `.claude/rules/renderer-parity.md`). The `b` / `i` choice over
+  // up across both surfaces (sister-site parity).
+  // The `b` / `i` choice over
   // the more "modern" `strong` / `em` is deliberate — a future
   // change MUST update both sites in lockstep.
   switch (span.kind) {
@@ -303,10 +302,7 @@ function renderSpan(span: ChordproTextSpan, key: number): ReactNode {
       // ChordPro payload like
       // `{span foreground=red); background-image: url(//evil.example/?leak`
       // is harmless to React's per-property style API but creates
-      // a sanitizer asymmetry between the two surfaces — flagged
-      // by `.claude/rules/sanitizer-security.md` §"Security
-      // Asymmetry" and `renderer-parity.md` §"Sanitizer Parity
-      // (React JSX surface)".
+      // a sanitizer asymmetry between the two surfaces.
       const style: CSSProperties = {};
       if (span.attributes.fontFamily) {
         style.fontFamily = sanitizeCssValue(span.attributes.fontFamily);
@@ -1630,8 +1626,7 @@ export interface ChordSelection {
 /**
  * Briefly flash a `.chord--ringing` class on a played chord element so
  * the tap gets visual feedback. Delegates to the shared
- * {@link pulseElement} mechanism (sister to the chord-diagram pulse — see
- * .claude/rules/fix-propagation.md) so the reduced-motion guard and the
+ * {@link pulseElement} mechanism (sister to the chord-diagram pulse) so the reduced-motion guard and the
  * animation-restart reflow live in one place.
  */
 function pulseChordElement(el: HTMLElement): void {
@@ -1674,7 +1669,7 @@ function renderLyricsLine(
   caret: CaretPlacement | null = null,
   /** Chord drag-and-drop + click-to-nudge context. */
   reposition: ChordRepositionContext | null = null,
-  /** Inline / hover diagram config (ADR-0027); `null` keeps the
+  /** Inline / hover diagram config; `null` keeps the
    * plain chord-name rendering. */
   diagrams: LyricsDiagramConfig | null = null,
   /** Chord-audio config (#2650); `null` keeps chords inert. */
@@ -1708,7 +1703,7 @@ interface LyricsLineProps {
   /** 1-indexed source line decoration applied to the root `.line`
    * div by `pushElement` for the editor↔preview caret-sync wire. */
   'data-source-line'?: number;
-  /** Inline / hover diagram config (ADR-0027). `null` / `'section'`
+  /** Inline / hover diagram config. `null` / `'section'`
    * keeps the plain chord-name rendering. */
   diagrams?: LyricsDiagramConfig | null;
   /** Chord-audio config (#2650). `null` keeps chords inert. */
@@ -1717,8 +1712,8 @@ interface LyricsLineProps {
 
 /**
  * Inline / hover diagram config threaded to {@link LyricsLine} so the
- * chord-block renderer can show compact diagrams above the lyrics
- * (ADR-0027). Resolved once on the walk context and passed per line.
+ * chord-block renderer can show compact diagrams above the lyrics.
+ * Resolved once on the walk context and passed per line.
  */
 interface LyricsDiagramConfig {
   mode: DiagramsMode;
@@ -1729,7 +1724,7 @@ interface LyricsDiagramConfig {
 
 /**
  * Renders the chord cell above a lyric segment when diagrams are shown
- * inline / hover (ADR-0027). A component (not a bare JSX fragment) so the
+ * inline / hover. A component (not a bare JSX fragment) so the
  * `useChordDiagram` hook inside `<ChordDiagram>` runs per chord — the
  * walker cannot call hooks inside its segment `.map`.
  *
@@ -2258,7 +2253,7 @@ function LyricsLine({
   // `.lyrics` sub-element below.
   const lineMarker =
     caret && caret.row === 'line' ? renderMarker(caret.lineRatio) : null;
-  // Layout contract for inline diagrams (ADR-0027): the chord-block
+  // Layout contract for inline diagrams: the chord-block
   // flex items must bottom-align so every `.lyrics` row sits on the
   // same baseline regardless of the (tall) compact diagram stacked
   // above the chord-bearing blocks. Without this, a chord-less block
@@ -2436,8 +2431,8 @@ function LyricsLine({
             {segment.chord ? (
               diagrams &&
               (diagrams.mode === 'inline' || diagrams.mode === 'hover') ? (
-                // chordsketch inline / hover diagram above the lyric
-                // (ADR-0027). `<ChordCell>` is a component so its
+                // chordsketch inline / hover diagram above the lyric.
+                // `<ChordCell>` is a component so its
                 // `useChordDiagram` hook can run per chord.
                 //
                 // The click-to-nudge controls (#2614) are NOT wired
@@ -2991,7 +2986,7 @@ export interface RenderChordproAstOptions {
   transposedKey?: string | null;
   /**
    * Per-directive transposed-key map keyed by the **canonical**
-   * `{key:}` directive value (ADR-0035 spelled-out form, e.g.
+   * `{key:}` directive value (spelled-out form, e.g.
    * `{ "G major": "A major", "D major": "E major" }` for a song
    * with both directives transposed +2). Plumbed in from
    * `useChordproAst`'s `transposedKeyDirectives`, which is
@@ -3000,8 +2995,8 @@ export interface RenderChordproAstOptions {
    * When present, the walker uses it for EVERY `{key:}`
    * directive — primary AND mid-song — to emit a paired
    * "Original → Playing" chip, achieving four-way parity with
-   * the Rust text / HTML / PDF renderers per
-   * `.claude/rules/renderer-parity.md`. When omitted, the walker
+   * the Rust text / HTML / PDF renderers.
+   * When omitted, the walker
    * falls back to the older `transposedKey`-only path that
    * shows the pair for the primary directive only and leaves
    * mid-song directives authored.
@@ -3151,7 +3146,7 @@ export type DiagramsPosition = 'bottom' | 'top' | 'right' | 'below';
  */
 /**
  * How chord diagrams are surfaced — a chordsketch extension to the
- * `{diagrams}` directive (ADR-0027). Mirrors the Rust `DiagramsMode`.
+ * `{diagrams}` directive. Mirrors the Rust `DiagramsMode`.
  * `'section'` (default) is the end-of-song grid; `'inline'` replaces
  * each chord name above a lyric with its compact diagram; `'hover'`
  * keeps the name and reveals the compact diagram on hover / focus.
@@ -3162,7 +3157,7 @@ interface DiagramsState {
   visible: boolean;
   position: DiagramsPosition;
   instrument?: ChordDiagramInstrument;
-  /** Surfacing mode (ADR-0027), orthogonal to instrument / position
+  /** Surfacing mode, orthogonal to instrument / position
    * so `{diagrams: inline}` and `{diagrams: guitar}` compose. */
   mode: DiagramsMode;
 }
@@ -3179,7 +3174,7 @@ interface DiagramsState {
  * the underlying parseable chord name used for AUDIO: a `display=`
  * override can be an arbitrary label (e.g. `"C⁹"`) the pitch lookup
  * cannot parse, so the two are kept distinct exactly as the inline/hover
- * `<ChordCell>` keeps them distinct (.claude/rules/fix-propagation.md).
+ * `<ChordCell>` keeps them distinct.
  */
 interface GridChord {
   name: string;
@@ -3230,7 +3225,7 @@ function collectChordNames(song: ChordproSong): GridChord[] {
  * (`base-fret 1 frets …`) is the diagram spec, the first word
  * is the chord name.
  *
- * Sister-site note (renderer-parity.md): the walker currently emits
+ * Sister-site note: the walker currently emits
  * the end-of-song chord-diagrams grid section, NOT a per-`{define}`
  * inline diagram on each directive — unlike the Rust HTML renderer
  * which paints both. When per-`{define}` inline emission is added
@@ -3442,7 +3437,7 @@ const DIAGRAMS_POSITIONS = new Set<DiagramsPosition>([
   'below',
 ]);
 // Mode keywords recognised on a `{diagrams: …}` value (chordsketch
-// extension, ADR-0027). Kept separate from instrument / position so a
+// extension). Kept separate from instrument / position so a
 // value matches exactly one facet; `section` restores the default grid.
 const DIAGRAMS_MODES = new Set<DiagramsMode>(['section', 'inline', 'hover']);
 
@@ -3450,8 +3445,7 @@ const DIAGRAMS_MODES = new Set<DiagramsMode>(['section', 'inline', 'hover']);
 // `ChordDiagramInstrument` value. Mirrors the equivalent map in
 // `chordsketch_chordpro::resolve_diagrams_instrument` so a
 // `{diagrams: piano}` line behaves identically in Rust and React
-// surfaces (per `.claude/rules/renderer-parity.md` §Sanitizer /
-// AST-arm parity). Returns `undefined` for values that are NOT
+// surfaces. Returns `undefined` for values that are NOT
 // instrument names — the caller falls back to the consumer's
 // `chordDiagramsInstrument` prop.
 function diagramsValueAsInstrument(
@@ -3518,7 +3512,7 @@ function resolveDiagramsState(song: ChordproSong): DiagramsState {
       continue;
     }
     if (DIAGRAMS_MODES.has(value as DiagramsMode)) {
-      // chordsketch extension (ADR-0027): `inline` / `hover` choose how
+      // chordsketch extension: `inline` / `hover` choose how
       // diagrams are surfaced (`section` restores the default grid).
       // Orthogonal to instrument / position, so it sets only `mode`.
       state.mode = value as DiagramsMode;
@@ -4037,7 +4031,7 @@ interface WalkContext {
   soundingKey: string | null;
   /**
    * Per-directive transposed-key map keyed by the **canonical**
-   * `{key:}` directive value (ADR-0035 spelled-out form, e.g.
+   * `{key:}` directive value (spelled-out form, e.g.
    * `{ "G major": "A major", "D major": "E major" }` for a song
    * with both directives transposed +2). Sister-site to the
    * Rust renderers' inline `canonical_transposed_key_with_style`
@@ -4072,7 +4066,7 @@ interface WalkContext {
   /**
    * Diagram state (visibility / mode / instrument / position) resolved
    * once over the whole song. The per-line chord-block renderer reads
-   * this to decide inline / hover rendering above the lyrics (ADR-0027),
+   * this to decide inline / hover rendering above the lyrics,
    * and the end-of-song grid reuses it. `null` when `chordDiagrams` is
    * not enabled.
    */
@@ -4086,7 +4080,7 @@ interface WalkContext {
    * Consumer-supplied default instrument / orientation for diagrams,
    * copied from `options.chordDiagrams` so the per-line chord-block
    * renderer (which only has `ctx`, not `options`) can fall back to
-   * them for inline / hover diagrams (ADR-0027).
+   * them for inline / hover diagrams.
    */
   chordDiagramsInstrument?: ChordDiagramInstrument;
   chordDiagramsOrientation?: ChordDiagramOrientation;
@@ -4835,7 +4829,7 @@ export function renderChordproAst(
   let rightSection: ReactNode = null;
   let bottomSection: ReactNode = null;
   // The end-of-song grid is the `section` mode (default). In the
-  // `inline` / `hover` chordsketch modes (ADR-0027) the diagrams are
+  // `inline` / `hover` chordsketch modes the diagrams are
   // shown above the lyrics by the chord-block renderer instead, so the
   // grid is suppressed here.
   if (
@@ -4962,7 +4956,7 @@ export function renderChordproAst(
   // full width. `position` defaults to `bottom`, so without this gate
   // an inline/hover song silently picks up `song--diagrams-bottom`.
   //
-  // `song--diagrams-inline` (ADR-0051) is a separate, always-safe
+  // `song--diagrams-inline` is a separate, always-safe
   // modifier: it carries only the leading-gutter `padding-left` that
   // clears the first line's overhanging compact diagram (see
   // `.line--inline-diagrams .chord-block-inline-diagram`'s

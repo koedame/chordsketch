@@ -6,7 +6,7 @@
 //!
 //! - how the capo, the CLI offset and the in-file transpose (the
 //!   `{+config.settings.transpose}` delta, replaced by each `{transpose}`)
-//!   compose into one displayed offset ([`SongTranspose`], ADR-0023);
+//!   compose into one displayed offset ([`SongTranspose`]);
 //! - which lines make up the most recent chorus and how many times it may
 //!   be recalled ([`ChorusTracker`]);
 //! - how the body of an unsupported notation block is skipped
@@ -31,7 +31,7 @@ pub const MAX_CHORUS_RECALLS: usize = 1000;
 /// The displayed transpose offset of a song, tracked as the walk meets
 /// `{transpose}` directives.
 ///
-/// The offset is `file + cli - capo` (ADR-0023). `file` is the in-file
+/// The offset is `file + cli - capo`. `file` is the in-file
 /// `{+config.settings.transpose}` delta at the start of the song and the
 /// latest `{transpose}` value afterwards.
 #[derive(Clone, Copy, Debug)]

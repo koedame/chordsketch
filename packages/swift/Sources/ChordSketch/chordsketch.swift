@@ -1434,7 +1434,7 @@ public func chordDiagramSvgWithDefinesOrientation(chord: String, instrument: Str
  * Like `chord_diagram_svg` but renders in the requested
  * orientation (#2572). `orientation` accepts `"vertical"`
  * (default) or `"horizontal"`. Horizontal mode is reader-view
- * only — see ADR-0026. `null` falls back to the default;
+ * only (high pitch on top). `null` falls back to the default;
  * unrecognised strings fall back silently. Mirrors the wasm
  * `chordDiagramSvgWithOrientation` and NAPI
  * `chordDiagramSvgWithOrientation` exports so every binding

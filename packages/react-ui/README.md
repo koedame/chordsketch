@@ -62,8 +62,7 @@ All components are pure class composition over the canonical design-system class
 
 The stylesheet also ships the design system's **app-shell vocabulary**. These
 are canonical classes with no React component — they carry no behaviour and no
-state, so you write the markup and the stylesheet does the rest
-([ADR-0061](https://github.com/koedame/chordsketch/blob/main/docs/adr/0061-chrome-and-layout-css-ships-from-react-ui.md)).
+state, so you write the markup and the stylesheet does the rest.
 
 | Class family | What it is |
 |---|---|
@@ -92,10 +91,9 @@ your app's `:root`.
 ## Design system
 
 The class vocabulary, tokens, and visual contract are defined upstream in
-[`design-system/DESIGN.md`](https://github.com/koedame/chordsketch/blob/main/design-system/DESIGN.md)
+[`design-system/tokens.css`](https://github.com/koedame/chordsketch/blob/main/design-system/tokens.css)
 and the static references under `design-system/preview/`. This package is the
-React binding of that layer (see
-[ADR-0029](https://github.com/koedame/chordsketch/blob/main/docs/adr/0029-react-ui-primitives-package.md)), plus the CSS for the chrome and layout classes above; the design system
+React binding of that layer, plus the CSS for the chrome and layout classes above; the design system
 itself remains the source of truth.
 
 ## Links

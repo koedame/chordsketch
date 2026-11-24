@@ -8,7 +8,7 @@ import { readStylesheetSource } from './stylesheet-source';
 
 /**
  * Selectors allowed to paint with the tertiary tone (`--cs-text-tertiary`
- * / its `--cs-ink-500` source), per ADR-0054: the token is a non-text /
+ * / its `--cs-ink-500` source): the token is a non-text /
  * large-text / disabled tone, so it clears the 3:1 WCAG 1.4.11 floor its
  * uses are held to but not the 4.5:1 that 1.4.3 asks of small text.
  *

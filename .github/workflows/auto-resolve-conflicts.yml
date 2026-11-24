@@ -48,7 +48,7 @@ jobs:
 
             // Filter to PRs that still have conflicts after auto-rebase, on
             // branches of this repository only: outside pull requests are not
-            // accepted (ADR-0087).
+            // accepted.
             const thisRepo = `${context.repo.owner}/${context.repo.repo}`;
             const conflicted = prs.filter(pr => {
               if (pr.head.repo?.full_name !== thisRepo) return false;

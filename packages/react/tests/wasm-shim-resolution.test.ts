@@ -19,8 +19,8 @@ import { describe, expect, test } from 'vitest';
 //     carries a suppression directive (`@ts-expect-error`,
 //     `@ts-ignore`, `@ts-nocheck`, or a triple-slash reference that
 //     bypasses the shim). Reintroducing one would paper over the
-//     resolution problem in the same silent-failure style
-//     `.claude/rules/root-cause-fixes.md` calls out.
+//     resolution problem by silencing the diagnostic
+//     instead of fixing what it reports.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC_DIR = resolve(here, '../src');
@@ -245,8 +245,8 @@ describe('@chordsketch/wasm shim resolution', () => {
     // (`tests/use-pdf-export-optional-peer.test.ts`). A future
     // contributor reintroducing `@ts-expect-error`, `@ts-ignore`,
     // `@ts-nocheck`, or a `/// <reference path="...wasm..."/>` near
-    // a `@chordsketch/wasm` import would recreate the silent-failure
-    // class `.claude/rules/root-cause-fixes.md` warns about — the
+    // a `@chordsketch/wasm` import would recreate that silent-failure
+    // class — the
     // directive would silently flip between dead and load-bearing
     // depending on consumer resolution state. The shim's whole
     // point is to make every such directive unnecessary.

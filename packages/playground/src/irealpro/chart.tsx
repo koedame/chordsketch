@@ -10,7 +10,7 @@ import './chart.css';
 // Library bridge: chord glyph translation lives in
 // `chordsketch-render-ireal::chord_typography`. We call it via
 // `chordTypography` so the chart stays a thin sample of the
-// libraries — see `.claude/rules/playground-is-a-sample.md`.
+// libraries.
 // ---------------------------------------------------------------
 
 interface WasmTypographySpan {
@@ -225,8 +225,7 @@ function renderQualityRun(text: string): JSX.Element[] {
 
 // Quality / accidental glyph translation has moved to the
 // library — see `chordsketch-render-ireal::chord_typography` and
-// the wasm export `chordTypography`. Per
-// `.claude/rules/playground-is-a-sample.md`, this file no longer
+// the wasm export `chordTypography`. This file no longer
 // owns translation logic; it only renders the spans the library
 // produces.
 

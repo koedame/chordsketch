@@ -177,7 +177,7 @@ def _build_repo(
         encoding="utf-8",
     )
 
-    # The Claude Code plugin's two manifests (ADR-0059). Both declare the
+    # The Claude Code plugin's two manifests. Both declare the
     # same version: the plugin's own, and the root marketplace entry that
     # points at it.
     plugin_dir = root / "packages" / "claude-code-plugin" / ".claude-plugin"
@@ -303,7 +303,7 @@ def _build_repo(
     )
 
     # The lockfile of every consumer that installs @chordsketch/wasm links the
-    # in-tree packages/npm (ADR-0073).
+    # in-tree packages/npm.
     for name in ("vscode-extension", "react", "vue", "svelte", "ui-irealb-editor"):
         (root / "packages" / name / "package-lock.json").write_text(
             json.dumps({"packages": {"node_modules/@chordsketch/wasm": {"resolved": "../npm", "link": True}}}),
@@ -689,7 +689,7 @@ class CheckRunTests(unittest.TestCase):
 
     def test_when_a_consumer_lockfile_installs_wasm_from_npm_the_check_fails(self) -> None:
         # The release commit raises the pins to a version npm does not serve
-        # yet (ADR-0073); a lockfile that resolves it from npm cannot install
+        # yet; a lockfile that resolves it from npm cannot install
         # at that commit.
         for name in ("vscode-extension", "react", "vue", "svelte", "ui-irealb-editor"):
             with self.subTest(package=name), TemporaryDirectory() as td:
@@ -726,7 +726,7 @@ class CheckRunTests(unittest.TestCase):
             )
 
     def test_framework_package_version_drift_detected(self) -> None:
-        # These packages publish with the workspace release (ADR-0073), so
+        # These packages publish with the workspace release, so
         # one left at its previous version would be skipped by the publish
         # as already served, or published at a version the tag never named.
         for name in check_version_consistency.FRAMEWORK_PACKAGE_DIRS:
@@ -883,7 +883,7 @@ class SetVersionTests(unittest.TestCase):
 
     def test_when_a_repo_is_bumped_to_a_patch_release_the_wasm_pins_name_the_patch(self) -> None:
         # The packages built on the wasm are tested against the one released
-        # with them, so they require it (ADR-0073).
+        # with them, so they require it.
         with TemporaryDirectory() as td:
             root = Path(td)
             _build_repo(root)

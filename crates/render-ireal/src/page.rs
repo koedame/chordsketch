@@ -62,8 +62,7 @@ pub const VERTICAL_BREAK_PER_LEVEL: i32 = 4;
 ///
 /// Mirrors the bounds-check pattern used by `chordsketch-chordpro`
 /// chord-diagram rendering and the `MAX_COLUMNS = 32` clamp in the
-/// HTML renderer (per `.claude/rules/renderer-parity.md`'s
-/// "Validation Parity" clause). Without this cap, a malicious or
+/// HTML renderer. Without this cap, a malicious or
 /// malformed AST with millions of bars would (a) waste unbounded
 /// memory in `format!` and (b) overflow the `(row as i32) *
 /// BAR_ROW_HEIGHT` y-coordinate computation in the grid emitter.

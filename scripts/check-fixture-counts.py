@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Golden fixture count CI check.
 
-Enforces the minimum per-renderer golden fixture counts documented in
-`.claude/rules/golden-tests.md`. A fixture is any direct subdirectory of
+Enforces the minimum per-renderer golden fixture counts in `MINIMUMS`
+below. A fixture is any direct subdirectory of
 the renderer's `tests/fixtures/` directory that contains an `input.cho`
 file — matches the discovery rule used by the golden-test harnesses.
 
 Runs on every PR via `.github/workflows/ci.yml` with no path filter: the
-guarantee is a project-wide property, not a per-path concern, and
-`ci-parallelization.md` §3 requires guarantee-style checks to run
-unconditionally.
+guarantee is a project-wide property, not a per-path concern, so a path
+filter would let a change outside the filter break it unnoticed.
 
 Usage:
 
@@ -22,8 +21,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Floors are the source of truth here and in `.claude/rules/golden-tests.md`.
-# When changing either, update both in the same PR.
+# The floors. This table is their only definition.
 MINIMUMS: dict[str, int] = {
     "render-text": 15,
     "render-html": 15,
@@ -62,10 +60,9 @@ def main() -> int:
     if any_failure:
         print()
         print(
-            "One or more renderers dropped below the minimum fixture count "
-            "documented in `.claude/rules/golden-tests.md`. Add fixtures or, "
-            "if the reduction is intentional, update the rule and this "
-            "script in the same PR so the numeric contract stays in sync."
+            "One or more renderers dropped below the minimum fixture count. "
+            "Add fixtures or, if the reduction is intentional, lower the "
+            "floor in `MINIMUMS` in this script in the same PR."
         )
         return 1
 

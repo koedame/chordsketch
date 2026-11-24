@@ -964,8 +964,7 @@ fn render_staff_text_demo() {
 ///    music-symbol band; the `*0`-anchored captions stay below.
 ///
 /// These would survive a regression that left the snapshot
-/// byte-identical while breaking semantic content — see the
-/// renderer-parity discipline in `.claude/rules/renderer-parity.md`.
+/// byte-identical while breaking semantic content.
 #[test]
 fn staff_text_demo_exercises_every_variant() {
     let svg = render_svg(&staff_text_demo(), &RenderOptions::default());

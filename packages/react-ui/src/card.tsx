@@ -19,7 +19,7 @@ export type CardProps = React.HTMLAttributes<HTMLElement> &
   );
 
 /**
- * Design-system card container (`design-system/DESIGN.md` §6). Renders an
+ * Design-system card container. Renders an
  * `<article>` with the canonical card class for the chosen variant; the
  * inner structure (`.artist`, `.meta`, `.footer`, `.stats`, …) is composed
  * by the caller per the design-system markup. `featured` is accepted only on

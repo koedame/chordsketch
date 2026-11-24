@@ -7,8 +7,7 @@
   Contents/PlugIns/ChordSketchQuickLook.appex has a type to preview.
   It only declares the type: there is no CFBundleDocumentTypes entry,
   so installing ChordSketch does not make it the default app for
-  ChordPro files (the same line the Windows preview handler draws; see
-  docs/adr/0050-windows-preview-handler-is-installer-registered.md).
+  ChordPro files (the same line the Windows preview handler draws).
 
   Identifiers are asserted against apps/desktop/preview-handler/src/quicklook.rs.
 -->

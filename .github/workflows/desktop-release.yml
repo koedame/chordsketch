@@ -33,8 +33,7 @@ on:
         required: true
         type: string
 
-# Release-shape concurrency per `.claude/rules/ci-parallelization.md`
-# §5 "Release/tag-triggered workflows" — a partial release (some
+# Release-shape concurrency — a partial release (some
 # platform bundles missing) would silently degrade every
 # downstream install path, so NEVER cancel in-flight runs on a
 # second tag push or a re-dispatch.
@@ -86,7 +85,7 @@ jobs:
             # oldest image that still carries `libwebkit2gtk-4.1-dev`,
             # which makes glibc 2.35 the floor. Keep this label in sync
             # with `desktop-build.yml`; `scripts/check-glibc-floor.py`
-            # asserts both on every PR. See ADR-0056.
+            # asserts both on every PR.
             runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
           - label: macos-aarch64
@@ -132,8 +131,7 @@ jobs:
           }
 
       - name: Desktop bundle build steps
-        # Shared composite with `desktop-build.yml` (#2223). Per
-        # `.claude/rules/ci-parallelization.md` §2, tag-triggered
+        # Shared composite with `desktop-build.yml` (#2223). Tag-triggered
         # workflows run too infrequently for rust-cache to help;
         # `enable-cache: "false"` suppresses the cache step.
         # `build-config` enables updater `.sig` file generation
@@ -305,12 +303,12 @@ jobs:
         env:
           # `GITHUB_TOKEN` is sufficient. This step used a PAT so the
           # resulting `release: [published]` event would cascade
-          # (ADR-0009) — GitHub suppresses that event for releases
+          # — GitHub suppresses that event for releases
           # created by `GITHUB_TOKEN`. Nothing has ever keyed off a
           # *desktop* release event: this workflow's own downstream work
           # (`update-cask`, `publish-updater-manifest`) has always been
-          # in-graph via `needs: [release]`, and ADR-0039 moved the
-          # library release to the same shape. See ADR-0039.
+          # in-graph via `needs: [release]`, and the library release
+          # now has the same shape.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
         # `--generate-notes` asks GitHub to auto-build the body
@@ -632,7 +630,7 @@ jobs:
     name: Update Flathub
     # Opens a pull request on `flathub/io.github.koedame.chordsketch` with the
     # manifest and source lists `packaging/flatpak/prepare.py` writes for
-    # this tag (ADR-0074). Flathub builds the pull request and posts a test
+    # this tag. Flathub builds the pull request and posts a test
     # build; a maintainer installs it and merges. The repository exists only
     # once the first submission is accepted, so until then the job generates
     # the files and stops, as it does for prerelease tags. `publishable.yml`
@@ -979,7 +977,7 @@ jobs:
 
   # Last in the graph: once the release, the Homebrew tap, Flathub and the
   # updater manifest all point at the new release, delete the older desktop
-  # releases (ADR-0091). Skipped when any job above failed, so an install
+  # releases. Skipped when any job above failed, so an install
   # path that still points at an older release keeps working until it is
   # repaired.
   prune-old-releases:

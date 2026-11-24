@@ -6,9 +6,8 @@
 # Every crate checksum listed here must match what the `Cargo.lock`
 # shipped inside the source tarball demands, or the cargo portgroup
 # rejects the build with "checksum mismatch on <crate>". The upstream
-# project ships a regeneration script and documents the full
-# procedure:
-#     https://github.com/koedame/chordsketch/blob/main/docs/releasing.md
+# project ships a regeneration script,
+# `scripts/macports-regen-cargo-crates.py`.
 
 PortSystem          1.0
 PortGroup           github 1.0

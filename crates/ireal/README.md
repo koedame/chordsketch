@@ -68,7 +68,7 @@ assert_eq!(parsed, song);
 | `ToJson` | `fn to_json(&self, &mut String)` and `fn to_json_string(&self) -> String` | Hand-rolled, byte-stable, compact JSON. |
 | `FromJson` | `fn from_json_str(&str) -> Result<Self, JsonError>` and `fn from_json_value(&JsonValue) -> Result<Self, JsonError>` | Round-trip-only deserializer; accepts only the subset `ToJson` emits. |
 | `parse_json` | `fn parse_json(&str) -> Result<JsonValue, JsonError>` | Free function for the underlying JSON value tree. |
-| `parse` / `parse_collection` | `fn parse(url: &str) -> Result<IrealSong, ParseError>` and `fn parse_collection(url: &str) -> Result<(Vec<IrealSong>, Option<String>), ParseError>` | `irealb://` / `irealbook://` URL parser. See `FORMAT.md` for the grammar. |
+| `parse` / `parse_collection` | `fn parse(url: &str) -> Result<IrealSong, ParseError>` and `fn parse_collection(url: &str) -> Result<(Vec<IrealSong>, Option<String>), ParseError>` | `irealb://` / `irealbook://` URL parser. |
 | `ParseError` | enum, `Debug + Display + Error` | Error variants from the URL parser. |
 | `irealb_serialize` / `irealbook_serialize` | `fn irealb_serialize(song: &IrealSong) -> String` and `fn irealbook_serialize(songs: &[IrealSong], name: Option<&str>) -> String` | Inverse of `parse` / `parse_collection` — produces the iReal Pro app's `MUSIC_PREFIX` + `obfusc50` export form. AST-level round trip; URL bytes need not match the original. |
 | `serialize_open_protocol` / `serialize_open_protocol_collection` | `fn serialize_open_protocol(song: &IrealSong) -> String` and `fn serialize_open_protocol_collection(songs: &[IrealSong], name: Option<&str>) -> String` | Open-protocol plain-text `irealbook://` serializer ([#2425](https://github.com/koedame/chordsketch/issues/2425)) — emits the 6-field shape from the spec at <https://www.irealpro.com/ireal-pro-custom-chord-chart-protocol>. Single-song output round-trips through `parse`; collection output uses a single `=` separator (not `===`) and is NOT round-trippable via `parse_collection`. |
@@ -106,8 +106,7 @@ sentinel in field 5 — round-trips through `parse` →
 `tests/fixtures/parser_open_protocol/a_walkin_thing/` golden
 fixture. The `END` song-terminator
 ([#2451](https://github.com/koedame/chordsketch/issues/2451))
-is deferred per `ARCHITECTURE.md`'s "Deferred AST scope" → "Other
-deferred items" — empirical investigation confirmed iReal Pro's URL
+is deferred — empirical investigation confirmed iReal Pro's URL
 exporter does not emit the token (it is app-internal only).
 
 Token coverage as of the latest release:
@@ -141,7 +140,7 @@ and are intentionally kept distinct:
 
 | Token / shape | Sub-issue | Class | Reason |
 |---|---|---|---|
-| `END` song-terminator symbol distinct from Fermata | [#2451](https://github.com/koedame/chordsketch/issues/2451) | Blocked on external evidence | Empirical investigation confirmed iReal Pro's URL exporter does not emit `END`; the symbol is app-internal only. See `ARCHITECTURE.md`'s "Deferred AST scope" → "Other deferred items". Reopens if an iReal Pro release starts emitting `END` in URLs. |
+| `END` song-terminator symbol distinct from Fermata | [#2451](https://github.com/koedame/chordsketch/issues/2451) | Blocked on external evidence | Empirical investigation confirmed iReal Pro's URL exporter does not emit `END`; the symbol is app-internal only. Reopens if an iReal Pro release starts emitting `END` in URLs. |
 | Convert-crate (`chordsketch-convert`) `SectionLabel::Custom("Chorus" / "Bridge" / "Outro")` emission cleanup | [#2450](https://github.com/koedame/chordsketch/issues/2450) | Actionable, out of this crate's scope | The phantom `SectionLabel::Chorus` / `Bridge` / `Outro` AST variants were already removed from `chordsketch-ireal`. The residual ChordPro → iReal converter behaviour producing `Custom("Chorus")` etc. lives in `chordsketch-convert` and is tracked separately — no parser/AST change is owed by this crate. |
 
 The two classes are tracked in one table only because the column
@@ -156,9 +155,7 @@ section: the round-trip golden fixture demonstrates the spec's
 literal worked example parses + re-serializes correctly, the
 Supported / Out-of-scope tables match the current AST surface
 exactly, and the two open rows above explain their respective
-reopen criteria. `.claude/rules/release-doc-sync.md` catches drift
-at release-cut time if the AST surface evolves and these tables
-fall behind.
+reopen criteria.
 
 ## File extension convention
 
@@ -174,7 +171,6 @@ convention so the URL can be saved to disk and round-tripped:
 
 `parse_collection` accepts both prefixes; the extension distinction
 is for dialog filters, OS associations, and editor-mode hints. The
-authoritative grammar reference is [`FORMAT.md`](./FORMAT.md). The
 convention is consumed by the CLI sniff
 ([`crates/cli/src/main.rs`](../cli/src/main.rs)), the Tauri desktop
 file associations

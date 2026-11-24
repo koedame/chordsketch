@@ -12,18 +12,13 @@ ship inside the ChordSketch desktop app:
   next to `ChordSketch.exe`. Explorer loads it into its isolated
   `prevhost.exe` surrogate, hands it the file as an `IStream`, and gives
   it a window to draw in; the DLL shows the result in a WebView2
-  control. Design decisions — why the installers register it, why the
-  root follows the install scope, why the profile lives in `LocalLow` —
-  are recorded in
-  [ADR-0050](../../../docs/adr/0050-windows-preview-handler-is-installer-registered.md).
+  control.
 - **macOS** — a Quick Look preview extension that draws the file when
   you press Space in Finder. Ships as
   `ChordSketch.app/Contents/PlugIns/ChordSketchQuickLook.appex`: a
   small Swift executable linked against this crate built as a static
   library. See [macOS Quick Look extension](#macos-quick-look-extension)
-  below, and
-  [ADR-0083](../../../docs/adr/0083-the-macos-quick-look-extension-is-a-data-based-preview-signed-before-the-bundler.md)
-  for the design decisions.
+  below.
 
 Linux has a standalone thumbnailer instead; see
 [`packaging/linux/README.md`](../../../packaging/linux/README.md).
@@ -83,9 +78,8 @@ go to the 64-bit registry view.
 `{8895b1c6-…}` is the IID of `IPreviewHandler`; the presence of that
 subkey is what marks a file type as previewable.
 
-The two installer files are sister sites in the sense of
-[`fix-propagation.md`](../../../.claude/rules/fix-propagation.md): they
-say the same thing in two languages, and nothing at runtime reads both.
+The two installer files are sister sites: they say the same thing in two
+languages, and nothing at runtime reads both.
 `src/registration.rs` holds the identifiers as constants, `include_str!`s
 both files, and fails `cargo test` if either one drifts — including on
 the Linux and macOS CI cells, where none of the COM code compiles.
@@ -271,8 +265,7 @@ Settings → General → Login Items & Extensions → Quick Look.
 - **macOS 12 or later.** Older versions ignore the extension and show
   the plain-text preview.
 - **Signing.** Until the release workflow has a Developer ID, the
-  published bundles are not signed as a whole; see
-  [`docs/releasing.md`](../../../docs/releasing.md#the-macos-quick-look-extension-and-signing).
+  published bundles are not signed as a whole.
 - Images, scripting, network access and the 10 MiB ceiling behave as on
   Windows (see [Known limits](#known-limits) above). A file over the
   limit shows a message instead of a render.

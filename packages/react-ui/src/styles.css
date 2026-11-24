@@ -5,8 +5,7 @@
  * design system. The class vocabulary (`.btn`, `.song-card`,
  * `.badge`, `.input`, …) and the CSS below are transcribed from the
  * canonical reference in `design-system/preview/components-*.html`;
- * `design-system/DESIGN.md` / `design-system/tokens.css` remain the
- * source of truth (ADR-0029 §5/§6).
+ * `design-system/tokens.css` remains the source of truth.
  *
  * Design-system tokens are exposed under the `--cs-*` namespace,
  * matching `@chordsketch/react`'s stylesheet. The namespace is local
@@ -14,7 +13,7 @@
  * token set so the primitives render correctly wherever this
  * stylesheet is loaded, without depending on (or being overridden by)
  * a host's own `:root` tokens. Values are generated from `design-system/tokens.css`
- * (see `scripts/build-tokens.mjs`, ADR-0038).
+ * (see `scripts/build-tokens.mjs`).
  */
 /* @generated:start — DO NOT EDIT. Source: design-system/tokens.css. Run: node scripts/build-tokens.mjs */
 .btn,
@@ -405,11 +404,11 @@
 .switch input:focus-visible + .track { box-shadow: var(--cs-focus-ring); }
 
 /* ------------------------------------------------------------------
- * Chrome & layout — the app-shell vocabulary of design-system/DESIGN.md
- * (§4.1 Stack, §6 Navigation, §9 canonical chrome vocabulary).
+ * Chrome & layout — the app-shell vocabulary of the design system
+ * (Stack, Navigation, and the canonical chrome classes).
  *
  * These classes ship as CSS only: they carry no behaviour and no state,
- * so the package exposes no React component for them (ADR-0061). Write
+ * so the package exposes no React component for them. Write
  * the markup yourself — `<header class="topnav">`, `<div class="pane">`,
  * `<div class="stack stack-8">`.
  *
@@ -601,7 +600,7 @@
   padding: var(--cs-sp-8);
 }
 
-/* Stack — the vertical-flow primitive (DESIGN.md §4.1) — design-system/preview/layout-stack.html */
+/* Stack — the vertical-flow primitive — design-system/preview/layout-stack.html */
 .stack {
   display: flex;
   flex-direction: column;

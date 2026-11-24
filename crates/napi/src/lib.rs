@@ -24,8 +24,7 @@
 //!
 //! Sister-site rule: every helper / wrapper pair added here must have a
 //! matching pair in `crates/wasm/src/{lib.rs, bindings.rs}` and
-//! `crates/ffi/src/lib.rs`. See `.claude/rules/fix-propagation.md`
-//! §Bindings.
+//! `crates/ffi/src/lib.rs`.
 
 use chordsketch_chordpro::render_result::RenderResult;
 
@@ -214,8 +213,7 @@ pub(crate) fn chord_diagram_svg_inner(
 /// Thin pass-through to [`chordsketch_chordpro::chord_pitches`]; kept here
 /// so the native test suite covers the binding's surface without the
 /// Node-API runtime. Sister-site to the wasm `chord_pitches_inner` and the
-/// FFI binding's `chord_pitches` (`.claude/rules/fix-propagation.md`
-/// §Bindings).
+/// FFI binding's `chord_pitches`.
 #[must_use]
 pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::chord_pitches(chord)
@@ -228,8 +226,7 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
 /// Routes through [`chordsketch_chordpro::voicings::diagram_pitches`] with
 /// `frets_shown = 5`, matching the SVG path so a diagram and its audio resolve
 /// to the same voicing. Sister-site to the wasm `diagram_pitches_inner` and the
-/// FFI binding's `diagram_pitches` (`.claude/rules/fix-propagation.md`
-/// §Bindings).
+/// FFI binding's `diagram_pitches`.
 ///
 /// The accepted instrument set is the core's
 /// [`chordsketch_chordpro::diagram_instrument`], the same one the SVG surface
@@ -251,8 +248,7 @@ pub(crate) fn diagram_pitches_inner(
 /// Thin pass-through to [`chordsketch_chordpro::chord_staff_notes`]; kept here
 /// so the native test suite covers the binding's surface without the Node-API
 /// runtime. Sister-site to the wasm `chord_staff_notes_inner` and the FFI
-/// binding's `chord_staff_notes` (`.claude/rules/fix-propagation.md`
-/// §Bindings).
+/// binding's `chord_staff_notes`.
 #[must_use]
 pub(crate) fn chord_staff_notes_inner(chord: &str) -> Option<Vec<chordsketch_chordpro::StaffNote>> {
     chordsketch_chordpro::chord_staff_notes(chord)
@@ -263,7 +259,7 @@ pub(crate) fn chord_staff_notes_inner(chord: &str) -> Option<Vec<chordsketch_cho
 /// not parseable as a chord.
 ///
 /// Sister-site to the wasm `key_scale_pitches_inner` and the FFI binding's
-/// `key_scale_pitches` (`.claude/rules/fix-propagation.md` §Bindings).
+/// `key_scale_pitches`.
 #[must_use]
 pub(crate) fn key_scale_pitches_inner(key: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::key_scale_pitches(key)
@@ -274,7 +270,7 @@ pub(crate) fn key_scale_pitches_inner(key: &str) -> Option<Vec<u8>> {
 /// chord.
 ///
 /// Sister-site to the wasm `key_tonic_triad_inner` and the FFI binding's
-/// `key_tonic_triad` (`.claude/rules/fix-propagation.md` §Bindings).
+/// `key_tonic_triad`.
 #[must_use]
 pub(crate) fn key_tonic_triad_inner(key: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::key_tonic_triad(key)

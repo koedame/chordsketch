@@ -67,8 +67,7 @@ pub fn has_traversal(path: &str) -> bool {
 /// rejected.
 ///
 /// Centralising this check in `chordsketch-chordpro` keeps the three
-/// renderers aligned per `.claude/rules/renderer-parity.md` §Validation
-/// Parity — a single `.cho` file must not produce different text / HTML /
+/// renderers aligned — a single `.cho` file must not produce different text / HTML /
 /// PDF depending on how permissive each renderer happens to be.
 ///
 /// # Examples
@@ -209,8 +208,8 @@ mod tests {
         assert!(!is_safe_image_src("vbscript:msgbox"));
         // `mhtml:` is documented as blocked in the function's doc comment
         // and is rejected because any scheme other than `http`/`https` is
-        // denied. Explicit assertion per the testing-completeness rule in
-        // `.claude/rules/sanitizer-security.md`.
+        // denied. Asserted explicitly so every scheme the doc comment
+        // names as blocked has a test.
         assert!(!is_safe_image_src("mhtml:file:///etc/passwd"));
     }
 

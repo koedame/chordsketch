@@ -28,9 +28,8 @@
 //!
 //! If you find yourself adding non-trivial logic here, move it down to
 //! `lib.rs` and call it from a new wrapper — the unit-testable surface
-//! lives there. The sister-site rule in
-//! `.claude/rules/fix-propagation.md` requires that any new public API
-//! added here also lands in `crates/napi/src/bindings.rs` and
+//! lives there. The three bindings expose the same surface, so any new public API
+//! added here must also land in `crates/napi/src/bindings.rs` and
 //! `crates/ffi/src/lib.rs` in the same PR.
 
 use serde::Serialize;
@@ -738,8 +737,8 @@ pub fn chord_diagram_svg_with_defines(
 /// an optional string.
 ///
 /// `orientation` accepts `"vertical"` (default) or `"horizontal"`
-/// (case-insensitive). Horizontal mode is reader-view only per
-/// ADR-0026. `null` / `undefined` / unrecognised values silently fall
+/// (case-insensitive). Horizontal mode is reader-view only
+/// (high pitch on top). `null` / `undefined` / unrecognised values silently fall
 /// back to the default, matching `resolve_orientation`.
 ///
 /// # Errors
@@ -840,8 +839,7 @@ pub fn chord_diagram_svg_with_defines_orientation_compact(
 ///
 /// Thin wrapper over [`chordsketch_chordpro::chord_pitches`] via the
 /// pure-Rust `chord_pitches_inner`. Sister-site to the NAPI
-/// `chordPitches` export and the FFI `chord_pitches` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// `chordPitches` export and the FFI `chord_pitches` function.
 #[wasm_bindgen(js_name = chordPitches)]
 #[must_use]
 pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
@@ -863,8 +861,7 @@ pub fn chord_pitches(chord: &str) -> Option<Vec<u8>> {
 /// `undefined`. Also `undefined` when no diagram is available for the chord.
 ///
 /// Thin wrapper over the pure-Rust `diagram_pitches_inner`. Sister-site to the
-/// NAPI `diagramPitches` export and the FFI `diagram_pitches` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// NAPI `diagramPitches` export and the FFI `diagram_pitches` function.
 ///
 /// # Errors
 ///
@@ -902,8 +899,7 @@ pub fn diagram_pitches(
 ///
 /// Thin wrapper over [`chordsketch_chordpro::chord_staff_notes`] via the
 /// pure-Rust `chord_staff_notes_inner`. Sister-site to the NAPI
-/// `chordStaffNotes` export and the FFI `chord_staff_notes` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// `chordStaffNotes` export and the FFI `chord_staff_notes` function.
 ///
 /// # Errors
 ///
@@ -931,8 +927,7 @@ pub fn chord_staff_notes(chord: &str) -> Result<JsValue, JsValue> {
 ///
 /// Thin wrapper over [`chordsketch_chordpro::key_scale_pitches`] via the
 /// pure-Rust `key_scale_pitches_inner`. Sister-site to the NAPI
-/// `keyScalePitches` export and the FFI `key_scale_pitches` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// `keyScalePitches` export and the FFI `key_scale_pitches` function.
 #[wasm_bindgen(js_name = keyScalePitches)]
 #[must_use]
 pub fn key_scale_pitches(key: &str) -> Option<Vec<u8>> {
@@ -950,8 +945,7 @@ pub fn key_scale_pitches(key: &str) -> Option<Vec<u8>> {
 ///
 /// Thin wrapper over [`chordsketch_chordpro::key_tonic_triad`] via the
 /// pure-Rust `key_tonic_triad_inner`. Sister-site to the NAPI
-/// `keyTonicTriad` export and the FFI `key_tonic_triad` function
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// `keyTonicTriad` export and the FFI `key_tonic_triad` function.
 #[wasm_bindgen(js_name = keyTonicTriad)]
 #[must_use]
 pub fn key_tonic_triad(key: &str) -> Option<Vec<u8>> {
@@ -1011,7 +1005,7 @@ export function validate(input: string): ValidationError[];
  * Layout orientation for the orientation-aware chord-diagram exports.
  *
  * `"horizontal"` renders the Japanese tablature layout (nut on the left,
- * reader-view — high pitch on top); see ADR-0026. `null` / `undefined` /
+ * reader-view — high pitch on top). `null` / `undefined` /
  * unrecognised strings fall back to `"vertical"`.
  */
 export type ChordDiagramOrientation = "vertical" | "horizontal";
@@ -1091,7 +1085,7 @@ export function chordStaffNotes(chord: string): StaffNote[] | undefined;
 "#;
 
 /// Return the ChordPro directive catalog as a JS array of `DirectiveInfo`
-/// objects (ADR-0028).
+/// objects.
 ///
 /// Each entry carries the directive's canonical `name`, its `aliases`, the
 /// `valueKind` (`"none"` / `"freeform"` / `"enum"`), the allowed `values`
@@ -1111,8 +1105,7 @@ pub fn list_directives() -> Result<JsValue, JsValue> {
 }
 
 /// Return the allowed value set for an enum-valued directive (alias-aware),
-/// or `null` for free-form / value-less directives and unknown names
-/// (ADR-0028).
+/// or `null` for free-form / value-less directives and unknown names.
 ///
 /// # Errors
 ///
@@ -1126,8 +1119,8 @@ pub fn directive_value_options(name: &str) -> Result<JsValue, JsValue> {
 #[wasm_bindgen(typescript_custom_section)]
 const DIRECTIVE_CATALOG_TS: &'static str = r#"
 /**
- * A single directive-catalog entry returned by {@link listDirectives}
- * (ADR-0028). The web editor's completion source and the playground's
+ * A single directive-catalog entry returned by {@link listDirectives}.
+ * The web editor's completion source and the playground's
  * directive picker drive their directive lists off this shared catalog so
  * they offer the same set the LSP / VS Code completion does.
  */

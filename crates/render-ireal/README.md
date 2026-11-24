@@ -61,10 +61,9 @@ collections callers invoke the renderer once per song. Upstream
 parsing from the on-disk
 `.irealb` (single song) / `.irealbook` (multi-song collection)
 file extensions is the responsibility of `chordsketch-ireal`'s
-`parse` / `parse_collection`. See
-[`crates/ireal/FORMAT.md`](../ireal/FORMAT.md) §"File extension
-convention" for the project-local convention these extensions
-encode.
+`parse` / `parse_collection`. See the "File extension convention"
+section of the [`chordsketch-ireal` README](../ireal/README.md) for the
+project-local convention these extensions encode.
 
 ## API
 
@@ -185,8 +184,10 @@ glyph outlines baked into `src/bravura.rs` are derived from the
 [Bravura SMuFL font][bravura] and are redistributed under the
 [SIL Open Font License 1.1][ofl] —
 the OFL text is at `LICENSE-OFL.txt` and the attribution required by
-§4 of the license is in the project-level `NOTICE`. ADR-0014 records
-why the renderer bakes path data instead of bundling the font binary.
+§4 of the license is in the project-level `NOTICE`. The renderer bakes
+path data instead of bundling the font binary because the few glyphs it
+needs are a couple of kilobytes as outlines, against a megabyte-scale
+font file.
 
 [bravura]: https://github.com/steinbergmedia/bravura
 [ofl]: https://openfontlicense.org

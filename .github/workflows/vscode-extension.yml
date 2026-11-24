@@ -36,7 +36,7 @@ on:
       - "scripts/check-publishable.py"
   # Reusable: called by release.yml's fan-out after the GitHub Release
   # exists, so `build-platform` can download the per-platform
-  # chordsketch-lsp archives from it (ADR-0039). A non-empty `tag` is what
+  # chordsketch-lsp archives from it. A non-empty `tag` is what
   # puts this workflow in publish mode; on `push` / `pull_request` it is
   # empty and only the `build` CI job runs.
   workflow_call:
@@ -203,7 +203,7 @@ jobs:
       - name: Validate release tag
         # Was an inline copy of the regex the composite action already
         # holds; a second copy of a security-relevant pattern is a
-        # fix-propagation hazard, so this routes through the shared action
+        # drift hazard, so this routes through the shared action
         # like every other release workflow. Defense in depth for the
         # `workflow_dispatch` path — the `workflow_call` path arrives
         # pre-validated. See #1797.
@@ -297,9 +297,8 @@ jobs:
     # If the "vscode-marketplace" environment does not exist (fork, fresh
     # instance), GitHub cannot start this job. That used to be masked so
     # the run stayed green (#1443); it is not any more. A release that
-    # cannot publish the extension is a failed release, and the
-    # pre-release checklist in docs/releasing.md already requires every
-    # publish environment to exist before the tag is cut.
+    # cannot publish the extension is a failed release, and every
+    # publish environment is expected to exist before the tag is cut.
     environment:
       name: vscode-marketplace
       url: https://marketplace.visualstudio.com/items?itemName=koedame.chordsketch

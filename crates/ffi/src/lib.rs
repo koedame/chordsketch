@@ -395,7 +395,7 @@ pub fn version() -> String {
 
 /// Constituent pitches of a chord as MIDI note numbers, for driving an
 /// audio synth (#2650). Mirrors the wasm `chordPitches` and NAPI
-/// `chordPitches` exports (`.claude/rules/fix-propagation.md` §Bindings).
+/// `chordPitches` exports.
 ///
 /// Returns ascending, de-duplicated MIDI note numbers describing a block
 /// voicing (root, third, fifth, plus any extension / altered / added
@@ -410,8 +410,7 @@ pub fn chord_pitches(chord: String) -> Option<Vec<u8>> {
 /// `(chord, instrument)` — for auditioning a diagram as exactly the shape it
 /// depicts, rather than the instrument-agnostic block voicing
 /// [`chord_pitches`] returns from the chord *name* (#2736). Mirrors the wasm
-/// `diagramPitches` and NAPI `diagramPitches` exports
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// `diagramPitches` and NAPI `diagramPitches` exports.
 ///
 /// Fretted instruments (`"guitar"`, `"ukulele"` / `"uke"`, `"charango"`) return one pitch
 /// per non-muted string in string (strum) order, keeping octave doublings;
@@ -461,7 +460,7 @@ pub struct StaffNote {
 /// Constituent tones of a chord spelled for staff notation — note letter,
 /// signed accidental, octave, and MIDI — for drawing the chord on a
 /// five-line staff (#2695). Mirrors the wasm `chordStaffNotes` and NAPI
-/// `chordStaffNotes` exports (`.claude/rules/fix-propagation.md` §Bindings).
+/// `chordStaffNotes` exports.
 ///
 /// Returns the tones ascending by pitch (a slash bass sorts first), or
 /// `None` when `chord` is not parseable as a chord. Each tone is spelled
@@ -485,7 +484,7 @@ pub fn chord_staff_notes(chord: String) -> Option<Vec<StaffNote>> {
 /// Ascending one-octave scale of a musical key as MIDI note numbers, for
 /// auditioning the key by ear — the movable-do "do re mi fa sol la ti do"
 /// (#2658). Mirrors the wasm `keyScalePitches` and NAPI `keyScalePitches`
-/// exports (`.claude/rules/fix-propagation.md` §Bindings).
+/// exports.
 ///
 /// `key` is a ChordPro `{key}` value (`"C"`, `"Am"`, `"Bb"`, `"F#m"`, …).
 /// Major keys yield the major scale; minor keys the natural-minor scale.
@@ -498,8 +497,7 @@ pub fn key_scale_pitches(key: String) -> Option<Vec<u8>> {
 
 /// Tonic triad of a musical key as MIDI note numbers — the "do mi sol"
 /// chord strummed after the scale in a key audition (#2658). Mirrors the
-/// wasm `keyTonicTriad` and NAPI `keyTonicTriad` exports
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// wasm `keyTonicTriad` and NAPI `keyTonicTriad` exports.
 ///
 /// Major keys yield a major triad, minor keys a minor triad. A key is a
 /// tonal centre, not a chord: the strict key grammar (issue #2665) rejects
@@ -549,8 +547,7 @@ pub fn chord_diagram_svg(
 /// chords show up here exactly like the Rust HTML renderer's
 /// `<section class="chord-diagrams">` block. Sister-site to
 /// the wasm `chordDiagramSvgWithDefines` and NAPI
-/// `chordDiagramSvgWithDefines` exports
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// `chordDiagramSvgWithDefines` exports.
 ///
 /// `defines` is bounded at parse time by the parser's
 /// `MAX_METADATA_ENTRIES = 1000` cap; callers constructing
@@ -573,8 +570,8 @@ pub fn chord_diagram_svg_with_defines(
 /// an optional string (#2572).
 ///
 /// `orientation` accepts `"vertical"` (default) or `"horizontal"`
-/// (case-insensitive). Horizontal mode is reader-view only per
-/// ADR-0026. `None` and unrecognised strings fall back to the default,
+/// (case-insensitive). Horizontal mode is reader-view only
+/// (high pitch on top). `None` and unrecognised strings fall back to the default,
 /// matching [`chordsketch_chordpro::chord_diagram::resolve_orientation`].
 ///
 /// # Errors

@@ -55,8 +55,8 @@ const recordedPageErrors: Error[] = [];
 
 async function pickKitchenSinkSample(page: import('@playwright/test').Page) {
   // Catch any uncaught exception that reaches the window during
-  // the mount + sample-swap flow. Per `.claude/rules/playground-
-  // smoke.md`: a `pageerror` listener guards against the pre-#2397
+  // the mount + sample-swap flow.
+  // A `pageerror` listener guards against the pre-#2397
   // class of failure where the editor mounts cleanly and renders
   // partially, but a wasm-bridge / walker exception silently drops
   // a section without crashing the suite. Tests below can assert

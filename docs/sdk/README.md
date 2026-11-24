@@ -43,8 +43,7 @@ you can copy the snippet that matches your stack.
 | Ruby | [`chordsketch`](https://rubygems.org/gems/chordsketch) | [`packages/ruby/README.md`](../../packages/ruby/README.md) |
 | CLI / shell scripts | `chordsketch` binary | [main `README.md` Installation section](../../README.md#installation) + `chordsketch --help` |
 
-The per-package READMEs are L2-quality
-(per [`.claude/rules/package-documentation.md`](../../.claude/rules/package-documentation.md))
+The per-package READMEs are complete references
 — install command, full API table, options. They are kept current
 with each release, so this guide intentionally does not duplicate
 them for binding-specific details. Cross-link to the relevant task
@@ -121,8 +120,6 @@ crate.
 Because every binding wraps the same parser and renderers, the
 output of `parseAndRenderHtml(input)` (or its language-specific
 equivalent) is byte-identical across hosts for any given input.
-PRs that introduce per-binding output drift are caught by the
-fix-propagation rule (`.claude/rules/fix-propagation.md`).
 
 ## Status
 
@@ -147,14 +144,13 @@ new bindings and new operations as they are exposed:
   (#2050).
 - **Static-site rendering**: the canonical Markdown under
   `docs/sdk/` is also rendered by the docs site at
-  [koedame.github.io/chordsketch/docs](https://koedame.github.io/chordsketch/docs/)
-  ([ADR-0021](../adr/0021-docs-site-co-located-with-playground.md)).
+  [koedame.github.io/chordsketch/docs](https://koedame.github.io/chordsketch/docs/).
   Both surfaces consume the same source — edits here propagate to
   both on the next deploy.
 - **Live demos**: each framework recipe has an editable page beside
   the docs — [Vue](https://koedame.github.io/chordsketch/vue/),
   [Svelte](https://koedame.github.io/chordsketch/svelte/), and the
   [ChordPro playground](https://koedame.github.io/chordsketch/chordpro/) for
-  React ([ADR-0053](../adr/0053-framework-demos-live-in-the-playground.md)).
+  React.
 
 If you find a gap, please [file an issue](https://github.com/koedame/chordsketch/issues/new).

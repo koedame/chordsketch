@@ -105,8 +105,7 @@ export interface IrealBarGridProps {
 }
 
 /** Default empty song. Matches `makeEmptySong` in
- * `packages/ui-irealb-editor/src/index.ts` (sister site per
- * [ADR-0020](../../../docs/adr/0020-ireal-pro-react-surface.md)). */
+ * `packages/ui-irealb-editor/src/index.ts` (sister site). */
 function makeEmptySong(): IrealSong {
   return {
     title: '',
@@ -168,7 +167,6 @@ const TIME_DENOMINATORS = [2, 4, 8] as const;
  * Save commits via the host's `emit` path; Cancel / Escape /
  * outside-click discard the draft.
  *
- * Per [ADR-0020](../../../docs/adr/0020-ireal-pro-react-surface.md),
  * `v0.2.0` reaches parity with the private
  * `@chordsketch/ui-irealb-editor` for this surface — the
  * playground and the desktop app continue to back the DOM editor

@@ -48,7 +48,7 @@ KNOWN_KINDS = frozenset(
 # Kinds that were once verified and have been retired. A manifest read from a
 # release tag cut before the retirement still lists them; the rollup checks
 # the tag against the checkers on main, which no longer implement these kinds,
-# and the retired channel never published that tag (ADR-0088). Only
+# and the retired channel never published that tag. Only
 # `load_channels(skip_retired=True)` drops them, so main's own manifest still
 # fails loudly if a retired kind creeps back in.
 RETIRED_KINDS = frozenset({"cocoapods"})
