@@ -36,6 +36,17 @@ name: Fuzz
 # private key can read it. The key is a file in the repository, not a secret,
 # so that runs from forks can encrypt too.
 #
+# A scheduled or manual run that finds a crash also leaves a trace that
+# outlives the run: the `report` job opens an issue titled
+# "Fuzzing found a crash in the ChordPro parser", or adds a comment to it when
+# one is already open (`.github/scripts/fuzz-crash-issue.sh`). The issue holds
+# the link to the run and the name of the encrypted artifact, nothing from the
+# crashing input. Nothing closes it automatically: a night without a crash
+# does not mean the input was fixed. It is closed by the pull request that
+# fixes the crash (`Closes #N`, with a regression test) or by a maintainer, so
+# "no open issue with that title" is the test for "no crash is waiting for a
+# fix", even after the Actions history has expired.
+#
 # The fuzz crate lives in `crates/chordpro/fuzz/` as its own workspace root, so
 # `libfuzzer-sys` never enters the SDK workspace or the zero-dependency
 # contract of `chordsketch-chordpro` (`scripts/check-zero-deps.py`).
@@ -70,6 +81,10 @@ jobs:
     name: Fuzz the ChordPro parser
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    outputs:
+      # `true` when the fuzz step or the minimize step found a crash, as
+      # opposed to a build or toolchain failure, which is not one.
+      crashed: ${{ steps.fuzz.outputs.crashed == 'true' || steps.cmin.outputs.crashed == 'true' }}
     env:
       FUZZ_DIR: crates/chordpro/fuzz
       FUZZ_SECONDS: ${{ github.event_name == 'pull_request' && '30' || inputs.seconds || '900' }}
@@ -150,6 +165,7 @@ jobs:
           echo "added $((after - before)) fixture inputs; starting with $after inputs ($before inherited)"
 
       - name: Fuzz parse
+        id: fuzz
         # -timeout: an input that runs longer than 10 s counts as a hang.
         # -rss_limit_mb: an input that needs more than 2 GiB counts as an
         # out-of-memory crash. The parser's own input cap is 10 MiB, so
@@ -181,6 +197,7 @@ jobs:
           exit "$status"
 
       - name: Minimize the corpus
+        id: cmin
         # Reached only when the fuzz step found nothing, so a corpus that
         # crashes the parser is never handed on.
         #
@@ -241,3 +258,26 @@ jobs:
           name: fuzz-parse-crash
           path: ${{ runner.temp }}/fuzz-parse-crash.tar.gz.age
           if-no-files-found: ignore
+
+  report:
+    name: Report the crash in an issue
+    # Only the fuzz and minimize steps of a scheduled or manual run raise
+    # `crashed`. The 30 s smoke on a pull request has no issue to open: the
+    # pull request itself fails.
+    needs: parse
+    if: always() && github.event_name != 'pull_request' && needs.parse.outputs.crashed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      # The only job that can write to issues; the one that runs the fuzzer
+      # compiles and executes the parser under test and stays read-only.
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Open the issue, or comment on the open one
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/fuzz-crash-issue.sh
