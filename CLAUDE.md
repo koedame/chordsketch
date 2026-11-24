@@ -28,7 +28,7 @@ cargo deny --all-features check licenses  # Dependency license allow-list (needs
                      # docs/adr/0085-binaries-ship-a-generated-third-party-license-notice.md
 python3 scripts/third-party-licenses.py --install  # Regenerate THIRD_PARTY_LICENSES.md,
                      # running `npm ci --ignore-scripts` in each bundled npm directory
-                     # first (needs `cargo install cargo-about --locked` and
+                     # first (needs `cargo install cargo-about --locked --version 0.9.3` and
                      # `pip install fonttools brotli`); drop --install when node_modules
                      # is already in place, or use --check to verify the file is up to
                      # date without a toolchain, as CI does

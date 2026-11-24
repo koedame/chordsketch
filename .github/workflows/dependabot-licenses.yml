@@ -82,11 +82,15 @@ jobs:
         with:
           toolchain: stable
 
+      # The composite holds the one `cargo-about` version the notice is built
+      # with; the script below refuses to run with any other (ADR-0099). It is
+      # read from the PR branch, which the first step has shown to differ from
+      # `main` only in Cargo manifests and the lock file. The composite is not
+      # in this workflow's `paths:` for the same reason: a PR that changes it
+      # fails that first step.
       - name: Install cargo-about
         if: steps.stale.outputs.stale == 'true'
-        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
-        with:
-          tool: cargo-about
+        uses: ./.github/actions/install-cargo-about
 
       - name: Setup Node.js
         if: steps.stale.outputs.stale == 'true'

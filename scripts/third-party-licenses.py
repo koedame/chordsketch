@@ -36,11 +36,18 @@ tooling, does not invalidate the file. The text of this script is part of
 the first hash (a change to how the file is rendered must regenerate it),
 so editing even this docstring means regenerating.
 
-Regenerating needs `cargo-about` (`cargo install cargo-about --locked`),
-network access for `cargo fetch`, and `npm ci --ignore-scripts` in each
-directory of `NPM_SURFACES` (in `packages/react` first: the VS Code
-extension links it and npm builds a linked package even with
-`--ignore-scripts`). `--install` runs those `npm ci` commands, in that
+Regenerating needs `cargo-about`, in exactly the version
+`.github/actions/install-cargo-about/action.yml` pins: two releases can find
+different license texts in the same crate, so the notice would otherwise gain
+or lose sections depending on who built it. A run with any other version stops
+before it does anything and prints the install command. `--check` never runs
+`cargo-about`, so it works whatever is installed; the pinned version is one of
+the inputs it hashes, so moving the pin means regenerating.
+
+Regenerating also needs network access for `cargo fetch`, and
+`npm ci --ignore-scripts` in each directory of `NPM_SURFACES` (in
+`packages/react` first: the VS Code extension links it and npm builds a
+linked package even with `--ignore-scripts`). `--install` runs those `npm ci` commands, in that
 order, before it regenerates. Without it, a run that finds `node_modules`
 missing lists every directory that lacks one, with the commands, in one go.
 It also needs `pip install fonttools brotli`: an npm font package's LICENSE names
@@ -60,6 +67,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "THIRD_PARTY_LICENSES.md"
+
+# The composite action CI installs cargo-about with. Its `tool:` line is the
+# only place the version is written down (ADR-0099).
+CARGO_ABOUT_PIN = ".github/actions/install-cargo-about/action.yml"
+CARGO_ABOUT_TOOL = re.compile(r"^\s*tool:\s*cargo-about@(\d+\.\d+\.\d+)\s*$", re.M)
 
 HEADER_INPUTS = "inputs-sha256"
 HEADER_BODY = "body-sha256"
@@ -262,6 +274,41 @@ def split_apache_notice(text: str) -> tuple[str, str]:
     if own == standard.strip():
         return text, ""
     return head + tail[: found.start()] + standard + tail[found.end():], own
+
+
+def pinned_cargo_about() -> str:
+    found = CARGO_ABOUT_TOOL.search((ROOT / CARGO_ABOUT_PIN).read_text(encoding="utf-8"))
+    if not found:
+        sys.exit(f"{CARGO_ABOUT_PIN} has no `tool: cargo-about@<major>.<minor>.<patch>` line")
+    return found.group(1)
+
+
+def installed_cargo_about(run=subprocess.run) -> str | None:
+    """The version of the `cargo about` on PATH, None when there is none."""
+    result = run(["cargo", "about", "--version"], capture_output=True, text=True)
+    if result.returncode != 0 or not result.stdout.split():
+        return None
+    return result.stdout.split()[-1]
+
+
+def require_pinned_cargo_about() -> None:
+    """Stop unless the installed cargo-about is the pinned one.
+
+    cargo-about 0.9.2 finds 17 ISC texts in ring 0.17.14 and 0.9.3 finds 22,
+    and the hashes `--check` compares cannot tell the two notices apart, so
+    the version is fixed before anything is generated.
+    """
+    want = pinned_cargo_about()
+    have = installed_cargo_about()
+    if have == want:
+        return
+    found = f"cargo-about {have} is installed" if have else "cargo-about is not installed"
+    sys.exit(
+        f"{found}, but {OUTPUT.name} is built with cargo-about {want} "
+        f"(pinned in {CARGO_ABOUT_PIN}): another version can find a different set of "
+        "license texts in the same crates.\n"
+        f"Install it with: cargo install cargo-about --locked --version {want}"
+    )
 
 
 def cargo_licenses() -> dict:
@@ -495,6 +542,7 @@ def inputs_digest(lock_text: str, surfaces: list[tuple[str, dict]]) -> str:
         h.update(label.encode() + b"\0" + data + b"\0")
 
     add("cargo", json.dumps(cargo_lock_packages(lock_text)).encode())
+    add("cargo-about", pinned_cargo_about().encode())
     for surface, selection in surfaces:
         rows = sorted((package_name(k), e["version"], e.get("integrity", "")) for k, e in selection.items())
         add("npm:" + surface, json.dumps(rows).encode())
@@ -608,7 +656,8 @@ def check() -> int:
     if have_inputs != want:
         problem = (
             f"{OUTPUT.name} was built from a different set of packages (Cargo.lock, "
-            "a package-lock.json, about.toml, deny.toml, a bundled license file or this script changed)"
+            "a package-lock.json, about.toml, deny.toml, a bundled license file, the pinned "
+            "cargo-about version or this script changed)"
         )
     elif have_body != sha256(body.encode()):
         problem = f"{OUTPUT.name} was edited by hand"
@@ -624,6 +673,7 @@ def generate(install: bool = False) -> int:
     mismatch = policy_mismatch()
     if mismatch:
         sys.exit(mismatch)
+    require_pinned_cargo_about()
     if install:
         install_npm()
     surfaces = npm_surfaces()

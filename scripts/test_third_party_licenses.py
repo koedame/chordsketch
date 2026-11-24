@@ -7,9 +7,12 @@ neither cargo-about nor `npm ci`. One smoke test asserts that the real
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -233,6 +236,153 @@ class NpmInstallTest(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("--install", result.stderr)
+
+
+ACTION_PINNING = "runs:\n  steps:\n    - uses: taiki-e/install-action@0000 # v2\n      with:\n        tool: cargo-about@{version}\n"
+
+
+class CargoAboutVersionTest(unittest.TestCase):
+    def repo_with_pin(self, root: str, version: str = "1.2.3") -> Path:
+        pin = Path(root) / tpl.CARGO_ABOUT_PIN
+        pin.parent.mkdir(parents=True)
+        pin.write_text(ACTION_PINNING.format(version=version), encoding="utf-8")
+        return Path(root)
+
+    def test_the_pinned_version_is_read_from_the_install_action(self):
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", self.repo_with_pin(root)):
+            self.assertEqual(tpl.pinned_cargo_about(), "1.2.3")
+
+    def test_an_install_action_that_names_no_exact_version_stops_the_run(self):
+        for unpinned in ("cargo-about", "cargo-about@latest", "cargo-about@${{ inputs.version }}", "cargo-about@0.9"):
+            with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", Path(root)):
+                pin = Path(root) / tpl.CARGO_ABOUT_PIN
+                pin.parent.mkdir(parents=True)
+                pin.write_text(f"        tool: {unpinned}\n", encoding="utf-8")
+                with self.assertRaises(SystemExit) as raised:
+                    tpl.pinned_cargo_about()
+            self.assertIn(tpl.CARGO_ABOUT_PIN, str(raised.exception))
+
+    def test_the_installed_version_is_the_last_word_cargo_about_prints(self):
+        run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout="cargo-about 0.9.2\n", stderr="")
+        self.assertEqual(tpl.installed_cargo_about(run=run), "0.9.2")
+
+    def test_a_cargo_without_the_about_subcommand_has_no_installed_version(self):
+        run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 101, stdout="", stderr="error: no such command: `about`")
+        self.assertIsNone(tpl.installed_cargo_about(run=run))
+
+    def test_a_cargo_about_other_than_the_pinned_one_stops_the_regeneration_and_says_how_to_install_it(self):
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", self.repo_with_pin(root)):
+            with mock.patch.object(tpl, "installed_cargo_about", return_value="1.2.2"):
+                with self.assertRaises(SystemExit) as raised:
+                    tpl.require_pinned_cargo_about()
+        message = str(raised.exception)
+        self.assertIn("cargo-about 1.2.2 is installed", message)
+        self.assertIn("cargo install cargo-about --locked --version 1.2.3", message)
+
+    def test_a_missing_cargo_about_stops_the_regeneration_and_says_how_to_install_it(self):
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", self.repo_with_pin(root)):
+            with mock.patch.object(tpl, "installed_cargo_about", return_value=None):
+                with self.assertRaises(SystemExit) as raised:
+                    tpl.require_pinned_cargo_about()
+        message = str(raised.exception)
+        self.assertIn("cargo-about is not installed", message)
+        self.assertIn("cargo install cargo-about --locked --version 1.2.3", message)
+
+    def test_the_pinned_cargo_about_lets_the_regeneration_go_on(self):
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", self.repo_with_pin(root)):
+            with mock.patch.object(tpl, "installed_cargo_about", return_value="1.2.3"):
+                tpl.require_pinned_cargo_about()
+
+    def test_regenerating_with_another_cargo_about_installs_nothing_and_leaves_the_notice_untouched(self):
+        with tempfile.TemporaryDirectory() as root:
+            output = Path(root) / "THIRD_PARTY_LICENSES.md"
+            output.write_text("as committed\n", encoding="utf-8")
+            with (
+                mock.patch.object(tpl, "ROOT", self.repo_with_pin(root)),
+                mock.patch.object(tpl, "OUTPUT", output),
+                mock.patch.object(tpl, "policy_mismatch", return_value=None),
+                mock.patch.object(tpl, "installed_cargo_about", return_value="1.2.2"),
+                mock.patch.object(tpl, "install_npm") as install_npm,
+                mock.patch.object(tpl, "cargo_licenses") as cargo_licenses,
+            ):
+                with self.assertRaises(SystemExit):
+                    tpl.generate(install=True)
+            install_npm.assert_not_called()
+            cargo_licenses.assert_not_called()
+            self.assertEqual(output.read_text(encoding="utf-8"), "as committed\n")
+
+    def test_regenerating_with_the_pinned_cargo_about_writes_the_notice(self):
+        with tempfile.TemporaryDirectory() as root:
+            output = Path(root) / "THIRD_PARTY_LICENSES.md"
+            (Path(root) / "Cargo.lock").write_text("", encoding="utf-8")
+            with (
+                mock.patch.object(tpl, "ROOT", self.repo_with_pin(root)),
+                mock.patch.object(tpl, "OUTPUT", output),
+                mock.patch.object(tpl, "policy_mismatch", return_value=None),
+                mock.patch.object(tpl, "installed_cargo_about", return_value="1.2.3"),
+                mock.patch.object(tpl, "npm_surfaces", return_value=[]),
+                mock.patch.object(tpl, "npm_licenses", return_value={}),
+                mock.patch.object(tpl, "cargo_licenses", return_value={("MIT", "MIT License", "text"): {("serde", "1.0.0"): ""}}),
+                mock.patch.object(tpl, "render", return_value="body\n"),
+                mock.patch.object(tpl, "inputs_digest", return_value="digest"),
+            ):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(tpl.generate(), 0)
+            self.assertEqual(tpl.parse_header(output.read_text(encoding="utf-8"))[2], "body\n")
+
+    def test_moving_the_pin_changes_the_input_hash_so_the_check_asks_for_a_regeneration(self):
+        digests = []
+        for version in ("1.2.3", "1.2.4"):
+            with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", self.repo_with_pin(root, version)):
+                for rel in ("about.toml", "deny.toml", "scripts/third-party-licenses.py", *(b[3] for b in tpl.BUNDLED)):
+                    target = Path(root) / rel
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text("same\n", encoding="utf-8")
+                digests.append(tpl.inputs_digest("", []))
+        self.assertNotEqual(digests[0], digests[1])
+
+    def test_a_change_to_the_install_action_that_keeps_the_version_keeps_the_input_hash(self):
+        digests = []
+        for sha in ("0000", "1111"):
+            with tempfile.TemporaryDirectory() as root, mock.patch.object(tpl, "ROOT", self.repo_with_pin(root)):
+                pin = Path(root) / tpl.CARGO_ABOUT_PIN
+                pin.write_text(pin.read_text(encoding="utf-8").replace("0000", sha), encoding="utf-8")
+                for rel in ("about.toml", "deny.toml", "scripts/third-party-licenses.py", *(b[3] for b in tpl.BUNDLED)):
+                    target = Path(root) / rel
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text("same\n", encoding="utf-8")
+                digests.append(tpl.inputs_digest("", []))
+        self.assertEqual(digests[0], digests[1])
+
+    def test_no_workflow_or_action_installs_cargo_about_except_the_pinned_install_action(self):
+        github = tpl.ROOT / ".github"
+        installs = [
+            f"{f.relative_to(tpl.ROOT)}: {line.strip()}"
+            for f in sorted([*github.rglob("*.yml"), *github.rglob("*.yaml")])
+            for line in f.read_text(encoding="utf-8").splitlines()
+            if re.search(r"^\s*tool:.*\bcargo-about\b|cargo (?:b?install)\b.*\bcargo-about\b", line)
+        ]
+        self.assertEqual(installs, [f"{tpl.CARGO_ABOUT_PIN}: tool: cargo-about@{tpl.pinned_cargo_about()}"])
+
+    def test_the_workflow_that_regenerates_the_notice_installs_cargo_about_through_the_pinned_install_action(self):
+        workflow = (tpl.ROOT / ".github/workflows/dependabot-licenses.yml").read_text(encoding="utf-8")
+        self.assertIn("uses: ./" + str(Path(tpl.CARGO_ABOUT_PIN).parent), workflow)
+
+    def test_every_documented_install_command_names_the_pinned_version(self):
+        pinned = tpl.pinned_cargo_about()
+        # The ADRs are left out: they are a record and may quote an old command.
+        documents = [
+            tpl.ROOT / "CLAUDE.md",
+            tpl.ROOT / "CONTRIBUTING.md",
+            *(f for f in sorted((tpl.ROOT / "docs").rglob("*.md")) if "adr" not in f.relative_to(tpl.ROOT).parts),
+        ]
+        commands = [
+            (str(f.relative_to(tpl.ROOT)), found.group(0))
+            for f in documents
+            for found in re.finditer(r"cargo install cargo-about[^`\n]*", f.read_text(encoding="utf-8"))
+        ]
+        self.assertIn(("CLAUDE.md", f"cargo install cargo-about --locked --version {pinned}"), commands)
+        self.assertEqual([c for c in commands if not c[1].endswith(f"--version {pinned}")], [])
 
 
 class ToolingTest(unittest.TestCase):

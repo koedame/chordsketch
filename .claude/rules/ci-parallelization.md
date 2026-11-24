@@ -151,10 +151,12 @@ registered tools:
 |---|---|
 | `wasm-pack` | `.github/actions/install-wasm-pack/action.yml`, `inputs.version` fallback (#2225) |
 | `macports-base` | `.github/actions/install-macports/action.yml`, `inputs.version` fallback |
+| `cargo-about` | `.github/actions/install-cargo-about/action.yml`, the `tool:` line; no override input, because `scripts/third-party-licenses.py` reads the same line and refuses any other version ([ADR-0099](../../docs/adr/0099-the-license-notice-is-built-with-one-pinned-cargo-about-version.md)) |
 
 New workflows that need one of these tools MUST consume its composite
 action (`uses: ./.github/actions/install-wasm-pack`,
-`uses: ./.github/actions/install-macports`) rather than re-pinning the
+`uses: ./.github/actions/install-macports`,
+`uses: ./.github/actions/install-cargo-about`) rather than re-pinning the
 version in a workflow-level `env:` block. Adding a new tool to this list
 means: create a `.github/actions/install-<tool>/action.yml` composite,
 move every workflow's version pin into it, and append the entry here in
