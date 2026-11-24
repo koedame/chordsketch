@@ -1,0 +1,26 @@
+name: "Install cargo-about"
+description: >
+  Install the one `cargo-about` release `THIRD_PARTY_LICENSES.md` is built
+  with, via `taiki-e/install-action`. The version on the `tool:` line below
+  is the only place it is written down: `scripts/third-party-licenses.py`
+  reads it from this file, refuses to regenerate the notice with any other
+  `cargo-about`, and counts it among the inputs `--check` hashes. Two
+  releases of `cargo-about` can find different license texts in the same
+  crate, so the notice would otherwise gain or lose sections depending on
+  who regenerated it (ADR-0099).
+runs:
+  using: "composite"
+  steps:
+    - name: Install cargo-about
+      # Dependabot keeps this pin current (`/.github/actions/*` is in
+      # `.github/dependabot.yml`). install-action can only download the
+      # `cargo-about` releases baked into the pinned commit's manifest, so
+      # when bumping the version below, check that this commit ships it.
+      uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
+      with:
+        # To move to another release: change the version here, run
+        # `python3 scripts/third-party-licenses.py --install` with that
+        # release installed, and compare the number of license sections
+        # per crate before and after. A release that finds fewer texts
+        # drops notices the licenses require.
+        tool: cargo-about@0.9.3
