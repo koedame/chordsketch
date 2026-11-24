@@ -20,13 +20,12 @@ counterpart for a React recipe, that is called out in
 > `<Transpose>` — are running as an editable page at
 > <https://koedame.github.io/chordsketch/svelte/>, built on this package. Type
 > ChordPro there and watch the engine render it before you install
-> anything ([ADR-0053](../../adr/0053-framework-demos-live-in-the-playground.md)).
+> anything.
 
 > **Prerequisite.** `npm install @chordsketch/svelte svelte`. Svelte
 > 5.0 or newer is a peer dependency — the components are written
 > with runes and do not run on Svelte 4. The package ships
-> preprocessed `.svelte` sources rather than compiled JavaScript
-> ([ADR-0052](../../adr/0052-svelte-bindings-publish-sources.md)),
+> preprocessed `.svelte` sources rather than compiled JavaScript,
 > so your own bundler compiles them with your app; Vite + SvelteKit
 > resolve them through the `svelte` export condition with no extra
 > configuration. The PDF / PNG export bundle is a separate optional
@@ -375,7 +374,7 @@ by design rather than by omission:
 | React surface | Why there is no Svelte equivalent |
 |---|---|
 | iReal Pro (`<IrealProEditor>`, `<IrealPreview>`, `useIrealParse`, …) | Not ported. Recipes 8 and 9 of the React page are React-only for now. |
-| AST walker (`useChordproAst`, `renderChordproAst`) | `<ChordSheet format="html">` renders the engine's own HTML instead of walking the AST into a component tree, per [ADR-0017](../../adr/0017-react-renders-from-ast.md). See Recipe 7 for the AST-level escape hatch. |
+| AST walker (`useChordproAst`, `renderChordproAst`) | `<ChordSheet format="html">` renders the engine's own HTML instead of walking the AST into a component tree. See Recipe 7 for the AST-level escape hatch. |
 | Interaction props built on that walker (in-preview chord selection, drag-to-reposition, chord audio) | They address React elements produced by the walker, which the Svelte render path never creates. |
 
 The CodeMirror source editor (`<ChordSourceArea>`) and the

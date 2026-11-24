@@ -7,13 +7,13 @@
 #
 # Requirements:
 #   - Perl ChordPro on PATH as `chordpro`, at the release recorded in
-#     `.github/upstream-version` (see docs/dev-setup.md).
+#     `.github/upstream-version` (`cpanm App::Music::ChordPro@<version>`).
 #
 # Run it when `.github/upstream-version` changes or a file is added to,
 # removed from or edited in `tests/corpus/`. It rewrites
 # `tests/perl-baseline/` and then refreshes the generated sections of
 # `docs/known-deviations.md`. CI never runs Perl; it only reads the saved
-# files (ADR-0040).
+# files.
 #
 # A corpus file counts as "Perl failed" when `chordpro` exits non-zero or
 # prints nothing for it. Those files get no saved output and are listed in
@@ -30,7 +30,7 @@ TEXT_DIR="$BASELINE_DIR/text"
 
 if ! command -v "$PERL_BIN" &>/dev/null; then
     echo "error: '$PERL_BIN' not found in PATH." >&2
-    echo "Install Perl ChordPro as described in docs/dev-setup.md." >&2
+    echo "Install the Perl ChordPro release named in .github/upstream-version (cpanm App::Music::ChordPro@<version>)." >&2
     exit 1
 fi
 

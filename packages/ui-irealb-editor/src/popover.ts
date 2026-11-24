@@ -303,8 +303,7 @@ export function openBarPopover(options: BarPopoverOptions): BarPopoverHandle {
     //                        instead of silently losing the previous
     //                        bass value (the pre-fix behaviour
     //                        nullified `bass` on every unparseable
-    //                        keystroke — `code-style.md` Silent
-    //                        Fallback violation).
+    //                        keystroke — a silent fallback).
     const bassInput = el('input', {
       attrs: {
         type: 'text',
@@ -723,7 +722,7 @@ function formatBass(root: ChordRoot): string {
  *
  * The pre-fix version returned `null` for both empty input and
  * garbage, which silently wiped a previously-valid bass on any
- * unparseable keystroke (`code-style.md` Silent Fallback). The
+ * unparseable keystroke (a silent fallback). The
  * three-valued return distinguishes the cases at the type level so
  * the call site can act differently. */
 function parseBassInput(s: string): ChordRoot | null | 'invalid' {

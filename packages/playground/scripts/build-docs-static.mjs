@@ -1,4 +1,6 @@
-// Static-site generator for the docs route. See ADR-0021.
+// Static-site generator for the docs route: pre-renders the Markdown
+// under `docs/sdk/` to one static HTML file per page, so the deployed
+// docs need no client-side rendering.
 
 import {
   existsSync,

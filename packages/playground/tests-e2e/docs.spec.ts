@@ -1,7 +1,7 @@
-// Browser smoke for the static docs route (#2506 / ADR-0021,
+// Browser smoke for the static docs route (#2506,
 // extended by #2514 to ship per-page static HTML).
 //
-// Per `.claude/rules/playground-smoke.md`: assertions are
+// Assertions are
 // structural anchors (selectors, `role=`), not visual snapshots;
 // `pageerror` is captured to catch any uncaught exceptions even
 // though the static docs pages do not load `@chordsketch/wasm`.
@@ -74,7 +74,7 @@ test.describe('docs site (static)', () => {
     page,
   }) => {
     // Asserts the build-time highlighter is wired into the deployed
-    // pipeline per ADR-0021's zero-JS posture: every recipe block
+    // pipeline (the docs pages ship no JS): every recipe block
     // must reach the DOM as a `<pre class="shiki">` with per-token
     // colour spans. A regression that silently fell back to plain
     // `<pre><code>` would clear the unit suite (the highlighter

@@ -18,7 +18,7 @@ on:
 
 # Cancel stale PR runs so a rebase does not leave two source builds
 # competing for the macOS concurrency cap. `workflow_dispatch` runs to
-# completion. Per `.claude/rules/ci-parallelization.md` §5.
+# completion.
 concurrency:
   group: homebrew-desktop-smoke-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

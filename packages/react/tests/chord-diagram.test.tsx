@@ -607,8 +607,8 @@ describe('<ChordDiagram> orientation pass-through (#2572)', () => {
     }
   });
 
-  test('rejects the removed horizontalStringOrder prop at the type layer (ADR-0026)', () => {
-    // ADR-0026 pins horizontal mode to reader-view; the
+  test('rejects the removed horizontalStringOrder prop at the type layer', () => {
+    // Horizontal mode is pinned to reader-view; the
     // `horizontalStringOrder` prop the pre-merge iteration shipped is
     // gone. The @ts-expect-error directive fails the test if the prop
     // ever comes back without an explicit type update — a regression
@@ -620,7 +620,7 @@ describe('<ChordDiagram> orientation pass-through (#2572)', () => {
         chord="Am"
         instrument="guitar"
         orientation="horizontal"
-        // @ts-expect-error -- horizontalStringOrder is intentionally not a prop (ADR-0026).
+        // @ts-expect-error -- horizontalStringOrder is intentionally not a prop.
         horizontalStringOrder="player"
         wasmLoader={makeLoader(stub as unknown as StubRenderer)}
       />,

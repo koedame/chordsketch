@@ -155,7 +155,7 @@ export function capoTransposeOffset(source: string): number {
  * Whether source-coordinate chord editing is safe for `source` under a
  * given CLI `transpose`. Editing rewrites the raw `[chord]` tokens by
  * source column, but the wasm parse path transposes the AST in place —
- * folding `{capo}` into the effective transpose (ADR-0023) — so under a
+ * folding `{capo}` into the effective transpose — so under a
  * non-zero **effective** transpose the rendered chord names are the
  * transposed spelling, not the raw source, and editing by source
  * coordinates would corrupt the song.
@@ -373,8 +373,8 @@ export function applyChordReposition(
   // Shared structural denylist with buildChordName / applyChordEdit /
   // applyChordDelete (one constant for every chord-writing helper, so a
   // future denylist change cannot reach only some of them — the
-  // sister-site divergence `.claude/rules/fix-propagation.md` warns
-  // about; previously this site inlined a near-copy that omitted `>`).
+  // sister-site divergence this guards against; previously this site
+  // inlined a near-copy that omitted `>`).
   if (CHORD_FORBIDDEN_RE.test(evt.chord)) {
     throw new Error(
       `chord ${JSON.stringify(evt.chord)} contains forbidden character ` +
@@ -526,8 +526,7 @@ interface LayoutSegment {
  * Both surfaces previously walked `line.segments` with byte-identical
  * accumulation; keeping two copies risked silent desync (a future
  * change to bracket-length math applied to one and not the other would
- * resolve the wrong chord — exactly the sister-site hazard
- * `.claude/rules/fix-propagation.md` warns about).
+ * resolve the wrong chord — the usual sister-site hazard).
  *
  * The chord column comes from the parser-supplied authoritative
  * {@link LayoutSegment.sourceColumn} (a 0-based UTF-16 column that survives
@@ -768,7 +767,7 @@ export function buildChordNudge(params: {
 // model the reposition pipeline uses (no parallel chord state).
 
 // ===========================================================================
-// Structured chord-type model (ADR-0037)
+// Structured chord-type model
 // ===========================================================================
 //
 // ChordSketch rejects ambiguous chord notation (a bare extended "stack" such
@@ -1188,7 +1187,7 @@ export function toggleTension(
  * tension, and the natural full stacks (`(9,11)`, `(9,11,13)`, `69`).
  *
  * This is the TypeScript half of the chord-diagram coverage sister list
- * (`.claude/rules/chord-diagram-coverage.md`): `tests/chord-type-coverage.test.ts`
+ * (every suffix the editor can write must have a diagram): `tests/chord-type-coverage.test.ts`
  * asserts this set equals `PALETTE_SUFFIXES` in
  * `crates/chordpro/src/voicings.rs`, which the Rust suite then proves yields a
  * playable diagram on every instrument and every root. Multi-altered tension

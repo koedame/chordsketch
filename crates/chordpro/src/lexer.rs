@@ -264,7 +264,7 @@ impl Lexer {
 /// escape branch in `packages/react/src/chordpro-language.ts`). Those lists
 /// cover only the always-special `{ } [ ]` (lyric context, never `in_directive`).
 /// Keep all of them in lockstep — adding a new escapable special here must be
-/// mirrored there (see `.claude/rules/fix-propagation.md`, #2634).
+/// mirrored there (#2634).
 fn is_special(ch: char, in_directive: bool) -> bool {
     matches!(ch, '{' | '}' | '[' | ']') || (ch == ':' && in_directive)
 }

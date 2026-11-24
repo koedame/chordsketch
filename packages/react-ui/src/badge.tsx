@@ -30,7 +30,7 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 /**
- * Design-system badge primitive (`design-system/DESIGN.md` §6) — status,
+ * Design-system badge primitive — status,
  * key, and format badges from `components-badges.html`.
  */
 export function Badge({
@@ -55,7 +55,7 @@ export interface PillProps extends React.HTMLAttributes<HTMLSpanElement> {
   solid?: boolean;
 }
 
-/** Genre pill primitive (`design-system/DESIGN.md` §6). */
+/** Genre pill primitive from `components-badges.html`. */
 export function Pill({ solid = false, className, children, ...rest }: PillProps): React.ReactElement {
   const cls = ['pill', solid ? 'solid' : '', className ?? ''].filter(Boolean).join(' ');
   return (

@@ -13,7 +13,7 @@ import { FakeAudioContext } from './fake-audio-context';
 // Stub renderer surface — covers BOTH the AST → JSX path
 // (parseChordproWithWarnings* used by `format="html"`
 // post-#2475) and the legacy text path (render_text* still used
-// by `format="text"`). See ADR-0017 for the surface split.
+// by `format="text"`).
 interface StubRenderer {
   default: ReturnType<typeof vi.fn>;
   parseChordproWithWarnings: ReturnType<typeof vi.fn>;
@@ -612,7 +612,7 @@ describe('<ChordSheet>', () => {
     // position. Am is detail-less in the stub, so the editor falls back to
     // raw-name parts (triad min, no 7th); clicking the "7" seventh chip adds
     // the dominant seventh to the minor triad → "Am7" over the original [Am]
-    // (the seventh is independent of the triad — ADR-0037).
+    // (the seventh is independent of the triad).
     const seventhBtn = Array.from(
       container.querySelectorAll('[aria-label="Seventh"] button'),
     ).find((c) => c.textContent === '7') as HTMLButtonElement;

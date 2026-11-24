@@ -8,7 +8,6 @@
     ".github",
     "apps",
     "ci",
-    "docs/adr",
     "packages/playground",
     "packages/ui-irealb-editor",
     "packaging",
@@ -17,11 +16,8 @@
   ],
   "excludeFiles": [
     "CHANGELOG.md",
-    "CLAUDE.md",
     "CONTRIBUTING.md",
-    "SECURITY.md",
-    "dev-setup.md",
-    "releasing.md"
+    "SECURITY.md"
   ],
   "rules": [
     "ChordSketch is pre-1.0. Any 0.x release may change the public API, rendered output, CLI flags and binding surfaces without a deprecation cycle, so pin an exact version.",

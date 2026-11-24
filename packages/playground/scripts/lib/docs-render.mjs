@@ -1,7 +1,6 @@
 // URI-scheme denylist mirrors the React JSX walker's
 // `isSafeHref` and agrees with `crates/render-html`'s `svg_sanitize.rs`
-// on the shared corpus — sister-site parity per
-// `.claude/rules/sanitizer-security.md` + `.claude/rules/fix-propagation.md`.
+// on the shared corpus — the three are sister sites.
 // Any addition or removal MUST land in all three sites in the same PR.
 
 import { readFileSync } from 'node:fs';
@@ -584,10 +583,9 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   }
 });
 
-// Shiki highlighter. Build-time only per
-// [ADR-0025](../../../../docs/adr/0025-build-time-syntax-highlighting-shiki.md);
-// the deployed pages carry zero JS beyond the inline hash-redirect
-// shim ([ADR-0021](../../../../docs/adr/0021-docs-site-co-located-with-playground.md)).
+// Shiki highlighter. Build-time only: the deployed pages carry zero JS
+// beyond the inline hash-redirect shim, so highlighting cannot run in
+// the browser.
 // The highlighter object is reused across every page render so we
 // pay grammar / theme load cost once. The ChordPro grammar is
 // sister-site to `syntaxes/chordpro.tmLanguage.json` — the same
@@ -597,7 +595,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 // editor highlighting, so on-page docs colour matches what those
 // editors render. (The Zed extension uses an independent
 // tree-sitter grammar at `packages/tree-sitter-chordpro` — out of
-// scope here per ADR-0025.)
+// scope here.)
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../../..');
 const CHORDPRO_GRAMMAR_PATH = resolve(
@@ -651,7 +649,7 @@ const SHIKI_LANGS = [
 // code fence its Lighthouse accessibility score.
 // `github-dark-default` is GitHub's current dark palette, tuned for a
 // #0D1117 surface that is 1.05:1 from ours, and its lowest token
-// colour lands at 6.43:1. See ADR-0055.
+// colour lands at 6.43:1.
 const SHIKI_THEME = 'github-dark-default';
 let HIGHLIGHTER;
 try {
@@ -757,8 +755,7 @@ function escapeHtmlText(value) {
 
 // Build-time-only function; the docs corpus's longest fence body
 // (an ASCII architecture diagram in `docs/sdk/README.md`, measured
-// at 1395 bytes by walking every fence under `docs/sdk/` — see
-// ADR-0025 §"Decision" + §"Consequences") sits well under this
+// at 1395 bytes by walking every fence under `docs/sdk/`) sits well under this
 // ceiling. Note: that fence carries no info-string lang, so it
 // reaches Shiki via the fallback path. The cap turns a runaway
 // input (a machine-generated doc file, a mis-rendered binary

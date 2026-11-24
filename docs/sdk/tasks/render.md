@@ -5,9 +5,7 @@ ChordPro string and returns rendered output in one of three formats:
 plain text (chords above lyrics), self-contained HTML5, or A4 PDF.
 
 The output is **byte-identical across every binding** for a given
-input — language choice does not change rendering semantics. PRs
-that introduce per-binding output drift are caught by the
-fix-propagation rule (`.claude/rules/fix-propagation.md`).
+input — language choice does not change rendering semantics.
 
 ## Input
 

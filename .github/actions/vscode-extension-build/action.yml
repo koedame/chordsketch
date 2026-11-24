@@ -5,8 +5,7 @@ description: >
   `@chordsketch/react` dist it aliases, its own dependencies and its
   esbuild bundle. Shared by `vscode-extension.yml`'s `build` and
   `build-platform` jobs and by `publishable.yml`, so the extension the
-  pull-request check packages is built exactly as the release builds it
-  (ADR-0070).
+  pull-request check packages is built exactly as the release builds it.
 inputs:
   cache-key:
     description: "`Swatinem/rust-cache` shared-key for the wasm-pack builds."

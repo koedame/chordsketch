@@ -3,8 +3,8 @@ description: >
   Install MacPorts from the official signed .pkg for the runner's macOS
   release, put it on PATH, and pull the upstream ports tree via
   `port selfupdate`. Single source of truth for the MacPorts version pin
-  shared by `macports-smoke.yml` and `readme-smoke.yml` (per
-  `.claude/rules/ci-parallelization.md` §2).
+  shared by `macports-smoke.yml` and `readme-smoke.yml`, so the two
+  cannot drift apart.
 inputs:
   version:
     description: >

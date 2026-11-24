@@ -264,7 +264,6 @@ impl DiagramData {
                         // sentinel that means "no finger shown" — so a
                         // typo in a ChordPro `fingers` list would silently
                         // produce a visually plausible but wrong diagram.
-                        // See code-style.md §Silent Fallback.
                         let Ok(n) = tokens[i].parse::<u8>() else {
                             break;
                         };
@@ -405,8 +404,7 @@ pub fn assign_fingers(frets: &[i32]) -> Vec<u8> {
 ///
 /// This is the single source of truth every renderer (the three SVG title
 /// sites here, plus the PDF renderer's three title sites) routes through, so
-/// the base/tension split and ordering cannot drift between surfaces (cf.
-/// `.claude/rules/fix-propagation.md`).
+/// the base/tension split and ordering cannot drift between surfaces.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiagramTitle {
     /// The base chord name, drawn at full size (e.g. `Dmaj7`, `F#m7`).
@@ -533,7 +531,7 @@ fn extract_alterations(quality: &str) -> (String, Vec<String>) {
 /// first; the typography conversion is applied last, so it is the single
 /// source of truth for diagram-title typography across the three SVG title
 /// sites here plus the PDF renderer's three title sites — none of them re-runs
-/// the conversion (cf. `.claude/rules/fix-propagation.md`). The ASCII title
+/// the conversion. The ASCII title
 /// path ([`render_ascii`]) does not route through this function; it applies
 /// [`crate::typography::unicode_accidentals`] to its title directly.
 ///
@@ -846,15 +844,15 @@ impl StackedTitleLayout {
 /// `Vertical` is the Western convention (nut on top, fretboard running
 /// downward) that ChordPro renderers have always emitted. `Horizontal` (nut
 /// on the left, fretboard running rightward) is the convention used in many
-/// Japanese tablature publications; see ADR-0026 for the corpus the decision
-/// referenced.
+/// Japanese tablature publications (chord books and J-POP scores).
 ///
 /// The horizontal layout is reader-view only — high pitch on top, matching
 /// the six-line tablature stave order so a reader fluent with tab parses
 /// the diagram with no mental flip. The historical player-view alternative
 /// (low pitch on top, mirroring what a right-handed player sees looking
-/// down at the instrument) is intentionally not offered as a knob; see
-/// ADR-0026 for the rationale.
+/// down at the instrument) is intentionally not offered as a knob:
+/// threading a second string-order setting through every binding, config
+/// key and UI control cost more than supporting both conventions was worth.
 ///
 /// The enum is `#[non_exhaustive]` so future layout variants (e.g.
 /// `HorizontalLefty` with the nut on the right) can be added without an
@@ -958,7 +956,7 @@ const OCTAVE_DOUBLE_DOT_OFFSET: f32 = 0.55;
 /// ([`regular`](Self::regular) / [`compact`](Self::compact)) built the
 /// metrics. This keeps the two size variants from forking into duplicate
 /// renderer functions — a geometry fix lands once and applies to both
-/// sizes (cf. `.claude/rules/fix-propagation.md`).
+/// sizes.
 ///
 /// `regular()` and `compact()` are the two constructors; the
 /// `render_svg_default_byte_identical_across_chord_shapes` test pins that
@@ -1199,7 +1197,7 @@ pub fn render_svg(data: &DiagramData) -> String {
 /// orientation.
 ///
 /// `Orientation::Horizontal` is reader-view only (high pitch on top); the
-/// variant is a unit case and carries no row-order parameter — see ADR-0026.
+/// variant is a unit case and carries no row-order parameter.
 ///
 /// # Examples
 ///
@@ -1540,8 +1538,8 @@ fn render_svg_vertical_inner(data: &DiagramData, m: &DiagramMetrics) -> String {
 
 /// Horizontal counterpart to [`render_svg_vertical_inner`]: nut on the left,
 /// fretboard running rightward, high pitch (1st string) on top. Reader-view
-/// only — see [`Orientation`] and ADR-0026 for why the player-view
-/// alternative is not exposed.
+/// only — see [`Orientation`] for why the player-view alternative is not
+/// exposed.
 ///
 /// The geometric layout mirrors the vertical renderer so behaviour stays in
 /// lockstep — anything that changes in one (open/muted placement, 12-fret
@@ -1720,7 +1718,7 @@ fn render_svg_horizontal_inner(data: &DiagramData, m: &DiagramMetrics) -> String
     // the per-string marker placement below maps each physical string
     // index (`i`) to the matching visual row via `row = num_strings -
     // 1 - i`, so the high-pitch string lands on the top row
-    // (reader-view, ADR-0026).
+    // (reader-view).
     for i in 0..num_strings {
         let y = top_margin + i as f32 * string_pitch;
         svg.push_str(&format!(
@@ -3678,8 +3676,7 @@ mod tests {
         // annotations", not "no-finger-on-string" per slot.
         //
         // Regression guard for the silent-fallback behaviour previously
-        // captured by `test_finger_overflow_beyond_u8_max_becomes_zero`;
-        // see code-style.md §Silent Fallback.
+        // captured by `test_finger_overflow_beyond_u8_max_becomes_zero`.
         let data =
             DiagramData::from_raw("Am", "frets x 0 2 2 1 0 fingers 256 1 2 3 1 0", 6).unwrap();
         assert!(
@@ -3932,7 +3929,7 @@ mod tests {
 
     /// Returns the SVG output for an Am open-position chord rendered in
     /// horizontal mode (reader-view — high pitch on top, the only horizontal
-    /// layout the project ships per ADR-0026).
+    /// layout the project ships).
     fn horizontal_am_svg() -> String {
         let data = DiagramData {
             name: "Am".to_string(),

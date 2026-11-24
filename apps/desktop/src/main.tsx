@@ -576,7 +576,7 @@ async function buildAppMenu(rebuildMenu: MenuRebuilder): Promise<Menu> {
         About: {
           name: DEFAULT_WINDOW_TITLE,
           version,
-          // Application-layer license per CLAUDE.md §License Policy;
+          // Application-layer license;
           // matches `apps/desktop/src-tauri/Cargo.toml`.
           license: 'AGPL-3.0-only',
           website: PROJECT_HOMEPAGE,
@@ -906,7 +906,7 @@ async function bootstrap(rootEl: HTMLElement): Promise<void> {
  * The first-tick attach observed in normal boots is well under
  * 50 ms; we keep two orders of magnitude of headroom so a slow
  * disk / Rosetta startup / debugger pause does not falsely trip
- * the alarm. Per `.claude/rules/evidence-based-claims.md`, the
+ * the alarm. The
  * exact number should be tightened once we have measured boot
  * times across a real macOS / Windows / Linux matrix.
  *

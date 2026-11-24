@@ -6,7 +6,7 @@ Uses only `unittest` from stdlib so CI does not need a `pip install` step.
 Every case reads the real files under `apps/desktop/src-tauri/`, so a change
 to `capabilities/*.json` or `tauri.conf.json` that widens what the WebView may
 do fails here until this file is edited in the same change. That edit is the
-review point: [ADR-0006](../docs/adr/0006-desktop-webview-trust-boundary.md)
+review point: the desktop app's trust boundary
 rests on the WebView loading only the local build, so granting a filesystem or
 shell permission, opening IPC to a remote URL, or loosening the CSP each
 invalidates it.
@@ -53,8 +53,8 @@ EXPECTED_PERMISSIONS: list[object] = [
 ]
 
 # Plugin namespaces that let WebView script reach the filesystem, run
-# programs, or talk to arbitrary hosts. ADR-0006 lists `fs:*` and `shell:*`
-# as the triggers for real capability gating; the rest are the same class.
+# programs, or talk to arbitrary hosts. Granting `fs:*` or `shell:*` would
+# call for real capability gating; the rest are the same class.
 FORBIDDEN_PERMISSION_NAMESPACES = [
     "fs",
     "shell",
@@ -119,7 +119,7 @@ class CapabilityTests(unittest.TestCase):
         self.assertNotIn(
             "remote",
             capability,
-            "`remote.urls` would hand IPC to a web page (ADR-0006)",
+            "`remote.urls` would hand IPC to a web page",
         )
 
     def test_default_capability_grants_exactly_the_reviewed_permissions(self):
@@ -130,7 +130,8 @@ class CapabilityTests(unittest.TestCase):
             granted,
             expected,
             "the WebView's permissions changed; if intended, update "
-            "EXPECTED_PERMISSIONS and re-check ADR-0006's revisit triggers",
+            "EXPECTED_PERMISSIONS and re-check that the WebView still loads "
+            "only the local build",
         )
 
     def test_default_capability_grants_no_filesystem_shell_or_network_plugin(self):
@@ -146,7 +147,7 @@ class CapabilityTests(unittest.TestCase):
                 namespace,
                 FORBIDDEN_PERMISSION_NAMESPACES,
                 f"{identifier} lets WebView script bypass the custom-command "
-                "boundary (ADR-0006 revisit trigger)",
+                "boundary",
             )
 
     def test_opener_is_scoped_to_the_project_homepage_only(self):
@@ -182,7 +183,7 @@ class ContentSecurityPolicyTests(unittest.TestCase):
             self.csp,
             EXPECTED_CSP,
             "the desktop CSP changed; if intended, update EXPECTED_CSP and "
-            "re-check ADR-0006",
+            "re-check that the WebView still loads only the local build",
         )
 
     def test_csp_allows_no_remote_origin_anywhere(self):
@@ -232,7 +233,7 @@ class ConfigTests(unittest.TestCase):
                     "url",
                     window,
                     f"{path.name}: a window `url` can point the WebView away "
-                    "from the local build (ADR-0006)",
+                    "from the local build",
                 )
 
     def test_no_config_file_weakens_the_security_section(self):

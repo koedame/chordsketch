@@ -43,7 +43,7 @@ jobs:
           fetch-depth: 1
 
       # On a pull request, Claude checks out its head and works on it.
-      # Outside pull requests are not accepted (ADR-0087), so only a pull
+      # Outside pull requests are not accepted, so only a pull
       # request whose head is a branch of this repository goes on.
       - name: Only pull requests from this repository
         if: github.event.issue.pull_request || github.event.pull_request
@@ -76,4 +76,4 @@ jobs:
             PR requirements:
             - Title: concise, imperative mood
             - Body: include `Closes #N` referencing the issue number
-            - Follow all rules in CLAUDE.md and .claude/rules/
+            - Write everything in English (code, comments, commit messages, PR text)

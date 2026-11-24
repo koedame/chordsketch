@@ -6,13 +6,13 @@ import { ACCIDENTAL_FLAT, ACCIDENTAL_SHARP, GCLEF, smuflTransform } from './brav
  * Music-notation glyphs (key signature, metronome, time signature)
  * used as decorative icons inside the `.meta-inline` markers the
  * AST walker emits for positional `{key}` / `{tempo}` / `{time}`
- * directives. The visual style mirrors `design-system/DESIGN.md`
- * §6.1 — no left accent borders, color contrast / typography is
+ * directives. The visual style mirrors the design system
+ * — no left accent borders, color contrast / typography is
  * the only signal.
  *
  * The treble clef and the sharp / flat accidentals are **real
  * Bravura SMuFL outlines** baked as inline SVG `<path>` data (see
- * `./bravura-glyphs` and [ADR-0014]), not a font download and not
+ * `./bravura-glyphs`), not a font download and not
  * the simplified caricatures used previously — the caricature clef
  * read as a distorted squiggle at chip size. The metronome and
  * time-signature glyphs stay hand-drawn primitives (they are not
@@ -21,9 +21,7 @@ import { ACCIDENTAL_FLAT, ACCIDENTAL_SHARP, GCLEF, smuflTransform } from './brav
  * Sister-site to `crates/render-html/src/music_glyphs.rs` (which
  * pulls the same Bravura paths from `crates/render-html/src/bravura.rs`)
  * — the React JSX walker and the HTML renderer MUST emit the same
- * key-signature DOM (`.claude/rules/renderer-parity.md`).
- *
- * [ADR-0014]: docs/adr/0014-bravura-glyphs-as-svg-paths.md
+ * key-signature DOM.
  */
 
 /** User units per staff space in the key-signature glyph (line gap). */
@@ -85,7 +83,7 @@ export function keySignatureFor(
     .trim();
 
   // Lenient key grammar — sister-site to the Rust
-  // `chordsketch_chordpro::parse_key` (ADR-0034). An uppercase root, an
+  // `chordsketch_chordpro::parse_key`. An uppercase root, an
   // optional accidental, an optional `/bass`, and a quality qualifier:
   //   minor ← m | - | (mi | min | minor, case-insensitive)
   //   major ← <empty> | M | (maj | major, case-insensitive)

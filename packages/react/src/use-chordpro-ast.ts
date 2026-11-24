@@ -8,7 +8,7 @@ import type { ChordproSong } from './chordpro-ast';
 // declared structurally so the React bundle does not pull the
 // WASM glue into its type graph. The runtime surface is the
 // `parseChordpro` / `parseChordproWithOptions` exports added in
-// #2475 alongside the AST → JSX cut-over (ADR-0017).
+// #2475 alongside the AST → JSX cut-over.
 interface ChordproParser {
   /** Browser-build init; absent on the Node build (`initWasm` copes with both). */
   default?: unknown;

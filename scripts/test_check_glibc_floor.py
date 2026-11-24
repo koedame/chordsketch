@@ -174,7 +174,7 @@ class CheckBinariesTest(unittest.TestCase):
 
 
 class DesktopChannelTest(unittest.TestCase):
-    """The desktop bundles' own floor (ADR-0056)."""
+    """The desktop bundles' own floor."""
 
     def check(self, readelf_output):
         return CheckBinariesTest.check(
@@ -286,7 +286,7 @@ class CheckWorkflowTest(unittest.TestCase):
 
 
 class CheckDesktopWorkflowTest(unittest.TestCase):
-    """The desktop matrices' runner pin (ADR-0056).
+    """The desktop matrices' runner pin.
 
     Runs against the repository's real workflows, so putting the Linux
     cell back on `ubuntu-latest` turns this suite red on the PR that

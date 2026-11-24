@@ -32,8 +32,7 @@ export default function App() {
 value from the host (controlled mode) instead of letting the component
 own it.
 
-> Renamed from `<Playground>` in `@chordsketch/react` v0.3.0 per
-> [ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md).
+> Renamed from `<Playground>` in `@chordsketch/react` v0.3.0.
 
 ## Recipe 2 — Render a read-only chord sheet
 
@@ -269,8 +268,7 @@ export default function App() {
 }
 ```
 
-> Renamed from `<IrealPlayground>` in `@chordsketch/react` v0.3.0
-> per [ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md).
+> Renamed from `<IrealPlayground>` in `@chordsketch/react` v0.3.0.
 
 The composite shows the editor (header form + interactive bar grid
 with structural editing + URL textarea) next to the SVG preview.
@@ -278,8 +276,7 @@ with structural editing + URL textarea) next to the SVG preview.
 narrower hosts; pass `source` + `onChange` for controlled mode.
 
 > **Editing scope.** `v0.2.0` brings the iReal Pro surface to
-> parity with the private `@chordsketch/ui-irealb-editor` per
-> [ADR-0020](../../adr/0020-ireal-pro-react-surface.md):
+> parity with the private `@chordsketch/ui-irealb-editor`:
 > structural section / bar editing, ARIA-grid keyboard navigation,
 > and a popover-based per-bar chord editor with a chord-row
 > editor, N-th ending input, and symbol picker. The playground
@@ -392,6 +389,3 @@ layer for non-React server rendering.
 - [`packages/react/README.md`](../../../packages/react/README.md) —
   the full API reference for `@chordsketch/react`, including the
   AST type re-exports and helper functions.
-- [ADR-0020](../../adr/0020-ireal-pro-react-surface.md) — why the
-  iReal Pro React surface is a native React implementation rather
-  than a wrapper around the private `@chordsketch/ui-irealb-editor`.

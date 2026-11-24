@@ -3,8 +3,8 @@
 //! `tests/perl-baseline/text/` holds what Perl ChordPro (the release recorded
 //! in `.github/upstream-version`) prints for every file in `tests/corpus/`.
 //! This test renders the same files with ChordSketch, passes both outputs
-//! through the normalisation below, and compares them. CI never runs Perl
-//! (ADR-0040); the saved output is refreshed by
+//! through the normalisation below, and compares them. CI never runs Perl;
+//! the saved output is refreshed by
 //! `scripts/update-perl-baseline.sh`.
 //!
 //! The comparison is a ratchet. A file whose output differs from Perl's after

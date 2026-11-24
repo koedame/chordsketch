@@ -79,7 +79,7 @@ describe('keySignatureFor', () => {
     expect(keySignatureFor('F♯')?.count).toBe(6);
     expect(keySignatureFor('B♭')?.count).toBe(2);
     // Lenient minor spellings all resolve to the same signature (sister-site
-    // to Rust `parse_key`, ADR-0034): attached markers, the spelled-out word,
+    // to Rust `parse_key`): attached markers, the spelled-out word,
     // and a space before the marker.
     expect(keySignatureFor('Em')?.count).toBe(1);
     expect(keySignatureFor('Emi')?.count).toBe(1); // `mi` alias
@@ -105,7 +105,7 @@ describe('keySignatureFor', () => {
     expect(keySignatureFor('G/B')).toEqual({ count: 1, type: 'sharp' });
   });
 
-  test('returns null for a malformed slash-bass (ADR-0034 parity)', () => {
+  test('returns null for a malformed slash-bass (parity with Rust parse_key)', () => {
     // Rust `parse_key` validates the bass, so a malformed bass is not a key
     // and draws no signature — the TS sister-site must agree (no glyph) rather
     // than ignoring the bass and drawing a tonic signature.
@@ -120,7 +120,7 @@ describe('keySignatureFor', () => {
     expect(keySignatureFor('H')).toBeNull(); // German "B" — out of scope
   });
 
-  test('returns null for non-key values (ADR-0034)', () => {
+  test('returns null for non-key values', () => {
     // A lowercase root is not a key; a chord extension is not a key; a church
     // mode has no single conventional signature — all yield null (staff-only),
     // matching the Rust `parse_key` sister-site.

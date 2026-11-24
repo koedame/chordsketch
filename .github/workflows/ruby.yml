@@ -61,7 +61,6 @@ jobs:
         # which makes `require 'chordsketch'` fail with "version
         # `GLIBC_2.39' not found" on every older distribution. `cross`
         # builds inside a pinned container whose sysroot is glibc 2.23.
-        # See ADR-0046.
         uses: taiki-e/install-action@25f51f6b1bf4e18876107cece836f4f77ac17c8c # v2
         with:
           tool: cross
@@ -260,7 +259,7 @@ jobs:
     # Enforce `bash -eo pipefail` in `run:` blocks. Scoped to this job
     # rather than workflow-level because ruby.yml has a Windows matrix
     # cell (build-native-others) whose `run:` blocks must keep pwsh
-    # defaults. See issue #1845 (fix-propagation from PR #1821).
+    # defaults. See issue #1845 (the same fix PR #1821 made elsewhere).
     defaults:
       run:
         shell: bash

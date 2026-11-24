@@ -70,10 +70,7 @@ bundles its own webkit2gtk and needs only the glibc floor, which still
 rules out RHEL 8 (glibc 2.28) and RHEL 9 (2.34). The build host is
 pinned for that reason — the executable links the host's glibc and the
 AppImage ships the host's webkit2gtk / GTK stack, so moving the runner
-moves the floor. See
-[ADR-0056](../../docs/adr/0056-desktop-bundles-target-ubuntu-2204.md)
-and
-[ADR-0057](../../docs/adr/0057-desktop-rpm-stays-a-webkit2gtk-41-channel.md);
+moves the floor.
 `scripts/check-glibc-floor.py --channel desktop` measures the bundles in
 CI before they are uploaded.
 
@@ -81,8 +78,7 @@ The libraries the `.AppImage` copies from the build host are mostly LGPL.
 `scripts/appimage-bundled-libraries.py` lists them with their package,
 version, source and license texts; the list is packed into the image at
 `usr/share/doc/chordsketch-desktop/bundled-libraries.txt` and published with
-each release as `chordsketch-desktop-linux-bundled-libraries.txt`
-([ADR-0086](../../docs/adr/0086-the-desktop-appimage-ships-a-generated-list-of-the-system-libraries-it-bundles.md)).
+each release as `chordsketch-desktop-linux-bundled-libraries.txt`.
 
 ## First-time setup
 
@@ -189,9 +185,8 @@ calls `@tauri-apps/plugin-process`'s `relaunch()`.
 desktop-updater-manifest/latest.json`. The `latest.json` manifest is
 published to the `desktop-updater-manifest` branch by the
 `publish-updater-manifest` job in `desktop-release.yml` on every
-`desktop-v*` tag — see
-[ADR-0005](../../docs/adr/0005-tauri-updater-key-management.md)
-for the signing-key management decision.
+`desktop-v*` tag. Each update is signed, and the app verifies the
+signature against the public key in `tauri.conf.json` before installing.
 
 Opt-out is stored in `localStorage` under
 `chordsketch-desktop-auto-update-opt-out/v1`. Users toggle it with
@@ -258,8 +253,7 @@ the script logs that it skipped and exits.
   `preview-handler.nsh`, which register and unregister the handler.
   Each installer writes at its own scope — HKLM for the per-machine
   MSI, HKCU for the per-user `.exe` — so the default installer needs
-  no administrator rights
-  ([ADR-0050](../../docs/adr/0050-windows-preview-handler-is-installer-registered.md)).
+  no administrator rights.
 
 macOS and Linux bundles are unaffected: the platform config is not
 merged there, and none of the COM code compiles off Windows.
@@ -288,13 +282,10 @@ Building needs `swiftc` (Xcode or the Command Line Tools).
 
 `src-tauri/Info.plist` exports the `me.koeda.chordsketch.chordpro`
 type the extension previews. It declares no document types, so the
-app does not become the default app for ChordPro files
-([ADR-0083](../../docs/adr/0083-the-macos-quick-look-extension-is-a-data-based-preview-signed-before-the-bundler.md)).
+app does not become the default app for ChordPro files.
 
 The bundle layout and how to verify the extension on a Mac are in
-[`preview-handler/README.md`](preview-handler/README.md#macos-quick-look-extension);
-how it goes through signing and notarization is in
-[`docs/releasing.md`](../../docs/releasing.md#the-macos-quick-look-extension-and-signing).
+[`preview-handler/README.md`](preview-handler/README.md#macos-quick-look-extension).
 
 ## Workspace integration
 

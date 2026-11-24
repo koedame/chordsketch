@@ -7,8 +7,7 @@
 //! system, linear interpolation between two anchor rows); plain
 //! text without a position prefix sits below the bar's baseline
 //! at the same `BELOW_OFFSET` the playground React chart uses for
-//! its `.text-mark` span (sister-site parity per
-//! `.claude/rules/renderer-parity.md`).
+//! its `.text-mark` span, so the two surfaces match.
 //!
 //! `<Nx>` repeat-count entries render as italic `"Nx"` so the
 //! directive intent stays visible — they have no `vertical_position`

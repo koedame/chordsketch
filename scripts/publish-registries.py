@@ -5,7 +5,7 @@
     python3 scripts/publish-registries.py crates --crates '["chordsketch"]'
     python3 scripts/publish-registries.py npm --packages '["@chordsketch/wasm"]' --all-packages '[...]' --mode check --tag v0.7.0 --out DIR
 
-Run only by `.github/workflows/publish-registries.yml` (ADR-0069). The jobs
+Run only by `.github/workflows/publish-registries.yml`. The jobs
 there authenticate with the registries through GitHub's OIDC token, so this
 script never sees a stored credential.
 
@@ -84,8 +84,7 @@ def workspace_packages(tree: Path) -> tuple[list[str], list[str]]:
 
     Read from `ci/release-channels.toml`, the same manifest `release.py`
     surveys, so the two cannot disagree about what a release publishes.
-    Every crate and npm package this repository publishes is among them
-    (ADR-0073).
+    Every crate and npm package this repository publishes is among them.
     """
     channels = [c for c in load_channels(tree / "ci" / "release-channels.toml") if c.expected_version == "tag"]
     return (
@@ -196,8 +195,7 @@ def interpret_npm_exchange(package: str, status: int, body: str) -> str:
         detail = body.strip()[:200]
     return (
         f"npm will not let this workflow publish {package} (HTTP {status}: {detail or 'no detail'}): its trusted "
-        f"publisher must name repository {REPO}, workflow publish-registries.yml and environment npm "
-        f"(docs/releasing.md, \"Trusted publishing\")"
+        f"publisher must name repository {REPO}, workflow publish-registries.yml and environment npm"
     )
 
 
@@ -280,7 +278,7 @@ def plan(tree: Path, served: Callable[[str, str, str | None], bool]) -> Plan:
                 problems.append(
                     f"{name} has never been published, and trusted publishing cannot create a package: publish its "
                     f"first version by hand ({how.format(name=name)}), register its trusted publisher, then dispatch "
-                    f"this workflow again (docs/releasing.md, \"Adding a package\")"
+                    f"this workflow again"
                 )
 
     versions = crate_versions(tree)

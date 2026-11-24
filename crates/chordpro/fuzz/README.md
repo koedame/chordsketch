@@ -1,8 +1,8 @@
 # Fuzzing the ChordPro parser
 
 cargo-fuzz targets for `chordsketch-chordpro`. This directory is its own
-workspace root and needs a nightly toolchain; see
-[ADR-0084](../../../docs/adr/0084-the-parser-is-fuzzed-with-cargo-fuzz-from-a-separate-nightly-workflow.md).
+workspace root, so `libfuzzer-sys` never reaches the main workspace or its
+lockfile, and it needs a nightly toolchain for the sanitizer instrumentation.
 
 ```bash
 cargo install cargo-fuzz --version 0.13.2 --locked

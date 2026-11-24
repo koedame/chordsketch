@@ -5,7 +5,7 @@ Invoked by `.github/workflows/release-verify.yml`, which runs on a daily
 schedule and on `workflow_dispatch` for manual re-verification or red-path
 dry-runs (`--force-stale <channel-id>`). It is deliberately not on the
 release event: at tag time several channels have not been published yet,
-so the rollup would be structurally red (ADR-0039).
+so the rollup would be structurally red.
 
 Usage (workflow context):
 
@@ -22,7 +22,7 @@ by any diagnostic lines on stderr.
 
 The status word is `OK`, `FAIL`, or `PENDING`. `PENDING` means the channel
 accepted the release but has not published it yet — a state Chocolatey's
-community moderation (ADR-0049) and the macports-ports review produce. It
+community moderation and the macports-ports review produce. It
 exits 0, because no action here can clear it, and the rollup renders it as its
 own row rather than as a pass.
 
@@ -30,7 +30,7 @@ Which question a channel is asked comes from its `expected_version` in the
 manifest: `"tag"` asks whether the newest published version equals the release
 tag, `"exists"` asks only whether the package is still publicly served (for a
 package published on its own cadence, where tag-equality is not a true
-statement but "still installable" is — ADR-0065), and `"skip"` asks nothing.
+statement but "still installable" is), and `"skip"` asks nothing.
 
 Stdlib only — no external deps. HTTP goes through urllib with an explicit
 15s timeout and a named User-Agent so registry rate limiters can identify
@@ -70,7 +70,7 @@ class CheckResult:
     handed the release to a third party who has not published it yet is
     neither: it sets `pending`, reporting OK-for-exit-status while the
     status column says PENDING rather than claiming a converged channel.
-    Only Chocolatey needs it today (ADR-0049) — every other registry
+    Only Chocolatey needs it today — every other registry
     either publishes synchronously or exposes no state between "accepted"
     and "served", so for them `pending` is never set and the verdict stays
     the binary it always was.
@@ -266,7 +266,7 @@ def _check_npm_exists(channel: Channel) -> CheckResult:
                 "<exists>",
                 f"{channel.package} is not served by the public npm registry "
                 f"(404) — it was unpublished, or its access was flipped to "
-                f"restricted. Re-publish per docs/releasing.md, or `npm access "
+                f"restricted. Publish it again, or `npm access "
                 f"set status=public {channel.package}`.",
             )
         return _error(channel, "<exists>", f"npm registry error: {exc}")
@@ -563,7 +563,7 @@ def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
     days for 0.2.1 and 54 for 0.5.0 (`Created` vs `PackageApprovedDate` on
     their own feed entries). So this checker reports three verdicts —
     OK / PENDING / FAIL — instead of folding the middle one into either
-    neighbour. Rationale and measurements: ADR-0049.
+    neighbour.
 
     One probe answers all three: the v2 OData *entity* endpoint,
     `Packages(Id='<package>',Version='<version>')`. It addresses a single
@@ -591,7 +591,7 @@ def _check_chocolatey(channel: Channel, version: str) -> CheckResult:
 
     A FAIL therefore means the push did not land — typically a `choco push`
     refused with 403 because the moderation queue refuses new versions
-    (#1852; conditions in docs/releasing.md), which the release fan-out downgrades to a
+    (#1852), which the release fan-out downgrades to a
     warning so one stalled channel of eight cannot fail a release. This
     rollup is the only other place that miss shows up.
     """
@@ -679,7 +679,7 @@ def _check_aur(channel: Channel, version: str) -> CheckResult:
     `update-aur` in `post-release.yml` pushes a regenerated PKGBUILD over
     SSH; aurweb serves the new version from the same commit, so there is no
     third state between "the AUR has it" and "it does not" and the verdict
-    stays the binary every non-Chocolatey channel uses (ADR-0049).
+    stays the binary every non-Chocolatey channel uses.
 
     The RPC v5 `info` endpoint answers with `resultcount: 0` and an empty
     `results` for a name it does not carry (measured 2026-09-02), which is
@@ -740,7 +740,7 @@ def _check_snap(channel: Channel, version: str) -> CheckResult:
     it, indistinguishable from one never uploaded (the endpoint exposes no
     "accepted but unreleased" field). There is therefore no observable
     middle state to report, and this checker stays binary rather than
-    reaching for `PENDING` (ADR-0049): if the stable channel does not serve
+    reaching for `PENDING`: if the stable channel does not serve
     the release, `snap install chordsketch` does not install it, which is
     exactly what red means.
 
@@ -801,15 +801,14 @@ def _check_macports(channel: Channel, version: str) -> CheckResult:
     1. **Is the in-tree Portfile ready to submit?** (FAIL when not.) The
        release commit bumps `github.setup` but cannot fill `checksums`: they
        are computed over the tag's archive, which does not exist until the
-       tag does. They are therefore refilled after the tag (docs/releasing.md,
-       Post-Release step 5), and this check is what notices when that was
+       tag does. They are therefore refilled after the tag, and this check is what notices when that was
        skipped. v0.8.0 and v0.9.0 shipped with v0.7.0's values and nothing
        went red, because `macports-portfile-sync` only reads `cargo.crates`.
        Red is the right colour: the maintainer can clear it with a one-line
        PR to this repository.
     2. **Has macports-ports taken the version?** (PENDING when not.) Merging
        the port bump is a MacPorts committer's action, like Chocolatey's
-       moderation (ADR-0049), so the lag is rendered as its own row and the
+       moderation, so the lag is rendered as its own row and the
        rollup stays green rather than holding a red nobody here can clear.
        The row is what makes a port stuck on an old release visible: the
        published port stayed on 0.5.0 through four releases unnoticed.
@@ -853,8 +852,8 @@ def _check_macports(channel: Channel, version: str) -> CheckResult:
             expected=version,
             detail=(
                 f"packaging/macports/Portfile's checksums do not match the "
-                f"v{pinned} archive ({'; '.join(problems)}). Refill them with "
-                f"docs/releasing.md Post-Release step 5.1 and open a PR; "
+                f"v{pinned} archive ({'; '.join(problems)}). Refill them from the "
+                f"tag's source archive (rmd160, sha256, size) and open a PR; "
                 f"macports-ports cannot take this Portfile as is."
             ),
         )
@@ -884,7 +883,7 @@ def _check_macports(channel: Channel, version: str) -> CheckResult:
         detail=(
             f"the Portfile is ready for {version}, but macports-ports still "
             f"serves {served}. The bump is a PR to macports/macports-ports "
-            f"(docs/releasing.md Post-Release step 5.4) that a MacPorts "
+            f"(textproc/chordsketch/Portfile) that a MacPorts "
             f"committer merges: submit it if it is not open yet, otherwise "
             f"wait for review."
         ),

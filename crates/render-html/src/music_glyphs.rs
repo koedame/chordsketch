@@ -7,20 +7,16 @@
 //! React JSX walker emits the same DOM shape (5-line staff +
 //! treble clef + accidentals for key signatures; animated
 //! pendulum for the metronome; stacked numerator / denominator
-//! for the time signature). Keeping the two in sync is a
-//! `.claude/rules/renderer-parity.md` §"Sanitizer Parity (React
-//! JSX surface)" obligation.
+//! for the time signature). The two must be kept in sync.
 //!
 //! The treble clef and the sharp / flat accidentals are **real
 //! Bravura SMuFL outlines** baked as inline SVG `<path>` data (see
-//! [`crate::bravura`] and [ADR-0014]), not a font download and not
+//! [`crate::bravura`]), not a font download and not
 //! the simplified caricatures used previously — the caricature clef
 //! read as a distorted squiggle at chip size. The metronome and
 //! time-signature glyphs stay hand-drawn primitives (they are not
 //! SMuFL glyphs). The React `<KeySignatureGlyph>` is the sister
 //! site and MUST emit the same key-signature DOM.
-//!
-//! [ADR-0014]: ../../../docs/adr/0014-bravura-glyphs-as-svg-paths.md
 
 use std::fmt::Write;
 
@@ -92,7 +88,7 @@ const FLAT_ORDER: &[(&str, f32)] = &[
 
 /// Look up a key-signature size and direction for a ChordPro
 /// `{key}` value. Delegates grammar to the lenient
-/// [`chordsketch_chordpro::parse_key`] (ADR-0034): major (`G`,
+/// [`chordsketch_chordpro::parse_key`]: major (`G`,
 /// `Bb`, `F#`, `G major`) and minor (`Em`, `F#m`, `E minor`, `E m`,
 /// `Emin`) tonal keys are accepted; unicode ♯ / ♭ and NBSP are
 /// normalised before parsing. Modal keys (`C dorian`) have no
@@ -121,7 +117,7 @@ pub fn key_signature_for(key: &str) -> Option<(usize, KeySigType)> {
 #[must_use]
 pub fn key_signature_for_with_diagnostics(key: &str) -> KeySignatureLookup {
     // Delegate the grammar — and the Unicode ♯ / ♭ + exotic-space normalisation
-    // — to the lenient key parser (`chordsketch_chordpro::parse_key`, ADR-0034)
+    // — to the lenient key parser (`chordsketch_chordpro::parse_key`)
     // so the glyph agrees with the displayed key, the transpose re-spelling, and
     // the audition on what a key is. Lenient minor spellings (`C minor`, `C m`,
     // `Cminor`, `C min`) are now all accepted and resolve to the minor signature.
@@ -536,7 +532,7 @@ mod tests {
         // Strict minor markers (`m`, `min`) resolve to the minor signature.
         assert_eq!(key_signature_for("Em"), Some((1, KeySigType::Sharp)));
         assert_eq!(key_signature_for("Emin"), Some((1, KeySigType::Sharp)));
-        // Lenient spellings now resolve to the same signature (ADR-0034): a
+        // Lenient spellings now resolve to the same signature: a
         // spelled-out word and a space before the marker are accepted.
         assert_eq!(key_signature_for("E minor"), Some((1, KeySigType::Sharp)));
         assert_eq!(key_signature_for("E m"), Some((1, KeySigType::Sharp)));

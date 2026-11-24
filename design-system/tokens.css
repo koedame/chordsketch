@@ -2,7 +2,7 @@
  * ChordSketch — Design Tokens
  *
  * Source of truth for color, typography, space, radius, elevation,
- * and motion. See DESIGN.md for usage guidance and rationale.
+ * and motion.
  */
 
 :root {
@@ -40,7 +40,7 @@
   --text-strong:    var(--ink-700);
   --text-secondary: var(--ink-600);
   /* Not for text below 18.66px — 3.53:1 / 3.38:1 / 3.23:1 on the three
-     light surfaces. See DESIGN.md §2.4 and ADR-0054. */
+     light surfaces, below the 4.5:1 WCAG floor for body text. */
   --text-tertiary:  var(--ink-500);
 
   /* ---------- Color: Semantic ---------- */
@@ -71,7 +71,7 @@
      ONLY — outside the chart, UI text is sans-serif and monospace. */
   --font-chart-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
   /* SMuFL music notation (segno, coda, accidentals, barlines, etc.).
-     iReal Pro / render-ireal use Bravura Text. See ADR-0014. */
+     iReal Pro / render-ireal use Bravura Text. */
   --font-music:   "Bravura Text", "Noto Music", "Symbola", serif;
 
   /* ---------- Typography: sizes (rem at 16px root) ---------- */

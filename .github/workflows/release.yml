@@ -14,8 +14,7 @@ on:
 # Tag-triggered releases never receive force-pushes and MUST NOT be
 # cancelled mid-flight (the partial-release failure mode described on
 # the `build` job below would silently degrade downstream channels).
-# Declare a concurrency group so the workflow is still covered by
-# `.claude/rules/ci-parallelization.md` §5, but with
+# Declare a concurrency group like every other workflow, but with
 # `cancel-in-progress: false` so tag pushes and workflow_dispatch runs
 # always run to completion.
 concurrency:
@@ -96,11 +95,12 @@ jobs:
         if: matrix.cross
         run: cargo install cross --locked
 
-      # NOTE: no Swatinem/rust-cache here. Per .claude/rules/ci-parallelization.md §2,
+      # NOTE: no Swatinem/rust-cache here:
       # this workflow fires on version-tag pushes (~every 10 days) and GitHub
       # Actions evicts cache entries after 7 days of inactivity, so the cache
       # expires between runs. Adding rust-cache delivers no wall-clock benefit
-      # and only adds YAML noise. Do not add one back without updating the rule.
+      # and only adds YAML noise. Do not add one back unless this workflow starts
+      # running weekly.
 
       - name: Build
         run: |
@@ -194,8 +194,8 @@ jobs:
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    # The contract every downstream reusable workflow is called with
-    # (ADR-0039). `tag` is the v-prefixed release tag, already
+    # The contract every downstream reusable workflow is called with.
+    # `tag` is the v-prefixed release tag, already
     # format-validated by the `Validate release tag` step below; `version`
     # is the same value with the `v` stripped, for the npm-side callees
     # that set a package.json version. (The `build` job's own
@@ -244,10 +244,10 @@ jobs:
       - name: Create Release
         env:
           # `GITHUB_TOKEN` is sufficient here. Publishing used to need a
-          # PAT (ADR-0009) purely so the resulting `release: [published]`
+          # PAT purely so the resulting `release: [published]`
           # event would cascade to the downstream workflows — GitHub
           # suppresses that event when the release is created by
-          # `GITHUB_TOKEN`. ADR-0039 replaced the cascade with the
+          # `GITHUB_TOKEN`. The cascade has been replaced with the
           # explicit fan-out below, so nothing keys off the event any
           # more and the PAT's only purpose is gone.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -263,7 +263,7 @@ jobs:
   # --------------------------------------------------------------- fan-out
   #
   # Downstream publishing is an explicit call graph rooted at this workflow,
-  # not a `release: [published]` broadcast (ADR-0039). Two properties the
+  # not a `release: [published]` broadcast. Two properties the
   # broadcast could not provide:
   #
   #   1. Tag-namespace routing. This workflow's `push: tags: v*` trigger is
@@ -342,7 +342,7 @@ jobs:
     name: Swift Package
     needs: [release]
     # `publish` uploads the xcframework the release branch pinned before
-    # the tag, and finds it among the Actions artifacts (ADR-0080).
+    # the tag, and finds it among the Actions artifacts.
     permissions:
       contents: write
       actions: read
@@ -362,7 +362,7 @@ jobs:
     secrets: inherit
 
   # Last in the graph: once the release and every channel that serves its
-  # assets are up to date, delete the older releases (ADR-0091). Skipped
+  # assets are up to date, delete the older releases. Skipped
   # when any job above failed, so a channel that still points at an older
   # release keeps working until it is repaired.
   prune-old-releases:

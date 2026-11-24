@@ -129,8 +129,7 @@ export interface UseChordAudioResult {
  * The chord's constituent pitches are computed by
  * `@chordsketch/wasm`'s `chordPitches` export (sister to
  * `chordsketch_chordpro::chord_pitches`) — the musical-theory source of
- * truth lives in the core library, not here (see
- * `.claude/rules/playground-is-a-sample.md`). This hook only turns those
+ * truth lives in the core library, not here. This hook only turns those
  * MIDI note numbers into sound, sharing the page-level `AudioContext`
  * with {@link useMetronome} via `audio-context.ts`.
  *

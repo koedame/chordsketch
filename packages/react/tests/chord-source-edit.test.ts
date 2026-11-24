@@ -540,7 +540,7 @@ describe('chordSuffixFromQuality', () => {
 
 });
 
-describe('structured chord-type model (ADR-0037)', () => {
+describe('structured chord-type model', () => {
   const sel = (
     triad: ChordTypeSelection['triad'],
     seventh: ChordTypeSelection['seventh'],

@@ -39,7 +39,7 @@ jobs:
               per_page: 100,
             });
 
-            // Outside pull requests are not accepted (ADR-0087), and a
+            // Outside pull requests are not accepted, and a
             // branch of another repository cannot be fetched or pushed here.
             const thisRepo = `${context.repo.owner}/${context.repo.repo}`;
             const conflicted = [];

@@ -14,8 +14,8 @@ import { describe, expect, test } from 'vitest';
 // package's DTS build failed, breaking the consumer's install through
 // the `prepare` hook. In the unresolved case `@ts-ignore` silently
 // swallowed unrelated diagnostics on the same line (typos in the
-// module specifier, cast mismatches, etc.) — the silent-failure
-// pattern called out by `.claude/rules/root-cause-fixes.md`.
+// module specifier, cast mismatches, etc.) — a silent
+// failure.
 //
 // The fix replaces the directive with an ambient module declaration
 // (the optional-peer shim under `src/`) so resolution succeeds in

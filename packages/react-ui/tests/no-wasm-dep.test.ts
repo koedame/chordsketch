@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
-// Policy test for ADR-0029: @chordsketch/react-ui is the wasm-free
+// Policy test: @chordsketch/react-ui is the wasm-free
 // design-system primitive layer. It must never acquire a dependency on
 // @chordsketch/wasm or @chordsketch/wasm-export — that coupling would
 // break every consumer that cannot (or does not want to) load wasm.
@@ -21,7 +21,7 @@ const DEP_FIELDS = [
   'devDependencies',
 ] as const;
 
-describe('@chordsketch/react-ui is wasm-free (ADR-0029)', () => {
+describe('@chordsketch/react-ui is wasm-free', () => {
   test('no @chordsketch/wasm* appears in any dependency field of package.json', () => {
     const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf8')) as Record<
       string,

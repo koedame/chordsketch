@@ -121,9 +121,7 @@ page load.
 The split is implemented at the `chordsketch-wasm` Cargo feature
 level: `@chordsketch/wasm` builds with `--no-default-features`
 (parser + lean renderers only), and `@chordsketch/wasm-export`
-builds with the `png-pdf` Cargo feature on. See
-[CLAUDE.md](https://github.com/koedame/chordsketch/blob/main/CLAUDE.md)
-in the source repo for the per-crate dependency graph and #2466
+builds with the `png-pdf` Cargo feature on. See #2466
 for the size-budget discussion that motivated the split.
 
 ## Building from source

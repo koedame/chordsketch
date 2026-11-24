@@ -7,7 +7,7 @@ import { defineConfig } from 'tsup';
 // resolved by the consumer's bundler). There is deliberately NO
 // `@chordsketch/wasm` external here: the primitives are pure
 // class-composition over design-system tokens and carry no wasm
-// dependency (ADR-0029). The component CSS lands at `dist/styles.css`
+// dependency. The component CSS lands at `dist/styles.css`
 // via the package's `./styles.css` export.
 export default defineConfig({
   entry: ['src/index.ts'],

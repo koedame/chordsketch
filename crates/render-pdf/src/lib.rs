@@ -742,7 +742,7 @@ fn render_song_into_doc(
     doc: &mut PdfDocument,
     warnings: &mut Vec<String>,
 ) {
-    // ADR-0023: capo subtracts from the effective transpose so the
+    // Capo subtracts from the effective transpose so the
     // displayed chord names match the shapes a guitarist holds at fret N.
     // The base config transpose is already folded into cli_transpose by the caller.
     let mut transpose = SongTranspose::new(song, cli_transpose, warnings);
@@ -755,7 +755,7 @@ fn render_song_into_doc(
     );
 
     // Diagram orientation (#2572). Horizontal mode is reader-view only
-    // per ADR-0026; the player-view alternative is not exposed as a
+    // (high pitch on top); the player-view alternative is not exposed as a
     // config knob. Sister-site: `crates/render-html/src/lib.rs` reads
     // the same key and emits the same warning.
     let raw_orientation = config.get_path("diagrams.orientation").as_str();
@@ -896,10 +896,9 @@ fn render_song_into_doc(
                             // back to the authored value when the
                             // directive value doesn't start with a note
                             // letter. Sister-site to render-text /
-                            // render-html / the React JSX walker per
-                            // `.claude/rules/renderer-parity.md`;
+                            // render-html / the React JSX walker;
                             // closes #2522.
-                            // Render the canonical key (ADR-0034): lenient
+                            // Render the canonical key: lenient
                             // input, canonical `Gm` / `G` / `C dorian` output,
                             // with the song-wide flat/sharp side applied under
                             // transpose. Verbatim fallback when not a key.
@@ -1485,7 +1484,7 @@ fn render_image(attrs: &ImageAttributes, doc: &mut PdfDocument) {
 
     // Apply the same allowlist the HTML and text renderers use, so a
     // single `.cho` cannot produce three different image-handling
-    // behaviours (issue #1832, renderer-parity.md §Validation Parity).
+    // behaviours (issue #1832).
     // `is_safe_image_src` blocks dangerous URI schemes (`javascript:`,
     // `file:`, `data:`, `blob:`, `vbscript:`, `mhtml:`) up front.
     if !chordsketch_chordpro::image_path::is_safe_image_src(&attrs.src) {
@@ -1968,7 +1967,8 @@ fn render_chord_diagram_pdf_vertical(
 /// running rightward. Mirrors the SVG horizontal renderer's geometry.
 ///
 /// Reader-view only: high pitch on top, matching tablature stave order.
-/// See ADR-0026 for the rationale behind not exposing a row-order knob.
+/// No row-order knob is exposed: one fixed layout keeps every binding and
+/// config surface free of a second string-order setting.
 fn render_chord_diagram_pdf_horizontal(
     data: &chordsketch_chordpro::chord_diagram::DiagramData,
     doc: &mut PdfDocument,
@@ -2849,8 +2849,7 @@ impl PdfDocument {
     /// emitted hex literal is `8 * MAX_TITLE_CHARS + 6` (worst case: all
     /// supplementary-plane chars, plus `<FEFF` BOM prefix and closing `>`) —
     /// well under any DoS-relevant size. The cap defends against pathological
-    /// `{title:...}` directives in untrusted `.cho` input (per
-    /// `.claude/rules/defensive-inputs.md` § Resource Limits).
+    /// `{title:...}` directives in untrusted `.cho` input.
     const MAX_TITLE_CHARS: usize = 1024;
 
     /// Set the document title used in the PDF `/Info` dictionary `/Title` entry.
@@ -4032,7 +4031,7 @@ mod tests {
         // Sister test to render-html's
         // `horizontal_string_order_config_key_is_ignored`. The
         // `diagrams.horizontal_string_order` key was retired together
-        // with the player-view alternative — see ADR-0026. The PDF
+        // with the player-view alternative. The PDF
         // renderer must therefore NOT warn on the unknown key.
         let song = chordsketch_chordpro::parse(
             "{title: t}\n{+config.diagrams.orientation: horizontal}\n\
@@ -4607,7 +4606,7 @@ mod transpose_tests {
         let input = "{key: G}\n[G]hi [D]world";
         let song = chordsketch_chordpro::parse(input).unwrap();
 
-        // No transpose: authored value preserved, canonicalised (ADR-0035).
+        // No transpose: authored value preserved, canonicalised.
         let zero = render_song_with_transpose(&song, 0, &Config::defaults());
         let zero_content = String::from_utf8_lossy(&zero);
         assert!(
@@ -4665,8 +4664,8 @@ mod transpose_tests {
             "modal qualifier must round-trip"
         );
 
-        // Lenient: word `minor` is accepted (ADR-0034) and rendered in the
-        // spelled-out canonical form (ADR-0035), transposed — `Bb minor` at +2
+        // Lenient: word `minor` is accepted and rendered in the
+        // spelled-out canonical form, transposed — `Bb minor` at +2
         // → `C minor`. The authored verbatim `Bb minor` must NOT survive: the
         // transposed root is `C`, so the canonical-vs-verbatim distinction is
         // the root, not the word `minor` (which the canonical form now carries
@@ -4707,7 +4706,7 @@ mod transpose_tests {
 
     #[test]
     fn test_capo_subtracts_in_composition_with_cli_transpose() {
-        // ADR-0023 composition rule: file + cli - capo. cli=+4 and
+        // Composition rule: file + cli - capo. cli=+4 and
         // {capo: 2} compose to effective +2, so [C] renders as D.
         // Sister-site to render-text / render-html.
         let input = "{key: C}\n{capo: 2}\n[C]Hi";
@@ -4740,7 +4739,7 @@ mod transpose_tests {
 
     #[test]
     fn test_transpose_directive_with_capo_saturation_emits_warning() {
-        // ADR-0023: `file + cli - capo` overflows i8 — the
+        // `file + cli - capo` overflows i8 — the
         // saturation arm rewired through `effective_transpose` must
         // surface a warning that cites the capo value alongside
         // the {transpose} value.

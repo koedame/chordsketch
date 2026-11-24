@@ -35,8 +35,7 @@ pub fn push_warning(warnings: &mut Vec<String>, message: impl Into<String>) {
 }
 
 /// Validate the `{capo}` metadata value at the render boundary and push
-/// a warning for any value outside `1..=24` (issue #1834,
-/// `.claude/rules/renderer-parity.md` §Validation Parity).
+/// a warning for any value outside `1..=24` (issue #1834).
 ///
 /// Renderers call this helper once at the top of their main entry point
 /// so the validation message is byte-identical across output formats —
@@ -44,8 +43,8 @@ pub fn push_warning(warnings: &mut Vec<String>, message: impl Into<String>) {
 /// sees the same warning regardless of which renderer they chose.
 pub fn validate_capo(metadata: &Metadata, warnings: &mut Vec<String>) {
     // The "rendered as no capo" suffix mirrors what the renderer
-    // pipeline actually does with the invalid value (per ADR-0023:
-    // `effective_transpose` receives `capo = 0` and the chord-line
+    // pipeline actually does with the invalid value
+    // (`effective_transpose` receives `capo = 0` and the chord-line
     // shift collapses), so a user who sees the warning understands
     // both *what* was wrong with their input and *what* the output
     // they are looking at represents.
@@ -139,9 +138,9 @@ pub fn validate_strict_key(metadata: &Metadata, config: &Config, warnings: &mut 
 
 /// Validate every `{key}` directive value at the render boundary and push a
 /// warning for any value [`crate::key::parse_key`] does not recognise as a key
-/// (issue #2665; relaxed by ADR-0034).
+/// (issue #2665).
 ///
-/// The parser is **lenient** (ADR-0034): the common human key spellings —
+/// The parser is **lenient**: the common human key spellings —
 /// `Gm` / `G m` / `G minor` / `Gminor` / `G min`, `G` / `G major`, and the
 /// church modes — are all recognised and render in their canonical form, so
 /// they do NOT warn. The warning fires only for values that are not keys at
@@ -171,7 +170,7 @@ pub fn validate_keys(metadata: &Metadata, warnings: &mut Vec<String>) {
 /// Walk the song and push a warning for every chord written in ChordSketch's
 /// rejected ambiguous notation — a bare extended "stack" (`G13`, `Cm9`) or a
 /// seventh-less parenthesised tension (`C(9)`) — pointing the user at the
-/// explicit spelling ([ADR-0037]).
+/// explicit spelling.
 ///
 /// ChordSketch still parses and renders the ambiguous form (the chord's tones
 /// and printed name are unchanged); this warning is the read-side half of the
@@ -183,14 +182,12 @@ pub fn validate_keys(metadata: &Metadata, warnings: &mut Vec<String>) {
 /// a song that repeats `[G13]` forty times produces one warning rather than
 /// forty. Renderers call this helper alongside [`validate_keys`] so the message
 /// is byte-identical across output formats.
-///
-/// [ADR-0037]: https://github.com/koedame/chordsketch/blob/main/docs/adr/0037-explicit-chord-extension-notation.md
 pub fn validate_ambiguous_chords(song: &Song, warnings: &mut Vec<String>) {
     // `HashSet` (not `Vec::contains`) keeps the per-chord dedup check O(1), so a
     // pathological song with many distinct chords stays linear rather than
     // O(n²). Once the warning cap is reached there is nothing left to emit, so
     // the walk stops — bounding both work and the `seen` set's memory on
-    // adversarial input (`.claude/rules/defensive-inputs.md` resource limits).
+    // adversarial input.
     let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for line in &song.lines {
         if warnings.len() >= MAX_WARNINGS {
@@ -481,7 +478,7 @@ mod tests {
         let md = Metadata {
             keys: vec![
                 // Canonical, lenient spellings, major words, modal, slash — all
-                // recognised as keys (ADR-0034), so none warn.
+                // recognised as keys, so none warn.
                 "C".into(),
                 "Gm".into(),
                 "F#m".into(),
@@ -501,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_validate_keys_warns_only_for_non_keys() {
-        // After ADR-0034 the editor is lenient: only values that are not keys
+        // The editor is lenient: only values that are not keys
         // at all — chord extensions, non-note roots, garbage — still warn.
         let mut v = Vec::<String>::new();
         let md = Metadata {
@@ -527,7 +524,7 @@ mod tests {
         assert!(v[0].contains("G minor") && v[0].contains("dorian"));
     }
 
-    // -- validate_ambiguous_chords (ADR-0037) -----------------------------
+    // -- validate_ambiguous_chords -----------------------------
 
     #[test]
     fn test_validate_ambiguous_chords_flags_bare_stack_once() {

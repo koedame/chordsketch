@@ -56,8 +56,7 @@ mod tests {
     /// `nsis.installerHooks`.
     const NSIS_HOOKS: &str = include_str!("../../src-tauri/windows/preview-handler.nsh");
 
-    /// The MSI and the NSIS installer are sister sites in the sense of
-    /// `.claude/rules/fix-propagation.md`: they write the same registry
+    /// The MSI and the NSIS installer are sister sites: they write the same registry
     /// layout in two different languages, and a value corrected in one
     /// is worthless if the other keeps the old one. Nothing at runtime
     /// reads both, so only a test can catch the drift.

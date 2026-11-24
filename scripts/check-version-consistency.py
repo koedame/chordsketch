@@ -36,7 +36,7 @@ Sources checked:
      canonical workspace version; comparison runs at major.minor
      granularity (`_expected_for` strips the patch when the field
      label ends with `(^major.minor)`). `--set` writes the released
-     version itself, `^X.Y.Z` (ADR-0073).
+     version itself, `^X.Y.Z`.
  11. `.github/workflows/readme-smoke.yml` — three hardcoded pins:
        a. `npm-wasm` job's `env: WASM_VERSION: "<version>"`
        b. `npm-wasm-export` job's `env: WASM_EXPORT_VERSION: "<version>"`
@@ -55,9 +55,9 @@ Sources checked:
      DLL ships inside the desktop installer, so it moves with it.)
  19. `packages/{react-ui,react,vue,svelte,chordpro-lite}/package.json`
      `version` — the npm packages that used to version on their own
-     cadence and now publish with every workspace release (ADR-0073)
+     cadence and now publish with every workspace release
  20. `packaging/flatpak/io.github.koedame.chordsketch.metainfo.xml` — the newest
-     `<release version>` (the Flathub listing's release history, ADR-0074)
+     `<release version>` (the Flathub listing's release history)
  21. The `version` of every path dependency on a workspace crate
      (`chordsketch-chordpro = { version = "X.Y.Z", path = "../chordpro" }`)
  22. `Cargo.lock` — the `version` of every workspace crate
@@ -68,7 +68,7 @@ Sources checked:
 
 Beyond versions, the lockfile of every consumer in (10) that installs
 `@chordsketch/wasm` must install it from the in-tree `packages/npm` rather
-than from npm (ADR-0073). The release commit raises those caret pins to a
+than from npm. The release commit raises those caret pins to a
 version npm does not serve until the release publishes it; only a lockfile
 that links the in-tree package still installs at that commit.
 
@@ -77,7 +77,7 @@ the same (file, field, current_value) shape plus a mandatory `tracking_issue`
 field — an entry without `tracking_issue` fails validation, because skips
 must never be forgotten (see #1506 and the user's explicit requirement).
 
-`--set X.Y.Z` is the release bump (docs/releasing.md, Step 1). Every loader
+`--set X.Y.Z` is the release bump. Every loader
 records where its value is written, so the same list of sources that is
 checked is the list that is rewritten; nothing else names a location.
 It writes X.Y.Z to every source the allowlist does not cover (the covered
@@ -513,10 +513,8 @@ def load_napi_optional_deps(repo_root: Path) -> list[Source]:
 # package whose `package.json` constrains a published `@chordsketch/*`
 # sister package via `^X.Y.Z`. The constraint MUST cover the current
 # canonical version or the consumer will silently resolve to the prior
-# major-minor when the canonical's major-minor bumps. The
-# `.claude/rules/package-documentation.md` §"Version Consistency Rule"
-# already names two of these (vscode-extension + npm/wasm) — this
-# loader extends the check to every published workspace consumer that
+# major-minor when the canonical's major-minor bumps. This
+# loader applies the check to every published workspace consumer that
 # pins `@chordsketch/wasm` or `@chordsketch/wasm-export`.
 _CONSUMER_PINS: list[tuple[str, str, str]] = [
     # (file, dotted-path, dep-name)
@@ -544,7 +542,7 @@ def load_consumer_pin_constraints(repo_root: Path) -> list[Source]:
     anything else (e.g. `*`, `workspace:`, a range expression) is a
     structural shape change worth surfacing as a SystemExit so the
     maintainer updates this loader explicitly. The current set of
-    consumers all use the simple caret form per CLAUDE.md.
+    consumers all use the simple caret form.
     """
     import json as _json
 
@@ -601,7 +599,7 @@ def load_consumer_pin_constraints(repo_root: Path) -> list[Source]:
 
 
 def _caret(version: str, released: str) -> str:
-    """The pins on the wasm packages name the version released with them (ADR-0073)."""
+    """The pins on the wasm packages name the version released with them."""
     return f"^{version}"
 
 
@@ -634,7 +632,7 @@ def load_readme_pins(repo_root: Path) -> list[Source]:
 
 
 # The in-tree directory each consumer's lockfile installs a pinned sister
-# package from (ADR-0073). `@chordsketch/wasm-export` is only an optional peer
+# package from. `@chordsketch/wasm-export` is only an optional peer
 # of its consumers, so no lockfile installs it.
 _IN_TREE_PACKAGES: dict[str, str] = {"@chordsketch/wasm": "packages/npm"}
 
@@ -772,7 +770,7 @@ def load_desktop_versions(repo_root: Path) -> list[Source]:
 
 # ------------------------------------------------- Claude Code plugin
 
-# Repo-relative paths of the Claude Code plugin's two manifests (ADR-0059).
+# Repo-relative paths of the Claude Code plugin's two manifests.
 # The plugin directory is named once here; `load_claude_code_plugin_versions`
 # checks that the marketplace entry still points at it.
 _PLUGIN_DIR = "packages/claude-code-plugin"
@@ -810,7 +808,7 @@ def load_claude_code_plugin_versions(repo_root: Path) -> list[Source]:
 
 # The npm packages built on top of the engine (the framework bindings, the
 # design-system primitives and the text helpers). They publish with every
-# workspace release, at its version (ADR-0073).
+# workspace release, at its version.
 FRAMEWORK_PACKAGE_DIRS = ("react-ui", "react", "vue", "svelte", "chordpro-lite")
 
 
@@ -820,7 +818,7 @@ def load_all_sources(repo_root: Path) -> list[Source]:
     sources.extend(load_cargo_lock_versions(repo_root))
     sources.append(load_package_json_version(repo_root, "packages/npm/package.json"))
     # `@chordsketch/wasm-export` ships in lockstep with `@chordsketch/wasm`
-    # per CLAUDE.md (#2466 added it as the heavy-bundle sister package).
+    # (#2466 added it as the heavy-bundle sister package).
     # `npm-export` was silently exempt from this check until #2517 added
     # it here — the gap allowed at least one cross-package release window
     # (v0.4.0) to ship with the npm-export version field drifted.

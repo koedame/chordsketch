@@ -2442,7 +2442,7 @@ describe('renderChordproAst', () => {
 
   // Chord names and key values are typeset with proper Unicode
   // musical accidentals (`♭` / `♯`) so a canonical `{key}` value of
-  // `Bb major` (ADR-0035) reads as "B♭ major" and a chord `[Bb]`
+  // `Bb major` reads as "B♭ major" and a chord `[Bb]`
   // shows as "B♭" in the chord row.
   test('chord and key displays use ♭ / ♯ Unicode accidentals', () => {
     const ast: ChordproSong = {
@@ -2573,7 +2573,7 @@ describe('renderChordproAst', () => {
     const { container } = render(
       renderChordproAst(ast, {
         transposedKey: 'A major',
-        // The map is keyed by the canonicalised directive value (ADR-0035).
+        // The map is keyed by the canonicalised directive value.
         transposedKeyDirectives: { 'G major': 'A major', 'D major': 'E major' },
       }),
     );
@@ -3017,8 +3017,7 @@ describe('renderChordproAst', () => {
 
   // Sister-site coverage to
   // the shared corpus — each entry in the walker's
-  // `DANGEROUS_URI_SCHEMES` MUST have a rejection test
-  // (`.claude/rules/sanitizer-security.md` §"Testing completeness").
+  // `DANGEROUS_URI_SCHEMES` MUST have a rejection test.
   test.each([
     ['javascript:alert(1)'],
     ['vbscript:msgbox(1)'],
@@ -3279,7 +3278,7 @@ describe('renderChordproAst', () => {
     const section = container.querySelector('section.abc');
     expect(section).not.toBeNull();
     // Mirrors `chordsketch-render-html`'s `render_section_open("abc", "ABC", …)` —
-    // sister-site parity per `.claude/rules/renderer-parity.md`.
+    // sister-site parity.
     expect(section?.querySelector('.section-label')?.textContent).toBe('ABC');
     expect(section?.querySelector('.line .lyrics')?.textContent).toBe('C: tune');
   });
@@ -3326,7 +3325,7 @@ describe('renderChordproAst', () => {
     const lyrics = container.querySelector('.lyrics');
     // Walker emits `<b>` / `<i>` to mirror
     // `chordsketch-render-html`'s element choice byte-for-byte
-    // (sister-site parity per `.claude/rules/renderer-parity.md`).
+    // (sister-site parity).
     expect(lyrics?.querySelector('b')?.textContent).toBe('Hello ');
     expect(lyrics?.querySelector('i')?.textContent).toBe('world');
   });
@@ -3360,8 +3359,7 @@ describe('renderChordproAst', () => {
   // state machine — a `{textfont}` / `{chordsize}` / etc. directive
   // mutates the running style, and every line emitted afterwards
   // picks up an inline style on the matching element. Sister-site
-  // parity per `.claude/rules/renderer-parity.md` and
-  // `.claude/rules/fix-propagation.md`.
+  // parity with the Rust renderers.
 
   test('{textfont} / {textsize} / {textcolour} apply to lyric .lyrics spans', () => {
     const { container } = render(
@@ -3850,8 +3848,8 @@ describe('renderChordproAst', () => {
   // ---------------------------------------------------------------------
   // Walker orientation pass-through (#2572). When the walker emits
   // <ChordDiagram> via the chordDiagrams option, `orientation` must
-  // reach the component as a prop. Horizontal mode is reader-view only
-  // per ADR-0026, so there is no separate string-order knob.
+  // reach the component as a prop. Horizontal mode is reader-view only,
+  // so there is no separate string-order knob.
   //
   // Stub the wasm loader so <ChordDiagram> resolves synchronously to a
   // marker SVG whose attributes record the orientation argument it was
@@ -4149,7 +4147,7 @@ describe('renderChordproAst click-to-focus + nudge (#2614)', () => {
   });
 });
 
-describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
+describe('renderChordproAst inline / hover diagrams', () => {
   // A song with N `{diagrams: …}` directive lines + one chord-bearing
   // lyric line. The `<ChordDiagram>` mounted by inline / hover lazily
   // loads wasm asynchronously; like the existing grid tests we assert
@@ -4596,7 +4594,7 @@ describe('renderChordproAst inline / hover diagrams (ADR-0027)', () => {
     //
     // Inline mode: no grid, so the wrapper must NOT carry a `position`
     // modifier (`song--diagrams-{top,bottom,right,below}`). It DOES
-    // carry `song--diagrams-inline` (ADR-0051) — a different modifier
+    // carry `song--diagrams-inline` — a different modifier
     // that only adds the `padding-left` leading gutter for the
     // overhanging compact diagram, applied to the whole `.song` root
     // (not per-line) so `.section-label` / `.comment` siblings of

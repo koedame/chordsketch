@@ -41,7 +41,7 @@ body,
   --cs-text-secondary: var(--cs-ink-600);
   /* Not a body-text tone — 3.38:1 on `--cs-canvas`, below the 4.5:1
    * WCAG 1.4.3 floor for text under 18.66px. Small copy uses
-   * `--cs-text-secondary`. See ADR-0054. */
+   * `--cs-text-secondary`. */
   --cs-text-tertiary: var(--cs-ink-500);
 
   --cs-focus-ring: 0 0 0 2px var(--cs-ink-0), 0 0 0 4px var(--cs-crimson-500);
@@ -353,7 +353,7 @@ body {
  * (`SHIKI_PRE_KEEP_PROPERTIES` in `scripts/lib/docs-render.mjs`), so the
  * code surface is this token rather than the theme's. The theme in
  * `SHIKI_THEME` must therefore be one whose token palette clears 4.5:1
- * against `--cs-ink-1000` — see ADR-0055. */
+ * against `--cs-ink-1000`. */
 .docs-prose pre {
   background: var(--cs-ink-1000);
   color: #f3f3f5;

@@ -135,7 +135,7 @@ describe('computeBestCapoPositions', () => {
 
   test('result is invariant under {capo: N} on the song metadata', () => {
     // The AST emitted by `parseChordpro*` has `{capo}` folded into
-    // the chord roots (ADR-0023), so a C-major song at capo 2
+    // the chord roots, so a C-major song at capo 2
     // arrives here with B♭ / E♭ / F chord roots. Dragging the
     // capo slider must not change the recommended positions —
     // the user is looking at the same song, just held with a

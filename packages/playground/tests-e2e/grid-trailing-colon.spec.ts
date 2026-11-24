@@ -5,7 +5,7 @@
 // the hang AS WELL AS the silent-drop class where the preview
 // renders an empty grid instead of an infinite loop.
 //
-// Per `.claude/rules/playground-smoke.md` a `pageerror`
+// A `pageerror`
 // listener is registered before navigation so a regression
 // that surfaces as an uncaught exception still fails the test.
 

@@ -21,8 +21,8 @@ on:
       - ".github/workflows/napi.yml"
       - ".github/actions/rust-cache/action.yml"
   # Reusable: called by release.yml's fan-out after the GitHub Release
-  # exists, so `upload-release-tarballs` has somewhere to upload to
-  # (ADR-0039). A non-empty `tag` is what puts this workflow in release
+  # exists, so `upload-release-tarballs` has somewhere to upload to.
+  # A non-empty `tag` is what puts this workflow in release
   # mode; on `push` / `pull_request` it is empty and only build + lint run.
   workflow_call:
     inputs:
@@ -52,7 +52,7 @@ permissions:
 # Force `bash -eo pipefail` for every `run:` block, including on the
 # Windows matrix cell, so a broken command in a pipe or an empty
 # `rustup target add` fails loud instead of being swallowed by pwsh's
-# permissive defaults. Closes the fix-propagation gap from PR #1821
+# permissive defaults. Closes the gap PR #1821 left in this workflow
 # (issue #1835). The unshelled blocks in this workflow — `rustup target
 # add`, `npm install -g`, `napi build` — are all cross-platform CLI
 # tools that behave identically under Git Bash on Windows, so switching
@@ -138,8 +138,7 @@ jobs:
           # problem and covers exactly the Linux gnu targets this matrix
           # builds. Derived from the target triple rather than a matrix
           # flag so a Linux target added later cannot silently omit it —
-          # forgetting the flag is how the x86_64 cell got here. See
-          # ADR-0046.
+          # forgetting the flag is how the x86_64 cell got here.
           NAPI_CROSS: ${{ contains(matrix.target, '-linux-gnu') && '--use-napi-cross' || '' }}
           TARGET: ${{ matrix.target }}
         run: |
@@ -288,7 +287,7 @@ jobs:
     # This job does not publish — it stages the platform packages with
     # their prebuilt .node files and uploads them as compressed tarballs
     # to the GitHub Release for `publish-registries.yml` to download and
-    # publish through trusted publishing (ADR-0069).
+    # publish through trusted publishing.
     #
     # `build` must succeed so every target triple has an artifact to stage;
     # we download them all, assemble each platform package, and tar the

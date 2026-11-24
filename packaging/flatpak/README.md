@@ -1,10 +1,7 @@
 <!-- markdownlint-disable MD041 -->
 # Flatpak (Flathub)
 
-The desktop app as a Flatpak, for Flathub
-([ADR-0074](../../docs/adr/0074-the-desktop-app-is-built-for-flathub-from-source.md)).
-The CLI is not published there
-([ADR-0072](../../docs/adr/0072-the-cli-is-not-published-to-flathub.md)).
+The desktop app as a Flatpak, for Flathub. The CLI is not published there.
 
 | File | Purpose |
 |---|---|
@@ -19,8 +16,7 @@ The CLI is not published there
 
 The application ID is `io.github.koedame.chordsketch`, the GitHub code-hosting
 ID for this repository, not the Tauri identifier
-`me.koeda.chordsketch.desktop`: Flathub refuses IDs that end in `.desktop`
-([ADR-0074](../../docs/adr/0074-the-desktop-app-is-built-for-flathub-from-source.md)).
+`me.koeda.chordsketch.desktop`: Flathub refuses IDs that end in `.desktop`.
 
 ## Build and run locally
 

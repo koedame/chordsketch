@@ -1146,7 +1146,7 @@ fn non_empty_string(s: &str) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// Ambiguous-notation detection (ADR-0037)
+// Ambiguous-notation detection
 // ---------------------------------------------------------------------------
 
 /// An explicit, unambiguous re-spelling of a chord written in ChordSketch's
@@ -1156,8 +1156,7 @@ fn non_empty_string(s: &str) -> Option<String> {
 /// ChordSketch still *parses* the ambiguous form for ChordPro / Perl-reference
 /// compatibility — [`chord_tones`] / [`parse_chord`] are unchanged — but the
 /// editor never *produces* it and the render boundary surfaces a warning that
-/// points the user at one of these explicit spellings
-/// ([ADR-0037](https://github.com/koedame/chordsketch/blob/main/docs/adr/0037-explicit-chord-extension-notation.md)).
+/// points the user at one of these explicit spellings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChordSuggestion {
     /// The tone-preserving explicit spelling. For a bare dominant stack this is
@@ -1239,7 +1238,7 @@ fn quality_core(triad: &str, maj_seventh: bool) -> String {
 /// explicit spelling(s) to suggest, or `None` when the chord is already
 /// unambiguous (or not a chord at all).
 ///
-/// Two patterns are flagged (see [ADR-0037]):
+/// Two patterns are flagged:
 ///
 /// 1. **Bare extended stack** — a headline `9` / `11` / `13` with no explicit
 ///    seventh marker and no parentheses (`C9`, `Gm13`, `Fmaj9`). The tertian
@@ -1252,8 +1251,6 @@ fn quality_core(triad: &str, maj_seventh: bool) -> String {
 /// Unambiguous forms — `C7`, `Cmaj7`, `C7(9)`, `Cadd9`, `C6`, `C69`, `Csus4`,
 /// `Cm7b5`, `C7b9`, `Cdim7` — return `None`. Tones are never changed by this
 /// function; it only classifies notation.
-///
-/// [ADR-0037]: https://github.com/koedame/chordsketch/blob/main/docs/adr/0037-explicit-chord-extension-notation.md
 #[must_use]
 pub fn suggest_canonical_chord(name: &str) -> Option<ChordSuggestion> {
     let (root_prefix, body, bass_suffix) = split_chord_name(name)?;
@@ -2400,7 +2397,7 @@ mod tests {
         }
     }
 
-    // -- Ambiguous-notation suggestion (ADR-0037) --------------------------
+    // -- Ambiguous-notation suggestion --------------------------
 
     fn canonical_of(name: &str) -> Option<String> {
         suggest_canonical_chord(name).map(|s| s.canonical)

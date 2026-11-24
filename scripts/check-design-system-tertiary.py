@@ -4,7 +4,7 @@
 `--ink-500` / `--text-tertiary` is a non-text / large-text / disabled
 tone, not a body-text tone: it is 3.53:1 on `--ink-0`, which clears the
 3:1 WCAG 1.4.11 asks of non-text UI but not the 4.5:1 SC 1.4.3 asks of
-text below 18.66px bold / 24px regular (ADR-0054, `DESIGN.md` §2.4).
+text below 18.66px bold / 24px regular.
 
 `packages/react/tests/tertiary-ink.test.ts` and its `react-ui` twin pin
 that constraint for the shipped stylesheets by allowlisting the selectors
@@ -116,7 +116,7 @@ def main() -> int:
         print()
         print(
             "`--ink-500` / `--text-tertiary` is a non-text / large-text / "
-            "disabled tone (ADR-0054, DESIGN.md §2.4). Repoint small copy at "
+            "disabled tone: it is below the 4.5:1 contrast small text needs. Repoint small copy at "
             "`--text-secondary`, or — if the site really is a separator "
             "glyph, an icon stroke, or a disabled control — add it to "
             "TERTIARY_ALLOWED in this script with the reason. Remove entries "

@@ -37,7 +37,7 @@ export interface ChordDiagramProps extends Omit<HTMLAttributes<HTMLDivElement>, 
    * Diagram orientation (#2572). Defaults to `"vertical"` — nut on
    * top, frets running downward. Pass `"horizontal"` for the
    * Japanese-tablature convention with nut on the left and frets
-   * running rightward (reader-view, high pitch on top — see ADR-0026).
+   * running rightward (reader-view, high pitch on top).
    */
   orientation?: ChordDiagramOrientation;
   /**

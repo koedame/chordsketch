@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
- * Chrome / layout CSS generator (ADR-0061).
+ * Chrome / layout CSS generator.
  *
- * `design-system/DESIGN.md` names two canonical class families. The primitives
+ * The design system has two canonical class families. The primitives
  * (`.btn`, `.input`, `.badge`, …) ship from `@chordsketch/react-ui`; the chrome
  * and layout vocabulary — `.topnav` and its parts, `.sidenav`, the
  * `.pane` / `.pane-head` / `.pane-body` split-pane frame, and the `.stack`
@@ -15,13 +15,12 @@
  * committed and CI regenerates it and asserts a zero diff (`tokens-sync.yml`),
  * so the shipped stylesheet is a projection of `design-system/` rather than a
  * second, drift-prone copy of it — the same idiom `scripts/build-tokens.mjs`
- * uses for token values (ADR-0038).
+ * uses for token values.
  *
  * The reference pages are not internally uniform: `ui_kits/web/editor-chord-
  * footer.html` is a deliberately denser variant of the editor (52px nav,
- * tighter panes). `DESIGN.md` §9 resolves this by naming
- * `ui_kits/web/editor.html` the canonical chrome source; GROUPS below is that
- * resolution made mechanical — one named source file per family, and no other
+ * tighter panes). `ui_kits/web/editor.html` is the canonical chrome source;
+ * GROUPS below is that choice made mechanical — one named source file per family, and no other
  * file is read. The validations then make a rename, a deletion, or a newly
  * introduced disagreement between the two files that both define `.topnav`
  * fail loudly rather than emit a plausible but wrong stylesheet.
@@ -75,7 +74,7 @@ const GROUPS = [
     match: (sel) => /^\.pane(?:-head|-body)?\b/.test(sel),
   },
   {
-    title: "Stack — the vertical-flow primitive (DESIGN.md §4.1)",
+    title: "Stack — the vertical-flow primitive",
     source: STACK,
     match: (sel) => /^\.stack\b/.test(sel),
   },
@@ -159,7 +158,7 @@ function declarations(body, selector) {
 /**
  * Rewrite every custom property — declared or referenced — into the `--cs-*`
  * namespace. The package scopes its variables to its own selectors so a host's
- * `:root` neither leaks in nor is polluted (ADR-0038 constraint 2); a bare
+ * `:root` neither leaks in nor is polluted; a bare
  * `--stack-gap` left in place would be reachable from the host and break that
  * isolation, so it becomes `--cs-stack-gap` like everything else.
  */

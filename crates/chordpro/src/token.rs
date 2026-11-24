@@ -102,11 +102,9 @@ pub struct Token {
     /// records the same start position counted in UTF-16 code units so the
     /// AST can hand chord-token source columns to JS consumers (the
     /// `@chordsketch/react` chord editor) that splice the source via
-    /// `String.prototype.slice` — see [ADR-0017] and issue #2634. It equals
+    /// `String.prototype.slice` — see issue #2634. It equals
     /// `span.start.column - 1` for any line containing only Basic Multilingual
     /// Plane characters.
-    ///
-    /// [ADR-0017]: https://github.com/koedame/chordsketch/blob/main/docs/adr/0017-react-renders-from-ast.md
     pub utf16_col: usize,
 }
 

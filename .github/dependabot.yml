@@ -10,22 +10,20 @@ version: 2
 # five unmerged majors.
 updates:
   # Patch and minor updates are grouped into one PR per ecosystem per week;
-  # every major update still opens its own PR, one dependency per PR (ADR-0075).
+  # every major update still opens its own PR, one dependency per PR.
   # Cargo classifies a pre-1.0 minor bump (0.55 -> 0.57) as major, so those
   # stay individual too. Security updates are not grouped (`applies-to`
   # defaults to version updates) and still open immediately, one per
-  # advisory. The `/dependabot-review` slash command processes both shapes:
-  # it audits every dependency a PR updates for advisories and behavioural
-  # deltas, applies any required code changes, and squash-merges the safe
-  # ones. See `.claude/commands/dependabot-review.md`, ADR-0016, ADR-0024 and
-  # ADR-0075.
+  # advisory. Both shapes are reviewed the same way: every dependency a PR
+  # updates is audited for advisories and behavioural deltas, any required
+  # code changes are applied, and the safe ones are squash-merged.
 
   # `directory: "/"` reads only `.github/workflows/` and a root `action.yml`,
   # so the composite actions under `.github/actions/` need their own entry in
   # `directories`. Across several directories a group still opens one PR, but
   # an ungrouped major opens one PR per directory that pins the action; the
   # `actions-major` group with `group-by: dependency-name` keeps a major at one
-  # PR per dependency covering every directory (ADR-0077).
+  # PR per dependency covering every directory.
   - package-ecosystem: "github-actions"
     directories:
       - "/"
@@ -48,7 +46,7 @@ updates:
 
   # A cargo PR changes `Cargo.lock`, which `THIRD_PARTY_LICENSES.md` is
   # generated from; `.github/workflows/dependabot-licenses.yml` pushes the
-  # regenerated file to the PR branch as one commit (ADR-0089).
+  # regenerated file to the PR branch as one commit.
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:

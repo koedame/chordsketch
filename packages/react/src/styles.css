@@ -11,8 +11,7 @@
  * consumers can override them per-element without colliding with
  * the workspace `design-system/tokens.css` (`--crimson-*`,
  * `--ink-*`, …) when both are loaded into the same document. The
- * namespace is local to this package's selectors. See
- * `design-system/DESIGN.md` §2 / §3 for the colour and type roles.
+ * namespace is local to this package's selectors.
  * Hosts that ship the workspace `design-system/tokens.css` get the
  * full design language; hosts that ship just this stylesheet get
  * the inline fallbacks below — visually equivalent for
@@ -282,7 +281,7 @@
  * `opacity: 0.7`, which composited the inherited `--cs-text-secondary`
  * against the toolbar to #959399 — 3.03:1, under the 4.5:1 WCAG 1.4.3
  * floor for 12px text. Name the tone instead of thinning it so the
- * rendered colour is the one the token guarantees (ADR-0054). */
+ * rendered colour is the one the token guarantees. */
 .chordsketch-preview-toolbar__label {
   font-size: 0.85em;
   color: var(--cs-text-secondary, #67646D);
@@ -448,7 +447,7 @@
 }
 
 .chordsketch-sheet__content {
-  /* Wrapper for the AST → JSX render path (#2475 / ADR-0017).
+  /* Wrapper for the AST → JSX render path (#2475).
      The pre-#2475 HTML render path's `body { max-width: 720px;
      margin: 2em auto; padding: 0 1em }` made sense when the
      output was a standalone document, but the React surface
@@ -1494,7 +1493,7 @@
   flex-wrap: wrap;
   margin: 0.1em 0;
 }
-/* Inline diagrams (ADR-0027): bottom-align the chord-blocks within a
+/* Inline diagrams: bottom-align the chord-blocks within a
    line so every `.lyrics` row lines up on the same baseline no matter
    how tall the compact diagram stacked above a chord-bearing block
    is. A chord-less block has only a `.lyrics` row; with the default
@@ -2173,7 +2172,7 @@
    The wrapper class `song--diagrams-<position>` on `.song` is the
    modifier the consumer's CSS can hook into for layout shifts
    that need to reach the wrapper itself (notably `right`). */
-/* ---- Inline / hover chord diagrams (ADR-0027) ----
+/* ---- Inline / hover chord diagrams ----
    `{diagrams: inline}` replaces each chord name above a lyric with its
    compact diagram; `{diagrams: hover}` keeps the name and reveals the
    compact diagram on hover / keyboard focus. */
@@ -2183,7 +2182,7 @@
 .chordsketch-sheet__content .chord-block-inline-diagram {
   line-height: 1;
 }
-/* Inline diagrams (ADR-0051): centre each compact diagram on the lyric
+/* Inline diagrams: centre each compact diagram on the lyric
    position its chord marks, instead of aligning the diagram's left edge
    there. A compact diagram is much wider than the syllable it annotates
    (63px vs an 18px kana for the vertical guitar layout), so left-edge
@@ -2272,7 +2271,7 @@
   background: var(--cs-surface, #ffffff);
   border: 1px solid var(--cs-border, #d4d1d6);
   border-radius: var(--cs-r-2, 4px);
-  /* Popover elevation token, single-sourced from tokens.css per ADR-0038
+  /* Popover elevation token, single-sourced from tokens.css
      rather than an off-palette pure-black literal. */
   box-shadow: var(--cs-e-2, 0 1px 2px rgba(10, 10, 11, 0.04), 0 4px 14px -2px rgba(10, 10, 11, 0.07));
 }
@@ -2936,7 +2935,7 @@
   border-radius: 4px;
 }
 
-/* ---------- iReal Pro editor + preview (#2473 / ADR-0020) ---------- */
+/* ---------- iReal Pro editor + preview (#2473) ---------- */
 
 .chordsketch-ireal-bar-grid {
   display: flex;

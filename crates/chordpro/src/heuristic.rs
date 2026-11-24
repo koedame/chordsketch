@@ -1035,8 +1035,7 @@ mod tests {
         assert!(!is_chord_token("Em7add9sus2extended"));
     }
 
-    /// Regression guard for stop-word collisions called out explicitly in
-    /// `.claude/rules/golden-tests.md` §Stop-Word Collision Tests (#1831).
+    /// Regression guard for stop-word collisions (#1831).
     ///
     /// These are lyric words that begin with a valid chord-root letter
     /// (A–G, with or without a chord-quality suffix prefix like `Am`,

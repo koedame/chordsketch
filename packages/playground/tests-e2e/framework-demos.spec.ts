@@ -5,7 +5,7 @@
 // `@chordsketch/svelte` run in a real browser: both packages' own
 // suites are jsdom + a stubbed wasm loader, so nothing else in the
 // repo would notice either binding failing to boot the real module.
-// Per `.claude/rules/playground-smoke.md` the assertions are
+// The assertions are
 // structural anchors, `pageerror` is captured on every navigation,
 // and each case would fail if the page silently degraded to "no
 // editor mounted".

@@ -4,7 +4,7 @@
 # Usage: require-same-repo-pr.sh <pull-request-number>
 # Environment: GITHUB_REPOSITORY, and GH_TOKEN for `gh`.
 #
-# Outside pull requests are not accepted (ADR-0087). A workflow that checks
+# Outside pull requests are not accepted. A workflow that checks
 # out a pull request's head with a write token runs this first. A head whose
 # repository was deleted has no name and fails too.
 set -euo pipefail

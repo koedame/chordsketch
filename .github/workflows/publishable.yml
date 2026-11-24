@@ -3,8 +3,8 @@ name: Publishable
 # Fails when something this repository publishes could no longer be
 # published: a package a registry would refuse, a publish dry run that
 # warns, a file that must not ship, a package that installs but does not
-# load. ADR-0070 records why this exists; `docs/publishing-requirements.md`
-# lists every condition per registry and the job that checks it.
+# load. Before this workflow, such a problem surfaced only when a registry
+# was asked to take the release.
 #
 # The checks are defined once, in `scripts/_publish_checks.py`, and
 # `publish-registries.yml` runs the same definitions before it publishes
@@ -12,8 +12,8 @@ name: Publishable
 # held to.
 #
 # The `Publishable` job at the bottom is the required status check, and
-# every change reaches `main` through the merge queue, where every job runs
-# (ADR-0079). On a pull request the `scope` job runs them only when the
+# every change reaches `main` through the merge queue, where every job runs.
+# On a pull request the `scope` job runs them only when the
 # change touches something they read or adds a large file
 # (`packaging_reasons` in `scripts/_publish_checks.py`); otherwise they are
 # skipped and `Publishable` passes, so the author waits for them once, in
@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
 
 # Linux-only, so this guards against stale runs piling up on Linux
-# capacity rather than the macOS ceiling (`.claude/rules/ci-parallelization.md` §5).
+# capacity rather than the macOS ceiling.
 concurrency:
   group: publishable-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

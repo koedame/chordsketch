@@ -33,7 +33,7 @@ allow = [
     "Zlib",
 ]
 exceptions = [
-    # The application layer is AGPL-3.0-only (CLAUDE.md, License Policy).
+    # The application layer is AGPL-3.0-only (see the License table in README.md).
     { crate = "chordsketch-desktop", allow = ["AGPL-3.0-only"] },
     { crate = "chordsketch-preview-handler", allow = ["AGPL-3.0-only"] },
     # The Bravura glyph outlines and the Noto Sans CJK JP subset (NOTICE).

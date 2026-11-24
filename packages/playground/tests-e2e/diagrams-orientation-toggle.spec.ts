@@ -1,7 +1,7 @@
 // Playground smoke for the chord-diagrams orientation toggle (#2572).
 //
-// Targets the production build (`vite preview` over `dist/`) per
-// `.claude/rules/playground-smoke.md` — the deployed bundle is what
+// Targets the production build (`vite preview` over `dist/`) — the
+// deployed bundle is what
 // users hit and what this spec proves still mounts the toggle and
 // flips the diagram orientation end-to-end across the wasm boundary.
 
@@ -20,8 +20,8 @@ test('diagrams orientation toggle flips the rendered SVG class end-to-end', asyn
 
   // Default orientation is vertical — the horizontal-mode class must
   // not be present at first paint. Assert the exact class so a
-  // regression that flips the default to horizontal (an ADR-0026
-  // violation) cannot pass via partial `toContain` match.
+  // regression that flips the default to horizontal cannot pass via
+  // partial `toContain` match.
   const initialClass = await page
     .locator('svg.chord-diagram')
     .first()
@@ -69,7 +69,7 @@ test('diagrams orientation toggle flips the rendered SVG class end-to-end', asyn
     )
     .toContain('chord-diagram-horizontal');
 
-  // Horizontal mode is reader-view only per ADR-0026 — the toolbar
+  // Horizontal mode is reader-view only — the toolbar
   // must not surface a string-order select.
   await expect(
     page.locator('.chordsketch-preview-toolbar__diagrams-string-order'),

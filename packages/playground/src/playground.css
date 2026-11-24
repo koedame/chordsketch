@@ -35,8 +35,8 @@ body,
  * them here keeps every rule — chordpro and irealpro alike — working without
  * sprinkling `var(--cs-X, #literal)` fallbacks across the file.
  *
- * GENERATED from `design-system/tokens.css` by `node scripts/build-tokens.mjs`
- * (ADR-0038). This block used to be a hand mirror carrying the instruction to
+ * GENERATED from `design-system/tokens.css` by `node scripts/build-tokens.mjs`.
+ * This block used to be a hand mirror carrying the instruction to
  * "keep it in lockstep", and it had drifted — `--cs-r-1`, `--cs-r-2`,
  * `--cs-r-full` and `--cs-dur-2` all disagreed with the source. Edit
  * `tokens.css` and regenerate; do not hand-edit between the markers. */
@@ -198,7 +198,7 @@ a {
  * intentionally omitted.
  *
  * The bar, brand, crumbs and actions come from
- * `@chordsketch/react-ui/styles.css` (ADR-0061); this file only
+ * `@chordsketch/react-ui/styles.css`; this file only
  * carries the playground's deltas, so a change to the canonical
  * chrome reaches the playground the way it reaches any other
  * consumer. Every rule below is a deliberate difference.
@@ -252,7 +252,7 @@ a {
 
 /* ----------------------------------------------------------------
  * Buttons: `.btn` + variants are now provided by the
- * @chordsketch/react-ui `<Button>` primitive (ADR-0029, #2587). The
+ * @chordsketch/react-ui `<Button>` primitive (#2587). The
  * route entries import `@chordsketch/react-ui/styles.css`, so the
  * playground no longer carries its own copy of the button rules.
  * ---------------------------------------------------------------- */
@@ -382,7 +382,7 @@ a {
 }
 
 /* `.pane`, `.pane-head` and `.pane-body` come from
-   `@chordsketch/react-ui/styles.css` (ADR-0061); the rules here are the
+   `@chordsketch/react-ui/styles.css`; the rules here are the
    playground's deltas. The pane body is the notable one: the canonical
    frame scrolls a padded document, while the playground fills it with a
    source area or a preview that scrolls itself. */
@@ -1107,7 +1107,7 @@ a {
   border: 1px solid var(--cs-warning-fg, #8A5A07);
   border-radius: 8px;
   /* Modal-grade elevation token (a fixed, floating notification panel),
-     single-sourced from design-system/tokens.css per ADR-0038 rather than
+     single-sourced from design-system/tokens.css rather than
      duplicating the literal shadow value. */
   box-shadow: var(--cs-e-3, 0 2px 6px rgba(10, 10, 11, 0.04), 0 16px 32px -6px rgba(10, 10, 11, 0.12));
   padding: 0.75rem 1rem;

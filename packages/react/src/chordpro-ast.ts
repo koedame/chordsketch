@@ -7,8 +7,7 @@
 // `null` instead of `undefined` for optional fields).
 //
 // This is the wire format the AST → JSX walker
-// (`<ChordSheet>`'s html branch) consumes, per
-// [ADR-0017](../../docs/adr/0017-react-renders-from-ast.md).
+// (`<ChordSheet>`'s html branch) consumes.
 
 /** Top-level parsed ChordPro song. */
 export interface ChordproSong {

@@ -14,8 +14,7 @@ import '@chordsketch/react/styles.css';
 <ChordProPreview source={"{title: My Song}\n[G]Hello [D]world"} />
 ```
 
-> New in `@chordsketch/react` v0.3.0
-> ([ADR-0022](../../adr/0022-react-as-canonical-preview-surface.md)).
+> New in `@chordsketch/react` v0.3.0.
 > Tier 2 in the v0.3.0 layout: composed preview + controls, but
 > no source editor. Pair with [`<ChordProEditor>`](#/reference/playground)
 > for the full Tier 3 editor + preview shell, or compose the Tier 1

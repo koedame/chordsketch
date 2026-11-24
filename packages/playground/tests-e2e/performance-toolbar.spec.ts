@@ -5,7 +5,7 @@
 //
 // Structural assertions only: this verifies the controls exist
 // and their accessibility wiring is in place. Pixel-level
-// appearance is out of scope (see `.claude/rules/playground-smoke.md`).
+// appearance is out of scope.
 
 import { expect, test } from '@playwright/test';
 

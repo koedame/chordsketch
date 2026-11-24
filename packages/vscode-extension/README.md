@@ -5,8 +5,7 @@
 <!--
   PNG (not SVG) because the VS Code Marketplace's vsce packaging step
   rejects SVG images in README.md with "SVGs are restricted in
-  README.md". `assets/logo-256.png` is the canonical high-DPI raster
-  per .claude/rules/package-documentation.md §Logo.
+  README.md". `assets/logo-256.png` is the canonical high-DPI raster.
 -->
 
 # ChordSketch for VS Code

@@ -7,7 +7,7 @@ rust-version.workspace = true
 # Bravura SMuFL glyph outlines (`src/bravura.rs`) under SIL OFL-1.1
 # alongside the MIT-licensed Rust source. SPDX `AND` reflects that
 # downstream consumers must comply with both terms.
-# Attribution: NOTICE (project root) + LICENSE-OFL.txt + ADR-0014.
+# Attribution: NOTICE (project root) + LICENSE-OFL.txt.
 license = "MIT AND OFL-1.1"
 authors.workspace = true
 repository.workspace = true
@@ -32,8 +32,8 @@ chordsketch-ireal = { version = "0.9.1", path = "../ireal" }
 # 0.45 line as the PDF side means a single set of SVG-parsing
 # crates, instead of one set per feature, when both are enabled.
 #
-# The renderer-crate dependency carve-out in `CLAUDE.md`
-# ("minimal external crates when justified") covers each addition
+# Renderer crates may take minimal external crates when justified,
+# and that covers each addition
 # — pure-Rust SVG rasterisation and SVG-to-PDF conversion both
 # have no zero-dep alternative, and the feature gates keep the
 # cost off any caller that does not need raster / PDF output.

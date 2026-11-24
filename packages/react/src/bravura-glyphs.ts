@@ -4,11 +4,11 @@
  * These are the actual font outlines (treble clef, sharp, flat, black
  * notehead), not the simplified caricatures the key-signature chip and
  * chord-tone staff used before. The same path-baked-not-font approach the
- * iReal renderer adopted in [ADR-0014] is reused here: the glyphs ship as
+ * iReal renderer uses is reused here: the glyphs ship as
  * `<path d="…">` data so `@chordsketch/react` never forces a ~500 KB music
  * font download on consumers, yet still draws true SMuFL shapes.
  *
- * Sister sites (keep in lockstep — `.claude/rules/fix-propagation.md`):
+ * Sister sites (keep in lockstep):
  *   - `crates/render-html/src/bravura.rs` — same gClef / sharp / flat for the
  *     HTML `{key}` chip (renderer-parity with `KeySignatureGlyph`).
  *   - `crates/render-ireal/src/bravura.rs` — segno / coda / fermata.
@@ -16,8 +16,6 @@
  * Regenerate the constants below (font units, OpenType +Y-up convention) with:
  *
  *     python3 scripts/extract-bravura-paths.py --target react
- *
- * [ADR-0014]: docs/adr/0014-bravura-glyphs-as-svg-paths.md
  */
 
 /** A baked Bravura glyph in font units (OpenType convention: +X right, +Y up,

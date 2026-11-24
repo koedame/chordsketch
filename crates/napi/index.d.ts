@@ -248,7 +248,7 @@ export function chordDiagramSvgWithDefines(
  * Layout orientation for the orientation-aware chord-diagram exports.
  *
  * `"horizontal"` renders the Japanese tablature layout (nut on the left,
- * reader-view — high pitch on top); see ADR-0026. The value is matched
+ * reader-view — high pitch on top). The value is matched
  * case-insensitively; `null` / `undefined` / unrecognised strings fall back
  * to `"vertical"`. Mirrors the WASM `ChordDiagramOrientation` type.
  */

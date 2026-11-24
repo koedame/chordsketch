@@ -18,7 +18,7 @@ has no counterpart for a React recipe, that is called out in
 > `<Transpose>` — are running as an editable page at
 > <https://koedame.github.io/chordsketch/vue/>, built on this package. Type
 > ChordPro there and watch the engine render it before you install
-> anything ([ADR-0053](../../adr/0053-framework-demos-live-in-the-playground.md)).
+> anything.
 
 > **Prerequisite.** `npm install @chordsketch/vue vue`. Vue 3.3 or
 > newer is a peer dependency. The PDF / PNG export bundle is a
@@ -368,7 +368,7 @@ design rather than by omission:
 | React surface | Why there is no Vue equivalent |
 |---|---|
 | iReal Pro (`<IrealProEditor>`, `<IrealPreview>`, `useIrealParse`, …) | Not ported. Recipes 8 and 9 of the React page are React-only for now. |
-| AST walker (`useChordproAst`, `renderChordproAst`) | `<ChordSheet format="html">` renders the engine's own HTML instead of walking the AST into a component tree, per [ADR-0017](../../adr/0017-react-renders-from-ast.md). See Recipe 7 for the AST-level escape hatch. |
+| AST walker (`useChordproAst`, `renderChordproAst`) | `<ChordSheet format="html">` renders the engine's own HTML instead of walking the AST into a component tree. See Recipe 7 for the AST-level escape hatch. |
 | Interaction props built on that walker (in-preview chord selection, drag-to-reposition, chord audio) | They address React elements produced by the walker, which the Vue render path never creates. |
 
 The CodeMirror source editor (`<ChordSourceArea>`) and the

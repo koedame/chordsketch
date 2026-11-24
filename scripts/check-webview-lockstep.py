@@ -5,7 +5,7 @@
 `chordsketch-desktop` reaches through `tauri-runtime-wry`, and both ship in
 one installer. The handler's `wry`, `windows` and `windows-core`
 requirements are therefore held at the versions Tauri resolves, so the tree
-carries one copy of each (ADR-0066).
+carries one copy of each.
 
 Nothing in Cargo enforces that. `wry = "0.55"` means `^0.55`, so when Tauri
 moves to a newer `wry` the handler keeps resolving the old one, both copies
@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print(
         "The preview handler and the desktop app ship in one installer and "
-        "must share one WebView2 stack (ADR-0066). Set the `wry`, `windows` "
+        "must share one WebView2 stack. Set the `wry`, `windows` "
         "and `windows-core` requirements in apps/desktop/preview-handler/"
         "Cargo.toml to the versions Tauri resolves, together, and commit "
         "the re-resolved Cargo.lock. A bump of the handler's requirement "

@@ -40,7 +40,7 @@ function buttonClassName(
 
 /**
  * Design-system button primitive. Composes the canonical `.btn` class
- * vocabulary from `design-system/DESIGN.md` §6. Renders a `<button>` by
+ * vocabulary of the design system. Renders a `<button>` by
  * default, or an `<a>` when `as="a"` (for link-styled actions). Anchor
  * attributes such as `href` require `as="a"` (a type error on the button
  * form). When `as="a"` and `isLoading`, navigation is suppressed and the

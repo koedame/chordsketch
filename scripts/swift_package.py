@@ -7,7 +7,7 @@
 
 SwiftPM reads `Package.swift` from the repository root of the tag a consumer
 resolves, so that file has to name the XCFramework of the release it is
-tagged for, checksum included (ADR-0080). `pin` writes the URL and checksum;
+tagged for, checksum included. `pin` writes the URL and checksum;
 `use-local` swaps the remote binary for a locally built XCFramework so
 `swift test` can run against a build that is not published yet.
 

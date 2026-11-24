@@ -9,7 +9,7 @@
  * body with a prose intro above the embedded editor. Keeping the
  * tokens in one place is deliberate; `playground.css`'s `:root`
  * block is already the playground's single mirror of
- * `design-system/tokens.css` (see `.claude/rules/design-tokens.md`).
+ * `design-system/tokens.css`.
  *
  * The Vue and Svelte demos share this stylesheet verbatim — the two
  * pages are the same page with a different binding underneath, so a

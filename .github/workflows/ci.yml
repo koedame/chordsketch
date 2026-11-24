@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  # Every change reaches `main` through the merge queue (ADR-0079), which
+  # Every change reaches `main` through the merge queue, which
   # runs the required checks on the merge group before it lands.
   merge_group:
 
@@ -113,8 +113,7 @@ jobs:
     #
     # Its own job rather than a `guards` step: those are Python-only. It runs
     # on every pull request like the other guarantees, so it has no `paths:`
-    # filter, and it compiles no Rust, so it has no `rust-cache` entry
-    # (`.claude/rules/ci-parallelization.md` §2).
+    # filter, and it compiles no Rust, so it has no `rust-cache` entry.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -144,16 +143,15 @@ jobs:
     #
     # They are guarantees, so none of them has a `paths:` filter and all of
     # them run on every pull request; none compiles Rust, so none needs a
-    # `rust-cache` entry (`.claude/rules/ci-parallelization.md` §2).
+    # `rust-cache` entry.
     #
-    # Each used to be a job of its own, which is what §3 asks for while runner
+    # Each used to be a job of its own, which is the better shape while runner
     # minutes are free. They stopped being free when the account's hosted
     # concurrency became the bottleneck: ten checks that each do ~18 s of
     # work still took ten slots and queued behind the multi-minute cargo
     # jobs, so per-job checkout and runner setup dominated what they actually
     # measured. Batching trades ten check badges for one and gives nine slots
-    # per run back to the jobs that need them. See §3 for the measurement
-    # that decided it.
+    # per run back to the jobs that need them.
     #
     # `if: ${{ !cancelled() }}` on every check keeps the property the separate
     # jobs had: a push that breaks three guards reports all three in one run
@@ -199,14 +197,14 @@ jobs:
       # around them. A pin left behind by an MSRV bump therefore stays green
       # until a user runs `docker build .` — which is how the builder sat on
       # `rust:1.85-bookworm` after the workspace moved to 1.88, where `cargo
-      # build` refuses to compile at all. See ADR-0062 for why this is a text
-      # check rather than a `docker build` job.
+      # build` refuses to compile at all. This is a text check rather than a
+      # `docker build` job because a build would put a pull of the `rust`
+      # image from a third-party registry in the path of every pull request.
       - name: MSRV consistency
         if: ${{ !cancelled() }}
         run: python3 scripts/check-msrv-consistency.py
 
-      # Enforces the minimum per-renderer golden fixture counts documented in
-      # `.claude/rules/golden-tests.md`.
+      # Enforces the minimum per-renderer golden fixture counts.
       - name: Fixture counts
         if: ${{ !cancelled() }}
         run: python3 scripts/check-fixture-counts.py
@@ -215,7 +213,7 @@ jobs:
       # reference pages, the way `packages/react{,-ui}/tests/tertiary-ink.test.ts`
       # keeps it off the shipped stylesheets: `--ink-500` is 3.53:1, which
       # clears the 3:1 WCAG 1.4.11 asks of non-text UI but not the 4.5:1
-      # SC 1.4.3 asks of text below 18.66px bold / 24px regular (ADR-0054).
+      # SC 1.4.3 asks of text below 18.66px bold / 24px regular.
       # Those pages have no test runner of their own, so the guard is a
       # standalone script.
       - name: Design system tertiary ink
@@ -223,8 +221,7 @@ jobs:
         run: python3 scripts/check-design-system-tertiary.py
 
       # Enforces the zero-external-dependency contract for the core crates
-      # (`chordsketch-chordpro`, `chordsketch-ireal`) documented in CLAUDE.md
-      # "Dependency Policy" and `.claude/rules/code-style.md`. A stray
+      # (`chordsketch-chordpro`, `chordsketch-ireal`). A stray
       # dev/build/normal dep drags a network-fetched transitive graph
       # (e.g. tempfile -> getrandom) back into every `cargo metadata`
       # resolution, which is what made the cold-cache desktop-build wasm step
@@ -233,8 +230,8 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/check-zero-deps.py
 
-      # Every public `Result` / `Option` function carries `#[must_use]`
-      # (`.claude/rules/defensive-inputs.md`), so a dropped parse / conversion
+      # Every public `Result` / `Option` function carries `#[must_use]`,
+      # so a dropped parse / conversion
       # outcome is flagged at the call site.
       - name: Public Result/Option functions carry #[must_use]
         if: ${{ !cancelled() }}
@@ -251,15 +248,15 @@ jobs:
 
       # No job may run on a self-hosted runner or read its runner from a
       # repository variable: the repository is public, so a fork's pull
-      # request would run arbitrary code there (ADR-0096).
+      # request would run arbitrary code there.
       - name: Runners are GitHub-hosted and not chosen by a variable
         if: ${{ !cancelled() }}
         run: python3 scripts/check-runs-on.py
 
       # The Windows preview handler and the desktop app ship in one installer
       # and embed WebView2 through the same `wry` / `windows` / `windows-core`,
-      # so the handler's requirements are held at the versions Tauri resolves
-      # (ADR-0066). A caret requirement left behind when Tauri moves — or
+      # so the handler's requirements are held at the versions Tauri resolves.
+      # A caret requirement left behind when Tauri moves — or
       # bumped ahead of it — puts a second copy of the stack in `Cargo.lock`
       # without failing any build, so this compares the two consumers' lock
       # entries directly. The drift arrives through `Cargo.lock` in
@@ -275,8 +272,8 @@ jobs:
       # fails to start on any older distribution ("version `GLIBC_2.39' not
       # found"). The desktop bundles have the same failure from the same cause,
       # expressed as a runner label rather than a container: they link the
-      # build host's webkit2gtk, so their matrices pin `ubuntu-22.04`
-      # (ADR-0056). Nothing on a PR would notice either one: `readme-smoke.yml`
+      # build host's webkit2gtk, so their matrices pin `ubuntu-22.04`.
+      # Nothing on a PR would notice either one: `readme-smoke.yml`
       # only ever exercises `ubuntu-latest`, so the first report comes from a
       # user. This answers the config half of both questions on every PR —
       # including for `desktop-release.yml`, which has no pull_request trigger
@@ -307,8 +304,8 @@ jobs:
       # `crates/chordpro/src/directive_catalog.rs` — against drifting from the
       # catalog. A directive added to the catalog alone would leave the
       # wasm-free format sniffer unable to recognise it, which is the
-      # duplicated-list failure ADR-0028 exists to prevent and ADR-0060
-      # inherits.
+      # duplicated-list failure the shared directive catalog exists to
+      # prevent.
       #
       # Deliberately NOT a step in `chordpro-lite.yml`: that workflow is
       # path-filtered on the package, so a catalog-only change — exactly the
@@ -320,7 +317,7 @@ jobs:
       # Guards `THIRD_PARTY_LICENSES.md` — the copyright notices and license
       # texts of every Rust crate and bundled npm package, shipped with each
       # binary — against drifting from `Cargo.lock` and the bundled
-      # `package-lock.json` files (ADR-0085). The check reads the lock files
+      # `package-lock.json` files. The check reads the lock files
       # only, so it needs no Rust or Node toolchain; regenerating does.
       #
       # Runs on every PR rather than behind a path filter for the same reason
@@ -424,7 +421,7 @@ jobs:
         include:
           # The Linux cell keeps `ubuntu-latest` in its name (required checks
           # are matched by name) but never runs on that label: it runs on
-          # `ubuntu-24.04`. See ADR-0092 and ADR-0096.
+          # `ubuntu-24.04`, a fixed image rather than a label that moves.
           - os: ubuntu-latest
             runner: ubuntu-24.04
     steps:
@@ -436,8 +433,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - uses: ./.github/actions/rust-cache
-        # Linux cells only — see `.claude/rules/ci-parallelization.md` §2
-        # "Cache budget". The six `test` cells were the single largest
+        # Linux cells only. The six `test` cells were the single largest
         # claim on the repository's 10 GiB Actions cache pool — 3.75 GiB
         # across the six, of which the four hosted cells hold 2.37 GiB —
         # which put total demand per `main` push above the cap and made
@@ -445,7 +441,7 @@ jobs:
         # cells give the budget up because they are not on the critical
         # path (measured cold penalty: Windows 2.5 min -> 8.1 min,
         # macOS 1.4 min -> 4.8 min, on runners with no queue pressure),
-        # while the Linux cells are on the critical path and keep it (§7).
+        # while the Linux cells are on the critical path and keep it.
         if: matrix.os == 'ubuntu-latest'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -477,7 +473,7 @@ jobs:
     #      Tauri Rust side, with webkit2gtk installed.
     # Guarantees both halves of the desktop stack compile on every PR,
     # while the cross-platform bundle build matrix stays tracked in
-    # #2077. Per `.claude/rules/ci-parallelization.md` §3, this runs
+    # #2077. As a guarantee-style check, this runs
     # without a `paths:` filter so any workspace or dep change is
     # exercised.
     runs-on: ubuntu-24.04

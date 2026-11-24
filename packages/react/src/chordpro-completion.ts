@@ -4,7 +4,7 @@ import { initWasm } from './wasm-init';
 
 /**
  * CodeMirror 6 autocomplete for ChordPro directives and their values,
- * backed by the shared `@chordsketch/wasm` directive catalog (ADR-0028).
+ * backed by the shared `@chordsketch/wasm` directive catalog.
  *
  * The catalog is the SAME source the LSP completion reads, so the web
  * editor offers exactly the directive set + enum values that VS Code does
@@ -50,7 +50,7 @@ interface WasmCatalogModule {
 }
 
 /**
- * Lazily load the directive catalog from `@chordsketch/wasm` (ADR-0028).
+ * Lazily load the directive catalog from `@chordsketch/wasm`.
  *
  * This is the default backing for {@link chordProCompletionSource}, and is
  * exported so other consumers — the playground's "Insert directive" picker,

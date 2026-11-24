@@ -43,8 +43,7 @@ are available for the following targets:
 | `x86_64-pc-windows-msvc` | Windows | x86_64 | MSVC runtime |
 
 Every Linux archive is cross-compiled against an old sysroot so the gnu
-builds run on any distribution shipping glibc 2.18 or newer
-([ADR-0046](https://github.com/koedame/chordsketch/blob/main/docs/adr/0046-linux-release-binaries-target-an-old-glibc.md));
+builds run on any distribution shipping glibc 2.18 or newer;
 the musl builds are statically linked and need no system glibc at all.
 
 For any other target, use `cargo install chordsketch`; the crate has no

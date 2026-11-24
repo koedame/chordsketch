@@ -41,9 +41,8 @@
 # Moving the macro invocations out of `lib.rs` makes the coverage
 # numbers reflect what they should: the pure-Rust business logic in
 # each binding's `lib.rs`. Post-split, napi lands at ~97% and wasm at
-# ~96%, putting the bindings-group intra-group skew (`.claude/rules/
-# fix-propagation.md` §Coverage Floors) at ~10pp against ffi's 88%
-# — within the rule's ceiling. ffi is unchanged because UniFFI
+# ~96%, putting the bindings-group intra-group skew at ~10pp against
+# ffi's 88% — within the ceiling the project holds the group to. ffi is unchanged because UniFFI
 # already places the generated ABI glue in a separate file that does
 # not participate in coverage; #2352 aligns napi / wasm with the same
 # pattern.
@@ -56,13 +55,11 @@
 # remain the line of defence against regressions in the thin
 # wrappers themselves. Routing their coverage data into Codecov on
 # top of the `cargo llvm-cov` upload remains a follow-up improvement
-# (see #2352's strategy menu) but is not necessary for the rule
+# (see #2352's strategy menu) but is not necessary for the
 # targets above, which are already met by the structural split.
 #
-# Codecov does not natively enforce intra-group skew; the skew clause lives
-# as a reviewer rule in `.claude/rules/renderer-parity.md` and
-# `.claude/rules/fix-propagation.md` and is verified by auto-review, not by
-# this file.
+# Codecov does not natively enforce intra-group skew; the skew ceiling is
+# checked in review, not by this file.
 #
 # Branch protection: Codecov status checks are emitted but NOT yet wired
 # into branch protection required checks. Per tracker §Strategy: "add to

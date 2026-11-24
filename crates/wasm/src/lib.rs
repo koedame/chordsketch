@@ -30,8 +30,7 @@
 //!
 //! Sister-site rule: every helper / wrapper pair added here must have
 //! a matching pair in `crates/napi/src/{lib.rs, bindings.rs}` and
-//! `crates/ffi/src/lib.rs`. See `.claude/rules/fix-propagation.md`
-//! §Bindings.
+//! `crates/ffi/src/lib.rs`.
 
 use chordsketch_chordpro::render_result::RenderResult;
 use serde::{Deserialize, Serialize};
@@ -182,8 +181,7 @@ pub(crate) fn render_bytes_with_warnings_core(
 /// `JsValue` — `JsValue::Drop` calls a wasm-bindgen-imported function
 /// that panics on non-wasm32 targets. Sister-site to the NAPI binding's
 /// `chord_diagram_svg_inner` and the FFI binding's
-/// `chord_diagram_svg_with_defines` (`.claude/rules/fix-propagation.md`
-/// §Bindings).
+/// `chord_diagram_svg_with_defines`.
 pub(crate) fn chord_diagram_svg_inner(
     chord: &str,
     instrument: &str,
@@ -251,8 +249,7 @@ pub(crate) fn chord_diagram_svg_inner_with_options(
 /// (rather than calling the core directly from the binding) so the native
 /// test suite covers the binding's surface without the wasm runtime, per
 /// the crate-layout note above. Sister-site to the NAPI
-/// `chord_pitches_inner` and the FFI binding's `chord_pitches`
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// `chord_pitches_inner` and the FFI binding's `chord_pitches`.
 #[must_use]
 pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::chord_pitches(chord)
@@ -268,8 +265,7 @@ pub(crate) fn chord_pitches_inner(chord: &str) -> Option<Vec<u8>> {
 /// highlighted keys for keyboard). `frets_shown` is fixed at `5` to match the
 /// SVG path in [`chord_diagram_svg_inner_with_options`], so a diagram and its
 /// audio resolve to the same voicing. Sister-site to the NAPI
-/// `diagram_pitches_inner` and the FFI binding's `diagram_pitches`
-/// (`.claude/rules/fix-propagation.md` §Bindings).
+/// `diagram_pitches_inner` and the FFI binding's `diagram_pitches`.
 ///
 /// The accepted instrument set is the core's
 /// [`chordsketch_chordpro::diagram_instrument`], the same one the SVG surface
@@ -291,8 +287,7 @@ pub(crate) fn diagram_pitches_inner(
 /// A thin pass-through to [`chordsketch_chordpro::key_scale_pitches`] kept
 /// here so the native test suite covers the binding's surface without the
 /// wasm runtime. Sister-site to the NAPI `key_scale_pitches_inner` and the
-/// FFI binding's `key_scale_pitches` (`.claude/rules/fix-propagation.md`
-/// §Bindings).
+/// FFI binding's `key_scale_pitches`.
 #[must_use]
 pub(crate) fn key_scale_pitches_inner(key: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::key_scale_pitches(key)
@@ -303,7 +298,7 @@ pub(crate) fn key_scale_pitches_inner(key: &str) -> Option<Vec<u8>> {
 /// chord.
 ///
 /// Sister-site to the NAPI `key_tonic_triad_inner` and the FFI binding's
-/// `key_tonic_triad` (`.claude/rules/fix-propagation.md` §Bindings).
+/// `key_tonic_triad`.
 #[must_use]
 pub(crate) fn key_tonic_triad_inner(key: &str) -> Option<Vec<u8>> {
     chordsketch_chordpro::key_tonic_triad(key)
@@ -330,7 +325,7 @@ pub(crate) struct StaffNotePayload {
 /// not parseable.
 ///
 /// Sister-site to the NAPI `chord_staff_notes_inner` and the FFI binding's
-/// `chord_staff_notes` (`.claude/rules/fix-propagation.md` §Bindings).
+/// `chord_staff_notes`.
 #[must_use]
 pub(crate) fn chord_staff_notes_inner(chord: &str) -> Option<Vec<StaffNotePayload>> {
     chordsketch_chordpro::chord_staff_notes(chord).map(|notes| {
@@ -456,7 +451,7 @@ pub(crate) type ParseChordproPayload = (
 );
 
 /// Normalise every `{key}` directive value — and the `metadata.key` / `keys`
-/// views — to its canonical spelling for the React AST (ADR-0034 / ADR-0035).
+/// views — to its canonical spelling for the React AST.
 /// Recognised human key spellings (`Gm`, `Gmin`, `C Dorian`, …) collapse to
 /// their spelled-out canonical form (`G minor`, `G minor`, `C dorian`); values
 /// that are not keys (chord extensions, no note-letter root) are left untouched
@@ -523,7 +518,7 @@ pub(crate) fn do_parse_chordpro(
     let mut warnings: Vec<String> = parse_result.errors.iter().map(|w| format!("{w}")).collect();
 
     let mut song = parse_result.song;
-    // Render the canonical key on the React surface too (ADR-0034 / ADR-0035):
+    // Render the canonical key on the React surface too:
     // the editor textarea keeps whatever the user typed, but the AST the JSX
     // walker renders from carries the canonical spelling, so a `{key: Gm}` chip
     // shows `G minor` (and a transposed chip its canonical transposed value).
@@ -534,7 +529,7 @@ pub(crate) fn do_parse_chordpro(
     // per-directive map) agrees.
     canonicalize_key_directives(&mut song);
     let cli_transpose = options.map(|o| o.transpose).unwrap_or(0);
-    // ADR-0023: fold `{capo: N}` into the transpose offset so the
+    // Fold `{capo: N}` into the transpose offset so the
     // React JSX walker (which renders from the transposed AST it
     // receives here) agrees with the Rust renderers on what `{capo}`
     // does to the displayed chord names.
@@ -544,22 +539,20 @@ pub(crate) fn do_parse_chordpro(
     };
     // Mirror the Rust renderers' validate_capo invocation so the
     // React preview surfaces the same "{capo} value N out of range"
-    // diagnostic instead of going silent (renderer-parity.md
-    // §Validation Parity). The renderer code path emits this
+    // diagnostic instead of going silent. The renderer code path emits this
     // warning at the top of render_song_impl; the wasm parse path
     // is the React surface's equivalent entry point.
     chordsketch_chordpro::render_result::validate_capo(&song.metadata, &mut warnings);
     // Mirror the Rust renderers' validate_keys invocation so the React preview
-    // surfaces the same "{key} value … is not a valid key" diagnostic
-    // (renderer-parity.md §Validation Parity). Per ADR-0034 the lenient key
+    // surfaces the same "{key} value … is not a valid key" diagnostic.
+    // The lenient key
     // spellings (`G minor`, `Gmin`, …) are accepted and canonicalised above, so
     // this warns only for values that are not keys at all (chord extensions
     // like `{key: G7}`, non-note roots like `{key: H}`), which render verbatim.
     chordsketch_chordpro::render_result::validate_keys(&song.metadata, &mut warnings);
     // Mirror the Rust renderers' validate_ambiguous_chords invocation so the
     // React preview flags ambiguous chord notation (`G13`, `C(9)`) and points
-    // the editor user at the explicit spelling (renderer-parity.md §Validation
-    // Parity; ADR-0037). The editor never *produces* these forms, but a song
+    // the editor user at the explicit spelling. The editor never *produces* these forms, but a song
     // loaded from elsewhere may carry them.
     chordsketch_chordpro::render_result::validate_ambiguous_chords(&song, &mut warnings);
     // The wasm path has no `{+config.settings.transpose}` extraction
@@ -583,8 +576,7 @@ pub(crate) fn do_parse_chordpro(
     // metadata as-is, so the original key string stays on the
     // emitted AST. Emit the transposed counterpart through the
     // separate `transposed_key` field below so the JSX walker
-    // does not have to re-do the music-theory inside JS (per
-    // `.claude/rules/playground-is-a-sample.md`'s spirit — the
+    // does not have to re-do the music-theory inside JS (the
     // library owns the maths).
     let transposed_key = if transpose_steps != 0 {
         // Canonical-spelling lookup: e.g. C +1 → Db (not C#),
@@ -1007,7 +999,7 @@ mod tests {
         // catastrophic for hosts that validate multi-song .cho files.
         // Sister-site to `crates/napi/src/lib.rs::
         // test_validate_inner_collects_errors_across_multi_song_input`
-        // (fix-propagation.md §Bindings, #2352 delta review).
+        // (#2352 delta review).
         let errors = validate_inner("[G\n{new_song}\n[D");
         assert!(
             errors.len() >= 2,
@@ -1282,7 +1274,7 @@ mod tests {
             do_parse_chordpro("{key: G}\n[G]Hello", Some(&opts)).unwrap();
         assert!(
             json.contains("\"key\":\"G major\""),
-            "original key stays on the AST, canonicalised (ADR-0035), got: {json}"
+            "original key stays on the AST, canonicalised, got: {json}"
         );
         assert_eq!(
             transposed_key.as_deref(),
@@ -1302,7 +1294,7 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_non_key_warns_and_is_not_transposed() {
-        // ADR-0034: a value that is not a key at all (a chord extension) still
+        // A value that is not a key at all (a chord extension) still
         // warns on the React parse path and emits no transposed counterpart;
         // the AST keeps it verbatim for the walker.
         let opts = RenderOptions {
@@ -1326,7 +1318,7 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_lenient_key_is_canonicalised_and_transposed() {
-        // ADR-0034 / ADR-0035: the editor accepts `G minor`, and the AST the
+        // The editor accepts `G minor`, and the AST the
         // React walker renders from carries the spelled-out canonical
         // `G minor` (no warning), with the transposed counterpart `A minor`.
         let opts = RenderOptions {
@@ -1353,7 +1345,7 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_canonicalises_meta_key_form_and_ignores_non_keys() {
-        // ADR-0034 / ADR-0035: the `{meta: key …}` long form is canonicalised
+        // The `{meta: key …}` long form is canonicalised
         // for the React AST too, while a non-key directive (`{title}`) is left
         // alone.
         let (json, _warnings, _transposed_key, _directives) =
@@ -1396,7 +1388,7 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_capo_subtracts_from_transpose_offset_for_react_walker() {
-        // ADR-0023: the wasm parse entry point folds {capo: N} into
+        // The wasm parse entry point folds {capo: N} into
         // the transpose offset it hands to `transpose(song, …)`, so
         // the React JSX walker sees pre-transposed chord names that
         // already incorporate the capo's `-N` shift. A song with no
@@ -1427,7 +1419,7 @@ mod tests {
 
     #[test]
     fn test_parse_chordpro_capo_cancels_cli_transpose() {
-        // ADR-0023 composition rule: file + cli - capo. With
+        // Composition rule: file + cli - capo. With
         // cli=+2 and {capo: 2} the displayed offset is 0, so a
         // `[C]` chord stays as `[C]` — capo cancels the CLI
         // transpose for display purposes (the guitarist plays the
@@ -1475,8 +1467,7 @@ mod tests {
         // capo as a no-op for the displayed offset. The wasm parse
         // path mirrors the Rust renderers by calling
         // `validate_capo` so the React preview surfaces the same
-        // warning instead of going silent
-        // (`.claude/rules/renderer-parity.md` §Validation Parity).
+        // warning instead of going silent.
         let opts = RenderOptions {
             transpose: 0,
             config: None,
@@ -2102,7 +2093,7 @@ mod tests {
         assert!(result.is_none());
     }
 
-    // ---- directive catalog exports (ADR-0028) ----
+    // ---- directive catalog exports ----
 
     // If this set changes, update the DirectiveInfo `valueKind` union in
     // crates/wasm/src/bindings.rs (DIRECTIVE_CATALOG_TS) and
@@ -2455,9 +2446,8 @@ mod wasm_tests {
             "output must be a JS string (got {output:?})"
         );
         // `is_string()` is already asserted, so the `as_string()` conversion
-        // is infallible — use `unwrap` instead of `unwrap_or_default` per
-        // `.claude/rules/code-style.md` (reserve fallbacks for genuinely
-        // unknown states).
+        // is infallible — use `unwrap` instead of `unwrap_or_default`
+        // (fallbacks are reserved for genuinely unknown states).
         assert!(
             output.as_string().unwrap().contains("Test"),
             "output must contain the rendered title"
@@ -2668,7 +2658,7 @@ mod wasm_tests {
     /// Sentinel: a `{transpose: 100}` directive in the source combined
     /// with a CLI `transpose: 100` exceeds the `i8` range (200 > 127),
     /// so `chordsketch_chordpro::transpose::effective_transpose`
-    /// (the helper introduced in ADR-0023 that composes `file + cli
+    /// (the helper that composes `file + cli
     /// - capo`) saturates and the renderer pushes a
     /// `transpose offset ... clamped to ...` warning. See the
     /// per-directive `{transpose}` handler in

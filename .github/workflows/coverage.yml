@@ -66,7 +66,7 @@ jobs:
       - name: Collect coverage
         # `chordsketch-desktop` is excluded (Tauri scaffold, covered by
         # `desktop-smoke` in ci.yml). See the matching exclusions in
-        # ci.yml and .claude/rules/ci-parallelization.md.
+        # ci.yml.
         #
         # `--features chordsketch-render-ireal/png,chordsketch-render-ireal/pdf`
         # turns on the PNG rasteriser (#2064) and PDF converter

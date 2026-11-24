@@ -1,7 +1,7 @@
-// Cross-language guard for `.claude/rules/chord-diagram-coverage.md`.
+// Cross-language guard: every chord type the editor can write has a diagram.
 //
 // The editor's producible canonical suffix set (`enumerateEditorSuffixes()`,
-// derived from the structured triad × seventh × tension controls — ADR-0037)
+// derived from the structured triad × seventh × tension controls)
 // and the Rust chord-diagram coverage test (`PALETTE_SUFFIXES` in
 // `crates/chordpro/src/voicings.rs`) are a documented sister pair: the Rust
 // test proves every suffix in its list yields a playable diagram on every
@@ -62,8 +62,8 @@ describe('chord-type palette diagram coverage', () => {
       missing,
       `These editor-producible suffixes are not covered by PALETTE_SUFFIXES in ` +
         `crates/chordpro/src/voicings.rs. Add them there (and confirm the ` +
-        `chord-diagram coverage test passes) per ` +
-        `.claude/rules/chord-diagram-coverage.md: ${JSON.stringify(missing)}`,
+        `chord-diagram coverage test passes): ` +
+        `${JSON.stringify(missing)}`,
     ).toEqual([]);
   });
 

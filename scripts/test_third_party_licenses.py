@@ -370,18 +370,16 @@ class CargoAboutVersionTest(unittest.TestCase):
 
     def test_every_documented_install_command_names_the_pinned_version(self):
         pinned = tpl.pinned_cargo_about()
-        # The ADRs are left out: they are a record and may quote an old command.
         documents = [
-            tpl.ROOT / "CLAUDE.md",
+            tpl.ROOT / "README.md",
             tpl.ROOT / "CONTRIBUTING.md",
-            *(f for f in sorted((tpl.ROOT / "docs").rglob("*.md")) if "adr" not in f.relative_to(tpl.ROOT).parts),
+            *sorted((tpl.ROOT / "docs").rglob("*.md")),
         ]
         commands = [
             (str(f.relative_to(tpl.ROOT)), found.group(0))
             for f in documents
             for found in re.finditer(r"cargo install cargo-about[^`\n]*", f.read_text(encoding="utf-8"))
         ]
-        self.assertIn(("CLAUDE.md", f"cargo install cargo-about --locked --version {pinned}"), commands)
         self.assertEqual([c for c in commands if not c[1].endswith(f"--version {pinned}")], [])
 
 

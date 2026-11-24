@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 /**
- * The chrome and layout vocabulary this package ships as CSS (ADR-0061).
- * `design-system/DESIGN.md` §4.1 / §6 / §9 name these canonical, and §11
+ * The chrome and layout vocabulary this package ships as CSS.
+ * The design system names these classes canonical and
  * makes removing or renaming one a MAJOR change — so the published
  * stylesheet is asserted to carry each of them rather than whatever the
  * generator's family matchers happened to find in the reference pages.

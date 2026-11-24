@@ -6,9 +6,9 @@ Rust directive catalog.
 any parser runs, and that decision needs the list of directives that
 are legal with no value — the names a bare `{name}` occurrence can be.
 That list belongs to the catalog in
-`crates/chordpro/src/directive_catalog.rs` (ADR-0028), which is the
+`crates/chordpro/src/directive_catalog.rs`, which is the
 single source of truth for directive knowledge; a hand-maintained
-TypeScript copy is exactly the drift ADR-0028 was written to remove.
+TypeScript copy is exactly the drift the catalog exists to remove.
 
 This script is the one-way bridge: it reads
 `BARE_DIRECTIVE_NAMES` out of the catalog and writes the TypeScript

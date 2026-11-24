@@ -21,7 +21,7 @@ a { color: inherit; }
 .note { color: var(--text-secondary); font-size: var(--fs-14); margin: 0 0 var(--sp-4); max-width: 64ch; }
 .note code, code.inline { font-family: var(--font-mono); font-size: var(--fs-13); background: var(--ink-100); padding: 1px var(--sp-1); border-radius: var(--r-1); }
 
-/* ----- The primitive under preview (DESIGN.md §4.1) ----- */
+/* ----- The primitive under preview ----- */
 .stack { display: flex; flex-direction: column; gap: var(--stack-gap, var(--sp-4)); }
 .stack > * { margin-block: 0; }
 .stack-1  { --stack-gap: var(--sp-1); }
@@ -50,7 +50,7 @@ a { color: inherit; }
 <body>
 <main class="container">
   <a href="index.html" class="preview-back">← Components</a>
-  <p class="eyebrow">Layout · §4.1</p>
+  <p class="eyebrow">Layout</p>
   <h1 class="preview-h1">Stack</h1>
   <p class="preview-deck">The vertical-flow primitive. Spacing between stacked elements is owned by the container via <code class="inline">--stack-gap</code>, never by per-child <code class="inline">margin-bottom</code>. Numbered modifiers map 1:1 onto the <code class="inline">--sp-*</code> scale; mixed rhythm is expressed by nesting.</p>
 

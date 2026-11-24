@@ -64,8 +64,7 @@ npm run dev
 ## Making Changes (Maintainers)
 
 1. **An issue is optional.** Open one when the change is worth discussing
-   before it is written; a self-contained fix can go straight to a PR
-   ([ADR-0043](docs/adr/0043-issue-not-required-for-prs.md)).
+   before it is written; a self-contained fix can go straight to a PR.
 2. **Create a branch** named `issue-{number}-{short-description}`
    (e.g., `issue-42-fix-transpose`) when the change has an issue, or
    `{type}/{short-description}` (e.g., `fix/transpose-sharps`) when it
@@ -84,7 +83,7 @@ npm run dev
 6. **Click "Merge when ready".** This adds
    the PR to the merge queue, which runs the required checks on your
    change combined with the current `main` and squash-merges it when
-   they pass ([ADR-0079](docs/adr/0079-merges-go-through-the-queue-which-runs-the-publish-checks.md)).
+   they pass.
    Your branch does not have to be up to date with `main`; rebase
    (`git rebase origin/main && git push --force-with-lease`) only to
    resolve a conflict. If the queue removes the PR, the failing

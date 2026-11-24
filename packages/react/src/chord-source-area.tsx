@@ -156,7 +156,7 @@ export interface ChordSourceAreaProps extends Omit<HTMLAttributes<HTMLDivElement
  *
  * The chord glyph in the source editor stays in the editor's
  * monospace stack — the Roboto / 700 / 16 px treatment from
- * DESIGN.md §3.2 applies to the rendered chord-sheet output, not
+ * design system applies to the rendered chord-sheet output, not
  * to the source pane. Directive values (the text after `:`) are
  * intentionally unstyled here so they inherit `--cs-text-primary`,
  * matching the plain "Oh! Susanna" / "Stephen Foster" copy in the
@@ -191,8 +191,7 @@ const designSystemHighlight = HighlightStyle.define([
   // unstyled — the reference treats values as plain copy.
   // Curly braces and the directive colon. 14px copy inside a
   // contenteditable, which axe does not colour-check, so the 3.53:1
-  // tertiary tone sat below SC 1.4.3 here without failing a route
-  // (ADR-0054).
+  // tertiary tone sat below SC 1.4.3 here without failing a route.
   {
     tag: chordProTagTable.punctuation,
     color: 'var(--cs-text-secondary, #67646D)',
@@ -235,7 +234,7 @@ const designSystemTheme = EditorView.theme(
       backgroundColor: 'var(--cs-surface, #FFFFFF)',
       borderRight: '1px solid var(--cs-border, #E8E6EA)',
       // Line numbers are 13px text on `--cs-surface`, so they need the
-      // 4.5:1 tone rather than the 3.53:1 tertiary one (ADR-0054).
+      // 4.5:1 tone rather than the 3.53:1 tertiary one.
       color: 'var(--cs-text-secondary, #67646D)',
       fontFamily:
         '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
@@ -424,7 +423,7 @@ export const ChordSourceArea = forwardRef<ChordSourceAreaHandle, ChordSourceArea
         designSystemTheme,
         // ChordPro directive + directive-value completion, sourced from the
         // shared `@chordsketch/wasm` catalog so the web editor offers the
-        // same set as the LSP / VS Code (ADR-0028).
+        // same set as the LSP / VS Code.
         autocompletion({ override: [chordProCompletionSource()] }),
         keymap.of([
           ...completionKeymap,

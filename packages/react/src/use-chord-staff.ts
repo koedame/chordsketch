@@ -77,8 +77,7 @@ export interface ChordStaffResult {
  *
  * The musical-theory source of truth (which tones a chord contains and how
  * they are spelled) lives in the core library, not here — this hook only
- * fetches the precomputed placement (see
- * `.claude/rules/playground-is-a-sample.md`).
+ * fetches the precomputed placement.
  *
  * ```ts
  * const { notes, loading } = useChordStaff('Cmaj9');

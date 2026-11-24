@@ -6,8 +6,7 @@
 //! one-line description. The catalog exists so editor tooling — the LSP
 //! completion provider (VS Code etc.) and, via the wasm bindings, the web
 //! CodeMirror editor and the playground "+ Directive" picker — all read
-//! ONE list instead of each maintaining its own drifting copy (see
-//! `.claude/rules/fix-propagation.md`, ADR-0028).
+//! ONE list instead of each maintaining its own drifting copy.
 //!
 //! The crate is zero-dependency, so the catalog is plain `&'static` data;
 //! serialization to JS happens at the wasm boundary, not here.
@@ -46,7 +45,7 @@ pub struct DirectiveInfo {
 /// `charango` / `piano` are the instrument-name extension; `top` / `bottom` /
 /// `right` / `below` are the section-position keywords; `section` is the
 /// default end-of-song diagram grid mode; `inline` / `hover` are the
-/// chordsketch surfacing-mode extension (ADR-0027). The parser also accepts
+/// chordsketch surfacing-mode extension. The parser also accepts
 /// the aliases `uke` / `keyboard` / `keys`, but completion offers the
 /// canonical forms only.
 const DIAGRAMS_VALUES: &[&str] = &[

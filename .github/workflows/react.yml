@@ -3,8 +3,7 @@ name: "@chordsketch/react"
 # Lint, typecheck, build, and smoke-test the @chordsketch/react
 # package on every PR that touches it, plus pushes to main for
 # post-merge verification. Publishing is not handled here: the
-# package publishes with every release, from `publish-registries.yml`
-# (ADR-0073).
+# package publishes with every release, from `publish-registries.yml`.
 
 on:
   push:
@@ -59,8 +58,8 @@ jobs:
       # The React package's tsconfig paths map for the wasm bundle
       # points at the in-tree build under `packages/npm/web/` so
       # tsc can see the new parseChordpro / parseChordproWithOptions
-      # exports the AST -> JSX walker depends on (#2475 /
-      # ADR-0017). The published @chordsketch/wasm@0.3.x on npm
+      # exports the AST -> JSX walker depends on (#2475).
+      # The published @chordsketch/wasm@0.3.x on npm
       # does not yet ship those exports, so the in-tree build
       # must produce `packages/npm/web/chordsketch_wasm.d.ts`
       # before tsc runs.

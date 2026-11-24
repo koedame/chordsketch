@@ -5,8 +5,9 @@
     scripts/release.py 0.7.0 --check   # preflight only; publishes nothing
 
 Run it from an up-to-date checkout of `main`, after the `Release vX.Y.Z`
-commit (docs/releasing.md steps 1-3) is on `main`. It replaces the hand-run
-steps 4-7. It reads the release from a temporary worktree of the
+commit (the version bump, with the Swift XCFramework pinned on its branch)
+is on `main`. It replaces tagging, waiting for the release workflow,
+publishing to crates.io and npm, and the channel rollup by hand. It reads the release from a temporary worktree of the
 release commit — the tagged commit once the tags exist, `origin/main`
 before — so the local checkout's branch and uncommitted changes play no
 part, and a release tagged before this script existed can still be
@@ -15,13 +16,13 @@ finished with it.
 The failure it exists to prevent is a half-published release. A release
 touches ~30 registries; most are published by CI from the tag push, and
 crates.io and npm by `.github/workflows/publish-registries.yml`, which this
-script dispatches once the others have converged (ADR-0069). Every one of
+script dispatches once the others have converged. Every one of
 them can refuse the release for a reason that was knowable beforehand — an
 expired token, a missing trusted publisher, a build that does not package —
 and once the tag is out there is no undoing the channels that already
 accepted it.
 So the script asks every question it can answer without publishing first,
-and only if every answer is yes does it push the tag (ADR-0068):
+and only if every answer is yes does it push the tag:
 
   * the release commit is at the requested version, with a dated CHANGELOG
     heading and consistent manifests;
@@ -513,8 +514,7 @@ def preflight_swift(state: Survey, findings: Findings) -> None:
 
     `swift.yml` uploads that zip to the Release after the tag, and the tag's
     `Package.swift` already names its checksum, so a zip that is gone or built
-    from other source cannot be fixed by re-running anything after the tag
-    (ADR-0080).
+    from other source cannot be fixed by re-running anything after the tag.
     """
     section("Swift XCFramework pinned in Package.swift")
     try:
@@ -583,7 +583,7 @@ def preflight_stalled_ci(state: Survey, plan: Plan, findings: Findings) -> None:
     for cid in plan.pending_ci:
         findings.problems.append(
             f"{cid} does not serve {state.version} ({state.ci_detail[cid]}) and no tag run is in progress; "
-            f"re-run that channel first (docs/releasing.md step 7)"
+            f"re-run that channel's workflow for the tag first (`gh workflow run <workflow> -f tag=v{state.version}`)"
         )
 
 
@@ -673,7 +673,7 @@ def gate_registry_publish(state: Survey, plan: Plan) -> None:
         raise ReleaseError(
             "not publishing to crates.io or npm while CI-published channels are behind:\n  - "
             + "\n  - ".join(problems)
-            + "\nRe-run the failed channel (docs/releasing.md step 7), then re-run this script; it resumes here."
+            + "\nRe-run the failed channel's workflow for the tag (`gh workflow run <workflow> -f tag=<tag>`), then re-run this script; it resumes here."
         )
     print("    every CI-published channel serves the version", flush=True)
 
@@ -799,7 +799,7 @@ def release(args: argparse.Namespace, login: str, commit: str, tree: Path, remot
         publish_registries(state, login)
     verify_release(state, login)
 
-    print(f"\nv{args.version} is released. winget and MacPorts are still manual (docs/releasing.md, Post-Release).")
+    print(f"\nv{args.version} is released. winget and MacPorts are still manual: each needs a pull request to its own repository.")
     return 0
 
 

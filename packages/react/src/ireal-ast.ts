@@ -7,11 +7,9 @@
 //
 // Sister-site: `packages/ui-irealb-editor/src/ast.ts` carries the same
 // shapes for the framework-agnostic editor used by the playground and
-// the desktop app. The two declarations were carved out independently
-// per [ADR-0020](../../../docs/adr/0020-ireal-pro-react-surface.md);
+// the desktop app. The two declarations were carved out independently;
 // they describe the same wasm output, so changes to one *shape* MUST
-// land in the other in the same PR. The fix-propagation rule
-// (`.claude/rules/fix-propagation.md`) applies here as it would to any
+// land in the other in the same PR, as with any
 // renderer sister-site pair.
 //
 // **Helper-function parity.** The two files share AST shapes AND now
@@ -27,7 +25,7 @@
 //     `ui-irealb-editor/src/ast.ts`; the React popover surface uses
 //     these to label the symbol picker and reason about the D.C. /
 //     D.S. family without hand-coding the ordinal expansion.
-// `.claude/rules/fix-propagation.md` applies: any change to either
+// The two copies are a sister-site pair: any change to either
 // helper here MUST land in `ui-irealb-editor/src/ast.ts` in the same
 // PR and vice versa.
 

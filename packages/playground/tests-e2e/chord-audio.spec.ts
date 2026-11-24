@@ -4,8 +4,8 @@ import { expect, test } from '@playwright/test';
 // the preview into audio mode, where every rendered chord becomes a
 // play button (`.chord--audio`, backed by the `useChordAudio` Web Audio
 // hook in `@chordsketch/react`). The in-package vitest suites stub Web
-// Audio and the wasm `chordPitches` export, so — per
-// `.claude/rules/playground-smoke.md` — only a real-browser smoke
+// Audio and the wasm `chordPitches` export, so
+// only a real-browser smoke
 // proves the toggle wires the audio mode into the deployed bundle's
 // preview.
 //

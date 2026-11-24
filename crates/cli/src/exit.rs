@@ -6,8 +6,9 @@
 //! code on the built binary.
 //!
 //! The values above 2 are the BSD `sysexits.h` ones
-//! (<https://man.freebsd.org/cgi/man.cgi?query=sysexits&sektion=3>); see
-//! `docs/adr/0098-cli-exit-codes-follow-sysexits.md` for why.
+//! (<https://man.freebsd.org/cgi/man.cgi?query=sysexits&sektion=3>), the
+//! one published list of exit codes for "what kind of failure was it", so a
+//! script can tell the kinds apart without matching on stderr text.
 
 use std::process::ExitCode;
 

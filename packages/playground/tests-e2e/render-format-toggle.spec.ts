@@ -4,7 +4,7 @@
 // Pre-#2475 this spec drove the Format `<select>` and asserted a
 // monotonic cache-bust marker inside the iframe `srcdoc`
 // (#2421 / PR #2322 / #2421). After the AST → JSX cut-over
-// (ADR-0017, this PR) the html branch renders inline through
+// (this PR) the html branch renders inline through
 // `<ChordSheet format="html">`'s walker — no iframe, no
 // `srcdoc`, no cache-bust marker. The invariant that survived
 // the architecture change is "transpose changes the rendered

@@ -30,7 +30,7 @@ import {
 // 30/32/34/36/38 and each unit step is half a line gap.
 //
 // The clef, noteheads, and accidentals are real Bravura SMuFL outlines (see
-// `./bravura-glyphs` / ADR-0014) mapped from font units into this staff via
+// `./bravura-glyphs`) mapped from font units into this staff via
 // `smuflTransform`, scaled so one staff space spans {@link LINE_GAP} units.
 
 const LETTER_ORDER = 'CDEFGAB';

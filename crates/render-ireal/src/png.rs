@@ -56,8 +56,7 @@ impl PngOptions {
     /// `dpi` is recorded verbatim — this constructor performs no
     /// range validation. Out-of-range values surface as
     /// [`PngError::DpiOutOfRange`] from [`render_png`] so the rule
-    /// that "validation lives at the public boundary" (per
-    /// `.claude/rules/defensive-inputs.md`) has a single
+    /// that "validation lives at the public boundary" has a single
     /// implementation site at the rendering boundary rather than
     /// duplicated copies on the constructor and the renderer.
     ///

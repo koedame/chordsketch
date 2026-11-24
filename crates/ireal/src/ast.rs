@@ -8,8 +8,6 @@
 //! evolve without disturbing call sites once this scaffold is in
 //! place.
 //!
-//! See `ARCHITECTURE.md` for the field-level design rationale.
-//!
 //! # Public-field mutation contract
 //!
 //! Every struct in this module exposes its fields as `pub`, deliberately,
@@ -20,8 +18,7 @@
 //! field mutation bypasses those checks**. Downstream consumers
 //! (renderer in #2057, URL writer in #2052) are expected to treat
 //! ASTs constructed by anything other than a documented constructor /
-//! parser as untrusted and re-validate at their own boundary, per the
-//! "validate at the public boundary" rule in `defensive-inputs.md`.
+//! parser as untrusted and re-validate at their own boundary.
 //! In particular: [`TimeSignature::numerator`] / [`TimeSignature::denominator`],
 //! [`IrealSong::transpose`], [`BeatPosition::subdivision`], and
 //! [`ChordRoot::note`] all carry doc-comment ranges that the type system
@@ -56,8 +53,8 @@ pub struct IrealSong {
     /// Concert-pitch key the chart is written in.
     pub key_signature: KeySignature,
     /// Time signature in force at the start of the chart. Time
-    /// changes inside the chart are not yet modelled — see
-    /// `ARCHITECTURE.md` §"Deferred AST scope" for the rationale.
+    /// changes inside the chart are not yet modelled: whether they
+    /// become per-section or per-bar overrides is still undecided.
     pub time_signature: TimeSignature,
     /// Beats-per-minute tempo. Optional because many shared charts
     /// leave tempo to the player.
@@ -140,7 +137,7 @@ impl Section {
 ///
 /// Earlier revisions also carried `Chorus`, `Bridge`, and `Outro`
 /// variants but those tokens are not emitted by the iReal Pro app
-/// (see `.claude/rules/`-tracked issue #2450). They were removed
+/// (issue #2450). They were removed
 /// to align the type with the spec; consumers that previously held
 /// `SectionLabel::Chorus` etc. now receive `Custom("Chorus")` /
 /// `Custom("Bridge")` from the convert crate (`to_ireal.rs`).
@@ -193,8 +190,7 @@ pub struct Bar {
     /// D.S. / Fine). At most one symbol per bar is the iReal Pro
     /// convention; if a future format extension allows multiple
     /// symbols per bar, this becomes `Vec<MusicalSymbol>` and call
-    /// sites that match on `Option` will need to update — flagged
-    /// in `ARCHITECTURE.md`.
+    /// sites that match on `Option` will need to update.
     pub symbol: Option<MusicalSymbol>,
     /// `true` when this bar is iReal Pro's "repeat previous measure"
     /// marker (URL tokens `Kcl` and `x`). The bar carries no chords
@@ -338,8 +334,8 @@ pub enum StaffText {
     /// ASTs may carry out-of-range values: the
     /// [`StaffText::raised`] constructor clamps, the JSON
     /// deserializer rejects with `JsonError`, and the URL / JSON
-    /// serializers re-clamp on emit — all per the "validate at the
-    /// public boundary" rule in `defensive-inputs.md`. The
+    /// serializers re-clamp on emit — every public boundary validates the
+    /// range itself. The
     /// asymmetry between "clamp on construction" and "reject on
     /// deserialise" is deliberate: a JSON document is a trust
     /// boundary (catch the producer bug early) while a Rust
@@ -970,8 +966,7 @@ impl MusicalSymbol {
     /// Used by [`crate::serialize`], `chordsketch_render_ireal`,
     /// and `chordsketch-convert` so the four sister sites (URL
     /// serializer, SVG renderer, PDF renderer, ChordPro converter)
-    /// share one canonical spelling table per
-    /// [`renderer-parity.md`](https://github.com/koedame/chordsketch/blob/main/.claude/rules/renderer-parity.md).
+    /// share one canonical spelling table.
     #[must_use]
     pub fn canonical_text(&self) -> Option<String> {
         match self {

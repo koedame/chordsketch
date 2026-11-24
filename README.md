@@ -82,8 +82,7 @@ output, CLI flags, binding surfaces, and the minimum supported Rust
 version can all change in a `0.x` bump, without a deprecation cycle.
 Breaking changes are named in the [CHANGELOG](CHANGELOG.md), and larger
 ones get a guide under [`docs/migration/`](docs/migration/). Pin an exact
-version if you depend on this crate today. The full policy is in
-[Versioning and release process](docs/releasing.md#pre-10-breaking-changes-are-expected).
+version if you depend on this crate today.
 
 ## Try it Online
 
@@ -94,8 +93,7 @@ ChordPro text editor and the iReal Pro bar-grid GUI editor at runtime.
 The same engine embedded through each UI package, one editable page per
 binding: [Vue](https://koedame.github.io/chordsketch/vue/) and
 [Svelte](https://koedame.github.io/chordsketch/svelte/). The ChordPro
-playground is the `@chordsketch/react` surface
-([ADR-0053](docs/adr/0053-framework-demos-live-in-the-playground.md)).
+playground is the `@chordsketch/react` surface.
 
 ## Documentation
 
@@ -104,7 +102,7 @@ embedding recipes for `@chordsketch/react`, per-component API
 reference, and cross-binding render / transpose guides. The
 canonical Markdown sources live under
 [`docs/sdk/`](docs/sdk/README.md) and the docs site renders them
-in-place (see [ADR-0021](docs/adr/0021-docs-site-co-located-with-playground.md)).
+in-place.
 
 ## Editor Integration
 
@@ -365,9 +363,7 @@ distribution for nothing, but the glibc floor still applies: it runs on
 RHEL 10 (glibc 2.39) and not on RHEL 8 (2.28) or RHEL 9 (2.34). RHEL 8
 and 9 therefore have no desktop bundle in any format. The CLI is the
 option there — it has no such constraint, running on glibc 2.18+ with
-no system dependencies
-([ADR-0056](https://github.com/koedame/chordsketch/blob/main/docs/adr/0056-desktop-bundles-target-ubuntu-2204.md),
-[ADR-0057](https://github.com/koedame/chordsketch/blob/main/docs/adr/0057-desktop-rpm-stays-a-webkit2gtk-41-channel.md)).
+no system dependencies.
 
 The libraries the `.AppImage` carries (webkit2gtk, GTK, GLib and what
 they need, mostly LGPL) are listed with their versions, source packages
@@ -585,9 +581,7 @@ reference and additional examples.
 - [Unified SDK guide (all bindings, task-oriented)](docs/sdk/README.md)
 - [Editor integration guide](docs/editors.md)
 - [Configuration guide](docs/configuration.md)
-- [Versioning and release process](docs/releasing.md)
 - [GitHub Action reference](docs/github-action.md)
-- [Architecture decision records](docs/adr/README.md)
 - [SECURITY.md](SECURITY.md)
 - [TRADEMARK.md](TRADEMARK.md)
 - [CHANGELOG.md](CHANGELOG.md)
@@ -655,5 +649,4 @@ Third-party dependency notices are in [NOTICE](NOTICE) and
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). They ship with the CLI
 archives, container images, the desktop app, the VS Code extension, the
 wasm and napi npm packages, and the PyPI, RubyGems, Maven, and Swift
-packages — see
-[ADR-0085](docs/adr/0085-binaries-ship-a-generated-third-party-license-notice.md).
+packages.

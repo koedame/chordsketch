@@ -8,9 +8,6 @@
 //! `*X*` closing-`*` sentinel), so the serializer omits them too.
 //! AST round-trip is the load-bearing property; URL byte-level
 //! round-trip is not.
-//!
-//! See `crates/ireal/FORMAT.md` for the full grammar and the list
-//! of features the parser preserves vs drops.
 
 use crate::ast::{
     Accidental, Bar, BarChordKind, BarLine, BeatGrouping, Chord, ChordQuality, ChordRoot,
@@ -23,8 +20,7 @@ use crate::parser::MUSIC_PREFIX;
 ///
 /// The output is the URL form iReal Pro accepts on import. The
 /// serializer is the inverse of [`crate::parse`] over the subset
-/// of the format the AST models — see `FORMAT.md` for the full
-/// grammar.
+/// of the format the AST models.
 ///
 /// # Example
 ///
@@ -541,8 +537,7 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
         // silently dropped a `bar.symbol` set on a bar whose
         // staff text looked like (but did not exact-match) a
         // macro phrase (e.g. symbol = DaCapo(AlCoda) +
-        // StaffText::Text("D.C. on Cue")). Sister-site discipline
-        // per `.claude/rules/fix-propagation.md`. RepeatCount
+        // StaffText::Text("D.C. on Cue")). RepeatCount
         // entries are skipped — they encode `<Nx>` and can never
         // collide with a macro phrase.
         let text_carries_macro = |b: &Bar| {
@@ -699,8 +694,7 @@ fn serialize_chord_chart(song: &IrealSong) -> String {
             // each entry through the appropriate encoder
             // (`<*XYtext>`, `<Nx>`, or plain `<text>`) with the
             // same `>`-stripping protection the `repeat_previous`
-            // branch above relies on — sister-site parity per
-            // `.claude/rules/fix-propagation.md`.
+            // branch above relies on.
             emit_staff_text(&mut chart, st);
         }
 
@@ -794,7 +788,7 @@ fn serialize_symbol(out: &mut String, symbol: MusicalSymbol) {
         // The D.C. / D.S. / Fine / Break family round-trips through
         // `canonical_text` — the same table powers the renderer's
         // text-directive paint and the convert-crate's ChordPro
-        // label, per `.claude/rules/renderer-parity.md`.
+        // label.
         sym @ (MusicalSymbol::DaCapo(_)
         | MusicalSymbol::DalSegno(_)
         | MusicalSymbol::Fine

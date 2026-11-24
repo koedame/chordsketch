@@ -556,7 +556,7 @@ function PlaygroundApp(): JSX.Element {
   const editorRef = useRef<ChordSourceAreaHandle | null>(null);
 
   // Directive picker options, sourced from the shared @chordsketch/wasm
-  // catalog (ADR-0028) so the list stays complete and never drifts from
+  // catalog so the list stays complete and never drifts from
   // what the parser, editor completion, and LSP recognise.
   const [directiveCatalog, setDirectiveCatalog] = useState<
     DirectiveCatalogEntry[]
@@ -592,8 +592,8 @@ function PlaygroundApp(): JSX.Element {
 
   // Caret-driven chord-editor footer (#2644). The hook owns the
   // edit / insert / move / delete source mutations and the preview's
-  // controlled selection — the playground is a thin consumer (see
-  // `.claude/rules/playground-is-a-sample.md`).
+  // controlled selection — the playground is a thin consumer: it is a
+  // sample of the libraries, so logic belongs in them, not here.
   const chordEditor = useChordEditor({
     source,
     onSourceChange: handleSourceChange,

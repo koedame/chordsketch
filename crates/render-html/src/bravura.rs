@@ -4,11 +4,11 @@
 //! These are real font outlines (treble clef, sharp, flat), not the
 //! simplified caricatures the key-signature glyph used previously — the
 //! caricature clef read as a distorted squiggle at chip size. The
-//! path-baked-not-font approach is the one [ADR-0014] established for the
-//! iReal renderer: ship the outlines as `<path d="…">` so no ~500 KB music
+//! path-baked-not-font approach is the one the iReal renderer already
+//! uses: ship the outlines as `<path d="…">` so no ~500 KB music
 //! font has to be loaded, yet the glyph is a true SMuFL shape.
 //!
-//! Sister sites (keep in lockstep — `.claude/rules/fix-propagation.md`):
+//! Sister sites (keep in lockstep):
 //!   - `packages/react/src/bravura-glyphs.ts` — same gClef / sharp / flat for
 //!     the React `<KeySignatureGlyph>` (renderer-parity with this crate's
 //!     HTML output).
@@ -23,9 +23,7 @@
 //!
 //! Attribution: the outlines are derivative works of the Bravura font,
 //! redistributed under SIL OFL-1.1 — see the project-root `NOTICE`,
-//! `crates/render-html/LICENSE-OFL.txt`, and ADR-0014.
-//!
-//! [ADR-0014]: ../../../docs/adr/0014-bravura-glyphs-as-svg-paths.md
+//! and `crates/render-html/LICENSE-OFL.txt`.
 
 use std::fmt::Write;
 

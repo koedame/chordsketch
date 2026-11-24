@@ -3,7 +3,7 @@
  * (a played chord / a pressed chord diagram) gets visual feedback. The
  * class is added imperatively — the chordpro-jsx walker is stateless per
  * chord, and `<ChordDiagram>` reuses the same mechanism so the two paths
- * cannot drift (.claude/rules/fix-propagation.md). The class is removed
+ * cannot drift. The class is removed
  * by the caller on `animationend`; a forced reflow between remove and
  * re-add restarts the CSS animation when the same target is activated
  * again before the previous pulse finishes.

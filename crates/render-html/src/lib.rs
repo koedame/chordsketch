@@ -223,7 +223,7 @@ fn render_song_body_into(
             .with_song_overrides(&song_overrides, warnings);
         &song_config
     };
-    // ADR-0023: capo subtracts from the effective transpose so the
+    // Capo subtracts from the effective transpose so the
     // displayed chord names match the shapes a guitarist holds at fret N.
     // The base config transpose is already folded into cli_transpose by the caller.
     let mut transpose = SongTranspose::new(song, cli_transpose, warnings);
@@ -277,7 +277,7 @@ fn render_song_body_into(
     );
 
     // Diagram orientation (#2572). Horizontal mode is reader-view only
-    // per ADR-0026; the player-view alternative is not exposed as a
+    // (high pitch on top); the player-view alternative is not exposed as a
     // config knob. Sister-site: `crates/render-pdf/src/lib.rs` reads the
     // same key. Surface a warning when the user typo'd the value (non-
     // empty raw string that doesn't parse to a known variant) so a
@@ -387,9 +387,8 @@ fn render_song_body_into(
                         // stacked time-signature digits) mirror the
                         // React JSX walker's `<KeySignatureGlyph> /
                         // <MetronomeGlyph> / <TimeSignatureGlyph>`
-                        // output per `.claude/rules/renderer-
-                        // parity.md` §"Sanitizer Parity (React JSX
-                        // surface)". The `{time}` arm intentionally
+                        // output so the two HTML surfaces stay in
+                        // step. The `{time}` arm intentionally
                         // omits the textual `meta-inline__value`
                         // because the stacked-digit glyph IS the
                         // value display — sister-site to the React
@@ -412,12 +411,11 @@ fn render_song_body_into(
                                 // the authored value when the directive
                                 // value doesn't start with a note letter.
                                 // Sister-site to render-text / render-pdf
-                                // / the React JSX walker per
-                                // `.claude/rules/renderer-parity.md`;
+                                // / the React JSX walker;
                                 // closes #2522. The key-signature SVG
                                 // glyph follows the transposed value too
                                 // so the staff matches.
-                                // Render the canonical key (ADR-0034): the
+                                // Render the canonical key: the
                                 // editor accepts lenient spellings but the
                                 // marker always shows `Gm` / `G` / `C dorian`,
                                 // with the song-wide flat/sharp side applied
@@ -1137,7 +1135,7 @@ pub fn render(input: &str) -> String {
 /// The substitution targets the sentinel rather than the literal value so
 /// `.chord-diagrams-grid`'s own `flex-wrap: wrap` is unaffected.
 // Design tokens from `design-system/tokens.css` at the workspace
-// root (see `design-system/DESIGN.md` §2 / §3). The font stacks
+// root. The font stacks
 // fall back to system-ui so the
 // document is readable when the design fonts are not installed; a
 // host that loads Noto Sans JP / Inter / JetBrains Mono / Roboto
@@ -1292,9 +1290,8 @@ fn render_metadata(metadata: &chordsketch_chordpro::ast::Metadata, html: &mut St
     // designed for embedding in third-party consumer stylesheets
     // and shouldn't impose SVG glyph choices on them. The React
     // JSX walker is free to render richer chrome since it ships
-    // alongside `@chordsketch/react`'s own `styles.css`. Sister-
-    // site asymmetry documented per `.claude/rules/renderer-
-    // parity.md` §Required practices.
+    // alongside `@chordsketch/react`'s own `styles.css`. The
+    // asymmetry between the two surfaces is deliberate.
 
     // Tier 1 — attribution.
     if !metadata.artists.is_empty() {
@@ -1756,8 +1753,7 @@ fn render_abc_with_fallback(
 /// Re-export shared image-src validation from `chordsketch-chordpro`.
 ///
 /// The actual allowlist logic lives in `chordsketch_chordpro::image_path::is_safe_image_src`
-/// so every renderer (text, HTML, PDF) applies the same check — see
-/// `.claude/rules/renderer-parity.md` §Validation Parity.
+/// so every renderer (text, HTML, PDF) applies the same check.
 use chordsketch_chordpro::image_path::is_safe_image_src;
 
 /// Render Lilypond notation content using lilypond, falling back to preformatted text.
@@ -2466,7 +2462,7 @@ mod tests {
 
         let song = chordsketch_chordpro::parse("{key: G}\n[G]hi [D]world").unwrap();
 
-        // No transpose: authored key passes through, canonicalised (ADR-0035).
+        // No transpose: authored key passes through, canonicalised.
         let zero = render_song_with_transpose(&song, 0, &Config::defaults());
         assert!(
             zero.contains("<span class=\"meta-inline__value\">G major</span>"),
@@ -2527,8 +2523,8 @@ mod tests {
             "modal qualifier must round-trip; got:\n{modal_out}"
         );
 
-        // Lenient: word `minor` is accepted (ADR-0034) and rendered in the
-        // spelled-out canonical form (ADR-0035), transposed — `Bb minor` at +2
+        // Lenient: word `minor` is accepted and rendered in the
+        // spelled-out canonical form, transposed — `Bb minor` at +2
         // → `C minor`.
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
         let bb_minor_out = render_song_with_transpose(&bb_minor, 2, &Config::defaults());
@@ -2584,7 +2580,7 @@ mod tests {
     #[test]
     fn horizontal_string_order_config_key_is_ignored() {
         // The `diagrams.horizontal_string_order` config key was retired
-        // along with the player-view alternative — see ADR-0026.
+        // along with the player-view alternative.
         // Setting it must not warn (nothing reads it) and the
         // orientation directive itself still takes effect.
         let song = chordsketch_chordpro::parse(
@@ -2634,7 +2630,7 @@ mod tests {
         // produces, but a user can hand-write it. The renderer must
         // emit a diagnostics warning rather than silently showing an
         // empty staff glyph (#2526). The warning embeds the spelled-out
-        // canonical form `Fb minor` (ADR-0035).
+        // canonical form `Fb minor`.
         let song = chordsketch_chordpro::parse("{key: Fbm}\n[Em]Hi").unwrap();
         let result = render_song_with_warnings(&song, 0, &Config::defaults());
         assert!(
@@ -3223,7 +3219,7 @@ mod transpose_tests {
 
     #[test]
     fn test_capo_transposes_displayed_chords() {
-        // ADR-0023: {capo: N} now shifts the displayed chord names
+        // {capo: N} now shifts the displayed chord names
         // by -N semitones in every renderer. This test pins the
         // text-renderer-equivalent guarantee for HTML — a [C] under
         // {key: C}+{capo: 2} renders as B♭, not C.
@@ -3239,7 +3235,7 @@ mod transpose_tests {
 
     #[test]
     fn test_capo_subtracts_in_composition_with_cli_transpose() {
-        // ADR-0023 composition rule: file + cli - capo. cli=+4 and
+        // Composition rule: file + cli - capo. cli=+4 and
         // {capo: 2} compose to effective +2, so [C] renders as D.
         // Sister-site to render-text / render-pdf.
         let input = "{key: C}\n{capo: 2}\n[C]Hi";
@@ -3275,7 +3271,7 @@ mod transpose_tests {
         // `if saturated` branch must surface a warning that cites
         // the capo value alongside the {transpose} value, so a user
         // who stacked the two pathologically large can diagnose the
-        // clamp. Exercises the saturation arm rewired by ADR-0023.
+        // clamp. Exercises the saturation arm of the capo composition.
         let input = "{capo: 5}\n{transpose: 120}\n[C]Hi";
         let song = chordsketch_chordpro::parse(input).unwrap();
         let result = render_song_with_warnings(&song, 20, &Config::defaults());
@@ -3837,7 +3833,7 @@ Verse text\n\
     /// surface as a positional marker in the body, so a reader
     /// can see *where* mid-song key / tempo / meter changes
     /// happen. Sister-site to the text / PDF renderers and the
-    /// React JSX walker (`renderer-parity.md`).
+    /// React JSX walker.
     #[test]
     fn test_inline_meta_marker_for_key() {
         let html = render("[G]first\n{key: D}\n[D]second");
@@ -3974,7 +3970,7 @@ Verse text\n\
     /// `box-sizing`, `min-height` + the 1px border made the button
     /// ~2px shorter, so the pills misaligned (#2624). This renderer
     /// only emits spans, but its embedded `.meta-inline` rule is the
-    /// sister-site to the React stylesheet (`renderer-parity.md`) and
+    /// sister-site to the React stylesheet and
     /// must carry the same declaration so the two HTML surfaces stay
     /// in lockstep.
     #[test]
@@ -4908,7 +4904,7 @@ mod delegate_tests {
         );
     }
 
-    // -- Namespaced dangerous tags (sister-site gap, sanitizer-security.md) --
+    // -- Namespaced dangerous tags (sister-site gap) --
 
     #[test]
     fn test_sanitize_svg_strips_namespaced_script() {

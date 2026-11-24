@@ -4,7 +4,7 @@
 This repository is public, so a pull request from a fork runs workflow code
 on whatever runner `runs-on` names. A self-hosted runner would run that code
 on the maintainer's machine, so no workflow may name one or read the runner
-from a variable that could be set to one (ADR-0096).
+from a variable that could be set to one.
 
 Checked in every `.github/workflows/*.yml` / `*.yaml`:
 
@@ -71,7 +71,7 @@ def main(argv: list[str]) -> int:
         print(
             "\nLinux jobs must use `runs-on: ubuntu-24.04`. The repository is public:"
             "\na fork's pull request could run arbitrary code on a self-hosted runner,"
-            "\nor on whatever a repository variable is later set to (ADR-0096).",
+            "\nor on whatever a repository variable is later set to.",
             file=sys.stderr,
         )
         return 1

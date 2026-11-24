@@ -75,7 +75,7 @@ export {
   type KeySignatureButtonProps,
 } from './key-signature-button';
 
-// AST → JSX walker (#2475 / ADR-0017). Powers `<ChordSheet>`'s
+// AST → JSX walker (#2475). Powers `<ChordSheet>`'s
 // `format="html"` branch — exposed at the package boundary so
 // custom consumers can drive their own React tree off the same
 // AST without the `<ChordSheet>` shell.
@@ -121,7 +121,7 @@ export {
 } from './chord-source-area';
 export { chordProLanguage, chordProTagTable } from './chordpro-language';
 
-// ChordPro directive + directive-value completion (ADR-0028). The
+// ChordPro directive + directive-value completion. The
 // `<ChordSourceArea>` wires `chordProCompletionSource` into CodeMirror
 // automatically; `loadChordproCatalog` is exposed so other consumers
 // (e.g. an "Insert directive" picker) can drive their directive list from
@@ -231,7 +231,7 @@ export {
   type UseChordEditorParams,
 } from './use-chord-editor';
 
-// iReal Pro surface (#2473 / #2505 / #2527 / ADR-0020). Mirrors the
+// iReal Pro surface (#2473 / #2505 / #2527). Mirrors the
 // ChordPro surface in shape: Tier 1 atom (`<IrealBarGrid>`) +
 // Tier 1 preview (`<IrealPreview>`) + Tier 3 composed editor
 // (`<IrealProEditor>`), plus parse / serialise hooks.

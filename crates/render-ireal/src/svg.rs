@@ -6,8 +6,7 @@
 //! helper at `crates/chordpro/src/escape.rs`. The duplication is
 //! intentional — the `[forbid(unsafe_code)] + zero-external-deps`
 //! posture of both AST crates makes a shared crate tempting but
-//! premature for a single helper. Per
-//! `.claude/rules/fix-propagation.md`, any future hardening of
+//! premature for a single helper. Any future hardening of
 //! either copy (e.g. adding XML 1.1 control-char handling, or
 //! switching to `Cow<'_, str>` to skip allocation on no-op input)
 //! MUST be applied to both call sites in the same PR. If the

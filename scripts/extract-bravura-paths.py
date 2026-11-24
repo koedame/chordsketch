@@ -27,12 +27,10 @@ commit-pinned upstream Bravura.otf each invocation; pass
 
 Upgrading Bravura: bump `PINNED_COMMIT` and `EXPECTED_SHA256` together
 to the new release's commit + Bravura.otf hash, re-run each
-`--target`, transcribe the resulting blocks into their sister files,
-and update ADR-0014's "Watch signals" section if the visual output
-shifts noticeably.
+`--target`, and transcribe the resulting blocks into their sister files.
 
-ADR-0014 (`docs/adr/0014-bravura-glyphs-as-svg-paths.md`) records why
-the renderers bake path data instead of bundling the font.
+The renderers bake path data instead of bundling the font, so the output
+needs no font file at render time.
 """
 
 from __future__ import annotations

@@ -26,7 +26,7 @@ export default defineConfig({
         landing: resolve(here, 'index.html'),
         chordpro: resolve(here, 'chordpro/index.html'),
         irealpro: resolve(here, 'irealpro/index.html'),
-        // /docs/ co-located per ADR-0021. CSS-only entry: the
+        // /docs/ is co-located with the playground. CSS-only entry: the
         // deployed HTML is emitted by
         // `scripts/build-docs-static.mjs` after this build runs;
         // Vite owns only `docs.css` so the asset participates in
@@ -73,7 +73,7 @@ export default defineConfig({
       // install the heavy peer.
       '@chordsketch/react/pdf': resolve(here, '../react/src/pdf.ts'),
       '@chordsketch/react': resolve(here, '../react/src/index.ts'),
-      // Wasm-free design-system primitives (#2587, ADR-0029). Same
+      // Wasm-free design-system primitives (#2587). Same
       // alias pattern; longer specifier first (Vite first-match).
       '@chordsketch/react-ui/styles.css': resolve(here, '../react-ui/src/styles.css'),
       '@chordsketch/react-ui': resolve(here, '../react-ui/src/index.ts'),

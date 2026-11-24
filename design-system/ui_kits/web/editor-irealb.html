@@ -7,15 +7,16 @@
 <link rel="stylesheet" href="../../fonts/fonts.css">
 <link rel="stylesheet" href="../../tokens.css">
 <style>
-/* Static design-system mock — narrow exception to ADR-0014.
-   ADR-0014 rejects runtime Bravura loading for the production
-   `chordsketch-render-ireal` crate (offline rendering, CDN-failure-as-
-   render-failure). This file is a static reference mock, not a render
+/* Static design-system mock — a narrow exception to how production
+   draws music glyphs. The production `chordsketch-render-ireal` crate
+   does not load Bravura at runtime (rendering must work offline, and a
+   CDN failure would become a render failure); it inlines the glyph
+   outlines as SVG paths. This file is a static reference mock, not a render
    function: it can require network at view time and is acceptable
    to break when offline. The URL is pinned to bravura-1.392 so the
    asset cannot silently change under us. Do NOT copy this @font-face
    pattern into `@chordsketch/ui-web`, the desktop app, or any
-   production rendering surface — those targets must follow ADR-0014's
+   production rendering surface — those targets must use the
    inline-SVG-paths approach. */
 @font-face {
   font-family: "Bravura Text";

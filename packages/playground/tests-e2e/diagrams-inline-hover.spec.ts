@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-// Inline / hover compact chord diagrams (ADR-0027). The placement is a
+// Inline / hover compact chord diagrams. The placement is a
 // React-JSX-walker feature (`@chordsketch/react`), and its three known
 // regressions are all CSS-layout effects that jsdom unit tests cannot
 // observe:
@@ -14,26 +14,24 @@ import { type Page, expect, test } from '@playwright/test';
 //      modifier defaults to `bottom`) flips `.song` to a flex column and
 //      stretches every body child — including the chips — to full width.
 //   3. `{diagrams: hover}` — the popover diagram floats free of the line
-//      so it must render at the full-size geometry (ADR-0027: "the hover
-//      popover floats free, so it uses the full-size diagram"). A compact
+//      so it must render at the full-size geometry. A compact
 //      SVG, or the absolutely-positioned popover collapsing to the
 //      trigger's ~10px inline width, makes the diagram unreadable (~0px).
 //   4. `{diagrams: inline}` — the compact diagram must be centred on the
-//      lyric position its chord marks (ADR-0051) WITHOUT moving the lyric
+//      lyric position its chord marks WITHOUT moving the lyric
 //      itself. Both halves are pure layout: the centring is a paint-time
 //      transform no unit test can see, and the earlier attempt at this
 //      (cross-axis `align-items: center`, reverted) silently pulled every
 //      narrow `.lyrics` segment away from the segment before it.
 //   5. `{diagrams: inline}` — the leading gutter that clears the first
-//      diagram's overhang (ADR-0051) must shift the WHOLE song, not just
+//      diagram's overhang must shift the WHOLE song, not just
 //      `.line--inline-diagrams` elements. A gutter scoped to individual
 //      lines leaves `.comment` / `.section-label` siblings flush at the
 //      original margin while every lyric line shifts right, producing a
 //      jagged left edge — a layout property only a real browser can see.
 //
-// Per `.claude/rules/playground-smoke.md` these are exactly the "in-process
-// suites are blind to the integration" cases that require a real-browser
-// smoke: each assertion below measures the rendered geometry that the unit
+// These are exactly the cases where in-process suites are blind to the
+// integration and a real-browser smoke is required: each assertion below measures the rendered geometry that the unit
 // tests cannot, and would fail on a silent CSS regression while the DOM
 // node still exists.
 
@@ -51,7 +49,7 @@ async function setSource(page: Page, text: string) {
   await page.keyboard.type(text);
 }
 
-test.describe('inline / hover compact chord diagrams (ADR-0027)', () => {
+test.describe('inline / hover compact chord diagrams', () => {
   test('{diagrams: inline}: chord-less lyric shares the lyric baseline and meta chips stay inline', async ({
     page,
   }) => {
@@ -102,11 +100,11 @@ test.describe('inline / hover compact chord diagrams (ADR-0027)', () => {
   test('{diagrams: inline}: the diagram is centred on its lyric position and the lyric flow is untouched', async ({
     page,
   }) => {
-    // ADR-0051. Two properties, both invisible to jsdom:
+    // Two properties, both invisible to jsdom:
     //
     //   (a) each compact diagram's horizontal centre sits on the lyric
     //       position its chord marks — the start of the chord-bearing
-    //       segment. The pre-ADR-0051 layout put the diagram's LEFT EDGE
+    //       segment. The earlier layout put the diagram's LEFT EDGE
     //       there, i.e. its centre half a diagram (~31px for the vertical
     //       guitar layout) to the right of the note.
     //   (b) the lyric line still reads as one continuous run: consecutive
@@ -176,7 +174,7 @@ test.describe('inline / hover compact chord diagrams (ADR-0027)', () => {
   test('{diagrams: inline}: the leading gutter keeps comments and section labels aligned with lyric lines', async ({
     page,
   }) => {
-    // ADR-0051's leading gutter (`--cs-inline-diagram-overhang`) clears the
+    // The leading gutter (`--cs-inline-diagram-overhang`) clears the
     // first diagram's left overhang. An earlier version put the gutter's
     // `padding-left` on each `.line--inline-diagrams` individually, which
     // shifted every lyric line right while leaving `.comment` /

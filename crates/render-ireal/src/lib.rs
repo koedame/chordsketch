@@ -152,8 +152,7 @@ pub struct RenderOptions {}
 /// The bar count is clamped to [`MAX_BARS`] before any allocation;
 /// surplus bars are silently truncated. This mirrors the input-
 /// bounds-check pattern in `chordsketch-chordpro`'s chord-diagram
-/// renderer and the `MAX_COLUMNS` clamp in the HTML renderer (per
-/// the validation-parity clause in `.claude/rules/renderer-parity.md`)
+/// renderer and the `MAX_COLUMNS` clamp in the HTML renderer,
 /// and prevents both unbounded `format!` allocation and overflow in
 /// the y-coordinate arithmetic.
 #[must_use = "rendering produces a string the caller is expected to consume"]
@@ -239,8 +238,7 @@ stroke=\"#E8E6EA\" stroke-width=\"1\"/>\n",
 /// ASCII range, otherwise `'?'`. Single source of truth for the
 /// out-of-range fallback shared with
 /// [`crate::chord_typography::chord_to_typography`]'s root / bass
-/// writers, so a future tightening of the rule (per
-/// `.claude/rules/sanitizer-security.md` "security asymmetry")
+/// writers, so a future tightening of the rule
 /// only needs to change one site.
 ///
 /// The AST documents `root.note` as `'A'..='G'` uppercase ASCII

@@ -4,13 +4,12 @@
  * `@chordsketch/ui-irealb-editor/style.css`.
  *
  * Tokens come from the design system (see
- * `design-system/tokens.css` at the workspace root and
- * `design-system/DESIGN.md` §9). Hosts that already supply the
+ * `design-system/tokens.css` at the workspace root). Hosts that already supply the
  * same `:root` block inherit the values; the per-package fallback
  * below keeps the editor visually correct when consumed standalone.
  */
 
-/* Generated 1:1 from `design-system/tokens.css` (ADR-0038).
+/* Generated 1:1 from `design-system/tokens.css`.
  * Do not hand-edit the block below — edit `tokens.css` and run
  * `node scripts/build-tokens.mjs` instead. Hosts that already
  * supply these tokens at `:root` inherit them; this standalone

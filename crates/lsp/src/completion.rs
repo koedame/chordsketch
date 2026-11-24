@@ -125,7 +125,7 @@ pub fn detect_context(line: &str, col: usize) -> CompletionContext {
             }
             // Directives whose value is a fixed set (e.g. `{diagrams: }`)
             // complete their allowed values; free-form / value-less
-            // directives still offer nothing (ADR-0028).
+            // directives still offer nothing.
             if directive_catalog::directive_value_options(&directive_name).is_some() {
                 return CompletionContext::DirectiveValue {
                     directive: directive_name,
@@ -193,7 +193,7 @@ const SUFFIXES: &[&str] = &[
 ///
 /// Sourced from the shared `chordsketch_chordpro::directive_catalog` so the
 /// LSP, the web editor, and the playground all offer the same directive set
-/// (ADR-0028) — no hand-maintained copy to drift.
+/// — no hand-maintained copy to drift.
 #[must_use]
 pub fn directive_items(prefix: &str) -> Vec<CompletionItem> {
     directive_catalog::directives()
@@ -219,8 +219,7 @@ pub fn directive_items(prefix: &str) -> Vec<CompletionItem> {
 
 /// Returns value completion items for an enum-valued directive (e.g.
 /// `{diagrams: }`), filtered by `prefix`. Empty for free-form / value-less
-/// directives and unknown names. Backed by the shared directive catalog
-/// (ADR-0028).
+/// directives and unknown names. Backed by the shared directive catalog.
 #[must_use]
 pub fn directive_value_items(directive: &str, prefix: &str) -> Vec<CompletionItem> {
     let Some(values) = directive_catalog::directive_value_options(directive) else {
@@ -506,7 +505,7 @@ mod tests {
     #[test]
     fn context_directive_value_non_meta_is_none() {
         // A FREE-FORM directive value (e.g. `{title: …}`) still offers no
-        // completion — only enum-valued directives do (ADR-0028).
+        // completion — only enum-valued directives do.
         let ctx = detect_context("{title: My", 10);
         assert_eq!(ctx, CompletionContext::None);
     }

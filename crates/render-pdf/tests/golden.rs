@@ -32,7 +32,7 @@
 //! first to declare the mode, then run UPDATE_GOLDEN.
 //!
 //! Each fixture deliberately mirrors an existing `render-text` fixture so
-//! sister-site parity (see `.claude/rules/renderer-parity.md`) can be
+//! sister-site parity can be
 //! verified by cross-referencing fixture names.
 
 use std::fs;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests that the pull request automation acts only on this repository's branches.
 
-Outside pull requests are not accepted (ADR-0087). The conflict automation
+Outside pull requests are not accepted. The conflict automation
 (`auto-rebase.yml`, `auto-resolve-conflicts.yml`), the review request
 (`claude-review.yml`) and `claude.yml` therefore act only on a pull request
 whose head is a branch of this repository.

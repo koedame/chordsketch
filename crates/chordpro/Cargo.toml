@@ -13,7 +13,6 @@ readme = "README.md"
 
 [dependencies]
 # This crate has ZERO external dependencies — normal, dev, AND build.
-# See CLAUDE.md "Dependency Policy", `.claude/rules/code-style.md`, and
-# the `external_tool` module's stdlib-only `TempDirGuard`. The invariant
+# See the `external_tool` module's stdlib-only `TempDirGuard`. The invariant
 # is enforced in CI by `scripts/check-zero-deps.py`; tests use the
 # stdlib-only temp-directory helper in `config.rs` rather than `tempfile`.

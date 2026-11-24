@@ -100,7 +100,7 @@ fn render_song_impl(
         &song_config
     };
     let mut output = Vec::new();
-    // ADR-0023: capo subtracts from the effective transpose so the
+    // Capo subtracts from the effective transpose so the
     // displayed chord names match the shapes a guitarist holds at fret N.
     // The base config transpose is already folded into cli_transpose by the caller.
     let mut transpose = SongTranspose::new(song, cli_transpose, warnings);
@@ -187,11 +187,10 @@ fn render_song_impl(
                                 // when the directive value doesn't even
                                 // start with a note letter. Sister-site to
                                 // render-html / render-pdf / the React JSX
-                                // walker per
-                                // `.claude/rules/renderer-parity.md`;
+                                // walker;
                                 // closes #2522. Typeset `Bb` / `F#` with
                                 // Unicode accidentals.
-                                // Render the canonical key (ADR-0034): the
+                                // Render the canonical key: the
                                 // editor accepts lenient spellings
                                 // (`G minor`, `Gmin`, …) but the rendered
                                 // marker always shows `Gm` / `G` / `C dorian`.
@@ -592,8 +591,8 @@ fn render_directive(
     }
     match &directive.kind {
         DirectiveKind::Image(attrs) if attrs.has_src() => {
-            // Validate the src for parity with the HTML renderer (#1832,
-            // renderer-parity.md §Validation Parity). Dangerous URI
+            // Validate the src for parity with the HTML renderer (#1832).
+            // Dangerous URI
             // schemes such as `javascript:` and `file:///etc/passwd`
             // never belong in rendered output — text output is not
             // executed, but embedding such strings would mislead any
@@ -614,7 +613,7 @@ fn render_directive(
         // Page-layout directives are intentionally no-ops in plain-text output:
         // plain text has no concept of pages, columns, or column breaks.
         // Explicit arms here make the omission visible to future contributors
-        // (renderer-parity.md requires every directive to have an explicit arm).
+        // (every renderer handles every directive with an explicit arm).
         DirectiveKind::NewPage
         | DirectiveKind::NewPhysicalPage
         | DirectiveKind::ColumnBreak
@@ -858,8 +857,7 @@ mod tests {
 
     /// Inline marker for every `[Pos]` metadata directive — sister-site
     /// to the React JSX walker (`packages/react/src/chordpro-jsx.tsx`)
-    /// and the Rust HTML renderer (`crates/render-html/src/lib.rs`)
-    /// per `.claude/rules/renderer-parity.md`.
+    /// and the Rust HTML renderer (`crates/render-html/src/lib.rs`).
     #[test]
     fn test_inline_meta_markers_at_position() {
         let input = "[G]first\n{tempo: 120}\n[C]middle\n{time: 6/8}\n[D]end";
@@ -900,7 +898,7 @@ mod tests {
 
         let song = chordsketch_chordpro::parse("{key: G}\n[G]hi [D]world").unwrap();
 
-        // No transpose: authored key passes through, canonicalised (ADR-0035).
+        // No transpose: authored key passes through, canonicalised.
         let zero = render_song_with_transpose(&song, 0, &Config::defaults());
         assert!(
             zero.contains("[Key: G major]"),
@@ -974,7 +972,7 @@ mod tests {
         );
 
         // Lenient: "minor" written out as a word is accepted as a minor key
-        // (ADR-0034) and rendered in the spelled-out canonical form (ADR-0035),
+        // and rendered in the spelled-out canonical form,
         // transposed. `Bb minor` at +2 lands on `C minor` (flat-side, so the
         // root spells `C`).
         let bb_minor = chordsketch_chordpro::parse("{key: Bb minor}\n[Bb]hi").unwrap();
@@ -986,7 +984,7 @@ mod tests {
 
         // Slash bass: the bass note transposes in lockstep with the
         // root via `transpose_detail_with_style`. The major quality is
-        // spelled out before the slash (ADR-0035).
+        // spelled out before the slash.
         let slash = chordsketch_chordpro::parse("{key: G/B}\n[G]hi").unwrap();
         let slash_out = render_song_with_transpose(&slash, 2, &Config::defaults());
         assert!(
@@ -1005,8 +1003,8 @@ mod tests {
         );
 
         // Compact-form minor (`Em`) uses ChordQuality::Minor — the
-        // helper spells out ` minor` after the (transposed) accidental
-        // (ADR-0035). At +2 the song-wide `prefer_flat` for an Em key
+        // helper spells out ` minor` after the (transposed) accidental.
+        // At +2 the song-wide `prefer_flat` for an Em key
         // lands sharp side, so the helper spells F♯ minor (consistent with
         // the chord lines, which also use F♯m). F♯m is the conventional
         // minor key (3♯); G♭m would be 9♭. The convention is owned by
@@ -1032,7 +1030,7 @@ mod tests {
         );
     }
 
-    /// Issue #2674 / ADR-0034 / ADR-0035: the editor accepts the various ways a
+    /// Issue #2674: the editor accepts the various ways a
     /// user might write a G-minor key, but the RENDERED marker is always the
     /// spelled-out canonical form. `Gm` / `G m` / `Gminor` / `G minor` /
     /// `G min` all render `A minor` at +2 with no warning; a non-key (`G7`)
@@ -1441,7 +1439,7 @@ mod transpose_tests {
 
     #[test]
     fn test_capo_transposes_displayed_chords() {
-        // ADR-0023: {capo: N} now shifts the displayed chord names
+        // {capo: N} now shifts the displayed chord names
         // by -N semitones in every renderer. Sister-site to the
         // render-html / render-pdf tests of the same name.
         let input = "{key: C}\n{capo: 2}\n[C]Hi";
@@ -1457,7 +1455,7 @@ mod transpose_tests {
 
     #[test]
     fn test_capo_subtracts_in_composition_with_cli_transpose() {
-        // ADR-0023 composition rule: file + cli - capo. cli=+4 and
+        // Composition rule: file + cli - capo. cli=+4 and
         // {capo: 2} compose to effective +2 (file=0), so [C]
         // renders as D. This pins the "ONE place" promise — a
         // renderer that accidentally drops capo from the formula
@@ -1496,7 +1494,7 @@ mod transpose_tests {
 
     #[test]
     fn test_capo_top_level_saturation_emits_warning() {
-        // ADR-0023 + Finding 1: a song whose cli_transpose alone
+        // A song whose cli_transpose alone
         // already saturates the offset must surface a warning even
         // when no in-song `{transpose}` directive is present. This
         // covers the top-level `effective_transpose` saturation
@@ -1676,7 +1674,7 @@ Second chorus
     fn test_page_control_not_replayed_in_chorus_recall() {
         // Page-control directives inside a chorus definition must NOT appear in
         // {chorus} recall output. This mirrors the equivalent test in the HTML and
-        // PDF renderers (renderer-parity.md).
+        // PDF renderers.
         let input = "\
 {start_of_chorus}
 [G]Chorus line
@@ -2263,8 +2261,7 @@ mod delegate_tests {
     fn test_diagrams_piano_auto_inject_typesets_accidentals() {
         // Regression: the keyboard-diagram title must typeset its accidentals
         // (`Bb` → `B♭`, `F#` → `F♯`) to match the fretted ASCII diagram and the
-        // chord-name typography every other surface applies (see
-        // `.claude/rules/chord-name-typography.md`).
+        // chord-name typography every other surface applies.
         let output = render("{diagrams: piano}\n[Bb]Hello [F#m]world");
         assert!(
             output.contains("B\u{266D}: keys"),

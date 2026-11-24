@@ -44,7 +44,7 @@ jobs:
   list:
     name: List the mutants
     # GitHub-hosted only: this repository is public, so no job may run on a
-    # self-hosted runner (ADR-0096).
+    # self-hosted runner.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

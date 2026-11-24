@@ -40,7 +40,7 @@ interface DiagramRenderer {
    * #2572. `orientation` accepts the same string values the Rust
    * `resolve_orientation` helper does; `null` / `undefined` falls
    * back to the default (vertical layout). Horizontal mode is
-   * reader-view only — see ADR-0026.
+   * reader-view only.
    *
    * Typed as `ChordDiagramOrientation | null | undefined` so callers
    * that construct their own stub renderer cannot accidentally pass

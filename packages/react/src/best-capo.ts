@@ -1,7 +1,7 @@
 // Compute the capo position(s) at which a song's chord-root labels
 // carry the fewest accidental glyphs (`♯` / `♭`).
 //
-// Per ADR-0023, a capo on fret `c` displays every chord transposed by
+// A capo on fret `c` displays every chord transposed by
 // `-c` semitones. The "best capo" picker enumerates `c ∈ [0..=12]`,
 // counts how many accidental glyphs would appear in the chord-root
 // labels at each `c`, and returns the set of positions tied for the
@@ -119,8 +119,8 @@ function parseSongCapo(song: ChordproSong): number {
  * Collect every (root, bass) semitone pair driven by an actual chord.
  *
  * The AST emitted by `@chordsketch/wasm`'s `parseChordpro*` path has
- * already folded `{capo: N}` into the effective transpose offset
- * (ADR-0023), so the chord roots stored on the AST are *displayed*
+ * already folded `{capo: N}` into the effective transpose offset,
+ * so the chord roots stored on the AST are *displayed*
  * roots — shifted by `-capo` from the source's literal roots. Add
  * `capo` back here so the best-capo enumeration sees the original
  * roots and produces a stable answer independent of the current
