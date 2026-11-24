@@ -38,7 +38,15 @@ ChordPro input is capped at 10 MiB, from a file or from stdin (`convert` reads u
 | stdout | the rendered document (text, HTML, PDF bytes, or SVG) unless `-o` is given |
 | stderr | parse errors and warnings |
 | exit 0 | rendered; there may still be warnings on stderr |
-| exit 1 | did not render — a parse error, a missing file, or an oversized input |
+| exit 2 | the command line is wrong — an unknown option, no input file, a malformed `--define` |
+| exit 65 | the input is not valid — a parse error, an oversized input, or bytes that are not UTF-8 |
+| exit 66 | an input file is missing or unreadable |
+| exit 73 | the `-o` file could not be written |
+| exit 74 | reading stdin or writing stdout failed |
+| exit 78 | a `--config` file is missing, unreadable, or malformed |
+
+With several input files, every failure is printed and the exit code is that of
+the first one. Exit 1 is only ever `fmt --check` (below).
 
 ## `fmt`
 

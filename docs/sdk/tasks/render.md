@@ -172,7 +172,7 @@ pdf  = Chordsketch.parse_and_render_pdf(input, nil, nil)  # binary string
 | Rust | `ParseError` (parse) / renderer infallible after parse | Carries `Span` (line + column) |
 | WASM / npm | thrown `JsError` | Render-path errors carry only `.message`. Use `validate(input)` for structured `{line, column, message}` records. |
 | NAPI / Node native | thrown `Error` | Same as WASM: render-path is `.message` only; `validate(input)` returns `ValidationError[]` with `line`, `column`, `message`. |
-| CLI | non-zero exit + stderr | Currently `1` (`ExitCode::FAILURE`) on any error path; the binary does not yet differentiate parse vs. config vs. I/O failures via distinct exit codes. |
+| CLI | non-zero exit + stderr | One exit code per kind of failure: `2` invalid command line, `65` invalid input (parse error), `66` input file missing or unreadable, `73` output file cannot be written, `74` stdin / stdout I/O error, `78` bad `--config` file. Full table: [CLI README, "Exit codes"](https://github.com/koedame/chordsketch/blob/main/crates/cli/README.md#exit-codes). |
 | Python | `chordsketch.ChordSketchError` exception | `.message` |
 | Swift | `ChordSketchError` enum (`.invalidConfig(reason:)`, `.noSongsFound`, …) | `.message`-equivalent on the variant payload |
 | Kotlin | `ChordSketchException` | `.message` |

@@ -8,27 +8,62 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-use chordsketch_chordpro::input_limit::{MAX_INPUT_BYTES, read_to_string_limited};
+use chordsketch_chordpro::input_limit::{
+    MAX_INPUT_BYTES, ReadLimitedError, read_to_string_limited,
+};
 use tempfile::NamedTempFile;
+
+mod exit;
+
+use exit::{Failure, exit_code};
 
 /// Input limit of the `convert` subcommand: the MusicXML converter's own
 /// ceiling, since a converted file may be MusicXML (its documents are far
 /// larger than a ChordPro source).
 const CONVERT_MAX_INPUT_BYTES: usize = chordsketch_convert_musicxml::MAX_INPUT_BYTES;
 
-/// Reads `path` into a [`String`], returning an error string if the file is
-/// larger than `limit` bytes or if any I/O error occurs.
+/// An input that could not be read: the message to print and the kind of
+/// failure it is.
+struct ReadError {
+    failure: Failure,
+    message: String,
+}
+
+impl ReadError {
+    /// Classifies a failed read. An input that is over the size limit or is
+    /// not UTF-8 was read but is not usable data; any other error means the
+    /// source itself could not be read, which is `unreadable`.
+    fn new(error: &ReadLimitedError, unreadable: Failure) -> Self {
+        let failure = match error {
+            ReadLimitedError::TooLarge { .. } => Failure::Data,
+            ReadLimitedError::Io(e) if e.kind() == io::ErrorKind::InvalidData => Failure::Data,
+            // Every other error — an I/O error today; the enum is
+            // non-exhaustive — means the source did not yield its bytes.
+            _ => unreadable,
+        };
+        Self {
+            failure,
+            message: error.to_string(),
+        }
+    }
+}
+
+/// Reads `path` into a [`String`], failing if the file is larger than
+/// `limit` bytes or if any I/O error occurs.
 #[must_use = "I/O errors from reading the file must be handled"]
-fn read_file_clamped(path: &str, limit: usize) -> Result<String, String> {
-    let file = fs::File::open(path).map_err(|e| e.to_string())?;
-    read_to_string_limited(file, limit).map_err(|e| e.to_string())
+fn read_file_clamped(path: &str, limit: usize) -> Result<String, ReadError> {
+    let file = fs::File::open(path).map_err(|e| ReadError {
+        failure: Failure::NoInput,
+        message: e.to_string(),
+    })?;
+    read_to_string_limited(file, limit).map_err(|e| ReadError::new(&e, Failure::NoInput))
 }
 
 /// Reads stdin into a [`String`], rejecting streams that exceed `limit`
 /// bytes.
 #[must_use = "I/O errors from reading stdin must be handled"]
-fn read_stdin_clamped(limit: usize) -> Result<String, String> {
-    read_to_string_limited(io::stdin(), limit).map_err(|e| e.to_string())
+fn read_stdin_clamped(limit: usize) -> Result<String, ReadError> {
+    read_to_string_limited(io::stdin(), limit).map_err(|e| ReadError::new(&e, Failure::Io))
 }
 
 /// Minimal JSON string escape for the `--warnings-json` output stream.
@@ -359,7 +394,7 @@ fn main() -> ExitCode {
             }
             Err(e) => {
                 eprintln!("error: {e}");
-                return ExitCode::FAILURE;
+                return Failure::Config.into();
             }
         }
     }
@@ -381,7 +416,7 @@ fn main() -> ExitCode {
             Ok(updated) => config = updated,
             Err(e) => {
                 eprintln!("error: invalid --define: {define} ({e})");
-                return ExitCode::FAILURE;
+                return Failure::Usage.into();
             }
         }
     }
@@ -422,14 +457,16 @@ fn main() -> ExitCode {
     let effective_transpose = combined.offset;
 
     let mut all_songs: Vec<chordsketch_chordpro::ast::Song> = Vec::new();
-    let mut had_error = false;
+    // The exit code is that of the first failure reported; later inputs are
+    // still processed so every problem is printed in one run.
+    let mut first_failure: Option<Failure> = None;
 
     for path in &cli.files {
         let input = match read_file_clamped(path, MAX_INPUT_BYTES) {
             Ok(content) => content,
             Err(e) => {
-                eprintln!("error: {path}: {e}");
-                had_error = true;
+                eprintln!("error: {path}: {}", e.message);
+                first_failure.get_or_insert(e.failure);
                 continue;
             }
         };
@@ -443,7 +480,7 @@ fn main() -> ExitCode {
                     e.column(),
                     e.message
                 );
-                had_error = true;
+                first_failure.get_or_insert(Failure::Data);
             }
         }
         all_songs.extend(result.results.into_iter().map(|r| r.song));
@@ -504,8 +541,8 @@ fn main() -> ExitCode {
         Output::Text(s) => s.is_empty(),
         Output::Binary(b) => b.is_empty(),
     };
-    if had_error && is_empty {
-        return ExitCode::FAILURE;
+    if first_failure.is_some() && is_empty {
+        return exit_code(first_failure);
     }
 
     let write_result = match &output {
@@ -515,14 +552,10 @@ fn main() -> ExitCode {
 
     if let Err(e) = write_result {
         eprintln!("error: {e}");
-        return ExitCode::FAILURE;
+        first_failure.get_or_insert(write_failure(&cli.output));
     }
 
-    if had_error {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
+    exit_code(first_failure)
 }
 
 /// Returns `true` if every argument in `files` should be routed
@@ -615,7 +648,7 @@ fn sniff_is_ireal(arg: &str) -> bool {
 /// `--format text|html|pdf` flag is documented as ignored.
 fn run_ireal_render(files: &[String], output: Option<&str>) -> ExitCode {
     let mut combined = String::new();
-    let mut had_error = false;
+    let mut first_failure: Option<Failure> = None;
     // Track whether the first SVG has been emitted so we can strip the XML
     // processing instruction from subsequent charts. Each `render_svg` call
     // produces a complete SVG document (including `<?xml version="1.0"...?>`);
@@ -628,8 +661,8 @@ fn run_ireal_render(files: &[String], output: Option<&str>) -> ExitCode {
         let url = match read_ireal_input(arg) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("error: {arg}: {e}");
-                had_error = true;
+                eprintln!("error: {arg}: {}", e.message);
+                first_failure.get_or_insert(e.failure);
                 continue;
             }
         };
@@ -637,7 +670,7 @@ fn run_ireal_render(files: &[String], output: Option<&str>) -> ExitCode {
             Ok((s, _name)) => s,
             Err(e) => {
                 eprintln!("error: {arg}: {e}");
-                had_error = true;
+                first_failure.get_or_insert(Failure::Data);
                 continue;
             }
         };
@@ -658,21 +691,17 @@ fn run_ireal_render(files: &[String], output: Option<&str>) -> ExitCode {
             }
         }
     }
-    let write_result = write_text(&output.map(str::to_owned), &combined);
-    if let Err(e) = write_result {
+    let output = output.map(str::to_owned);
+    if let Err(e) = write_text(&output, &combined) {
         eprintln!("error: {e}");
-        return ExitCode::FAILURE;
+        first_failure.get_or_insert(write_failure(&output));
     }
-    if had_error {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
+    exit_code(first_failure)
 }
 
 /// Reads an iReal input — either a URL string passed inline or a
 /// file containing such a URL.
-fn read_ireal_input(arg: &str) -> Result<String, String> {
+fn read_ireal_input(arg: &str) -> Result<String, ReadError> {
     let trimmed_arg = arg.trim_start();
     if trimmed_arg.starts_with("irealb://") || trimmed_arg.starts_with("irealbook://") {
         return Ok(trimmed_arg.to_owned());
@@ -682,14 +711,7 @@ fn read_ireal_input(arg: &str) -> Result<String, String> {
 
 /// Write text output to a file or stdout.
 fn write_text(path: &Option<String>, content: &str) -> io::Result<()> {
-    match path {
-        Some(path) => fs::write(path, content),
-        None => {
-            let stdout = io::stdout();
-            let mut handle = stdout.lock();
-            handle.write_all(content.as_bytes())
-        }
-    }
+    write_bytes(path, content.as_bytes())
 }
 
 /// Write binary output to a file or stdout.
@@ -699,8 +721,21 @@ fn write_bytes(path: &Option<String>, content: &[u8]) -> io::Result<()> {
         None => {
             let stdout = io::stdout();
             let mut handle = stdout.lock();
-            handle.write_all(content)
+            handle.write_all(content)?;
+            // Stdout is line-buffered: without the flush, a failure to write
+            // the part after the last newline would only happen at process
+            // exit, where it is ignored.
+            handle.flush()
         }
+    }
+}
+
+/// The kind of failure a failed [`write_bytes`] / [`write_text`] to `path`
+/// is: a named output file that could not be written, or stdout.
+fn write_failure(path: &Option<String>) -> Failure {
+    match path {
+        Some(_) => Failure::CantCreate,
+        None => Failure::Io,
     }
 }
 
@@ -713,13 +748,24 @@ fn write_bytes(path: &Option<String>, content: &[u8]) -> io::Result<()> {
 /// # Exit codes
 ///
 /// * `0` — the client disconnected cleanly.
-/// * `1` — the server could not start, or stopped abnormally.
+/// * [`Failure::Protocol`] — the handshake did not complete.
+/// * [`Failure::Software`] — the server could not start, or stopped
+///   abnormally.
 fn run_mcp() -> ExitCode {
+    use chordsketch_mcp::ServeError;
+
     match chordsketch_mcp::serve_stdio() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
-            ExitCode::FAILURE
+            match e {
+                ServeError::Handshake(_) => Failure::Protocol,
+                // `Runtime` and `Task` today; the enum is non-exhaustive,
+                // and any other way for the server to fail is the server's
+                // own failure rather than the peer's.
+                _ => Failure::Software,
+            }
+            .into()
         }
     }
 }
@@ -729,11 +775,14 @@ fn run_mcp() -> ExitCode {
 /// # Exit codes
 ///
 /// * `0` — all files are formatted (or `--check` found nothing to change).
-/// * `1` — at least one file needs formatting (`--check` mode) or an I/O
-///   error occurred.
+/// * The code of the first read or write failure, if there was one. An
+///   error takes precedence over [`Failure::Unformatted`], so that code
+///   always means every file was checked.
+/// * [`Failure::Unformatted`] — at least one file needs formatting
+///   (`--check` mode).
 fn run_fmt(files: &[String], check: bool) -> ExitCode {
     let options = chordsketch_chordpro::formatter::FormatOptions::default();
-    let mut had_error = false;
+    let mut first_failure: Option<Failure> = None;
     let mut needs_format = false;
 
     for file in files {
@@ -742,8 +791,8 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
             let input = match read_stdin_clamped(MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("error: reading stdin: {e}");
-                    had_error = true;
+                    eprintln!("error: reading stdin: {}", e.message);
+                    first_failure.get_or_insert(e.failure);
                     continue;
                 }
             };
@@ -755,14 +804,14 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
                 }
             } else if let Err(e) = write_text(&None, &formatted) {
                 eprintln!("error: writing stdout: {e}");
-                had_error = true;
+                first_failure.get_or_insert(Failure::Io);
             }
         } else {
             let input = match read_file_clamped(file, MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("error: {file}: {e}");
-                    had_error = true;
+                    eprintln!("error: {file}: {}", e.message);
+                    first_failure.get_or_insert(e.failure);
                     continue;
                 }
             };
@@ -776,16 +825,12 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
                 && let Err(e) = write_formatted_atomic(file, &formatted)
             {
                 eprintln!("error: {file}: {e}");
-                had_error = true;
+                first_failure.get_or_insert(Failure::CantCreate);
             }
         }
     }
 
-    if had_error || needs_format {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
+    exit_code(first_failure.or(needs_format.then_some(Failure::Unformatted)))
 }
 
 /// Run the `convert` subcommand.
@@ -801,8 +846,10 @@ fn run_fmt(files: &[String], check: bool) -> ExitCode {
 /// # Exit codes
 ///
 /// * `0` — all files converted successfully.
-/// * `1` — at least one I/O error occurred or a file was skipped because its
-///   format could not be detected.
+/// * Otherwise the code of the first failure reported: an input that could
+///   not be read, one that could not be converted or whose format could not
+///   be detected ([`Failure::Data`]), or an output that could not be
+///   written.
 fn run_convert(
     files: &[String],
     from: ConvertFrom,
@@ -820,37 +867,38 @@ fn run_convert(
     if let Some(ConvertTo::Musicxml) = to {
         if files.len() > 1 {
             eprintln!("error: --to musicxml supports only a single input file");
-            return ExitCode::FAILURE;
+            return Failure::Usage.into();
         }
         let file = &files[0];
         let input = if file == "-" {
             match read_stdin_clamped(MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("error: reading stdin: {e}");
-                    return ExitCode::FAILURE;
+                    eprintln!("error: reading stdin: {}", e.message);
+                    return e.failure.into();
                 }
             }
         } else {
             match read_file_clamped(file, MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("error: {file}: {e}");
-                    return ExitCode::FAILURE;
+                    eprintln!("error: {file}: {}", e.message);
+                    return e.failure.into();
                 }
             }
         };
         let result = parse_lenient(&input);
         let xml = to_musicxml(&result.song);
-        if let Err(e) = write_text(&output_path.map(str::to_string), &xml) {
+        let output = output_path.map(str::to_string);
+        if let Err(e) = write_text(&output, &xml) {
             eprintln!("error: {e}");
-            return ExitCode::FAILURE;
+            return write_failure(&output).into();
         }
         return ExitCode::SUCCESS;
     }
 
     // --- Import path: other formats → ChordPro ------------------------------
-    let mut had_error = false;
+    let mut first_failure: Option<Failure> = None;
     let mut combined = String::new();
 
     for file in files {
@@ -858,8 +906,8 @@ fn run_convert(
             match read_stdin_clamped(CONVERT_MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("error: reading stdin: {e}");
-                    had_error = true;
+                    eprintln!("error: reading stdin: {}", e.message);
+                    first_failure.get_or_insert(e.failure);
                     continue;
                 }
             }
@@ -867,8 +915,8 @@ fn run_convert(
             match read_file_clamped(file, CONVERT_MAX_INPUT_BYTES) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("error: {file}: {e}");
-                    had_error = true;
+                    eprintln!("error: {file}: {}", e.message);
+                    first_failure.get_or_insert(e.failure);
                     continue;
                 }
             }
@@ -934,7 +982,7 @@ fn run_convert(
                             file.as_str()
                         };
                         eprintln!("error: {label}: {e}");
-                        had_error = true;
+                        first_failure.get_or_insert(Failure::Data);
                     }
                 }
             }
@@ -959,25 +1007,22 @@ fn run_convert(
                          use --from plaintext, --from abc, or --from musicxml to force conversion"
                     ),
                 );
-                had_error = true;
+                first_failure.get_or_insert(Failure::Data);
             }
         }
     }
 
-    if combined.is_empty() && had_error {
-        return ExitCode::FAILURE;
+    if combined.is_empty() && first_failure.is_some() {
+        return exit_code(first_failure);
     }
 
-    if let Err(e) = write_text(&output_path.map(str::to_string), &combined) {
+    let output = output_path.map(str::to_string);
+    if let Err(e) = write_text(&output, &combined) {
         eprintln!("error: {e}");
-        return ExitCode::FAILURE;
+        first_failure.get_or_insert(write_failure(&output));
     }
 
-    if had_error {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
+    exit_code(first_failure)
 }
 
 /// Write `content` to `path` atomically: write to a temp file in the same
