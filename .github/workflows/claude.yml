@@ -42,6 +42,16 @@ jobs:
           token: ${{ secrets.CLAUDE_PAT }}
           fetch-depth: 1
 
+      # On a pull request, Claude checks out its head and works on it.
+      # Outside pull requests are not accepted (ADR-0087), so only a pull
+      # request whose head is a branch of this repository goes on.
+      - name: Only pull requests from this repository
+        if: github.event.issue.pull_request || github.event.pull_request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: bash .github/scripts/require-same-repo-pr.sh "$PR"
+
       - uses: anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1
         id: claude
         with:

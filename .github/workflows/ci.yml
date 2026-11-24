@@ -395,6 +395,7 @@ jobs:
             scripts/test_check_must_use.py \
             scripts/test_check_suppressions.py \
             scripts/test_check_runs_on.py \
+            scripts/test_pr_automation_same_repo.py \
             scripts/test_check_webview_lockstep.py \
             scripts/test_check_glibc_floor.py \
             scripts/test_macports_regen_cargo_crates.py \
