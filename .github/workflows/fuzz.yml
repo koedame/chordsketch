@@ -45,7 +45,9 @@ name: Fuzz
 # does not mean the input was fixed. It is closed by the pull request that
 # fixes the crash (`Closes #N`, with a regression test) or by a maintainer, so
 # "no open issue with that title" is the test for "no crash is waiting for a
-# fix", even after the Actions history has expired.
+# fix", even after the Actions history has expired. A night whose fuzz job
+# finished without a crash and found no such issue open says so in the log of
+# the `report` job ("No fuzz crash issue is open.").
 #
 # The fuzz crate lives in `crates/chordpro/fuzz/` as its own workspace root, so
 # `libfuzzer-sys` never enters the SDK workspace or the zero-dependency
@@ -260,12 +262,13 @@ jobs:
           if-no-files-found: ignore
 
   report:
-    name: Report the crash in an issue
-    # Only the fuzz and minimize steps of a scheduled or manual run raise
-    # `crashed`. The 30 s smoke on a pull request has no issue to open: the
-    # pull request itself fails.
+    name: Track fuzz crashes in an issue
+    # Runs after every scheduled or manual run, not only after a crash: it
+    # opens or updates the issue when `parse` found a crash, and otherwise
+    # states in its log whether a crash issue is still open. The 30 s smoke on
+    # a pull request has no issue to open: the pull request itself fails.
     needs: parse
-    if: always() && github.event_name != 'pull_request' && needs.parse.outputs.crashed == 'true'
+    if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -280,4 +283,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CRASHED: ${{ needs.parse.outputs.crashed }}
+          PARSE_RESULT: ${{ needs.parse.result }}
         run: bash .github/scripts/fuzz-crash-issue.sh

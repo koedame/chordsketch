@@ -90,7 +90,9 @@ run and the name of the encrypted artifact, never the input. It is not closed
 automatically, because a night without a crash does not show the input was
 fixed; the pull request that fixes the crash closes it with `Closes #N`. An
 open issue with that title is the record of a crash that is still waiting for
-a fix.
+a fix. The `report` job runs after every scheduled or manual run and, when the
+fuzz job finished without a crash and no such issue is open, logs `No fuzz
+crash issue is open.`
 
 ## References
 
