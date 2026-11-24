@@ -138,7 +138,8 @@ jobs:
   guards:
     name: Repository guards
     # Every guarantee-style check this workflow carries that is Python-only
-    # (plus pwsh for the release-publication steps) and finishes in seconds,
+    # (plus pwsh for the release-publication steps, and the playground's
+    # installed npm packages for one license test) and finishes in seconds,
     # batched into one job.
     #
     # They are guarantees, so none of them has a `paths:` filter and all of
@@ -352,9 +353,34 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 -m pip install fonttools==4.66.1 brotli==1.2.0
 
+      # `test_third_party_licenses.py` also reads the copyright the Noto Sans
+      # JP font files state out of the `@fontsource-variable/noto-sans-jp`
+      # package the playground bundles, and checks that the license text
+      # reproduced for that package names the same holder. The package exists
+      # only in the playground's `node_modules`, and the test skips when it is
+      # not installed, so install it. `--ignore-scripts` because the test
+      # reads files and nothing here builds.
+      - name: Setup Node.js
+        if: ${{ !cancelled() }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/playground/package-lock.json
+
+      - name: Install the playground's npm packages for the notice tests
+        if: ${{ !cancelled() }}
+        run: npm ci --ignore-scripts
+        working-directory: packages/playground
+
+      # Several suites skip a test when what it needs (pwsh, fontTools, an
+      # installed npm package) is missing, so that they still run on a
+      # contributor's machine. In this job everything they need is installed,
+      # so a skip means a guarantee stopped being checked: fail on it.
       - name: Unit tests
         if: ${{ !cancelled() }}
         run: |
+          set -o pipefail
           python3 -m unittest -v \
             scripts/test_check_version_consistency.py \
             scripts/test_check_release_channels.py \
@@ -380,7 +406,12 @@ jobs:
             scripts/test_third_party_licenses.py \
             scripts/test_appimage_bundled_libraries.py \
             scripts/test_desktop_bundle_licenses.py \
-            scripts/test_tap_push_retry.py
+            scripts/test_tap_push_retry.py \
+            2>&1 | tee "$RUNNER_TEMP/guard-unit-tests.log"
+          if grep -F -- '... skipped ' "$RUNNER_TEMP/guard-unit-tests.log"; then
+            echo "::error::a guard unit test was skipped (listed above); install what it needs in this job"
+            exit 1
+          fi
 
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.rust }})
