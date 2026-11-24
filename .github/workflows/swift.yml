@@ -389,14 +389,14 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           if [ ! -f Package.swift ] || [ ! -f scripts/swift_package.py ]; then
-            echo "::error::${TAG} has no root Package.swift, so no XCFramework was pinned for it. Only releases cut with the pin step (this workflow dispatched with `pin=X.Y.Z` on the release branch) can be published from here."
+            echo "::error::${TAG} has no root Package.swift, so no XCFramework was pinned for it. Only releases cut with the pin step (this workflow dispatched with pin=X.Y.Z on the release branch) can be published from here."
             exit 1
           fi
           PIN=$(python3 scripts/swift_package.py show)
           read -r URL SHA <<< "$PIN"
           EXPECTED="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/chordsketch-xcframework.zip"
           if [ "$URL" != "$EXPECTED" ]; then
-            echo "::error::Package.swift at ${TAG} points at ${URL}, not ${EXPECTED}. The XCFramework was not pinned before the tag: the release branch has to run this workflow with `pin=X.Y.Z` before the tag is cut."
+            echo "::error::Package.swift at ${TAG} points at ${URL}, not ${EXPECTED}. The XCFramework was not pinned before the tag: the release branch has to run this workflow with pin=X.Y.Z before the tag is cut."
             exit 1
           fi
           RUN_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=xcframework-${SHA}" \
