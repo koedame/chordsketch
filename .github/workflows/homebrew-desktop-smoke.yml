@@ -51,6 +51,10 @@ jobs:
               packaging/homebrew/chordsketch-desktop-formula.rb.template \
               > "${tap}/Formula/chordsketch-desktop.rb"
           cat "${tap}/Formula/chordsketch-desktop.rb"
+          # Homebrew refuses to load a formula from a tap it has not been
+          # told to trust. This tap holds one formula, written from this
+          # checkout a few lines above.
+          brew trust local/desktop
 
       - name: Audit the formula
         run: brew audit --strict --formula local/desktop/chordsketch-desktop
