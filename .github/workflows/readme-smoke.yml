@@ -881,6 +881,16 @@ jobs:
 
   macports:
     name: MacPorts (macOS)
+    # WORKAROUND: disabled until the port in the MacPorts ports tree
+    # installs again. `port install chordsketch` stops at
+    # `Checksum mismatch for chordsketch-0.9.0.tar.gz`, and what it
+    # checks is the upstream Portfile (textproc/chordsketch), so no
+    # change in this repository can turn the job green. Left running
+    # it fails every pull request and every scheduled run for the same
+    # reason. Tracked in #3077; remove this `if:` once the port in the
+    # tree installs. The in-tree Portfile is still linted by
+    # `macports-smoke.yml`.
+    if: false
     # `port install` needs a real macOS host; MacPorts targets darwin
     # only. Same host constraint as `homebrew-cask` above.
     runs-on: macos-latest
