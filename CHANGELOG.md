@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their flat spelling), and every renderer and binding that decides the
   flat / sharp side of a transposed key follows it.
 
+### Security
+
+- **`libz-sys` 1.1.33** clears RUSTSEC-2026-0544. It moves the bundled zlib
+  from 1.3.2 to 1.4.
+- **`url` 2.5.9** clears RUSTSEC-2026-0592.
+- **`cookie` 0.18.3** clears RUSTSEC-2026-0594.
+
 ## [0.9.1] - 2026-11-16
 
 ### Changed
