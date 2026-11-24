@@ -48,7 +48,14 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.CLAUDE_PAT }}
           track_progress: true
-          claude_args: "--allowedTools Edit,Write,Read,Bash"
+          # `--permission-mode acceptEdits` is the mode the action itself sets
+          # for a run that `track_progress` puts on its `@claude`-mention path,
+          # which is every run of this job. It is spelled out so the mode does
+          # not follow the action's default: `claude_args` is appended after
+          # the action's own arguments and the last `--permission-mode` wins.
+          # In this mode a tool call that no `--allowedTools` rule covers is
+          # denied, so the list below stays a strict list.
+          claude_args: "--permission-mode acceptEdits --allowedTools Edit,Write,Read,Bash"
           settings: '{"attribution": {"commit": "", "pr": "", "sessionUrl": false}}'
           prompt: |
             When working on a GitHub issue (not a PR review), after implementing the
