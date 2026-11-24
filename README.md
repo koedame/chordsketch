@@ -47,7 +47,7 @@ Install the CLI (more [install options](#installation) below):
 
 ```bash
 brew install --formula koedame/tap/chordsketch   # macOS / Linux
-cargo install chordsketch --locked               # any platform with Rust 1.88+
+cargo install chordsketch --locked               # any platform with Rust 1.89+
 ```
 
 Save a chart as `song.cho`:
@@ -289,11 +289,11 @@ cargo install chordsketch --locked
 
 `--locked` builds with the dependency versions the release was tested with.
 Without it, Cargo may pick a newer dependency release that needs a newer Rust
-than 1.88 and the build fails.
+than 1.89 and the build fails.
 
 ### From source
 
-Requires Rust 1.88 or later.
+Requires Rust 1.89 or later.
 
 ```bash
 git clone https://github.com/koedame/chordsketch.git

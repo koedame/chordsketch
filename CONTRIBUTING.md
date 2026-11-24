@@ -34,7 +34,7 @@ issue bodies.
 
 ## Development Setup
 
-Requires **Rust 1.88** or later.
+Requires **Rust 1.89** or later.
 
 ```bash
 git clone https://github.com/koedame/chordsketch.git

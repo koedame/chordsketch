@@ -388,7 +388,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, "1.88.0"]
+        rust: [stable, "1.89.0"]
         include:
           # The Linux cell keeps `ubuntu-latest` in its name (required checks
           # are matched by name) but never runs on that label: it runs on

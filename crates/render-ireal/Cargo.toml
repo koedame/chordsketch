@@ -47,7 +47,7 @@ chordsketch-ireal = { version = "0.9.1", path = "../ireal" }
 # type in the same binary.
 #
 # The workspace MSRV no longer holds this line back (resvg 0.46 /
-# 0.47 want Rust 1.87, the workspace pins 1.88). What does is
+# 0.47 want Rust 1.87, the workspace pins 1.89). What does is
 # `svg2pdf` 0.13, whose `usvg ^0.45` requirement is the newest
 # usvg line any published svg2pdf accepts; moving resvg past 0.45
 # on its own would split the usvg tree again.

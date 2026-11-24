@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The minimum supported Rust version is now 1.89** (was 1.88).
+  `cargo install chordsketch` without `--locked` did not build on Rust 1.88:
+  Cargo picks the newest `uuid` 1.x, and `uuid` 1.29 requires Rust 1.89. The
+  declared floor now matches what a plain install needs. Pre-1.0, an MSRV
+  raise ships in a `0.x` release rather than waiting for `1.0.0` — see
+  [ADR-0044](docs/adr/0044-pre-1.0-breaking-changes-are-expected.md).
+  Consumers on Rust 1.88 stay on the previous release and install it with
+  `--locked`.
+
 ### Fixed
 
 - **Transposing a minor-key song now spells the key and its chords as
