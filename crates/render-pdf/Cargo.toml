@@ -41,3 +41,7 @@ libc = { version = "0.2", default-features = false }
 # against a small `expected.txt` snapshot instead. Dev-only, so the runtime
 # crate stays minimal.
 pdf-extract = "0.12"
+# Reads the PDFs the PNG transparency tests produce back the way a viewer
+# does (object references, stream filters, predictors). Already in the
+# dependency tree through pdf-extract.
+lopdf = { version = "0.42", default-features = false }
