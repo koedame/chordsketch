@@ -1483,6 +1483,7 @@ class XcframeworkArchiveTest(unittest.TestCase):
 class RunGradleTest(unittest.TestCase):
     """plugins.gradle.org fails now and then for files that exist; the checks must not fail with it."""
 
+    TOO_MANY_REQUESTS = "> Could not GET 'https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-gradle-plugins-bom/1.9.25/x.pom'. Received status code 429 from server: Too Many Requests"
     FETCH_FAILURE = "Plugin [id: 'com.vanniktech.maven.publish', version: '0.30.0'] was not found in any of the following sources:"
 
     def run_with(self, outputs: list[tuple[int, str]]) -> tuple[checks.subprocess.CompletedProcess, int, list[float]]:
@@ -1501,12 +1502,20 @@ class RunGradleTest(unittest.TestCase):
         result, calls, pauses = self.run_with([(1, self.FETCH_FAILURE), (0, "BUILD SUCCESSFUL")])
         self.assertEqual((result.returncode, calls, len(pauses)), (0, 2, 1))
 
-    def test_when_a_fetch_is_tried_again_gradle_is_told_to_ask_the_repository_again(self) -> None:
+    def test_when_a_file_was_not_found_gradle_is_told_to_ask_the_repository_again(self) -> None:
         self.run_with([(1, self.FETCH_FAILURE), (0, "BUILD SUCCESSFUL")])
         self.assertEqual([c.count("--refresh-dependencies") for c in self.calls], [0, 1])
 
+    def test_when_the_repository_answered_too_many_requests_gradle_keeps_what_it_has_cached(self) -> None:
+        self.run_with([(1, self.TOO_MANY_REQUESTS)] * 2 + [(0, "BUILD SUCCESSFUL")])
+        self.assertEqual([c.count("--refresh-dependencies") for c in self.calls], [0, 0, 0])
+
+    def test_when_the_repository_keeps_answering_too_many_requests_each_wait_is_longer(self) -> None:
+        result, calls, pauses = self.run_with([(1, self.TOO_MANY_REQUESTS)] * checks.GRADLE_ATTEMPTS)
+        self.assertEqual((result.returncode, calls, pauses), (1, checks.GRADLE_ATTEMPTS, [30, 60, 90, 120]))
+
     def test_when_every_attempt_fails_fetching_the_last_failure_is_returned(self) -> None:
-        result, calls, _ = self.run_with([(1, self.FETCH_FAILURE)] * 3)
+        result, calls, _ = self.run_with([(1, self.FETCH_FAILURE)] * checks.GRADLE_ATTEMPTS)
         self.assertEqual((result.returncode, calls), (1, checks.GRADLE_ATTEMPTS))
 
     def test_when_the_build_fails_for_another_reason_it_is_not_run_again(self) -> None:

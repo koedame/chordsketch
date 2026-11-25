@@ -12,7 +12,9 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/kotlin.yml"
+      - "scripts/gradle-retry.py"
       - ".github/actions/rust-cache/action.yml"
+      - ".github/actions/gradle-cache/action.yml"
   pull_request:
     paths:
       - "crates/ffi/**"
@@ -22,7 +24,9 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/kotlin.yml"
+      - "scripts/gradle-retry.py"
       - ".github/actions/rust-cache/action.yml"
+      - ".github/actions/gradle-cache/action.yml"
   workflow_dispatch:
     inputs:
       tag:
@@ -213,10 +217,22 @@ jobs:
           java-version: "17"
           distribution: "temurin"
 
+      - uses: ./.github/actions/gradle-cache
+        with:
+          phase: restore
+          directory: packages/kotlin
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Test with Gradle
-        working-directory: packages/kotlin
-        run: |
-          ./gradlew test
+        # Run again after a wait when Maven Central or the plugin portal
+        # refuses a request (429 / 5xx); a build that fails any other way is not.
+        run: python3 scripts/gradle-retry.py packages/kotlin test
+
+      - uses: ./.github/actions/gradle-cache
+        with:
+          phase: save
+          directory: packages/kotlin
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Upload generated Kotlin bindings
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

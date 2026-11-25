@@ -297,9 +297,9 @@ def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> subproc
 
 
 # What Gradle prints when a plugin, a dependency or the distribution itself could
-# not be fetched. plugins.gradle.org and services.gradle.org answer 404 / 5xx or drop
-# the connection now and then for files that exist, so these are retried; a build
-# that fails any other way is not.
+# not be fetched. plugins.gradle.org, services.gradle.org and Maven Central answer
+# 404 / 429 / 5xx or drop the connection now and then for files that exist, so
+# these are retried; a build that fails any other way is not.
 GRADLE_FETCH_FAILURES = (
     "Could not resolve ",
     "Could not parse POM",
@@ -312,7 +312,19 @@ GRADLE_FETCH_FAILURES = (
     "Server returned HTTP response code",
     "Could not install Gradle distribution",
 )
-GRADLE_ATTEMPTS = 3
+# What Gradle prints for a file the repository said was not there. It remembers
+# that for a day, so only these make the next run ask again with
+# `--refresh-dependencies`; for any other fetch failure that flag would throw
+# away what the dependency cache holds and ask for all of it once more, the
+# very requests a rate limit is refusing.
+GRADLE_REMEMBERED_MISSING = (
+    "was not found in any of the following sources",
+    "Could not find ",
+    "status code 404",
+)
+# Maven Central's limit on a runner's shared address lasts minutes, so the waits
+# add up to 5 minutes (30 + 60 + 90 + 120 seconds).
+GRADLE_ATTEMPTS = 5
 GRADLE_RETRY_WAIT = 30
 
 
@@ -327,14 +339,17 @@ def run_gradle(
     """Run a Gradle command again, after a wait, when it failed fetching from a repository.
 
     Gradle remembers a 404 for a day, so a plain second run fails in half a second
-    without asking the repository again; the runs after the first refresh what it knows.
+    without asking the repository again; after a 404 the runs that follow refresh what it knows.
+    A 429 or a dropped connection is not remembered, so those runs go on with the cache.
     """
+    refresh = False
     for attempt in range(1, attempts + 1):
-        result = runner(cmd if attempt == 1 else [*cmd, "--refresh-dependencies"], cwd)
+        result = runner([*cmd, "--refresh-dependencies"] if refresh else cmd, cwd)
         if result.returncode == 0 or attempt == attempts:
             return result
         if not any(marker in result.stdout for marker in GRADLE_FETCH_FAILURES):
             return result
+        refresh = refresh or any(marker in result.stdout for marker in GRADLE_REMEMBERED_MISSING)
         pause = wait * attempt
         print(f"Gradle could not fetch what it needs (attempt {attempt} of {attempts}); trying again in {pause:g}s", flush=True)
         sleep(pause)
@@ -2353,6 +2368,7 @@ PACKAGING_PATHS = (
     ".github/actions/chocolatey-pack-push/*",
     ".github/actions/cli-render-smoke/*",
     ".github/actions/docker-release-image/*",
+    ".github/actions/gradle-cache/*",
     ".github/actions/install-macports/*",
     ".github/actions/install-wasm-pack/*",
     ".github/actions/rust-cache/*",
@@ -2367,6 +2383,7 @@ PACKAGING_PATHS = (
     "scripts/_publish_checks.py",
     "scripts/_release_channels.py",
     "scripts/check-publishable.py",
+    "scripts/gradle-retry.py",
     "scripts/macports-regen-cargo-crates.py",
     "scripts/publish-registries.py",
     "scripts/release.py",

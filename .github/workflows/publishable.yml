@@ -424,6 +424,12 @@ jobs:
           java-version: "17"
           distribution: "temurin"
 
+      - uses: ./.github/actions/gradle-cache
+        with:
+          phase: restore
+          directory: packages/kotlin
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       # Maven Central refuses unsigned artifacts, so the check requires a
       # signature on every file. The release signs with its own key; a pull
       # request has none, so it signs with one made for this run.
@@ -441,6 +447,12 @@ jobs:
 
       - name: Publish to a scratch repository and check it
         run: python3 scripts/check-publishable.py maven
+
+      - uses: ./.github/actions/gradle-cache
+        with:
+          phase: save
+          directory: packages/kotlin
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
   container-image:
     name: GHCR and Docker Hub
@@ -564,8 +576,20 @@ jobs:
           java-version: "17"
           distribution: "temurin"
 
+      - uses: ./.github/actions/gradle-cache
+        with:
+          phase: restore
+          directory: packages/jetbrains-plugin
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Build and check the plugin distribution
         run: python3 scripts/check-publishable.py jetbrains
+
+      - uses: ./.github/actions/gradle-cache
+        with:
+          phase: save
+          directory: packages/jetbrains-plugin
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
   macports:
     name: MacPorts

@@ -1,0 +1,49 @@
+name: "Gradle cache"
+description: >
+  Keep the dependencies a Gradle project resolves from Maven Central and the
+  Gradle plugin portal, and the Gradle distribution the wrapper downloads, so a
+  run does not ask those repositories for them again. Maven Central answers
+  429 Too Many Requests to the runners' shared addresses now and then. Call it
+  with `phase: restore` before the first `gradlew` and with `phase: save` as
+  the last step of the job.
+inputs:
+  phase:
+    description: "`restore` before the build, `save` after it."
+    required: true
+  directory:
+    description: "The Gradle project's directory, relative to the repository root. The key follows its build files."
+    required: true
+  save-if:
+    description: >
+      Whether the `save` phase writes the cache. Required so every caller
+      states that only `main` writes to the GitHub Actions cache; entries
+      written per pull request would exhaust the cache budget.
+    required: true
+runs:
+  using: "composite"
+  steps:
+    # The IntelliJ Platform SDK (`idea`, ~780 MB) is left out: it comes from
+    # download.jetbrains.com, not from a repository that rate-limits, and it
+    # would take most of the pool's headroom. Gradle fetches it again when the
+    # files are missing.
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      if: inputs.phase == 'restore'
+      with:
+        path: |
+          ~/.gradle/caches/modules-2
+          !~/.gradle/caches/modules-2/files-2.1/idea
+          !~/.gradle/caches/modules-2/files-2.1/idea/**
+          ~/.gradle/wrapper/dists
+        key: gradle-${{ inputs.directory }}-${{ runner.os }}-${{ hashFiles(format('{0}/**/*.gradle.kts', inputs.directory), format('{0}/gradle.properties', inputs.directory), format('{0}/gradle/wrapper/gradle-wrapper.properties', inputs.directory)) }}
+        restore-keys: |
+          gradle-${{ inputs.directory }}-${{ runner.os }}-
+
+    - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      if: inputs.phase == 'save' && inputs.save-if == 'true'
+      with:
+        path: |
+          ~/.gradle/caches/modules-2
+          !~/.gradle/caches/modules-2/files-2.1/idea
+          !~/.gradle/caches/modules-2/files-2.1/idea/**
+          ~/.gradle/wrapper/dists
+        key: gradle-${{ inputs.directory }}-${{ runner.os }}-${{ hashFiles(format('{0}/**/*.gradle.kts', inputs.directory), format('{0}/gradle.properties', inputs.directory), format('{0}/gradle/wrapper/gradle-wrapper.properties', inputs.directory)) }}
