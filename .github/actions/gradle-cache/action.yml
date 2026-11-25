@@ -1,10 +1,10 @@
 name: "Gradle cache"
 description: >
   Keep the dependencies a Gradle project resolves from Maven Central and the
-  Gradle plugin portal, so a run does not ask those repositories for them again. Maven Central answers
-  429 Too Many Requests to the runners' shared addresses now and then. Call it
-  with `phase: restore` before the first `gradlew` and with `phase: save` as
-  the last step of the job.
+  Gradle plugin portal, so a run does not ask those repositories for them
+  again. Maven Central answers 429 Too Many Requests to the runners' shared
+  addresses now and then. Call it with `phase: restore` before the first
+  `gradlew` and with `phase: save` as the last step of the job.
 inputs:
   phase:
     description: "`restore` before the build, `save` after it."
