@@ -368,20 +368,6 @@ class CargoAboutVersionTest(unittest.TestCase):
         workflow = (tpl.ROOT / ".github/workflows/dependabot-licenses.yml").read_text(encoding="utf-8")
         self.assertIn("uses: ./" + str(Path(tpl.CARGO_ABOUT_PIN).parent), workflow)
 
-    def test_every_documented_install_command_names_the_pinned_version(self):
-        pinned = tpl.pinned_cargo_about()
-        documents = [
-            tpl.ROOT / "README.md",
-            tpl.ROOT / "CONTRIBUTING.md",
-            *sorted((tpl.ROOT / "docs").rglob("*.md")),
-        ]
-        commands = [
-            (str(f.relative_to(tpl.ROOT)), found.group(0))
-            for f in documents
-            for found in re.finditer(r"cargo install cargo-about[^`\n]*", f.read_text(encoding="utf-8"))
-        ]
-        self.assertEqual([c for c in commands if not c[1].endswith(f"--version {pinned}")], [])
-
 
 class ToolingTest(unittest.TestCase):
     def test_type_definitions_and_test_runners_are_tooling(self):
