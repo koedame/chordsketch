@@ -12,12 +12,14 @@ on:
       - "syntaxes/chordpro.tmLanguage.json"
       - "syntaxes/language-configuration.json"
       - ".github/workflows/jetbrains.yml"
+      - ".github/actions/gradle-cache/action.yml"
   pull_request:
     paths:
       - "packages/jetbrains-plugin/**"
       - "syntaxes/chordpro.tmLanguage.json"
       - "syntaxes/language-configuration.json"
       - ".github/workflows/jetbrains.yml"
+      - ".github/actions/gradle-cache/action.yml"
 
 concurrency:
   group: jetbrains-${{ github.ref }}
@@ -42,6 +44,12 @@ jobs:
           java-version: "17"
           distribution: "temurin"
 
+      - uses: ./.github/actions/gradle-cache
+        with:
+          phase: restore
+          directory: packages/jetbrains-plugin
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Build plugin
         run: ./gradlew buildPlugin
 
@@ -53,3 +61,9 @@ jobs:
         run: |
           diff syntaxes/chordpro.tmLanguage.json packages/jetbrains-plugin/textmate/chordpro/chordpro.tmLanguage.json
           diff syntaxes/language-configuration.json packages/jetbrains-plugin/textmate/chordpro/language-configuration.json
+
+      - uses: ./.github/actions/gradle-cache
+        with:
+          phase: save
+          directory: packages/jetbrains-plugin
+          save-if: ${{ github.ref == 'refs/heads/main' }}
