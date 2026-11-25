@@ -2383,6 +2383,7 @@ PACKAGING_PATHS = (
     "scripts/_publish_checks.py",
     "scripts/_release_channels.py",
     "scripts/check-publishable.py",
+    "scripts/gradle-retry.py",
     "scripts/macports-regen-cargo-crates.py",
     "scripts/publish-registries.py",
     "scripts/release.py",
