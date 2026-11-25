@@ -2434,8 +2434,14 @@ struct PngInfo {
     idat_data: Vec<u8>,
     /// PLTE chunk data for indexed color images (color type 3).
     palette: Option<Vec<u8>>,
-    /// Zlib-compressed alpha channel data (for color types 4 and 6).
+    /// Zlib-compressed alpha channel data (color types 4 and 6, and indexed
+    /// images with a `tRNS` chunk).
     smask: Option<Vec<u8>>,
+    /// Bit depth of the alpha channel in `smask`.
+    smask_bit_depth: u8,
+    /// Transparent color key from a `tRNS` chunk (gray: 1 value, RGB: 3
+    /// values, in sample units), written as the PDF `/Mask` array.
+    color_key: Option<Vec<u16>>,
 }
 
 /// Parse a PNG file and prepare its data for PDF embedding.
@@ -2470,6 +2476,7 @@ fn parse_png(data: &[u8]) -> Option<PngInfo> {
     // Collect IDAT chunks and optionally PLTE.
     let mut idat_chunks: Vec<u8> = Vec::new();
     let mut palette: Option<Vec<u8>> = None;
+    let mut trns: Option<Vec<u8>> = None;
     let mut pos = 8; // skip signature
 
     while pos + 12 <= data.len() {
@@ -2491,6 +2498,8 @@ fn parse_png(data: &[u8]) -> Option<PngInfo> {
             idat_chunks.extend_from_slice(&data[chunk_data_start..chunk_data_end]);
         } else if ctype == b"PLTE" {
             palette = Some(data[chunk_data_start..chunk_data_end].to_vec());
+        } else if ctype == b"tRNS" {
+            trns = Some(data[chunk_data_start..chunk_data_end].to_vec());
         } else if ctype == b"IEND" {
             break;
         }
@@ -2515,6 +2524,27 @@ fn parse_png(data: &[u8]) -> Option<PngInfo> {
             3 => 3, // indexed → presented as RGB via palette lookup in PDF
             _ => 3, // RGB
         };
+        // A `tRNS` chunk makes some pixels transparent: indexed images get a
+        // per-pixel alpha (SMask) from the palette lookup, gray / RGB images
+        // a single transparent color (a PDF color key mask).
+        let mut smask = None;
+        let mut color_key = None;
+        match (color_type, trns.as_deref()) {
+            (3, Some(trns)) => {
+                smask = Some(indexed_alpha(&idat_chunks, width, height, bit_depth, trns)?);
+            }
+            (0, Some(trns)) if trns.len() == 2 => {
+                color_key = Some(vec![u16::from_be_bytes([trns[0], trns[1]])]);
+            }
+            (2, Some(trns)) if trns.len() == 6 => {
+                color_key = Some(
+                    (0..3)
+                        .map(|i| u16::from_be_bytes([trns[2 * i], trns[2 * i + 1]]))
+                        .collect(),
+                );
+            }
+            _ => {}
+        }
         Some(PngInfo {
             width,
             height,
@@ -2522,7 +2552,9 @@ fn parse_png(data: &[u8]) -> Option<PngInfo> {
             colors,
             idat_data: idat_chunks,
             palette,
-            smask: None,
+            smask,
+            smask_bit_depth: 8,
+            color_key,
         })
     }
 }
@@ -2572,18 +2604,66 @@ fn separate_alpha(
         _ => return None,
     };
     let total_channels = color_channels + alpha_channels;
-    let src_stride = 1 + w * total_channels * bytes_per_sample; // +1 for filter byte
-
-    if raw.len() < h * src_stride {
-        return None;
-    }
 
     // Un-filter all rows at once, then separate channels.
     let bpp = total_channels * bytes_per_sample;
     let row_bytes = w * total_channels * bytes_per_sample;
-    let mut decoded = vec![0u8; h * row_bytes];
+    let decoded = unfilter_scanlines(&raw, h, row_bytes, bpp)?;
+
+    // Separate color and alpha channels, writing with filter 0 (None).
+    let color_stride = 1 + w * color_channels * bytes_per_sample;
+    let alpha_stride = 1 + w * bytes_per_sample;
+    let mut color_raw = Vec::with_capacity(h * color_stride);
+    let mut alpha_raw = Vec::with_capacity(h * alpha_stride);
 
     for row in 0..h {
+        color_raw.push(0); // filter byte = None
+        alpha_raw.push(0); // filter byte = None
+        let row_start = row * row_bytes;
+        for x in 0..w {
+            let pixel_start = row_start + x * total_channels * bytes_per_sample;
+            // Color channels
+            for c in 0..color_channels {
+                let offset = pixel_start + c * bytes_per_sample;
+                color_raw.extend_from_slice(&decoded[offset..offset + bytes_per_sample]);
+            }
+            // Alpha channel
+            let alpha_offset = pixel_start + color_channels * bytes_per_sample;
+            alpha_raw.extend_from_slice(&decoded[alpha_offset..alpha_offset + bytes_per_sample]);
+        }
+    }
+
+    // Recompress both streams with zlib.
+    let idat_data = zlib_compress(&color_raw)?;
+    let smask = zlib_compress(&alpha_raw)?;
+
+    Some(PngInfo {
+        width,
+        height,
+        bit_depth,
+        colors: color_channels as u8,
+        idat_data,
+        palette: None,
+        smask: Some(smask),
+        smask_bit_depth: bit_depth,
+        color_key: None,
+    })
+}
+
+/// Reverse the PNG scanline filters (types 0–4) of decompressed IDAT data.
+///
+/// `raw` holds `height` rows, each a 1-byte filter type followed by
+/// `row_bytes` bytes. `bpp` is the filter's "bytes per complete pixel"
+/// (at least 1). Returns the unfiltered rows without the filter bytes, or
+/// `None` if the data is too short or a filter type is unknown.
+fn unfilter_scanlines(raw: &[u8], height: usize, row_bytes: usize, bpp: usize) -> Option<Vec<u8>> {
+    let src_stride = 1 + row_bytes;
+    if raw.len() < height.checked_mul(src_stride)? {
+        return None;
+    }
+    let mut decoded = vec![0u8; height * row_bytes];
+
+    for row in 0..height {
         let src_start = row * src_stride;
         let filter = raw[src_start];
         let src_row = &raw[src_start + 1..src_start + src_stride];
@@ -2650,43 +2730,51 @@ fn separate_alpha(
             _ => return None,
         }
     }
+    Some(decoded)
+}
 
-    // Separate color and alpha channels, writing with filter 0 (None).
-    let color_stride = 1 + w * color_channels * bytes_per_sample;
-    let alpha_stride = 1 + w * bytes_per_sample;
-    let mut color_raw = Vec::with_capacity(h * color_stride);
-    let mut alpha_raw = Vec::with_capacity(h * alpha_stride);
+/// Build the alpha channel of an indexed PNG (color type 3) with a `tRNS`
+/// chunk: one 8-bit alpha value per pixel, looked up from the palette index.
+/// Palette entries beyond the end of `tRNS` are fully opaque.
+///
+/// Returns the zlib-compressed rows (filter byte 0), ready for `/SMask`.
+fn indexed_alpha(
+    idat_data: &[u8],
+    width: u32,
+    height: u32,
+    bit_depth: u8,
+    trns: &[u8],
+) -> Option<Vec<u8>> {
+    if !matches!(bit_depth, 1 | 2 | 4 | 8) {
+        return None;
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let bits = bit_depth as usize;
+    let row_bytes = (w.checked_mul(bits)?).div_ceil(8);
+    let expected_size = h.checked_mul(1 + row_bytes)?;
+    const MAX_DECOMPRESSED_SIZE: u64 = 256 * 1024 * 1024;
+    let limit = (expected_size as u64).min(MAX_DECOMPRESSED_SIZE);
 
+    let mut decoder = ZlibDecoder::new(idat_data).take(limit + 1);
+    let mut raw = Vec::new();
+    if decoder.read_to_end(&mut raw).is_err() || raw.len() as u64 > limit {
+        return None;
+    }
+    let decoded = unfilter_scanlines(&raw, h, row_bytes, 1)?;
+
+    let mut alpha_raw = Vec::with_capacity(h * (1 + w));
     for row in 0..h {
-        color_raw.push(0); // filter byte = None
         alpha_raw.push(0); // filter byte = None
-        let row_start = row * row_bytes;
+        let row_data = &decoded[row * row_bytes..(row + 1) * row_bytes];
         for x in 0..w {
-            let pixel_start = row_start + x * total_channels * bytes_per_sample;
-            // Color channels
-            for c in 0..color_channels {
-                let offset = pixel_start + c * bytes_per_sample;
-                color_raw.extend_from_slice(&decoded[offset..offset + bytes_per_sample]);
-            }
-            // Alpha channel
-            let alpha_offset = pixel_start + color_channels * bytes_per_sample;
-            alpha_raw.extend_from_slice(&decoded[alpha_offset..alpha_offset + bytes_per_sample]);
+            let bit_pos = x * bits;
+            let shift = 8 - bits - (bit_pos % 8);
+            let index = ((row_data[bit_pos / 8] >> shift) & ((1u16 << bits) - 1) as u8) as usize;
+            alpha_raw.push(trns.get(index).copied().unwrap_or(255));
         }
     }
-
-    // Recompress both streams with zlib.
-    let idat_data = zlib_compress(&color_raw)?;
-    let smask = zlib_compress(&alpha_raw)?;
-
-    Some(PngInfo {
-        width,
-        height,
-        bit_depth,
-        colors: color_channels as u8,
-        idat_data,
-        palette: None,
-        smask: Some(smask),
-    })
+    zlib_compress(&alpha_raw)
 }
 
 /// Paeth predictor function used by PNG filter type 4.
@@ -2739,6 +2827,10 @@ enum ImageFormat {
         /// Zlib-compressed alpha channel for images with transparency.
         /// Stored as a separate `/FlateDecode` stream for the PDF SMask.
         smask: Option<Vec<u8>>,
+        /// Bit depth of the alpha channel in `smask`.
+        smask_bit_depth: u8,
+        /// Transparent color key (`/Mask` array values), if any.
+        color_key: Option<Vec<u16>>,
     },
 }
 
@@ -3374,6 +3466,8 @@ impl PdfDocument {
                 colors: info.colors,
                 palette: info.palette,
                 smask: info.smask,
+                smask_bit_depth: info.smask_bit_depth,
+                color_key: info.color_key,
             },
         });
         idx
@@ -3681,31 +3775,13 @@ impl PdfDocument {
                     colors,
                     palette,
                     smask,
+                    smask_bit_depth,
+                    color_key,
                 } => {
-                    // If there is an SMask, write it first so we know its
-                    // object number when writing the main image.
-                    let smask_obj_num = if smask.is_some() {
-                        offsets.push(pdf.len());
-                        let sobj = offsets.len();
-                        let smask_data = smask.as_ref().expect("checked above");
-                        let smask_header = format!(
-                            "{} 0 obj\n<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent {} /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent {} /Columns {} >> /Length {} >>\nstream\n",
-                            sobj,
-                            img.width,
-                            img.height,
-                            bit_depth,
-                            bit_depth,
-                            img.width,
-                            smask_data.len()
-                        );
-                        pdf.extend_from_slice(smask_header.as_bytes());
-                        pdf.extend_from_slice(smask_data);
-                        pdf.extend_from_slice(b"\nendstream\nendobj\n");
-                        Some(sobj)
-                    } else {
-                        None
-                    };
-
+                    // The image XObject comes first: the resources dict
+                    // refers to the first object of each image, and that
+                    // object must be the image itself, not its SMask. The
+                    // SMask follows as the next object.
                     offsets.push(pdf.len());
                     let obj_num = offsets.len();
 
@@ -3720,27 +3796,59 @@ impl PdfDocument {
                         (1, None) => "/DeviceGray".to_string(),
                         _ => "/DeviceRGB".to_string(),
                     };
+                    // PNG predictors work on whole pixels. An indexed image
+                    // has one sample (the palette index) per pixel even though
+                    // `colors` counts the RGB channels it expands to.
+                    let predictor_colors = if palette.is_some() { 1 } else { *colors };
 
-                    let smask_ref = smask_obj_num
-                        .map(|n| format!(" /SMask {} 0 R", n))
-                        .unwrap_or_default();
+                    let smask_ref = if smask.is_some() {
+                        format!(" /SMask {} 0 R", obj_num + 1)
+                    } else {
+                        String::new()
+                    };
+                    let mask_ref = match color_key {
+                        Some(key) => {
+                            let ranges: Vec<String> =
+                                key.iter().map(|v| format!("{v} {v}")).collect();
+                            format!(" /Mask [{}]", ranges.join(" "))
+                        }
+                        None => String::new(),
+                    };
 
                     let header = format!(
-                        "{} 0 obj\n<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace {} /BitsPerComponent {} /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors {} /BitsPerComponent {} /Columns {} >>{} /Length {} >>\nstream\n",
+                        "{} 0 obj\n<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace {} /BitsPerComponent {} /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors {} /BitsPerComponent {} /Columns {} >>{}{} /Length {} >>\nstream\n",
                         obj_num,
                         img.width,
                         img.height,
                         color_space,
                         bit_depth,
-                        colors,
+                        predictor_colors,
                         bit_depth,
                         img.width,
                         smask_ref,
+                        mask_ref,
                         idat_data.len()
                     );
                     pdf.extend_from_slice(header.as_bytes());
                     pdf.extend_from_slice(idat_data);
                     pdf.extend_from_slice(b"\nendstream\nendobj\n");
+
+                    if let Some(smask_data) = smask {
+                        offsets.push(pdf.len());
+                        let smask_header = format!(
+                            "{} 0 obj\n<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent {} /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent {} /Columns {} >> /Length {} >>\nstream\n",
+                            offsets.len(),
+                            img.width,
+                            img.height,
+                            smask_bit_depth,
+                            smask_bit_depth,
+                            img.width,
+                            smask_data.len()
+                        );
+                        pdf.extend_from_slice(smask_header.as_bytes());
+                        pdf.extend_from_slice(smask_data);
+                        pdf.extend_from_slice(b"\nendstream\nendobj\n");
+                    }
                 }
             }
         }
@@ -7448,6 +7556,8 @@ mod png_tests {
                 colors: 3,
                 palette: None,
                 smask: None,
+                smask_bit_depth: 8,
+                color_key: None,
             },
         };
         assert_eq!(img.num_pdf_objects(), 1);
@@ -7464,6 +7574,8 @@ mod png_tests {
                 colors: 3,
                 palette: None,
                 smask: Some(vec![1, 2, 3]),
+                smask_bit_depth: 8,
+                color_key: None,
             },
         };
         assert_eq!(img.num_pdf_objects(), 2);
@@ -7637,3 +7749,6 @@ mod info_title_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod png_transparency_tests;

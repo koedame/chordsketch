@@ -907,6 +907,7 @@ dependencies = [
  "chordsketch-chordpro",
  "flate2",
  "libc",
+ "lopdf",
  "pdf-extract",
  "ttf-parser",
 ]
