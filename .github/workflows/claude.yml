@@ -63,6 +63,12 @@ jobs:
           # maintainer are passed to Claude as context; those from other
           # accounts are left out of the prompt.
           include_comments_by_actor: unchidev
+          # Commits Claude pushes to a pull request are authored as the
+          # maintainer, the account CLAUDE_PAT belongs to and the one that
+          # starts every run. With the action's default bot identity, each
+          # squash merge added a bot co-author trailer to the commit on main.
+          bot_name: unchidev
+          bot_id: "69432552"
           # `--permission-mode acceptEdits` is the mode the action itself sets
           # for a run that `track_progress` puts on its `@claude`-mention path,
           # which is every run of this job. It is spelled out so the mode does
