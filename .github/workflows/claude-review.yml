@@ -66,7 +66,7 @@ jobs:
             }
 
             // Limit auto-review iterations to prevent infinite loops.
-            // claude[bot] fix commits are NOT skipped — they get delta-reviewed.
+            // Fix commits from the Claude workflow are NOT skipped — they get delta-reviewed.
             // MAX_ITERATIONS is the safety cap: after that many requests the
             // loop stops and waits for a human. A clean convergence usually
             // takes about four iterations (#2471); the review instructions

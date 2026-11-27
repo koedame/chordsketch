@@ -94,7 +94,8 @@ npm run dev
 
 CI runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and
 `cargo test` on every PR. A Claude-powered auto-review classifies
-findings by severity and may push fix commits directly.
+findings by severity and may push fix commits directly. Those fix
+commits are authored as the maintainer.
 
 ## Code Style
 
