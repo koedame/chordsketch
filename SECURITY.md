@@ -40,10 +40,11 @@ attempting to:
 - **Symlink rejection**: Config files are opened with `O_NOFOLLOW` on Unix to
   prevent symlink-based redirection.
 - **File size limit**: Config files are capped at 10 MB (`MAX_CONFIG_FILE_SIZE`).
-- **Delegate execution restriction**: Only system-level, user-level config, or
-  explicit CLI flags can enable delegate execution. Project-level and song-level
-  configs cannot enable delegates — any attempt is silently overridden with a
-  warning.
+- **Delegate execution restriction**: Delegates are off by default and are
+  never enabled just because the tool is installed. Only system-level or
+  user-level config, explicit CLI flags, or the configuration a library caller
+  passes can enable delegate execution. Project-level and song-level configs
+  cannot enable delegates — any attempt is reset to `false` with a warning.
 
 ### RRJSON Parser
 
@@ -52,26 +53,34 @@ attempting to:
 - **Non-finite number rejection**: `Infinity`, `-Infinity`, and `NaN` are
   rejected.
 
-### Delegate Execution (abc2svg, Lilypond)
+### Delegate Execution (abc2svg, Lilypond, MuseScore)
 
 Delegate environments invoke external tools to convert music notation to SVG.
-Multiple defense layers are applied:
+These tools execute code that can be embedded in the notation (abc2svg runs
+JavaScript, Lilypond runs Scheme), so **the primary control is that delegates
+are off unless a trusted source enables them**, and they should be enabled only
+for song files you trust. The file previews (Explorer / Quick Look) and the MCP
+server never run delegates, whatever the configuration. The WebAssembly build
+cannot run them at all.
 
-1. **Content-level sanitization** — dangerous constructs are stripped from input
-   before the external tool is invoked:
-   - ABC: `%%beginjs`/`%%endjs` blocks and `%%javascript` directives are
-     removed (case-insensitive).
-   - Lilypond: lines containing dangerous Scheme functions (`system`, `getenv`,
-     `open-input-file`, `open-output-file`, `open-file`, `primitive-load`,
-     `primitive-load-path`, `eval-string`, `load`, `ly:gulp-file`, `ly:system`,
-     `ly:parser-include`, `ly:set-option`) are stripped.
-2. **Process sandboxing** — Lilypond is invoked with the `-dsafe` flag to
-   sandbox its embedded Scheme interpreter.
-3. **Safe command construction** — all arguments are passed via the
+When a delegate is enabled, these additional layers apply:
+
+1. **Content-level filtering** — before the external tool is invoked:
+   - ABC: only stylesheet directives (`%%...` / `I:...` lines) on a fixed
+     allowlist of layout, spacing, font and score-structure directives are
+     passed through. Every other directive is removed, together with the body
+     of any block it opens.
+   - Lilypond: lines with directly-called dangerous Scheme functions are
+     removed. This is a best-effort filter, not a security boundary — Lilypond
+     removed its `-dsafe` sandbox mode in 2.23.12 and has no replacement, so
+     Lilypond content must come from a trusted file.
+   - MusicXML: XML processing instructions and `<!DOCTYPE>` declarations are
+     removed.
+2. **Safe command construction** — all arguments are passed via the
    `Command::arg()` API, preventing shell metacharacter injection.
-4. **Output sanitization** — SVG output from delegates is run through the SVG
+3. **Output sanitization** — SVG output from delegates is run through the SVG
    sanitizer before inclusion in rendered output.
-5. **Temp file safety** — temporary files use PID + atomic counter for unique
+4. **Temp file safety** — temporary files use PID + atomic counter for unique
    names, are created with `O_EXCL` (exclusive create) semantics, and
    directories use `create_dir` (not `create_dir_all`) to prevent symlink
    attacks on parent paths.

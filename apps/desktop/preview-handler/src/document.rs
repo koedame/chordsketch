@@ -100,6 +100,15 @@ pub fn decode_source(bytes: &[u8]) -> Result<String, SourceError> {
     Ok(String::from_utf8_lossy(without_bom).into_owned())
 }
 
+/// The configuration every preview renders with.
+///
+/// External notation tools are always off: the shell previews whatever
+/// file the user selects, before they have decided to trust it, and those
+/// tools run code embedded in the notation.
+fn preview_config() -> Config {
+    Config::defaults().without_delegates()
+}
+
 /// Render ChordPro source into the self-contained HTML document the
 /// preview pane loads via `NavigateToString`.
 ///
@@ -115,7 +124,7 @@ pub fn decode_source(bytes: &[u8]) -> Result<String, SourceError> {
 /// `parse_multi_lenient` open / export path.
 #[must_use]
 pub fn render_document(source: &str) -> String {
-    let config = Config::defaults();
+    let config = preview_config();
     let songs: Vec<_> = parse_multi_lenient(source)
         .results
         .into_iter()
@@ -179,6 +188,18 @@ fn envelope(title: &str, body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_preview_never_enables_an_external_notation_tool() {
+        let config = preview_config();
+        for delegate in chordsketch_chordpro::config::Delegate::ALL {
+            assert!(
+                !config.delegate_enabled(delegate),
+                "{}",
+                delegate.config_key()
+            );
+        }
+    }
 
     #[test]
     fn test_decode_source_strips_utf8_bom() {

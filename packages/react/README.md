@@ -148,10 +148,12 @@ with dangerous schemes drop out of the output the same way they
 do on the static-HTML side. Delegate sections (`{start_of_abc}`,
 `{start_of_ly}`, `{start_of_musicxml}`, `{start_of_textblock}`)
 are tracked as a follow-up — the walker currently ignores their
-bodies rather than rendering them. If you accept untrusted
-ChordPro and need full delegate-section rendering today, drive
-the static `chordsketch-render-html` output yourself and embed
-it in your own iframe.
+bodies rather than rendering them. If you need delegate-section
+rendering for ChordPro you trust, drive the static
+`chordsketch-render-html` output yourself with the delegates
+enabled in its configuration and embed it in your own iframe.
+The external tools behind those sections execute code embedded
+in the notation, so do not enable them for untrusted input.
 
 Errors are surfaced via an inline `role="alert"` above the
 render by default. Pass `errorFallback={(err) => <YourJsx/>}` to

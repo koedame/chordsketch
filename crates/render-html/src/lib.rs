@@ -31,7 +31,7 @@ use svg_sanitize::sanitize_svg_content;
 
 use chordsketch_chordpro::ast::{CommentStyle, Directive, DirectiveKind, Line, LyricsLine, Song};
 use chordsketch_chordpro::canonical_chord_name;
-use chordsketch_chordpro::config::Config;
+use chordsketch_chordpro::config::{Config, Delegate};
 use chordsketch_chordpro::escape::escape_xml as escape;
 use chordsketch_chordpro::formatting::{
     StyleElement, StyleProperty, parse_font_size, style_target,
@@ -253,13 +253,17 @@ fn render_song_body_into(
     // the structured tokeniser (`chordsketch_chordpro::grid`)
     // instead of the generic chord-over-lyrics path.
     let mut in_grid = false;
-    // Delegate tool availability: Some(true) = force enable, Some(false) = force
-    // disable, None = auto-detect on first encounter. The auto-detect value is
-    // lazily resolved (via `get_or_insert_with`) so that subprocess checks only
-    // run when a delegate section is actually present in the input.
-    let mut abc2svg_resolved: Option<bool> = config.get_path("delegates.abc2svg").as_bool();
-    let mut lilypond_resolved: Option<bool> = config.get_path("delegates.lilypond").as_bool();
-    let mut musescore_resolved: Option<bool> = config.get_path("delegates.musescore").as_bool();
+    // Whether each external notation tool may be run. Only an explicit `true`
+    // from the caller's configuration enables one; an installed tool is never
+    // picked up on its own. The wasm build has no process to spawn, so the
+    // tools stay off there whatever the configuration says.
+    #[cfg(not(target_arch = "wasm32"))]
+    let delegate_on = |d: Delegate| config.delegate_enabled(d);
+    #[cfg(target_arch = "wasm32")]
+    let delegate_on = |_: Delegate| false;
+    let abc2svg_enabled = delegate_on(Delegate::Abc2svg);
+    let lilypond_enabled = delegate_on(Delegate::Lilypond);
+    let musescore_enabled = delegate_on(Delegate::Musescore);
     let mut abc_buf: Option<String> = None;
     let mut abc_label: Option<String> = None;
     let mut ly_buf: Option<String> = None;
@@ -600,12 +604,7 @@ fn render_song_body_into(
                         html.push_str("<div style=\"break-before: recto;\"></div>\n");
                     }
                     DirectiveKind::StartOfAbc => {
-                        #[cfg(not(target_arch = "wasm32"))]
-                        let enabled = *abc2svg_resolved
-                            .get_or_insert_with(chordsketch_chordpro::external_tool::has_abc2svg);
-                        #[cfg(target_arch = "wasm32")]
-                        let enabled = *abc2svg_resolved.get_or_insert(false);
-                        if enabled {
+                        if abc2svg_enabled {
                             abc_buf = Some(String::new());
                             abc_label = directive.value.clone();
                         } else {
@@ -626,12 +625,7 @@ fn render_song_body_into(
                         }
                     }
                     DirectiveKind::StartOfLy => {
-                        #[cfg(not(target_arch = "wasm32"))]
-                        let enabled = *lilypond_resolved
-                            .get_or_insert_with(chordsketch_chordpro::external_tool::has_lilypond);
-                        #[cfg(target_arch = "wasm32")]
-                        let enabled = *lilypond_resolved.get_or_insert(false);
-                        if enabled {
+                        if lilypond_enabled {
                             ly_buf = Some(String::new());
                             ly_label = directive.value.clone();
                         } else {
@@ -652,12 +646,7 @@ fn render_song_body_into(
                         }
                     }
                     DirectiveKind::StartOfMusicxml => {
-                        #[cfg(not(target_arch = "wasm32"))]
-                        let enabled = *musescore_resolved
-                            .get_or_insert_with(chordsketch_chordpro::external_tool::has_musescore);
-                        #[cfg(target_arch = "wasm32")]
-                        let enabled = *musescore_resolved.get_or_insert(false);
-                        if enabled {
+                        if musescore_enabled {
                             musicxml_buf = Some(String::new());
                             musicxml_label = directive.value.clone();
                         } else {
@@ -1733,7 +1722,7 @@ fn render_abc_with_fallback(
 
 /// Fallback for wasm32: external tools are never available, so render as
 /// preformatted text. This function is unreachable in practice because
-/// `has_abc2svg()` always returns false on wasm32, but the compiler needs it.
+/// every delegate is disabled on wasm32, but the compiler needs it.
 #[cfg(target_arch = "wasm32")]
 fn render_abc_with_fallback(
     abc_content: &str,
@@ -1787,8 +1776,8 @@ fn render_ly_with_fallback(
 }
 
 /// Fallback for wasm32: external tools are never available, so render as
-/// preformatted text. Unreachable in practice because `has_lilypond()` always
-/// returns false on wasm32.
+/// preformatted text. Unreachable in practice because every delegate is
+/// disabled on wasm32.
 #[cfg(target_arch = "wasm32")]
 fn render_ly_with_fallback(
     ly_content: &str,
@@ -1834,8 +1823,8 @@ fn render_musicxml_with_fallback(
 }
 
 /// Fallback for wasm32: external tools are never available, so render as
-/// preformatted text. Unreachable in practice because `has_musescore()` always
-/// returns false on wasm32.
+/// preformatted text. Unreachable in practice because every delegate is
+/// disabled on wasm32.
 #[cfg(target_arch = "wasm32")]
 fn render_musicxml_with_fallback(
     musicxml_content: &str,
@@ -4606,28 +4595,6 @@ Verse text\n\
     }
 
     #[test]
-    fn test_abc_section_null_config_auto_detect_disabled() {
-        // Default config has delegates.abc2svg=null (auto-detect).
-        // When abc2svg is not installed, sections render as plain text.
-        if chordsketch_chordpro::external_tool::has_abc2svg() {
-            return; // Skip on machines with abc2svg installed
-        }
-        let input = "{start_of_abc}\nX:1\n{end_of_abc}";
-        let song = chordsketch_chordpro::parse(input).unwrap();
-        // Use defaults — delegates.abc2svg is null (auto-detect)
-        let config = chordsketch_chordpro::config::Config::defaults();
-        assert!(
-            config.get_path("delegates.abc2svg").is_null(),
-            "default config should have null delegates.abc2svg"
-        );
-        let html = render_song_with_transpose(&song, 0, &config);
-        assert!(
-            html.contains("<section class=\"abc\">"),
-            "null auto-detect with no abc2svg should render as text section"
-        );
-    }
-
-    #[test]
     fn test_abc_section_fallback_preformatted() {
         // With delegate enabled but abc2svg not available, falls back to <pre>
         if chordsketch_chordpro::external_tool::has_abc2svg() {
@@ -4679,53 +4646,45 @@ Verse text\n\
     }
 
     #[test]
-    fn test_abc_section_auto_detect_default_config() {
-        // Default config has delegates.abc2svg=null (auto-detect).
-        // When the tool is not found, auto-detect resolves to false and the
-        // section renders with raw content as regular text (no SVG, no <pre>).
+    fn test_abc_section_renders_as_text_with_default_config() {
+        // The defaults never run abc2svg, installed or not: the section
+        // renders its raw content as regular text (no SVG, no <pre>), and no
+        // invocation warning shows that the tool was not attempted.
         let input = "{start_of_abc}\nX:1\nT:Test\nK:C\n{end_of_abc}";
         let song = chordsketch_chordpro::parse(input).unwrap();
         let config = chordsketch_chordpro::config::Config::defaults();
-        let html = render_song_with_transpose(&song, 0, &config);
+        let result = render_song_with_warnings(&song, 0, &config);
+        let html = &result.output;
+        assert!(html.contains("<section class=\"abc\">"));
+        assert!(html.contains("X:1"), "raw ABC content should be present");
+        assert!(!html.contains("<svg"), "abc2svg must not have run");
+        assert!(!html.contains("<pre>"), "the tool fallback was not taken");
         assert!(
-            html.contains("<section class=\"abc\">"),
-            "auto-detect should produce abc section"
+            !result.warnings.iter().any(|w| w.contains("abc2svg")),
+            "abc2svg must not have been attempted: {:?}",
+            result.warnings
         );
-        if !chordsketch_chordpro::external_tool::has_abc2svg() {
-            assert!(
-                html.contains("X:1"),
-                "raw ABC content should be present without tool"
-            );
-            assert!(
-                !html.contains("<svg"),
-                "no SVG should be generated without abc2svg"
-            );
-        }
     }
 
     // -- lilypond delegate rendering tests ----------------------------------------
 
     #[test]
-    fn test_ly_section_auto_detect_default_config() {
-        // Same as ABC: auto-detect renders a section regardless of tool availability.
+    fn test_ly_section_renders_as_text_with_default_config() {
+        // Same as ABC: the defaults never run lilypond, installed or not.
         let input = "{start_of_ly}\n\\relative c' { c4 }\n{end_of_ly}";
         let song = chordsketch_chordpro::parse(input).unwrap();
         let config = chordsketch_chordpro::config::Config::defaults();
-        let html = render_song_with_transpose(&song, 0, &config);
+        let result = render_song_with_warnings(&song, 0, &config);
+        let html = &result.output;
+        assert!(html.contains("<section class=\"ly\">"));
+        assert!(html.contains("\\relative"), "raw content should be present");
+        assert!(!html.contains("<svg"), "lilypond must not have run");
+        assert!(!html.contains("<pre>"), "the tool fallback was not taken");
         assert!(
-            html.contains("<section class=\"ly\">"),
-            "auto-detect should produce ly section"
+            !result.warnings.iter().any(|w| w.contains("lilypond")),
+            "lilypond must not have been attempted: {:?}",
+            result.warnings
         );
-        if !chordsketch_chordpro::external_tool::has_lilypond() {
-            assert!(
-                html.contains("\\relative"),
-                "raw Lilypond content should be present without tool"
-            );
-            assert!(
-                !html.contains("<svg"),
-                "no SVG should be generated without lilypond"
-            );
-        }
     }
 
     #[test]
@@ -4824,24 +4783,21 @@ mod delegate_tests {
     }
 
     #[test]
-    fn test_render_musicxml_section_no_musescore_installed() {
-        // Default config has delegates.musescore=null (auto-detect).
-        // When musescore is not installed, sections render as plain text.
-        if chordsketch_chordpro::external_tool::has_musescore() {
-            return; // Skip on machines with musescore installed
-        }
-
+    fn test_render_musicxml_section_renders_as_text_with_default_config() {
+        // The defaults never run MuseScore, installed or not.
         let input = "{start_of_musicxml}\n<score-partwise/>\n{end_of_musicxml}";
         let song = chordsketch_chordpro::parse(input).unwrap();
         let config = chordsketch_chordpro::config::Config::defaults();
+        let result = render_song_with_warnings(&song, 0, &config);
+        assert!(result.output.contains("<section class=\"musicxml\">"));
         assert!(
-            config.get_path("delegates.musescore").is_null(),
-            "default config should have null delegates.musescore"
+            !result.output.contains("<pre>"),
+            "the tool fallback was not taken"
         );
-        let html = render_song_with_transpose(&song, 0, &config);
         assert!(
-            html.contains("<section class=\"musicxml\">"),
-            "null auto-detect with no musescore should render as text section"
+            !result.warnings.iter().any(|w| w.contains("musescore")),
+            "musescore must not have been attempted: {:?}",
+            result.warnings
         );
     }
 

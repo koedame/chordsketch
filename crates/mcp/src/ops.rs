@@ -190,7 +190,7 @@ pub struct DirectiveInfo {
 /// that shows the chart without them shows a silently shortened song.
 #[must_use]
 pub fn render(source: &str, format: RenderFormat, transpose: i8) -> Rendered {
-    let config = Config::defaults();
+    let config = render_config();
     let songs = parse_songs(source);
     let result = match format {
         RenderFormat::Text => {
@@ -209,6 +209,15 @@ pub fn render(source: &str, format: RenderFormat, transpose: i8) -> Rendered {
         output: result.output,
         warnings,
     }
+}
+
+/// The configuration every render uses.
+///
+/// External notation tools are always off here: the source comes from a
+/// client that may have fetched it from anywhere, and those tools run code
+/// embedded in the notation.
+fn render_config() -> Config {
+    Config::defaults().without_delegates()
 }
 
 /// Parses ChordPro source into one syntax tree per song.
@@ -252,7 +261,7 @@ pub fn validate(source: &str) -> Validation {
     let rendered = chordsketch_render_text::render_songs_with_warnings(
         &parse_songs(source),
         0,
-        &Config::defaults(),
+        &render_config(),
     );
     Validation {
         errors: diagnostics(source),
@@ -374,6 +383,18 @@ mod tests {
     /// file**, but line 2 of the second song's segment.
     const MULTI_SONG_WITH_ERROR: &str =
         "{title: A}\n[G]ok\n{new_song}\n{title: B}\n{bad\n[G]Hello\n";
+
+    #[test]
+    fn rendering_never_enables_an_external_notation_tool() {
+        let config = render_config();
+        for delegate in chordsketch_chordpro::config::Delegate::ALL {
+            assert!(
+                !config.delegate_enabled(delegate),
+                "{}",
+                delegate.config_key()
+            );
+        }
+    }
 
     #[test]
     fn rendering_a_song_to_text_puts_its_chords_above_the_lyrics() {

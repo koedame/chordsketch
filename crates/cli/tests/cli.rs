@@ -1397,16 +1397,17 @@ fn project_config_over_the_untrusted_size_limit_is_not_read_when_rendering() {
     assert!(stderr.contains("exceeds"), "a warning is shown: {stderr}");
 }
 
-/// Put an `abc2svg` stand-in on PATH that records only a real render
-/// (`tosvg.js <file>`), not the `--version` probe used for auto-detection.
+/// Put a stand-in for the external tool `name` on PATH. It records any run
+/// other than a `--version` probe by creating `marker`, so a test can tell
+/// whether the renderer actually handed it a section.
 #[cfg(unix)]
-fn fake_abc2svg(bin: &Path, marker: &Path) -> std::ffi::OsString {
+fn fake_tool(bin: &Path, name: &str, marker: &Path) -> std::ffi::OsString {
     use std::os::unix::fs::PermissionsExt;
-    let script = bin.join("abc2svg");
+    let script = bin.join(name);
     std::fs::write(
         &script,
         format!(
-            "#!/bin/sh\nif [ \"$1\" = tosvg.js ]; then : > '{}'; fi\nexit 0\n",
+            "#!/bin/sh\nif [ \"$1\" != --version ]; then : > '{}'; fi\nexit 0\n",
             marker.display()
         ),
     )
@@ -1417,37 +1418,75 @@ fn fake_abc2svg(bin: &Path, marker: &Path) -> std::ffi::OsString {
     std::env::join_paths(paths).unwrap()
 }
 
+/// How one external-tool test sets up its run.
 #[cfg(unix)]
-fn run_html_with_abc_section(
-    song_prefix: &str,
-    project_config: Option<&str>,
-    user_config: &str,
-) -> bool {
+struct DelegateRun<'a> {
+    /// Executable the renderer would start (`abc2svg`, `lilypond`, `mscore`).
+    tool: &'a str,
+    /// Section name in `{start_of_<section>}`.
+    section: &'a str,
+    /// Notation placed inside the section.
+    body: &'a str,
+    /// Lines placed before the section in the song file.
+    song_prefix: &'a str,
+    /// `chordsketch.json` next to the song, if any.
+    project_config: Option<&'a str>,
+    /// The user's `chordsketch/chordsketch.json`.
+    user_config: &'a str,
+    /// Extra command-line arguments.
+    args: &'a [&'a str],
+}
+
+#[cfg(unix)]
+impl Default for DelegateRun<'_> {
+    fn default() -> Self {
+        Self {
+            tool: "abc2svg",
+            section: "abc",
+            body: "X:1\nK:C\nCDEF|\n",
+            song_prefix: "",
+            project_config: None,
+            user_config: "{}",
+            args: &[],
+        }
+    }
+}
+
+/// Render a song with one delegate section to HTML, with a stand-in for the
+/// tool first on PATH, and report whether the stand-in was run.
+#[cfg(unix)]
+fn delegate_was_run(run: &DelegateRun<'_>) -> bool {
     let dir = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
     let bin = tempfile::tempdir().unwrap();
-    let marker = dir.path().join("abc2svg-was-run");
-    let path = fake_abc2svg(bin.path(), &marker);
+    let marker = dir.path().join("tool-was-run");
+    let path = fake_tool(bin.path(), run.tool, &marker);
 
     std::fs::create_dir_all(home.path().join("chordsketch")).unwrap();
     std::fs::write(
         home.path().join("chordsketch").join("chordsketch.json"),
-        user_config,
+        run.user_config,
     )
     .unwrap();
-    if let Some(cfg) = project_config {
+    if let Some(cfg) = run.project_config {
         std::fs::write(dir.path().join("chordsketch.json"), cfg).unwrap();
     }
     let song = dir.path().join("song.cho");
     std::fs::write(
         &song,
-        format!("{song_prefix}{{start_of_abc}}\nX:1\nK:C\nCDEF|\n{{end_of_abc}}\n"),
+        format!(
+            "{prefix}{{start_of_{section}}}\n{body}{{end_of_{section}}}\n",
+            prefix = run.song_prefix,
+            section = run.section,
+            body = run.body,
+        ),
     )
     .unwrap();
 
     cli_in(dir.path(), home.path())
         .env("PATH", path)
         .args(["--format", "html"])
+        .args(run.args)
         .arg(&song)
         .assert()
         .success();
@@ -1457,33 +1496,106 @@ fn run_html_with_abc_section(
 #[cfg(unix)]
 #[test]
 fn abc2svg_is_run_when_the_user_config_enables_it() {
-    // Control for the two tests below: the stand-in tool is run when the
+    // Control for the tests below: the stand-in tool is run when the
     // trusted configuration allows it.
-    assert!(run_html_with_abc_section(
-        "",
-        None,
-        r#"{ "delegates": { "abc2svg": true } }"#
-    ));
+    assert!(delegate_was_run(&DelegateRun {
+        user_config: r#"{ "delegates": { "abc2svg": true } }"#,
+        ..DelegateRun::default()
+    }));
+}
+
+#[cfg(unix)]
+#[test]
+fn abc2svg_is_run_when_a_command_line_define_enables_it() {
+    assert!(delegate_was_run(&DelegateRun {
+        args: &["--define", "delegates.abc2svg=true"],
+        ..DelegateRun::default()
+    }));
+}
+
+#[cfg(unix)]
+#[test]
+fn abc2svg_on_path_is_not_run_when_nothing_enables_it() {
+    assert!(!delegate_was_run(&DelegateRun::default()));
 }
 
 #[cfg(unix)]
 #[test]
 fn abc2svg_is_not_run_when_only_the_project_config_enables_it() {
-    assert!(!run_html_with_abc_section(
-        "",
-        Some(r#"{ "delegates": { "abc2svg": true } }"#),
-        r#"{ "delegates": { "abc2svg": false } }"#,
-    ));
+    assert!(!delegate_was_run(&DelegateRun {
+        project_config: Some(r#"{ "delegates": { "abc2svg": true } }"#),
+        ..DelegateRun::default()
+    }));
 }
 
 #[cfg(unix)]
 #[test]
 fn abc2svg_is_not_run_when_only_the_song_file_enables_it() {
-    assert!(!run_html_with_abc_section(
-        "{+config.delegates.abc2svg: true}\n",
-        None,
-        r#"{ "delegates": { "abc2svg": false } }"#,
-    ));
+    assert!(!delegate_was_run(&DelegateRun {
+        song_prefix: "{+config.delegates.abc2svg: true}\n",
+        ..DelegateRun::default()
+    }));
+}
+
+#[cfg(unix)]
+const LILYPOND: DelegateRun<'static> = DelegateRun {
+    tool: "lilypond",
+    section: "ly",
+    body: "\\relative c' { c4 d e f }\n",
+    song_prefix: "",
+    project_config: None,
+    user_config: "{}",
+    args: &[],
+};
+
+#[cfg(unix)]
+#[test]
+fn lilypond_is_run_when_a_command_line_define_enables_it() {
+    assert!(delegate_was_run(&DelegateRun {
+        args: &["--define", "delegates.lilypond=true"],
+        ..LILYPOND
+    }));
+}
+
+#[cfg(unix)]
+#[test]
+fn lilypond_on_path_is_not_run_when_nothing_enables_it() {
+    assert!(!delegate_was_run(&LILYPOND));
+}
+
+#[cfg(unix)]
+#[test]
+fn lilypond_is_not_run_when_only_the_project_config_enables_it() {
+    assert!(!delegate_was_run(&DelegateRun {
+        project_config: Some(r#"{ "delegates": { "lilypond": true } }"#),
+        ..LILYPOND
+    }));
+}
+
+#[cfg(unix)]
+const MUSESCORE: DelegateRun<'static> = DelegateRun {
+    tool: "mscore",
+    section: "musicxml",
+    body: "<score-partwise/>\n",
+    song_prefix: "",
+    project_config: None,
+    user_config: "{}",
+    args: &[],
+};
+
+#[cfg(unix)]
+#[test]
+fn musescore_is_run_when_a_command_line_define_enables_it() {
+    assert!(delegate_was_run(&DelegateRun {
+        args: &["--define", "delegates.musescore=true"],
+        ..MUSESCORE
+    }));
+}
+
+#[cfg(unix)]
+#[test]
+fn musescore_on_path_is_not_run_when_nothing_enables_it() {
+    assert!(!delegate_was_run(&MUSESCORE));
 }
 
 /// A JPEG header the PDF renderer accepts (not a displayable picture).

@@ -145,8 +145,9 @@ sections below describe where the output differs.
   `chordpro.json` is not picked up, and upstream keys that ChordSketch does
   not implement are ignored.
 - Delegate environments (`{start_of_abc}`, `{start_of_ly}`) need ABC or
-  LilyPond tooling installed on the machine. Without it the section is not
-  drawn. In the HTML run above, Perl failed on the corpus files that use
+  LilyPond tooling installed on the machine and the matching `delegates.*`
+  key set to `true` (they are off by default). Without both the section is
+  not drawn. In the HTML run above, Perl failed on the corpus files that use
   these tools.
 
 ## Text Renderer Differences

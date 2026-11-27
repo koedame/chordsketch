@@ -9,6 +9,6 @@
   "eslint-disable:packages/react": 25,
   "eslint-disable:packages/svelte": 2,
   "eslint-disable:packages/vue": 3,
-  "ignore:crates/chordpro": 8,
+  "ignore:crates/chordpro": 7,
   "ignore:crates/render-html": 2
 }
