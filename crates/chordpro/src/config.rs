@@ -150,6 +150,37 @@ pub struct ConfigLoadResult {
     pub warnings: Vec<String>,
 }
 
+/// An external notation tool that the HTML renderer can hand a section to.
+///
+/// Each one is switched on by a boolean under `delegates.*` in the
+/// configuration and is off by default. The tools execute code that can be
+/// embedded in the notation they receive, so enable them only for song
+/// files you trust.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Delegate {
+    /// `abc2svg`, for `{start_of_abc}` sections.
+    Abc2svg,
+    /// `lilypond`, for `{start_of_ly}` sections.
+    Lilypond,
+    /// MuseScore (`mscore` / `musescore`), for `{start_of_musicxml}` sections.
+    Musescore,
+}
+
+impl Delegate {
+    /// Every delegate, in a fixed order.
+    pub const ALL: [Self; 3] = [Self::Abc2svg, Self::Lilypond, Self::Musescore];
+
+    /// The dot-separated configuration key that enables this delegate.
+    #[must_use]
+    pub const fn config_key(self) -> &'static str {
+        match self {
+            Self::Abc2svg => "delegates.abc2svg",
+            Self::Lilypond => "delegates.lilypond",
+            Self::Musescore => "delegates.musescore",
+        }
+    }
+}
+
 /// A ChordPro configuration loaded from one or more sources.
 ///
 /// Wraps a [`Value::Object`] and provides convenience accessors.
@@ -215,6 +246,30 @@ impl Config {
             }
         }
         current
+    }
+
+    /// Whether the external tool behind `delegate` may be run.
+    ///
+    /// Only a boolean `true` under the delegate's key enables it. `false`,
+    /// `null`, a missing key, and any non-boolean value all mean disabled:
+    /// the tool is never run just because it happens to be installed.
+    #[must_use]
+    pub fn delegate_enabled(&self, delegate: Delegate) -> bool {
+        self.get_path(delegate.config_key()).as_bool() == Some(true)
+    }
+
+    /// Returns this configuration with every delegate disabled.
+    ///
+    /// For surfaces that render files nobody vouched for (file previews,
+    /// a server answering requests), where no setting should be able to
+    /// start an external tool.
+    #[must_use]
+    pub fn without_delegates(self) -> Self {
+        Delegate::ALL.into_iter().fold(self, |config, delegate| {
+            config
+                .with_define(&format!("{}=false", delegate.config_key()))
+                .expect("hardcoded define is valid")
+        })
     }
 
     /// Returns a reference to the underlying [`Value`].
@@ -507,13 +562,11 @@ impl Config {
             }
         }
 
-        // Snapshot delegate settings from trusted sources (system + user config).
-        // Project-level and song-specific configs must not silently enable
-        // delegate execution — only CLI flags or explicit user config
-        // (~/.config/chordsketch/) may enable delegates.
-        let trusted_abc2svg = config.get_path("delegates.abc2svg").clone();
-        let trusted_lilypond = config.get_path("delegates.lilypond").clone();
-        let trusted_musescore = config.get_path("delegates.musescore").clone();
+        // Snapshot which delegates the trusted sources (defaults, system and
+        // user config) enabled. Project-level and song-specific configs must
+        // not enable delegate execution — only command-line defines, the
+        // user or system config, or a library caller may.
+        let trusted_enabled = Delegate::ALL.map(|d| config.delegate_enabled(d));
 
         // Project config (untrusted — reduced size limit)
         if let Some(dir) = project_dir {
@@ -545,84 +598,18 @@ impl Config {
             }
         }
 
-        // Restore delegate settings to trusted values if an untrusted config
-        // made them more permissive. Permissiveness order:
-        //   Bool(false) < Null (auto-detect) < Bool(true)
-        // Any escalation is blocked: false→null, false→true, null→true.
-        fn delegate_perm(v: &Value) -> u8 {
-            match v.as_bool() {
-                Some(false) => 0,
-                None => 1, // Null or non-bool → auto-detect level
-                Some(true) => 2,
+        // An untrusted config may turn a delegate off but never on.
+        for (delegate, trusted) in Delegate::ALL.into_iter().zip(trusted_enabled) {
+            if config.delegate_enabled(delegate) && !trusted {
+                let key = delegate.config_key();
+                config = config
+                    .with_define(&format!("{key}=false"))
+                    .expect("hardcoded define is valid");
+                warnings.push(format!(
+                    "{key} was enabled by an untrusted config and has been reset to false \
+                     (disabled) for security; use --define {key}=true to enable"
+                ));
             }
-        }
-
-        let current_abc2svg = config.get_path("delegates.abc2svg").clone();
-        let current_lilypond = config.get_path("delegates.lilypond").clone();
-        let current_musescore = config.get_path("delegates.musescore").clone();
-
-        if delegate_perm(&current_abc2svg) > delegate_perm(&trusted_abc2svg) {
-            // trusted is either null (perm 1) or false (perm 0). If it were
-            // true (perm 2), no current value could exceed it.
-            let reset = if trusted_abc2svg.is_null() {
-                "null"
-            } else {
-                debug_assert_eq!(trusted_abc2svg.as_bool(), Some(false));
-                "false"
-            };
-            config = config
-                .with_define(&format!("delegates.abc2svg={reset}"))
-                .expect("hardcoded define is valid");
-            let explanation = if reset == "null" {
-                "reset to null (auto-detect: enabled only if abc2svg is installed)"
-            } else {
-                "reset to false (disabled)"
-            };
-            warnings.push(format!(
-                "delegates.abc2svg was escalated by an untrusted config and has been \
-                 {explanation} for security; use --define delegates.abc2svg=true to enable"
-            ));
-        }
-        if delegate_perm(&current_lilypond) > delegate_perm(&trusted_lilypond) {
-            // trusted is either null (perm 1) or false (perm 0). See abc2svg comment above.
-            let reset = if trusted_lilypond.is_null() {
-                "null"
-            } else {
-                debug_assert_eq!(trusted_lilypond.as_bool(), Some(false));
-                "false"
-            };
-            config = config
-                .with_define(&format!("delegates.lilypond={reset}"))
-                .expect("hardcoded define is valid");
-            let explanation = if reset == "null" {
-                "reset to null (auto-detect: enabled only if lilypond is installed)"
-            } else {
-                "reset to false (disabled)"
-            };
-            warnings.push(format!(
-                "delegates.lilypond was escalated by an untrusted config and has been \
-                 {explanation} for security; use --define delegates.lilypond=true to enable"
-            ));
-        }
-        if delegate_perm(&current_musescore) > delegate_perm(&trusted_musescore) {
-            let reset = if trusted_musescore.is_null() {
-                "null"
-            } else {
-                debug_assert_eq!(trusted_musescore.as_bool(), Some(false));
-                "false"
-            };
-            config = config
-                .with_define(&format!("delegates.musescore={reset}"))
-                .expect("hardcoded define is valid");
-            let explanation = if reset == "null" {
-                "reset to null (auto-detect: enabled only if mscore/musescore is installed)"
-            } else {
-                "reset to false (disabled)"
-            };
-            warnings.push(format!(
-                "delegates.musescore was escalated by an untrusted config and has been \
-                 {explanation} for security; use --define delegates.musescore=true to enable"
-            ));
         }
 
         ConfigLoadResult { config, warnings }
@@ -943,10 +930,14 @@ const DEFAULT_CONFIG: &str = r#"{
     },
 
     // Delegate environments (external tool integration).
-    // null = auto-detect on first use; true = force enable; false = force disable.
+    // Off unless a trusted source (command-line define, user or system
+    // config, or the library caller) sets the entry to true. The tools
+    // run code embedded in the notation, so only enable them for song
+    // files you trust.
     delegates: {
-        abc2svg: null,
-        lilypond: null
+        abc2svg: false,
+        lilypond: false,
+        musescore: false
     }
 }"#;
 
@@ -1056,16 +1047,6 @@ mod tests {
     /// for `tempfile::tempdir`).
     fn tempdir() -> std::io::Result<TempDir> {
         TempDir::new()
-    }
-
-    /// Map a delegate config value to a permissiveness level for ordering.
-    /// Matches the `delegate_perm` function used in `Config::load()`.
-    fn delegate_perm(v: &Value) -> u8 {
-        match v.as_bool() {
-            Some(false) => 0,
-            None => 1, // Null or non-bool → auto-detect level
-            Some(true) => 2,
-        }
     }
 
     #[test]
@@ -1485,38 +1466,48 @@ mod tests {
         let dir = tempdir().unwrap();
         std::fs::write(
             dir.path().join("chordsketch.json"),
-            r#"{ "delegates": { "abc2svg": true, "lilypond": true } }"#,
+            r#"{ "delegates": { "abc2svg": true, "lilypond": true, "musescore": true } }"#,
         )
         .unwrap();
 
         let result = Config::load(Some(dir.path().to_str().unwrap()), None);
-        // Delegates should be reset to null (auto-detect default)
-        assert_eq!(result.config.get_path("delegates.abc2svg"), &Value::Null);
-        assert_eq!(result.config.get_path("delegates.lilypond"), &Value::Null);
-        // Warnings should be emitted
-        assert!(
-            result
-                .warnings
-                .iter()
-                .any(|w| w.contains("delegates.abc2svg")),
-            "expected delegate warning, got: {:?}",
-            result.warnings
-        );
-        assert!(
-            result
-                .warnings
-                .iter()
-                .any(|w| w.contains("delegates.lilypond")),
-            "expected delegate warning, got: {:?}",
-            result.warnings
-        );
+        for delegate in Delegate::ALL {
+            let key = delegate.config_key();
+            // Reset to the trusted value (false), not merely left alone.
+            assert_eq!(result.config.get_path(key), &Value::Bool(false), "{key}");
+            assert!(!result.config.delegate_enabled(delegate), "{key}");
+            assert!(
+                result.warnings.iter().any(|w| w.contains(key)),
+                "expected a warning for {key}, got: {:?}",
+                result.warnings
+            );
+        }
     }
 
     #[test]
-    fn test_load_project_null_does_not_escalate_default_null() {
-        // Config::load() with a project config that sets delegates to null.
-        // Default trusted baseline is null, so null→null is not an escalation
-        // and no warning should be emitted.
+    fn test_song_specific_config_cannot_enable_delegates() {
+        let dir = tempdir().unwrap();
+        let song_config = dir.path().join("song.json");
+        std::fs::write(
+            &song_config,
+            r#"{ "delegates": { "abc2svg": true, "lilypond": true, "musescore": true } }"#,
+        )
+        .unwrap();
+
+        let result = Config::load(None, Some(song_config.to_str().unwrap()));
+        for delegate in Delegate::ALL {
+            assert!(
+                !result.config.delegate_enabled(delegate),
+                "{}",
+                delegate.config_key()
+            );
+        }
+    }
+
+    #[test]
+    fn test_project_config_setting_a_delegate_to_null_leaves_it_disabled() {
+        // null is not "detect the tool"; it is just another value that is
+        // not `true`. Nothing was enabled, so nothing needs resetting.
         let dir = tempdir().unwrap();
         std::fs::write(
             dir.path().join("chordsketch.json"),
@@ -1525,13 +1516,13 @@ mod tests {
         .unwrap();
 
         let result = Config::load(Some(dir.path().to_str().unwrap()), None);
-        assert_eq!(result.config.get_path("delegates.abc2svg"), &Value::Null);
+        assert!(!result.config.delegate_enabled(Delegate::Abc2svg));
         assert!(
             !result
                 .warnings
                 .iter()
                 .any(|w| w.contains("delegates.abc2svg")),
-            "null→null should not trigger a delegate warning: {:?}",
+            "a value that does not enable the delegate needs no warning: {:?}",
             result.warnings
         );
     }
@@ -1562,40 +1553,48 @@ mod tests {
     }
 
     #[test]
-    fn test_project_config_cannot_escalate_false_to_null() {
-        // Verify that null (auto-detect) is more permissive than false (disabled).
-        // The merge itself changes the value; the security check in load() restores it.
-        let mut config = Config::defaults()
-            .with_define("delegates.abc2svg=false")
-            .expect("hardcoded");
-        let overlay = Config::parse(r#"{ "delegates": { "abc2svg": null } }"#).unwrap();
-        config = config.merge(overlay);
-        // After merge the value is Null — the security check must detect this
-        // as an escalation (false → null) and restore to false.
-        assert_eq!(
-            config.get_path("delegates.abc2svg"),
-            &Value::Null,
-            "merge changes false to null"
-        );
-
-        // Verify the permissiveness ordering used by the security check.
-        assert!(
-            delegate_perm(&Value::Null) > delegate_perm(&Value::Bool(false)),
-            "null (auto-detect) must be more permissive than false (disabled)"
-        );
-        assert!(
-            delegate_perm(&Value::Bool(true)) > delegate_perm(&Value::Null),
-            "true must be more permissive than null (auto-detect)"
-        );
+    fn test_every_delegate_is_disabled_in_the_defaults() {
+        let config = Config::defaults();
+        for delegate in Delegate::ALL {
+            let key = delegate.config_key();
+            assert_eq!(config.get_path(key), &Value::Bool(false), "{key}");
+            assert!(!config.delegate_enabled(delegate), "{key}");
+        }
     }
 
     #[test]
-    fn test_project_config_can_downgrade_delegates() {
-        // Downgrading from null (auto) to false (disabled) is safe and allowed.
-        assert!(
-            delegate_perm(&Value::Bool(false)) <= delegate_perm(&Value::Null),
-            "false should not be considered an escalation over null"
-        );
+    fn test_only_boolean_true_enables_a_delegate() {
+        let enabled = |value: &str| {
+            Config::defaults()
+                .with_define(&format!("delegates.abc2svg={value}"))
+                .expect("valid define")
+                .delegate_enabled(Delegate::Abc2svg)
+        };
+        assert!(enabled("true"));
+        assert!(!enabled("false"));
+        assert!(!enabled("null"));
+        assert!(!enabled("1"));
+        assert!(!enabled("yes"));
+        assert!(!Config::empty().delegate_enabled(Delegate::Abc2svg));
+    }
+
+    #[test]
+    fn test_without_delegates_disables_every_delegate_a_caller_enabled() {
+        let config = Config::defaults()
+            .with_define("delegates.abc2svg=true")
+            .and_then(|c| c.with_define("delegates.lilypond=true"))
+            .and_then(|c| c.with_define("delegates.musescore=true"))
+            .expect("valid defines");
+        assert!(Delegate::ALL.iter().all(|&d| config.delegate_enabled(d)));
+
+        let config = config.without_delegates();
+        for delegate in Delegate::ALL {
+            assert!(
+                !config.delegate_enabled(delegate),
+                "{}",
+                delegate.config_key()
+            );
+        }
     }
 
     #[test]
@@ -1840,9 +1839,9 @@ mod tests {
             ("delegates.lilypond", "true"),
         ];
         let config = config.with_song_overrides(&overrides, &mut warnings);
-        // Delegate keys should remain at their default (null = auto-detect)
-        assert_eq!(config.get_path("delegates.abc2svg"), &Value::Null);
-        assert_eq!(config.get_path("delegates.lilypond"), &Value::Null);
+        // Delegate keys should remain at their default (disabled)
+        assert_eq!(config.get_path("delegates.abc2svg"), &Value::Bool(false));
+        assert_eq!(config.get_path("delegates.lilypond"), &Value::Bool(false));
         assert_eq!(warnings.len(), 2);
         assert!(warnings[0].contains("delegates.abc2svg"));
         assert!(warnings[1].contains("delegates.lilypond"));
@@ -2039,7 +2038,8 @@ mod tests {
         let config = Config::defaults();
         let mut warnings = Vec::new();
         let overrides = vec![("delegates.abc2svg", "true")];
-        let _result = config.with_song_overrides(&overrides, &mut warnings);
+        let result = config.with_song_overrides(&overrides, &mut warnings);
+        assert!(!result.delegate_enabled(Delegate::Abc2svg));
         // Delegate keys should be blocked — a warning should be emitted.
         assert!(
             warnings.iter().any(|w| w.contains("cannot be overridden")),

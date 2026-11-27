@@ -31,6 +31,12 @@ let html = render_song(&song);
   environments such as `{start_of_svg}` embed SVG markup, which is rewritten
   through an allowlist of SVG elements and attributes; use a Content Security
   Policy when rendering untrusted input)
+- ABC, Lilypond and MusicXML sections can be drawn by external tools
+  (abc2svg, Lilypond, MuseScore). They are off by default and run only when the
+  configuration sets `delegates.abc2svg`, `delegates.lilypond` or
+  `delegates.musescore` to `true`. These tools execute code embedded in the
+  notation, so enable them only for song files you trust; otherwise the
+  sections render as text
 
 ## Links
 

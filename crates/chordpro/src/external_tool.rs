@@ -1,12 +1,22 @@
 //! Utilities for detecting and invoking external tools.
 //!
-//! The delegate rendering pipeline (ABC, Lilypond) requires external tools
-//! to convert notation into SVG/PNG. This module provides functions to check
+//! The delegate rendering pipeline (ABC, Lilypond, MusicXML) requires external
+//! tools to convert notation into SVG. This module provides functions to check
 //! whether these tools are installed and accessible on the current system,
 //! and to invoke them on delegate environment content.
 //!
 //! All detection functions are safe to call even when the tools are not
 //! installed — they return `false` rather than panicking.
+//!
+//! # Security
+//!
+//! These tools execute code that can be embedded in the notation they are
+//! given (abc2svg runs JavaScript, Lilypond runs Scheme). The renderers only
+//! invoke them when the configuration explicitly enables the delegate (see
+//! [`crate::config::Delegate`]), which is off by default and cannot be
+//! switched on from a song file or a project config. The content filters
+//! applied here reduce what reaches the tools, but they are not a sandbox:
+//! enable a delegate only for song files you trust.
 
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -185,62 +195,198 @@ pub fn invoke_abc2svg(abc_content: &str) -> Result<String, String> {
         .ok_or_else(|| "failed to extract SVG from abc2svg output".to_string())
 }
 
-/// Strip dangerous JavaScript directives from ABC notation content.
+/// Stylesheet directives (`%%name ...` or `I:name ...` lines) that are passed
+/// to abc2svg. Each one only adjusts layout, spacing, fonts, or the score
+/// structure.
 ///
-/// abc2svg supports embedded JavaScript via `%%beginjs`/`%%endjs` blocks and
-/// `%%javascript` directives. `%%js` is an undocumented but observed shorthand
-/// for `%%javascript` found in some abc2svg examples; it is stripped
-/// preemptively as defense-in-depth (see #1551). When processing untrusted
-/// `.cho` files, these directives could allow arbitrary code execution in the
-/// Node.js runtime. This function removes such directives to prevent code
-/// injection.
+/// This is an allowlist: a directive line whose name is not listed here is
+/// removed before abc2svg sees the notation. Names are compared
+/// ASCII-case-insensitively.
+const ABC_ALLOWED_DIRECTIVES: &[&str] = &[
+    // Page and line layout
+    "pagewidth",
+    "pagescale",
+    "scale",
+    "staffwidth",
+    "leftmargin",
+    "rightmargin",
+    "topspace",
+    "indent",
+    "newpage",
+    "vskip",
+    "sep",
+    "linebreak",
+    "staffbreak",
+    "barsperstaff",
+    "breakoneoln",
+    "singleline",
+    "stretchstaff",
+    "breaklimit",
+    "maxshrink",
+    "notespacingfactor",
+    "lineskipfac",
+    "parskipfac",
+    "gracespace",
+    // Vertical spacing
+    "composerspace",
+    "infospace",
+    "musicspace",
+    "partsspace",
+    "staffsep",
+    "maxstaffsep",
+    "sysstaffsep",
+    "maxsysstaffsep",
+    "subtitlespace",
+    "textspace",
+    "titlespace",
+    "vocalspace",
+    "wordsspace",
+    // Score structure
+    "score",
+    "staves",
+    "clef",
+    "staff",
+    "stafflines",
+    "staffscale",
+    "staffnonote",
+    "transpose",
+    "ottava",
+    "repbra",
+    "repeat",
+    "setbarnb",
+    // Appearance of notes, bars, and headings
+    "measurenb",
+    "measurebox",
+    "measrepnb",
+    "contbarnb",
+    "aligncomposer",
+    "infoline",
+    "titlecaps",
+    "titleleft",
+    "titleformat",
+    "writefields",
+    "beamslope",
+    "flatbeams",
+    "straightflags",
+    "bstemdown",
+    "stemheight",
+    "slurheight",
+    "tieheight",
+    "graceslurs",
+    "squarebreve",
+    "cancelkey",
+    "custos",
+    "hyphencont",
+    "shiftunison",
+    "tuplets",
+    "dynamic",
+    "gchord",
+    "gstemdir",
+    "ornament",
+    "stemdir",
+    "vocal",
+    "annotationbox",
+    "gchordbox",
+    "partsbox",
+    "altchord",
+    "dblrepbar",
+    "rbmax",
+    "rbmin",
+    "abc-version",
+    // Diagnostics
+    "checkbars",
+    "decoerr",
+    "keywarn",
+    "linewarn",
+    "timewarn",
+    "quiet",
+    // Text lines
+    "center",
+    "text",
+    // Named fonts
+    "titlefont",
+    "subtitlefont",
+    "composerfont",
+    "partsfont",
+    "tempofont",
+    "vocalfont",
+    "textfont",
+    "wordsfont",
+    "gchordfont",
+    "annotationfont",
+    "infofont",
+    "measurefont",
+    "repeatfont",
+    "voicefont",
+    "historyfont",
+    "headerfont",
+    "footerfont",
+    "tupletfont",
+];
+
+/// If `line` is an abc2svg stylesheet directive (`%%name ...` or
+/// `I:name ...`), returns the directive name; otherwise `None`.
+///
+/// The name is the first run of non-whitespace characters after the
+/// prefix, which is how abc2svg itself splits a directive line. Leading
+/// whitespace before the prefix is ignored here so that such a line is
+/// still treated as a directive and has to pass the allowlist.
+fn abc_directive_name(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    let rest = trimmed.strip_prefix("%%").or_else(|| {
+        trimmed
+            .get(..2)
+            .filter(|p| p.eq_ignore_ascii_case("I:"))
+            .map(|_| &trimmed[2..]) // safe: get(..2) succeeded => 2 is a char boundary
+    })?;
+    // abc2svg splits on JavaScript's `\s`, which also covers U+FEFF.
+    let is_sep = |c: char| c.is_whitespace() || c == '\u{feff}';
+    let rest = rest.trim_start_matches(is_sep);
+    Some(rest.split(is_sep).next().unwrap_or(""))
+}
+
+/// Whether `name` is on [`ABC_ALLOWED_DIRECTIVES`].
+fn abc_directive_allowed(name: &str) -> bool {
+    ABC_ALLOWED_DIRECTIVES
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(name))
+}
+
+/// Remove every stylesheet directive that is not on the allowlist from ABC
+/// notation before it is handed to abc2svg.
+///
+/// abc2svg acts on directive lines beyond layout: some open multi-line
+/// blocks whose body it interprets (including script blocks it executes),
+/// some read other files. Rather than enumerating those, only the
+/// directives in [`ABC_ALLOWED_DIRECTIVES`] are kept. A dropped directive
+/// whose name starts with `begin` also drops the lines up to its matching
+/// `end` line, so the block body is not left behind as stray notation.
+/// Lines that are not directives (headers, music, lyrics, comments) pass
+/// through unchanged.
 fn sanitize_abc_content(input: &str) -> String {
     let mut output = String::with_capacity(input.len());
-    let mut in_js_block = false;
+    // While inside a dropped `begin<kind>` block: the `end<kind>` name that
+    // closes it, lowercased.
+    let mut block_end: Option<String> = None;
 
     for line in input.lines() {
-        let trimmed = line.trim();
+        let name = abc_directive_name(line);
 
-        if in_js_block {
-            if trimmed.eq_ignore_ascii_case("%%endjs") {
-                in_js_block = false;
+        if let Some(end) = &block_end {
+            if name.is_some_and(|n| n.eq_ignore_ascii_case(end)) {
+                block_end = None;
             }
             continue;
         }
 
-        if trimmed.eq_ignore_ascii_case("%%beginjs") {
-            in_js_block = true;
+        if let Some(name) = name
+            && !abc_directive_allowed(name)
+        {
+            let lower = name.to_ascii_lowercase();
+            if let Some(kind) = lower.strip_prefix("begin") {
+                block_end = Some(format!("end{kind}"));
+            }
             continue;
-        }
-
-        // %%javascript <code> is a single-line JS directive (case-insensitive).
-        // Use str::get to avoid panicking on multi-byte chars at byte 12 (#1574).
-        // Use chars().next() with is_whitespace() to cover all whitespace separators
-        // including \x0b (VT) and \x0c (FF), not just space/tab (#1582).
-        // Note: is_ascii_whitespace() excludes VT (0x0B), so is_whitespace() is used.
-        if trimmed
-            .get(..12)
-            .is_some_and(|s| s.eq_ignore_ascii_case("%%javascript"))
-        {
-            let after = &trimmed[12..]; // safe: get(..12) succeeded => 12 is a char boundary
-            if after.chars().next().is_none_or(|c| c.is_whitespace()) {
-                continue;
-            }
-        }
-
-        // %%js <code> is an undocumented shorthand for %%javascript observed in
-        // some abc2svg examples. Strip it as defense-in-depth (#1551).
-        // Use str::get to avoid panicking on multi-byte chars at byte 4 (#1574).
-        // Use chars().next() with is_whitespace() to cover all whitespace separators
-        // including \x0b (VT) and \x0c (FF), not just space/tab (#1582).
-        if trimmed
-            .get(..4)
-            .is_some_and(|s| s.eq_ignore_ascii_case("%%js"))
-        {
-            let after = &trimmed[4..]; // safe: get(..4) succeeded => 4 is a char boundary
-            if after.chars().next().is_none_or(|c| c.is_whitespace()) {
-                continue;
-            }
         }
 
         if !output.is_empty() {
@@ -252,10 +398,15 @@ fn sanitize_abc_content(input: &str) -> String {
     output
 }
 
-/// Dangerous Scheme function names that should be stripped from Lilypond content.
+/// Scheme function names whose directly-sigiled calls are stripped from
+/// Lilypond content.
 ///
-/// These functions can escape the `-dsafe` sandbox or access the filesystem
-/// if a future Lilypond version has a `-dsafe` bypass.
+/// This is a best-effort filter for the most obvious calls, **not a security
+/// boundary.** Lilypond runs embedded Scheme with full access to the system,
+/// and Scheme can reach these functions in ways a line filter cannot
+/// recognise. Lilypond no longer offers a sandbox (its `-dsafe` mode was
+/// removed upstream in 2.23.12), so the only protection is to enable the
+/// Lilypond delegate solely for song files you trust.
 const DANGEROUS_SCHEME_FUNCTIONS: &[&str] = &[
     "system",
     "getenv",
@@ -268,8 +419,8 @@ const DANGEROUS_SCHEME_FUNCTIONS: &[&str] = &[
     "load",
     "ly:gulp-file",
     // ly:gulp-string is the cousin of ly:gulp-file that has also appeared
-    // in `-dsafe`-bypass research; it reads a file and returns its contents
-    // as a string. Block as defense-in-depth (#1844).
+    // alongside it; it reads a file and returns its contents as a string
+    // (#1844).
     "ly:gulp-string",
     "gulp-string",
     // Note: `ly:format` was removed from this list in #1859. It is a
@@ -286,7 +437,8 @@ const DANGEROUS_SCHEME_FUNCTIONS: &[&str] = &[
     // `#(ly:format` match triggered the line drop; after removal it
     // does not, and the inner `(ly:gulp-file …)` has no sigil.
     // We accept this because:
-    //   1. The primary sandbox is Lilypond's `-dsafe`, not this list.
+    //   1. This list is not a security boundary (see the doc comment
+    //      above); trusting the song file is.
     //   2. The same bypass works with any other wrapper function
     //      (`display`, `apply`, user-defined let-bindings, …), so
     //      keeping `ly:format` on the list did not systematically
@@ -304,11 +456,11 @@ const DANGEROUS_SCHEME_FUNCTIONS: &[&str] = &[
     "ly:set-option",
 ];
 
-/// Strip dangerous Scheme directives from Lilypond content as defense-in-depth.
+/// Remove lines with directly-sigiled calls to the functions in
+/// [`DANGEROUS_SCHEME_FUNCTIONS`] (e.g., `#(system ...)`, `#(getenv ...)`).
 ///
-/// Lilypond's `-dsafe` flag sandboxes the embedded Scheme interpreter, but as a
-/// secondary layer of protection, this function removes lines containing known
-/// dangerous Scheme function calls (e.g., `#(system ...)`, `#(getenv ...)`).
+/// Best effort only — see [`DANGEROUS_SCHEME_FUNCTIONS`]. Lilypond content is
+/// executable code, so it must come from a trusted song file.
 fn sanitize_lilypond_content(input: &str) -> String {
     let mut output = String::with_capacity(input.len());
 
@@ -402,10 +554,11 @@ pub fn invoke_lilypond(ly_content: &str) -> Result<String, String> {
     // freshly created directory and the file write inside it.
     write_temp_file_exclusive(&ly_path, &sanitized)?;
 
-    // Use -dsafe to sandbox Lilypond's embedded Scheme interpreter,
-    // preventing arbitrary code execution from untrusted .cho files.
+    // No sandbox flag: Lilypond 2.23.12 removed `-dsafe` (passing it is a
+    // fatal error), and Lilypond has no replacement. Embedded Scheme runs
+    // with the user's privileges, which is why the delegate is off unless
+    // the caller enables it for trusted input.
     let result = Command::new("lilypond")
-        .arg("-dsafe")
         .arg("--svg")
         .arg(format!("-o{}", output_prefix.display()))
         .arg(&ly_path)
@@ -787,174 +940,132 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn invoke_lilypond_blocks_scheme_code() {
-        if !has_lilypond() {
-            return;
-        }
-        // Embedded Scheme that tries to execute a system command.
-        // With -dsafe this should fail (lilypond exits with error).
-        let ly = r#"#(system "echo pwned")
-\relative c' { c4 d e f | }
-"#;
-        let result = invoke_lilypond(ly);
-        assert!(
-            result.is_err(),
-            "Lilypond should reject Scheme system calls with -dsafe"
-        );
-    }
-
-    #[test]
-    fn sanitize_abc_strips_beginjs_endjs_block() {
-        let input = "X:1\nK:C\n%%beginjs\nprocess.exit(1);\n%%endjs\nCDEF|\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C\nCDEF|");
-        assert!(!result.contains("beginjs"));
-        assert!(!result.contains("process"));
-    }
-
-    #[test]
-    fn sanitize_abc_strips_javascript_directive() {
-        let input = "X:1\nK:C\n%%javascript require('child_process').exec('id')\nCDEF|\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C\nCDEF|");
-        assert!(!result.contains("javascript"));
-        assert!(!result.contains("child_process"));
-    }
-
-    #[test]
-    fn sanitize_abc_preserves_normal_content() {
-        let input = "X:1\nT:Test\nM:4/4\nK:C\n%%MIDI program 1\nCDEF|GABc|\n";
+    fn sanitize_abc_keeps_notation_and_allowed_directives() {
+        let input = "X:1\nT:Test\nM:4/4\nL:1/8\n%%score (S A)\nI:linebreak $\n\
+                     %%titlefont Times 18\nK:C\n% a plain comment\nCDEF|GABc|\nw:la la la la\n";
         let result = super::sanitize_abc_content(input);
         assert_eq!(
             result,
-            "X:1\nT:Test\nM:4/4\nK:C\n%%MIDI program 1\nCDEF|GABc|"
+            "X:1\nT:Test\nM:4/4\nL:1/8\n%%score (S A)\nI:linebreak $\n\
+             %%titlefont Times 18\nK:C\n% a plain comment\nCDEF|GABc|\nw:la la la la"
         );
     }
 
     #[test]
-    fn sanitize_abc_case_insensitive_beginjs() {
-        let input = "X:1\n%%BeginJS\nalert(1);\n%%EndJS\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
+    fn sanitize_abc_keeps_allowed_directives_whatever_their_case_spacing_or_arguments() {
+        for line in [
+            "%%score",
+            "%%SCORE (1 2)",
+            "%% score (1 2)",
+            "%%\tStaffSep 30",
+            "I:score {1 2}",
+            "i:Score",
+            "I: measurenb 0",
+            "  %%vskip 1cm",
+        ] {
+            let input = format!("X:1\n{line}\nK:C\n");
+            assert_eq!(
+                super::sanitize_abc_content(&input),
+                format!("X:1\n{line}\nK:C"),
+                "allowed directive was dropped: {line:?}"
+            );
+        }
     }
 
     #[test]
-    fn sanitize_abc_case_insensitive_javascript() {
-        // All-caps
-        let input = "X:1\n%%JAVASCRIPT alert(1)\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-
-        // Mixed case
-        let input = "X:1\n%%Javascript require('fs')\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-
-        // Another mixed case variant
-        let input = "X:1\n%%jAvAsCrIpT evil()\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-
-        // Bare directive without code
-        let input = "X:1\n%%JAVASCRIPT\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
+    fn sanitize_abc_drops_every_directive_outside_the_allowlist() {
+        // Names that are not on the allowlist, including ones that merely
+        // start or end like an allowed name. None may survive, whatever the
+        // prefix, case, spacing, or trailing arguments.
+        let names = [
+            "frobnicate",
+            "scorex",
+            "xscore",
+            "score-extra",
+            "include",
+            "format",
+            "font",
+            "MIDI",
+            "voice",
+            "tune",
+            "",
+        ];
+        let prefixes = ["%%", "%% ", "%%\t", "I:", "I: ", "i:", " %%", "\t%%"];
+        for name in names {
+            for prefix in prefixes {
+                for name_case in [name.to_string(), name.to_ascii_uppercase()] {
+                    for suffix in ["", " arg", "\targ more"] {
+                        let line = format!("{prefix}{name_case}{suffix}");
+                        let input = format!("X:1\n{line}\nK:C\nCDEF|\n");
+                        assert_eq!(
+                            super::sanitize_abc_content(&input),
+                            "X:1\nK:C\nCDEF|",
+                            "directive outside the allowlist survived: {line:?}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]
-    fn sanitize_abc_does_not_strip_javascript_prefix_in_other_words() {
-        // %%javascriptfoo is NOT a %%javascript directive (no space/tab separator).
-        let input = "X:1\n%%javascriptfoo bar\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert!(result.contains("%%javascriptfoo"));
+    fn every_allowed_abc_directive_survives_and_a_suffixed_name_does_not() {
+        for &name in super::ABC_ALLOWED_DIRECTIVES {
+            let kept = format!("X:1\n%%{name} 1\nK:C\n");
+            assert_eq!(
+                super::sanitize_abc_content(&kept),
+                format!("X:1\n%%{name} 1\nK:C"),
+                "{name}"
+            );
+            let suffixed = format!("X:1\n%%{name}x 1\nK:C\n");
+            assert_eq!(
+                super::sanitize_abc_content(&suffixed),
+                "X:1\nK:C",
+                "{name}x"
+            );
+        }
     }
 
     #[test]
-    fn sanitize_abc_strips_js_shorthand_directive() {
-        // %%js is an undocumented shorthand for %%javascript; strip it as
-        // defense-in-depth (#1551).
-        let input = "X:1\nK:C\n%%js require('child_process').exec('id')\nCDEF|\n";
+    fn sanitize_abc_drops_a_block_directive_together_with_its_body() {
+        let input = "X:1\nK:C\n%%beginfoo opt\nbody line 1\n%%score (1)\nbody line 2\n\
+                     %%endfoo\nCDEF|\n";
         let result = super::sanitize_abc_content(input);
         assert_eq!(result, "X:1\nK:C\nCDEF|");
-        assert!(!result.contains("%%js"));
-        assert!(!result.contains("child_process"));
     }
 
     #[test]
-    fn sanitize_abc_js_case_insensitive() {
-        // %%JS and %%Js variants should be stripped.
-        let input = "X:1\n%%JS alert(1)\nK:C\n";
+    fn sanitize_abc_drops_a_block_directive_given_with_the_info_field_prefix() {
+        let input = "X:1\nI:BeginFoo\nbody\nI:EndFoo\nK:C\nCDEF|\n";
         let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-
-        let input = "X:1\n%%Js alert(1)\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-
-        // Bare %%js without code
-        let input = "X:1\n%%js\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-
-        // Tab-separated %%js\t<code> must also be stripped (#1572).
-        let input = "X:1\n%%js\talert(1)\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-        assert!(!result.contains("alert"));
+        assert_eq!(result, "X:1\nK:C\nCDEF|");
     }
 
     #[test]
-    fn sanitize_abc_js_other_ascii_whitespace_separators() {
-        // Vertical tab (\x0b) as separator: %%javascript\x0b<code> (#1582).
-        let input = "X:1\n%%javascript\x0bevil()\nK:C\n";
+    fn sanitize_abc_drops_the_rest_of_an_unterminated_block() {
+        let input = "X:1\nK:C\n%%beginfoo\nbody\nCDEF|\n";
         let result = super::sanitize_abc_content(input);
         assert_eq!(result, "X:1\nK:C");
-        assert!(!result.contains("evil"));
-
-        // Form feed (\x0c) as separator: %%javascript\x0c<code> (#1582).
-        let input = "X:1\n%%javascript\x0cevil()\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-        assert!(!result.contains("evil"));
-
-        // Vertical tab (\x0b) as separator: %%js\x0b<code> (#1582).
-        let input = "X:1\n%%js\x0bevil()\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-        assert!(!result.contains("evil"));
-
-        // Form feed (\x0c) as separator: %%js\x0c<code> (#1582).
-        let input = "X:1\n%%js\x0cevil()\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert_eq!(result, "X:1\nK:C");
-        assert!(!result.contains("evil"));
     }
 
     #[test]
-    fn sanitize_abc_js_no_panic_on_multibyte_char_at_boundary() {
-        // "%%jé" is 5 bytes: %%(0x25) %(0x25) j(0x6A) é(0xC3 0xA9).
-        // Byte 4 is a UTF-8 continuation byte — not a char boundary.
-        // A naive trimmed[..4] would panic; the fix uses str::get (#1574).
-        let input = "X:1\n%%jé injected\nK:C\n";
+    fn sanitize_abc_ends_a_block_only_at_its_own_end_directive() {
+        let input = "X:1\n%%beginfoo\n%%endbar\nstill body\n%%endfoo\nK:C\n";
         let result = super::sanitize_abc_content(input);
-        // "%%jé" is not the %%js directive, so the line is preserved.
-        assert!(result.contains("%%jé"));
-
-        // "%%javascrip" + "é" — 12 bytes but byte 12 is not a char boundary.
-        // ("%%javascrip" is 11 bytes, "é" = 0xC3 0xA9 starts at byte 11.)
-        let input2 = "X:1\n%%javascripé evil\nK:C\n";
-        let result2 = super::sanitize_abc_content(input2);
-        // "%%javascripé" is not the %%javascript directive, so line is preserved.
-        assert!(result2.contains("%%javascripé"));
+        assert_eq!(result, "X:1\nK:C");
     }
 
     #[test]
-    fn sanitize_abc_does_not_strip_js_prefix_in_other_words() {
-        // %%json is NOT a %%js directive (no space/tab/end after "%%js").
-        let input = "X:1\n%%json {\"key\": \"value\"}\nK:C\n";
-        let result = super::sanitize_abc_content(input);
-        assert!(result.contains("%%json"));
+    fn sanitize_abc_does_not_panic_on_multibyte_text_after_a_prefix() {
+        for input in [
+            "X:1\n%%é\nK:C\n",
+            "X:1\nIé\nK:C\n",
+            "X:1\n%%\u{feff}é x\nK:C\n",
+        ] {
+            let result = super::sanitize_abc_content(input);
+            assert!(result.starts_with("X:1"), "{input:?}");
+            assert!(result.ends_with("K:C"), "{input:?}");
+        }
     }
 
     #[test]

@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: external notation tools are off by default.** ABC, Lilypond
+  and MusicXML sections are no longer handed to abc2svg, Lilypond or
+  MuseScore just because the tool is installed: `delegates.abc2svg`,
+  `delegates.lilypond` and `delegates.musescore` now default to `false`, and
+  only `true` enables a tool (`null` no longer means "auto-detect"). Turn one
+  on with `--define delegates.abc2svg=true`, a `--config` file, the user or
+  system config, or the configuration a library caller passes; a project
+  config, a song-specific config, or a `{+config...}` directive in a song
+  still cannot. These tools execute code that can be embedded in the
+  notation, so enable them only for song files you trust. The Explorer /
+  Quick Look previews and `chordsketch mcp` never run them, whatever the
+  configuration. Anyone who relied on auto-detection needs to set the key
+  to `true`.
+- **Breaking: ABC content passed to abc2svg keeps only known layout
+  directives.** Stylesheet directives (`%%...` and `I:...` lines) outside a
+  fixed allowlist of layout, spacing, font and score-structure directives
+  are removed before abc2svg runs, together with the body of any block they
+  open. Previously only a few named directives were removed.
+- **Lilypond is invoked without `-dsafe`.** Lilypond 2.23.12 removed its
+  safe mode and treats the flag as a fatal error, so every Lilypond section
+  fell back to plain text on current Lilypond releases. There is no
+  replacement sandbox: Lilypond content runs with your privileges, which is
+  why the delegate is off unless you enable it for trusted files.
+
 - **Breaking: the CLI exits with a different code for each kind of
   failure** instead of `1` for all of them, so a script can tell a bad song
   from a missing file: `2` invalid command line (now also a malformed

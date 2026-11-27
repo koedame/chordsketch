@@ -171,8 +171,21 @@ Chord display settings.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `delegates.abc2svg` | boolean/null | `null` | ABC delegate (null = auto-detect) |
-| `delegates.lilypond` | boolean/null | `null` | Lilypond delegate (null = auto-detect) |
+| `delegates.abc2svg` | boolean | `false` | Render `{start_of_abc}` sections with abc2svg |
+| `delegates.lilypond` | boolean | `false` | Render `{start_of_ly}` sections with Lilypond |
+| `delegates.musescore` | boolean | `false` | Render `{start_of_musicxml}` sections with MuseScore |
+
+A delegate runs only when its key is `true`; any other value leaves it off,
+and an installed tool is never picked up on its own. Only trusted sources can
+turn a delegate on: `--define`, a `--config` file you pass, the system or user
+config file, or the configuration a library caller supplies. A project config
+next to the song, a song-specific config, or a `{+config.delegates...}`
+directive in the song cannot — the value is reset to `false` with a warning.
+
+abc2svg and Lilypond execute code that can be embedded in the notation
+(JavaScript and Scheme respectively), and Lilypond no longer has a sandbox
+mode. **Enable a delegate only when rendering song files you trust.** The file
+previews and the MCP server never run delegates, whatever the configuration.
 
 ## Song-Level Configuration Overrides
 
