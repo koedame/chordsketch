@@ -5,23 +5,24 @@ on:
     types: [created]
   pull_request_review_comment:
     types: [created]
-  issues:
-    types: [opened, assigned]
   pull_request_review:
     types: [submitted]
 
 jobs:
   claude:
-    # Security: only allow unchidev to trigger @claude on this public repo.
-    # Automated review comments from claude-review.yml are posted via CLAUDE_PAT
-    # (owned by unchidev), so sender.login == 'unchidev' holds for those too.
+    # Only the maintainer (unchidev) can start a run, and only from a pull
+    # request: a comment on a plain issue does not start one, and opening or
+    # assigning an issue is not a trigger at all. The `@claude` requests posted
+    # by claude-review.yml and auto-resolve-conflicts.yml go through CLAUDE_PAT,
+    # which belongs to unchidev, so they pass this check as well.
+    # What Claude reads is limited in the same way: see
+    # `include_comments_by_actor` on the action below.
     if: |
       github.event.sender.login == 'unchidev' &&
       (
-        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
         (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -58,6 +59,10 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.CLAUDE_PAT }}
           track_progress: true
+          # Only comments, reviews and review comments written by the
+          # maintainer are passed to Claude as context; those from other
+          # accounts are left out of the prompt.
+          include_comments_by_actor: unchidev
           # `--permission-mode acceptEdits` is the mode the action itself sets
           # for a run that `track_progress` puts on its `@claude`-mention path,
           # which is every run of this job. It is spelled out so the mode does
@@ -68,12 +73,4 @@ jobs:
           claude_args: "--permission-mode acceptEdits --allowedTools Edit,Write,Read,Bash"
           settings: '{"attribution": {"commit": "", "pr": "", "sessionUrl": false}}'
           prompt: |
-            When working on a GitHub issue (not a PR review), after implementing the
-            solution and pushing your changes to the branch, you MUST create a pull
-            request automatically using `gh pr create`. Do not just show a "Create PR"
-            link — actually create the PR.
-
-            PR requirements:
-            - Title: concise, imperative mood
-            - Body: include `Closes #N` referencing the issue number
-            - Write everything in English (code, comments, commit messages, PR text)
+            Write everything in English (code, comments, commit messages, PR text).
